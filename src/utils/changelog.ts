@@ -1,5 +1,5 @@
 export const CHANGELOG: Record<string, string[]> = {
-  "v3.1.6": [
+  "v3.1.8": [
     "Fix: Saving OCR review from the match-result wizard now returns to the result flow instead of closing back to Recording with the reviewed hostile roster still visible.",
     "Fix: Final save and submission cleanup now clears teammate, hostile, and team-ship session state so reviewed OCR roster context does not bleed into the next recording."
   ],
