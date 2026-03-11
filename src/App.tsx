@@ -80,6 +80,10 @@ const ResetConfirmModal = React.lazy(() => import('./components/ResetConfirmModa
 const Wizard = React.lazy(() => import('./components/Wizard').then((m) => ({ default: m.Wizard })));
 const ReviewQueueModal = React.lazy(() => import('./components/ReviewQueueModal').then((m) => ({ default: m.ReviewQueueModal })));
 const MatchRecordingPage = React.lazy(() => import('./components/MatchRecordingPage').then(m => ({ default: m.MatchRecordingPage })));
+import type { AppView } from './store/slices/createUISlice';
+const APP_VIEW_ORDER: AppView[] = IS_DEV_BUILD
+    ? ['recording', 'analytics', 'history', 'smart-captures', 'players', 'id-mapper', 'dev-ocr']
+    : ['recording', 'analytics', 'history', 'smart-captures', 'players', 'id-mapper'];
 import type { OCRExtractedData } from './utils/ocr/ocrTypes';
 import { useAppStore } from './store/useAppStore';
 import { getElectronAPI } from './utils/electronAPI';
@@ -129,7 +133,7 @@ interface TelemetryDraftPromptState {
 }
 
 interface RestoreSessionPayload {
-    activeView: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'id-mapper' | 'history' | 'dev-ocr';
+    activeView: AppView;
     showWizard: WizardResult | null;
     pendingMatchData: Partial<Match> | null;
     selectedTeammates: string[];
@@ -414,6 +418,15 @@ const App: React.FC = () => {
         showSetupWizard, setShowSetupWizard,
         setNotificationsSuspended,
     } = useUIState();
+    const [mountedViews, setMountedViews] = useState<Record<AppView, boolean>>(() => ({
+        recording: activeView === 'recording',
+        analytics: activeView === 'analytics',
+        history: activeView === 'history',
+        'smart-captures': activeView === 'smart-captures',
+        players: activeView === 'players',
+        'id-mapper': activeView === 'id-mapper',
+        'dev-ocr': activeView === 'dev-ocr',
+    }));
 
     const changelogDialogTitleId = React.useId();
     const changelogDialogDescriptionId = React.useId();
@@ -1471,6 +1484,14 @@ const App: React.FC = () => {
             recordDashboardPreloadVisit(activeView);
         }
     }, [activeView, recordDashboardPreloadVisit]);
+
+    useEffect(() => {
+        setMountedViews((prev) => (
+            prev[activeView]
+                ? prev
+                : { ...prev, [activeView]: true }
+        ));
+    }, [activeView]);
 
     useEffect(() => {
         const interval = window.setInterval(() => {
@@ -2565,8 +2586,8 @@ const App: React.FC = () => {
         return () => window.removeEventListener('submission:ocr-gate', onOcrGateRequest as EventListener);
     }, [handleApplyOCRData]);
 
-    const renderActiveView = () => {
-        switch (activeView) {
+    const renderView = (view: AppView) => {
+        switch (view) {
             case 'recording':
                 return <RecordingView onSmartCaptureData={handleSmartCaptureData} />;
             case 'analytics':
@@ -2702,13 +2723,25 @@ const App: React.FC = () => {
                             />
 
                             <main className="flex-1 overflow-hidden bg-md-sys-surface rounded-card">
-                                <Suspense fallback={viewFallback}>
-                                    <ErrorBoundary>
-                                        <div className="h-full app-view-transition">
-                                            {renderActiveView()}
-                                        </div>
-                                    </ErrorBoundary>
-                                </Suspense>
+                                <div className="h-full app-view-transition">
+                                    {APP_VIEW_ORDER.map((view) => {
+                                        const isActiveView = activeView === view;
+                                        if (!isActiveView && !mountedViews[view]) return null;
+                                        return (
+                                            <section
+                                                key={view}
+                                                aria-hidden={!isActiveView}
+                                                className={isActiveView ? 'h-full min-h-0' : 'hidden h-full min-h-0'}
+                                            >
+                                                <Suspense fallback={isActiveView ? viewFallback : null}>
+                                                    <ErrorBoundary>
+                                                        {renderView(view)}
+                                                    </ErrorBoundary>
+                                                </Suspense>
+                                            </section>
+                                        );
+                                    })}
+                                </div>
                             </main>
                         </div>
                     </div>
