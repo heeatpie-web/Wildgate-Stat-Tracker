@@ -13,6 +13,7 @@ const setPendingKilledBy = vi.fn();
 const setPendingKilledByShip = vi.fn();
 const setSelectedTeammates = vi.fn();
 const setSelectedOpponents = vi.fn();
+const setSessionShipTypes = vi.fn();
 const setTimeMin = vi.fn();
 const setTimeSec = vi.fn();
 const setDamageTaken = vi.fn();
@@ -44,6 +45,7 @@ vi.mock('../../providers/GameDataProvider', () => ({
     setPendingKilledByShip,
     setSelectedTeammates,
     setSelectedOpponents,
+    setSessionShipTypes,
     setTimeMin,
     setTimeSec,
     setDamageTaken,
@@ -145,6 +147,7 @@ describe('useMatchSubmission', () => {
     setPendingKilledByShip.mockClear();
     setSelectedTeammates.mockClear();
     setSelectedOpponents.mockClear();
+    setSessionShipTypes.mockClear();
     setTimeMin.mockClear();
     setTimeSec.mockClear();
     setDamageTaken.mockClear();
@@ -906,6 +909,10 @@ describe('useMatchSubmission', () => {
     expect(savedMatch.subType).toBe('Artifact');
     expect(savedMatch.ocrState).toBe('reviewing');
     expect(bundleMatchArtifacts).not.toHaveBeenCalled();
+    expect(setSelectedTeammates).toHaveBeenCalledWith([]);
+    expect(setSelectedOpponents).toHaveBeenCalledWith([]);
+    expect(setSessionTeams).toHaveBeenCalledWith({});
+    expect(setSessionShipTypes).toHaveBeenCalledWith({}, 'manual');
     expect(setToast).toHaveBeenCalledWith({ message: 'Results saved. You can return to OCR later.', type: 'success' });
   });
 

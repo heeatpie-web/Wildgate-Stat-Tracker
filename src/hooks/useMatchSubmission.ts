@@ -122,6 +122,7 @@ export const useMatchSubmission = () => {
         setPendingKilledByShip,
         setSelectedTeammates,
         setSelectedOpponents,
+        setSessionShipTypes,
         setTimeMin,
         setTimeSec,
         setDamageTaken,
@@ -161,8 +162,10 @@ export const useMatchSubmission = () => {
         setPendingArtifactType("");
         setPendingKilledBy("");
         setPendingKilledByShip("");
+        setSelectedTeammates([]);
         setSelectedOpponents([]);
         setSessionTeams({});
+        setSessionShipTypes({}, 'manual');
         setTimelineEvents([]);
         setIsMatchInProgress(false);
         setMatchStartTime(null);
@@ -193,8 +196,10 @@ export const useMatchSubmission = () => {
         setPoiEasy,
         setPoiEpic,
         setPoiMedium,
+        setSelectedTeammates,
         setSelectedOpponents,
         setSelectedReachModifiers,
+        setSessionShipTypes,
         setSessionTeams,
         setShowWizard,
         setTimeMin,

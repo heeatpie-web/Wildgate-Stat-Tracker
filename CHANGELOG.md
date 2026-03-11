@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.1.6] - 2026-03-11
+
+### Fixed
+- Saving OCR review from the match-result wizard now returns to the result flow instead of closing back to Recording with the reviewed hostile roster still visible
+- Final save and submission cleanup now clears teammate, hostile, and team-ship session state so reviewed OCR roster context does not bleed into the next recording
+
 ## [3.1.5] - 2026-03-10
 
 ### Fixed

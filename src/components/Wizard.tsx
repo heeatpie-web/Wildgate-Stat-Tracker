@@ -1389,10 +1389,10 @@ export const Wizard: React.FC = () => {
                                     rerunOcrDisabled={isRerunningOcr || isPendingOcrProcessing}
                                     isRerunningOcr={isRerunningOcr}
                                     onAcceptAll={() => {
-                                        // Persist OCR review state to the actual match record
-                                        // before closing, so the snapshot-restore effect doesn't
-                                        // overwrite the ocrState that OcrCorrectionModal set on
-                                        // pendingMatchData.
+                                        // Persist OCR review state before returning to the
+                                        // result tab so the operator can finish the actual
+                                        // save/finalize action without the wizard dumping back
+                                        // to the recording screen mid-flow.
                                         const latestPending = useAppStore.getState().pendingMatchData;
                                         const matchId = latestPending?.id;
                                         if (matchId) {
@@ -1406,7 +1406,7 @@ export const Wizard: React.FC = () => {
                                                 } as Match);
                                             }
                                         }
-                                        setShowWizard(null);
+                                        React.startTransition(() => setActiveTab('result'));
                                     }}
                                     screenshots={deferredWizardReviewScreenshots}
                                 />

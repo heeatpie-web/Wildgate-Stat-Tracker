@@ -2,7 +2,7 @@
   "name": "wildgate-stat-tracker",
   "productName": "Wildgate Stat Tracker",
   "private": true,
-  "version": "3.1.5",
+  "version": "3.1.6",
   "type": "module",
   "main": "electron/main.cjs",
   "author": {
@@ -35,7 +35,7 @@
     "artifacts:relink": "node scripts/relink_smart_capture_artifacts.cjs --apply",
     "artifacts:migrate:canonical": "node scripts/migrate_artifact_folders_to_canonical.cjs",
     "artifacts:migrate:canonical:force": "node scripts/migrate_artifact_folders_to_canonical.cjs --force",
-"dev:qa": "npm run snap:views && npm run ci:quality",
+    "dev:qa": "npm run snap:views && npm run ci:quality",
     "setup:parallel-streams": "powershell -ExecutionPolicy Bypass -File scripts/setup-parallel-streams.ps1 -IncludeContract",
     "check:stream-ownership": "node scripts/check-stream-ownership.cjs --stream auto",
     "check:stream-ownership:ui": "node scripts/check-stream-ownership.cjs --stream ui",

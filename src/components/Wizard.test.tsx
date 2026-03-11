@@ -37,6 +37,7 @@ const gameData = {
     setPoiMedium: vi.fn(),
     poiEpic: 0,
     setPoiEpic: vi.fn(),
+    updateMatch: vi.fn(),
 };
 
 const uiState = {
@@ -55,6 +56,13 @@ const saveResultDraft = vi.fn();
 const setPendingMatchDataFromStore = vi.fn();
 const rerunOCRMulti = vi.fn();
 const bundleMatchArtifacts = vi.fn();
+const appStoreState = {
+    ocrMode: 'local',
+    ocrRegions: undefined,
+    pendingMatchData: null as any,
+    matches: [] as any[],
+    setPendingMatchData: setPendingMatchDataFromStore,
+};
 
 vi.mock('../providers/GameDataProvider', () => ({
     useGameData: () => gameData,
@@ -78,27 +86,26 @@ vi.mock('../utils/artifactService', () => ({
 }));
 
 vi.mock('../store/useAppStore', () => {
-    const state = {
-        ocrMode: 'local',
-        ocrRegions: undefined,
-        setPendingMatchData: setPendingMatchDataFromStore,
-    };
-    const hook = ((selector?: (value: typeof state) => unknown) => (
-        typeof selector === 'function' ? selector(state) : state
+    const hook = ((selector?: (value: typeof appStoreState) => unknown) => (
+        typeof selector === 'function' ? selector(appStoreState) : appStoreState
     )) as unknown as {
-        (selector?: (value: typeof state) => unknown): unknown;
-        getState: () => { setPendingMatchData: typeof setPendingMatchDataFromStore };
+        (selector?: (value: typeof appStoreState) => unknown): unknown;
+        getState: () => typeof appStoreState;
     };
-    hook.getState = () => ({ setPendingMatchData: setPendingMatchDataFromStore });
+    hook.getState = () => appStoreState;
     return { useAppStore: hook };
 });
 
 vi.mock('./OcrCorrectionModal', () => ({
-    OcrCorrectionModal: ({ onRequestRerunOcr, rerunOcrDisabled, isRerunningOcr, onEmbeddedFooterActionsChange }: any) => {
+    OcrCorrectionModal: ({ onAcceptAll, onClose, onRequestRerunOcr, rerunOcrDisabled, isRerunningOcr, onEmbeddedFooterActionsChange }: any) => {
+        const acceptRef = React.useRef(onAcceptAll);
+        const closeRef = React.useRef(onClose);
+        acceptRef.current = onAcceptAll;
+        closeRef.current = onClose;
         React.useEffect(() => {
             onEmbeddedFooterActionsChange?.({
-                discard: vi.fn(),
-                saveAndClose: vi.fn(),
+                discard: () => closeRef.current?.(),
+                saveAndClose: () => acceptRef.current?.(),
             });
             return () => onEmbeddedFooterActionsChange?.(null);
         }, [onEmbeddedFooterActionsChange]);
@@ -126,7 +133,10 @@ describe('Wizard', () => {
         gameData.pendingPlacement = null;
         gameData.currentLoadout = null;
         gameData.sessionTeams = {};
+        gameData.sessionShipTypes = {};
         uiState.showWizard = null;
+        appStoreState.pendingMatchData = null;
+        appStoreState.matches = [];
         vi.clearAllMocks();
         bundleMatchArtifacts.mockResolvedValue([]);
         rerunOCRMulti.mockResolvedValue({
@@ -602,6 +612,55 @@ describe('Wizard', () => {
         rerender(<Wizard />);
 
         expect(screen.queryByTestId('wizard-ocr-processing-overlay')).toBeNull();
+    });
+
+    it('returns to the result tab after embedded OCR save-and-apply instead of closing the wizard', async () => {
+        const { Wizard } = await import('./Wizard');
+        gameData.pendingMatchData = {
+            id: 915,
+            loadout: {
+                hero: 'Adrian',
+                ship: 'Hunter',
+                weapons: [],
+                equipment: [],
+            },
+            kills: { 'AI Legion': 0 },
+            ocrState: 'reviewing',
+        };
+        appStoreState.pendingMatchData = {
+            ...gameData.pendingMatchData,
+            result: 'Win',
+        };
+        appStoreState.matches = [{
+            id: 915,
+            timestamp: 1_700_000_000_000,
+            date: '1/1/2024',
+            mode: 'Artifact Brawl',
+            player: 'TestPilot',
+            teammates: [],
+            opponents: [],
+            hero: 'Adrian',
+            ship: 'Hunter',
+            reachModifiers: [],
+            kills: { 'AI Legion': 0 },
+            result: 'Win',
+            subType: 'Combat',
+        }];
+        uiState.showWizard = 'Win';
+
+        render(<Wizard />);
+        fireEvent.click(screen.getByRole('button', { name: /ocr review/i }));
+        fireEvent.click(screen.getByRole('button', { name: /save and apply/i }));
+
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: /abort submission/i })).toBeInTheDocument();
+        });
+        expect(screen.queryByRole('button', { name: /save and apply/i })).not.toBeInTheDocument();
+        expect(uiState.setShowWizard).not.toHaveBeenCalledWith(null);
+        expect(gameData.updateMatch).toHaveBeenCalledWith(expect.objectContaining({
+            id: 915,
+            ocrState: 'saved',
+        }));
     });
 
     it('keeps prospector loadout collapsed by default in the OCR tab', async () => {
