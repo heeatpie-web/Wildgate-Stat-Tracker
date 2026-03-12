@@ -12,14 +12,14 @@ export const TIPS_BY_VIEW: Record<AppView, string[]> = {
     'If ship type looks wrong, fix it in OCR review before saving the match.',
   ],
   analytics: [
-    'Start with era filters to avoid mixing baseline and expansion balance shifts.',
+    'Start with update filters to isolate matches from the current live balance.',
     'Use ship + perk filters together to find stable loadout win-rate trends.',
     'Check hazard cards with low sample sizes before drawing conclusions.',
-    'Compare selected era against all-time to spot patch-driven movement.',
+    'Compare a selected update against all-time to spot patch-driven movement.',
     'Review loadout breakdowns as separate rows, not merged weapon strings.',
     'Use date-range filters before exporting analytics snapshots to keep reports focused.',
     'When one metric spikes, verify placement and match-count context first.',
-    'Patch history in an era is useful for explaining sudden performance changes.',
+    'Patch history for an update helps explain sudden performance changes.',
   ],
   'smart-captures': [
     'Queue filters first, then resolve matches in order to keep OCR flow predictable.',

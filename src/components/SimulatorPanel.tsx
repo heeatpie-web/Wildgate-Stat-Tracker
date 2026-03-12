@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useGameData } from '../providers/GameDataProvider';
 import { processTelemetryEvent, TelemetryContext, TelemetryActions } from '../utils/telemetryProcessor';
 import Logger from '../utils/logger';
@@ -40,46 +40,17 @@ const SimulatorPanel: React.FC = () => {
     const [loading, setLoading] = useState(false);
 
     const timerRef = useRef<NodeJS.Timeout | null>(null);
+    const eventsRef = useRef<SimEvent[]>(events);
+    const isSimulationRef = useRef(isSimulation);
+    const playerIdMapRef = useRef(playerIdMap);
+    const pilotRegistryRef = useRef(pilotRegistry);
 
-    // Load Archive List
-    const fetchArchives = async (autoLoadLatest = false) => {
-        setStatus("Fetching archives...");
-        try {
-            const api = getElectronAPI();
-            if (!api) {
-                setStatus("Error: IPC not available");
-                return;
-            }
-            const raw = await api.invoke('list-telemetry-archives');
-            if (raw?.success === false) {
-                throw new Error(raw.message || 'Failed to list archives');
-            }
-            const list = raw?.success ? (raw.data?.archives || []) : (Array.isArray(raw) ? raw : []);
-            console.log('[Simulator] Found archives:', list?.length);
-            setArchiveFiles(list || []);
+    useEffect(() => { eventsRef.current = events; }, [events]);
+    useEffect(() => { isSimulationRef.current = isSimulation; }, [isSimulation]);
+    useEffect(() => { playerIdMapRef.current = playerIdMap; }, [playerIdMap]);
+    useEffect(() => { pilotRegistryRef.current = pilotRegistry; }, [pilotRegistry]);
 
-            if (!list || list.length === 0) {
-                setStatus("No archives found on disk");
-            } else {
-                setStatus(`Found ${list.length} archives`);
-            }
-
-            // Auto-load latest if requested and we have archives
-            if (autoLoadLatest && list && list.length > 0 && events.length === 0) {
-                setSelectedArchive(list[0].archiveId);
-                handleLoadArchive(list[0].archiveId);
-            }
-        } catch (error) {
-            console.error("Failed to list archives", error);
-            setStatus(`List Error: ${errorMessage(error)}`);
-        }
-    };
-
-    useEffect(() => {
-        if (isSimulation) fetchArchives(true); // Auto-load latest when entering sim mode
-    }, [isSimulation]);
-
-    const handleLoadArchive = async (archiveId: string) => {
+    const handleLoadArchive = useCallback(async (archiveId: string) => {
         if (!archiveId) return;
         setLoading(true);
         const selected = archiveFiles.find(a => a.archiveId === archiveId);
@@ -104,7 +75,45 @@ const SimulatorPanel: React.FC = () => {
             setStatus(`Load Error: ${errorMessage(error)}`);
         }
         setLoading(false);
-    };
+    }, [archiveFiles]);
+
+    // Load Archive List
+    const fetchArchives = useCallback(async (autoLoadLatest = false) => {
+        setStatus("Fetching archives...");
+        try {
+            const api = getElectronAPI();
+            if (!api) {
+                setStatus("Error: IPC not available");
+                return;
+            }
+            const raw = await api.invoke('list-telemetry-archives');
+            if (raw?.success === false) {
+                throw new Error(raw.message || 'Failed to list archives');
+            }
+            const list = raw?.success ? (raw.data?.archives || []) : (Array.isArray(raw) ? raw : []);
+            console.log('[Simulator] Found archives:', list?.length);
+            setArchiveFiles(list || []);
+
+            if (!list || list.length === 0) {
+                setStatus("No archives found on disk");
+            } else {
+                setStatus(`Found ${list.length} archives`);
+            }
+
+            // Auto-load latest if requested and we have archives
+            if (autoLoadLatest && list && list.length > 0 && eventsRef.current.length === 0) {
+                setSelectedArchive(list[0].archiveId);
+                void handleLoadArchive(list[0].archiveId);
+            }
+        } catch (error) {
+            console.error("Failed to list archives", error);
+            setStatus(`List Error: ${errorMessage(error)}`);
+        }
+    }, [handleLoadArchive]);
+
+    useEffect(() => {
+        if (isSimulation) void fetchArchives(true); // Auto-load latest when entering sim mode
+    }, [fetchArchives, isSimulation]);
 
     const loadLatestArchive = () => {
         if (archiveFiles.length > 0) {
@@ -178,8 +187,9 @@ const SimulatorPanel: React.FC = () => {
 
     // Process Event on Tick
     useEffect(() => {
-        if (progress > 0 && progress < events.length && isSimulation) {
-            const event = events[progress];
+        const liveEvents = eventsRef.current;
+        if (progress > 0 && progress < liveEvents.length && isSimulationRef.current) {
+            const event = liveEvents[progress];
 
             // Build Context & Actions (Same as Live Monitor)
             const actions: TelemetryActions = {
@@ -192,14 +202,14 @@ const SimulatorPanel: React.FC = () => {
                 setShowWizard: () => {}, // No-op for simulation
             };
 
-            const startSeconds = events[0] ? getTelemetryEventTimestamp(events[0]) : 0;
+            const startSeconds = liveEvents[0] ? getTelemetryEventTimestamp(liveEvents[0]) : 0;
             const currentSeconds = getTelemetryEventTimestamp(event);
 
             const context: TelemetryContext = {
                 matchStartTime: startSeconds * 1000,
                 isMatchInProgress: true, // Force true for sim usually
-                playerIdMap,
-                pilotRegistry
+                playerIdMap: playerIdMapRef.current,
+                pilotRegistry: pilotRegistryRef.current
             };
 
             // Update Time Display
@@ -210,7 +220,7 @@ const SimulatorPanel: React.FC = () => {
 
             processTelemetryEvent(event, actions, context);
         }
-    }, [progress]);
+    }, [progress, setIsMatchInProgress, setMatchStartTime, setOverlayPhase, setTimeMin, setTimeSec, updatePlayerIdMapping]);
 
     if (!isSimulation && events.length === 0) {
         return (

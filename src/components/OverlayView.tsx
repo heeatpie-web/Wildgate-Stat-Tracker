@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { MissionPanel } from './recording/MissionPanel';
 import { ActionPanel } from './recording/ActionPanel';
 import { SquadronPanel } from './recording/SquadronPanel';
@@ -40,10 +40,10 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
         [pilotRegistry],
     );
 
-    const canAddRosterPlayer = (name: string) => {
+    const canAddRosterPlayer = useCallback((name: string) => {
         const normalized = name.trim().toLowerCase();
         return normalized.length > 0 && !registrySet.has(normalized);
-    };
+    }, [registrySet]);
 
     const handleAddRosterPlayer = (name: string) => {
         if (!canAddRosterPlayer(name)) return;
@@ -60,7 +60,7 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
                 seen.add(normalized);
                 return true;
             });
-    }, [topWingmen, topRivals, pilotRegistry]);
+    }, [canAddRosterPlayer, topWingmen, topRivals]);
 
     const handleAddVisibleSocialPlayers = () => {
         if (visibleSocialAdds.length === 0) return;

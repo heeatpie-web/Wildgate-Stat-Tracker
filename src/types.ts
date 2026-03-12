@@ -430,19 +430,20 @@ export interface MomentumData {
   trend: 'rising' | 'falling' | 'stable';
 }
 
-export type EntityDimensionKey = 'ship' | 'prospectorWeapon' | 'equipment' | 'perk' | 'era';
+export type EntityDimensionKey = 'ship' | 'prospectorWeapon' | 'equipment' | 'perk' | 'update';
 
-export interface EraPatchNote {
+export interface UpdatePatchNote {
   version: string;
   date?: string;
   description: string;
 }
 
-export interface EraDefinition {
+export interface UpdateDefinition {
   key: string;
   label: string;
+  startDate: string;
   description?: string;
-  patches?: EraPatchNote[];
+  patches?: UpdatePatchNote[];
 }
 
 export interface EntityAnalyticsFilters {
@@ -450,7 +451,7 @@ export interface EntityAnalyticsFilters {
   prospectorWeapon: string[];
   equipment: string[];
   perk: string[];
-  era: string[];
+  update: string[];
 }
 
 export interface EntityMetricRow {

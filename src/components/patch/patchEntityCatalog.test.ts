@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getMatchEquipment, getMatchPerks, getMatchProspectorWeapons } from './patchEntityCatalog';
+import { getMatchEquipment, getMatchPerks, getMatchProspectorWeapons, getMatchUpdateKey } from './patchEntityCatalog';
 import type { Match } from '../../types';
 
 const baseMatch = (overrides: Partial<Match> = {}): Match => ({
@@ -62,5 +62,21 @@ describe('loadout entry normalization', () => {
             },
         });
         expect(getMatchEquipment(match)).toEqual(['Shield Matrix', 'Repair Drone']);
+    });
+});
+
+describe('getMatchUpdateKey', () => {
+    it('assigns matches on or after 2026-03-12 to the current update bucket', () => {
+        const match = baseMatch({
+            timestamp: new Date(2026, 2, 12, 12, 0, 0).getTime(),
+        });
+        expect(getMatchUpdateKey(match)).toBe('drill-charge-ram-bastion-2026-03-12');
+    });
+
+    it('leaves pre-update matches unassigned', () => {
+        const match = baseMatch({
+            timestamp: new Date(2026, 2, 11, 23, 59, 59).getTime(),
+        });
+        expect(getMatchUpdateKey(match)).toBe('');
     });
 });

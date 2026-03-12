@@ -145,7 +145,7 @@ vi.mock('./EntityAnalyticsView', () => ({
 }));
 
 vi.mock('../patch/patchEntityCatalog', () => ({
-  getMatchEra: vi.fn(() => ''),
+  getMatchUpdateKey: vi.fn(() => 'drill-charge-ram-bastion-2026-03-12'),
   getMatchEquipment: vi.fn(() => []),
   getMatchPerks: vi.fn(() => []),
   getMatchProspectorWeapons: vi.fn(() => []),
@@ -162,6 +162,8 @@ describe('AnalyticsShell', () => {
     render(<AnalyticsShell />);
 
     expect(screen.getByRole('heading', { name: /analytics cockpit/i }).closest('.twilight-solid-scope')).not.toBeNull();
+    expect(screen.getByRole('option', { name: /all updates/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /drill charge \/ ram bastion - 3\/12\/2026/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /all updates/i })).toBeNull();
     expect(screen.queryByText(/game patch history/i)).toBeNull();
   });

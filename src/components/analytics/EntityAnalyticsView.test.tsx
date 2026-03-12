@@ -11,7 +11,7 @@ const data: EntityAnalyticsData = {
         prospectorWeapon: [],
         equipment: [],
         perk: [],
-        era: [],
+        update: [],
     },
     filteredCount: 12,
     thresholds: {
@@ -56,7 +56,7 @@ const data: EntityAnalyticsData = {
             placementDistribution: {},
             lowSample: false,
         }],
-        era: [],
+        update: [],
     },
     comparisons: {
         periodVsPrevious: {

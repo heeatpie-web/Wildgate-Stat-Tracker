@@ -1,6 +1,6 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 const gameData = {
@@ -84,6 +84,8 @@ const appStoreState = {
 
 const previewArtifactRepair = vi.fn();
 const applyArtifactRepair = vi.fn();
+const rerunOCRMulti = vi.fn();
+const getMatchArtifactsStructured = vi.fn();
 
 vi.mock('../providers/GameDataProvider', () => ({
   useGameData: () => gameData,
@@ -105,8 +107,8 @@ vi.mock('../store/useAppStore', () => ({
 }));
 
 vi.mock('../utils/artifactService', () => ({
-  getMatchArtifactsStructured: vi.fn(),
-  rerunOCRMulti: vi.fn(),
+  getMatchArtifactsStructured,
+  rerunOCRMulti,
   removeMatchArtifact: vi.fn(),
   addMatchArtifact: vi.fn(),
   reassignMatchArtifact: vi.fn(),
@@ -172,6 +174,38 @@ describe('SmartCapturesPanel paused lifecycle', () => {
         appliedLinks: 1,
       },
     });
+    rerunOCRMulti.mockResolvedValue({
+      perFile: [
+        {
+          success: true,
+          imagePath: 'C:\\captures\\match-1.png',
+          data: {
+            captureTimestamp: Date.now(),
+            teammates: [],
+            opponentTeams: [],
+            reachModifiers: [],
+            artifacts: ['C:\\captures\\match-1.png'],
+          },
+        },
+      ],
+      data: {
+        captureTimestamp: Date.now(),
+        teammates: [],
+        opponentTeams: [],
+        reachModifiers: [],
+        artifacts: ['C:\\captures\\match-1.png'],
+      },
+    });
+    getMatchArtifactsStructured.mockResolvedValue({
+      images: [],
+      imageFiles: [],
+      telemetry: [],
+      missingImages: [],
+      resolvedFromDisk: false,
+    });
+    appStoreState.selectedMatchId = null;
+    appStoreState.activeSection = 'tools';
+    appStoreState.ocrMode = 'local';
   });
 
   it('stops background auto-repair while inactive and preserves the current tools state', async () => {
@@ -219,5 +253,27 @@ describe('SmartCapturesPanel paused lifecycle', () => {
     expect(previewArtifactRepair).toHaveBeenCalledTimes(1);
     expect(applyArtifactRepair).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Planned')).toBeInTheDocument();
+  });
+
+  it('uses the latest OCR mode for keyboard-triggered re-analysis after a mode change', async () => {
+    appStoreState.activeSection = 'capture';
+    appStoreState.selectedMatchId = 1;
+    const { default: SmartCapturesPanel } = await import('./SmartCapturesPanel');
+    const { rerender } = render(<SmartCapturesPanel />);
+
+    appStoreState.ocrMode = 'cloud';
+    rerender(<SmartCapturesPanel />);
+
+    fireEvent.keyDown(window, { key: 'r' });
+
+    await waitFor(() => {
+      expect(rerunOCRMulti).toHaveBeenCalledWith(
+        ['C:\\captures\\match-1.png'],
+        'Pilot',
+        'cloud',
+        undefined,
+        expect.anything(),
+      );
+    });
   });
 });

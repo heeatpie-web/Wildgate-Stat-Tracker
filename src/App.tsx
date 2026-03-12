@@ -396,6 +396,7 @@ const App: React.FC = () => {
     const fuzzyPromptCountRef = React.useRef(0);
     const idPromptCountRef = React.useRef(0);
     const startupMatchNormalizationUserRef = React.useRef('');
+    const matchesRef = React.useRef<Match[]>([]);
     const setTutorialCompleted = useAppStore(s => s.setTutorialCompleted);
     const tutorialCompleted = useAppStore(s => s.tutorialCompleted);
     const tipsEnabled = useAppStore(s => s.tipsEnabled);
@@ -487,6 +488,10 @@ const App: React.FC = () => {
         soundEnabled,
         performanceMode,
     } = useUserPreferences();
+
+    useEffect(() => {
+        matchesRef.current = matches;
+    }, [matches]);
 
     const { logFeed, logStatus } = useLogMonitor();
     const { discardTelemetryDraft, submitting: telemetryDraftDiscarding } = useMatchSubmission();
@@ -852,7 +857,8 @@ const App: React.FC = () => {
                 return combinedNameSimilarityScore(candidateClean, canonicalClean) >= 90;
             };
 
-            const normalizedMatches = matches.map((match) => {
+            const matchesSnapshot = matchesRef.current;
+            const normalizedMatches = matchesSnapshot.map((match) => {
                 const matchPlayer = String(match.player || '').trim();
                 const activePlayer = String(activeUser || '').trim();
                 const canonicalPlayer = !isUnknownLabel(matchPlayer)
@@ -883,7 +889,7 @@ const App: React.FC = () => {
             });
 
             if (cancelled) return;
-            const changed = normalizedMatches.some((match, idx) => match !== matches[idx]);
+            const changed = normalizedMatches.some((match, idx) => match !== matchesSnapshot[idx]);
             if (changed) {
                 setMatches(normalizedMatches);
             }
@@ -1966,7 +1972,7 @@ const App: React.FC = () => {
             source: 'ocr',
         });
         setToast({ message: `Queued roster candidate: ${normalized}`, type: 'info' });
-    }, [addPendingReview, pendingReviews, pilotRegistry, setToast]);
+    }, [addPendingReview, dismissedRosterCandidateKeys, pendingReviews, pilotRegistry, setToast]);
 
     const handleApplyOCRData = useCallback((
         data: OCRExtractedData,
@@ -2549,7 +2555,7 @@ const App: React.FC = () => {
                 detail: { source: 'app-ocr-gate', matchId: targetMatchId },
             }));
         }, 0);
-    }, [pilotRegistry, activeShip, setSelectedTeammates, selectedOpponents, setActiveShip, selectedReachModifiers, setSelectedReachModifiers, setToast, addPendingReview, pendingReviews, sessionShipTypes, showWizard, setShowWizard]);
+    }, [activeShip, activeUser, addPendingReview, dismissedRosterCandidateKeys, pendingReviews, pilotRegistry, selectedOpponents, selectedReachModifiers, sessionShipTypes, setActiveShip, setSelectedReachModifiers, setSelectedTeammates, setShowWizard, setToast, showWizard]);
 
     const handleSmartCaptureData = useCallback((data: OCRExtractedData) => {
         handleApplyOCRData(data, null, null);

@@ -5,7 +5,7 @@ import { getElectronAPI } from '../utils/electronAPI';
 
 export const WindowFrame: React.FC = () => {
     const [isMaximized, setIsMaximized] = React.useState(false);
-    const api = getElectronAPI();
+    const api = React.useMemo(() => getElectronAPI(), []);
 
     React.useEffect(() => {
         if (!api) return;
@@ -15,7 +15,7 @@ export const WindowFrame: React.FC = () => {
         });
 
         return unsub;
-    }, []);
+    }, [api]);
 
     const handleMinimize = () => api?.send('minimize-window');
     const handleMaximize = () => api?.send('maximize-window');

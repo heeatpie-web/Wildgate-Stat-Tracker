@@ -1,4 +1,5 @@
 import type { Match } from '../../types';
+import { getUpdateForTimestamp } from '../../data/gamePatches';
 
 export const PATCH_PROSPECTOR_WEAPONS = [
     'Foam Gun',
@@ -35,7 +36,7 @@ export const PATCH_PERKS = [
 
 export const MAX_PERKS_PER_MATCH = 2;
 
-export type EraKey = 'baseline' | 'expansion';
+export type UpdateKey = string;
 
 export interface PerkCatalogEntry {
     name: string;
@@ -166,16 +167,8 @@ export const getMatchWeaponDimensions = (match: Match): string[] => (
     ])
 );
 
-export const matchesPatchExpansion = (match: Match): boolean => {
-    const ship = splitShipLabel(getMatchShip(match));
-    const weapons = getMatchWeaponDimensions(match);
-    const equipment = getMatchEquipment(match);
-    const perks = getMatchPerks(match);
-    if (PATCH_SHIPS.some((value) => normalize(splitShipLabel(value)) === normalize(ship))) return true;
-    if (weapons.some((weapon) => PATCH_PROSPECTOR_WEAPONS.some((value) => normalize(value) === normalize(weapon)))) return true;
-    if (equipment.some((item) => PATCH_PROSPECTOR_EQUIPMENT.some((value) => normalize(value) === normalize(item)))) return true;
-    if (perks.some((perk) => PATCH_PERKS.some((value) => normalize(value) === normalize(perk)))) return true;
-    return false;
+export const getMatchUpdateKey = (match: Match): UpdateKey => {
+    const timestamp = Number(match?.timestamp || 0);
+    if (!Number.isFinite(timestamp) || timestamp <= 0) return '';
+    return getUpdateForTimestamp(timestamp)?.key || '';
 };
-
-export const getMatchEra = (match: Match): EraKey => (matchesPatchExpansion(match) ? 'expansion' : 'baseline');

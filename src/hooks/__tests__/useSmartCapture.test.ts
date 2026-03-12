@@ -20,6 +20,7 @@ const mockStoreState: Record<string, unknown> = {
 const playCaptureMock = vi.fn();
 const playSuccessMock = vi.fn();
 const playErrorMock = vi.fn();
+const prepareAudioMock = vi.fn();
 
 vi.mock('../../utils/electronBridge', () => ({
   captureGameWindow: vi.fn().mockResolvedValue(undefined),
@@ -51,7 +52,12 @@ vi.mock('../../store/useAppStore', () => ({
 }));
 
 vi.mock('../../hooks/useSoundEffects', () => ({
-  useSoundEffects: () => ({ playCapture: playCaptureMock, playSuccess: playSuccessMock, playError: playErrorMock }),
+  useSoundEffects: () => ({
+    prepareAudio: prepareAudioMock,
+    playCapture: playCaptureMock,
+    playSuccess: playSuccessMock,
+    playError: playErrorMock,
+  }),
 }));
 
 vi.mock('../../utils/stringUtils', () => ({
@@ -209,7 +215,9 @@ describe('useSmartCapture', () => {
       await actions.captureOnly('match-sound');
     });
 
+    expect(prepareAudioMock).toHaveBeenCalledTimes(1);
     expect(playCaptureMock).toHaveBeenCalledTimes(1);
+    expect(prepareAudioMock.mock.invocationCallOrder[0]).toBeLessThan(playCaptureMock.mock.invocationCallOrder[0]);
     expect(playSuccessMock).not.toHaveBeenCalled();
   });
 

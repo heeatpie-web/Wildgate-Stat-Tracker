@@ -150,10 +150,10 @@ export const useMatchSubmission = () => {
     const { playVictory, playDefeat } = useSoundEffects();
     const [submitting, setSubmitting] = useState(false);
 
-    const pickFirstKnown = (...values: Array<string | undefined | null>) => {
+    const pickFirstKnown = useCallback((...values: Array<string | undefined | null>) => {
         const known = values.find(v => v && !/^unknown/i.test(v));
         return known || values.find(v => v) || '';
-    };
+    }, []);
 
     const clearSubmissionState = useCallback(() => {
         setShowWizard(null);

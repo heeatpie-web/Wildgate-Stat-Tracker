@@ -573,7 +573,7 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
         } else if (!selectedMatchId && matches.length > 0) {
             setSelectedMatchId(matches[0].id);
         }
-    }, [matches, selectedMatchId, smartCapturesFocusMatchId, setSmartCapturesFocusMatchId]);
+    }, [matches, selectedMatchId, setQueueOnly, setSelectedMatchId, setSmartCapturesFocusMatchId, smartCapturesFocusMatchId]);
 
     const availableQueueDayKeys = useMemo(() => {
         const keys = new Set<string>();
@@ -701,6 +701,23 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
         return { idx, total: workQueueMatches.length };
     }, [queueOnly, selectedMatchId, workQueueMatches]);
 
+    const goNextQueue = useCallback(() => {
+        if (!queueOnly) return;
+        if (!selectedMatchId || workQueueMatches.length === 0) return;
+        const idx = workQueueMatches.findIndex(m => m.id === selectedMatchId);
+        const next = workQueueMatches[(Math.max(0, idx) + 1) % workQueueMatches.length];
+        if (next) setSelectedMatchId(next.id);
+    }, [queueOnly, selectedMatchId, setSelectedMatchId, workQueueMatches]);
+
+    const goPrevQueue = useCallback(() => {
+        if (!queueOnly) return;
+        if (!selectedMatchId || workQueueMatches.length === 0) return;
+        const idx = workQueueMatches.findIndex(m => m.id === selectedMatchId);
+        const prevIdx = idx <= 0 ? workQueueMatches.length - 1 : idx - 1;
+        const prev = workQueueMatches[prevIdx];
+        if (prev) setSelectedMatchId(prev.id);
+    }, [queueOnly, selectedMatchId, setSelectedMatchId, workQueueMatches]);
+
     const resolveSelected = useCallback(() => {
         if (!selectedMatchId) return;
         const m = matches.find(x => x.id === selectedMatchId);
@@ -710,24 +727,7 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
         if (queueOnly) {
             setTimeout(() => goNextQueue(), 0);
         }
-    }, [matches, selectedMatchId, updateMatch, setToast]);
-
-    const goNextQueue = useCallback(() => {
-        if (!queueOnly) return;
-        if (!selectedMatchId || workQueueMatches.length === 0) return;
-        const idx = workQueueMatches.findIndex(m => m.id === selectedMatchId);
-        const next = workQueueMatches[(Math.max(0, idx) + 1) % workQueueMatches.length];
-        if (next) setSelectedMatchId(next.id);
-    }, [queueOnly, selectedMatchId, workQueueMatches]);
-
-    const goPrevQueue = useCallback(() => {
-        if (!queueOnly) return;
-        if (!selectedMatchId || workQueueMatches.length === 0) return;
-        const idx = workQueueMatches.findIndex(m => m.id === selectedMatchId);
-        const prevIdx = idx <= 0 ? workQueueMatches.length - 1 : idx - 1;
-        const prev = workQueueMatches[prevIdx];
-        if (prev) setSelectedMatchId(prev.id);
-    }, [queueOnly, selectedMatchId, workQueueMatches]);
+    }, [goNextQueue, matches, queueOnly, selectedMatchId, setToast, updateMatch]);
 
     const ocrIssueMatches = useMemo(() => {
         return matches
@@ -1244,7 +1244,7 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
         } finally {
             setBulkBusy(false);
         }
-    }, [activeUser, globalOrderedMatchIds, matches, normalizeModifierName, ocrMode, ocrRegions, pushNotification, rerunRuntimeOptions, selectedIds, sessionTeams, setSmartCapturesOpenOcrReviewMatchId, setToast, showWizard, updateMatch]);
+    }, [activeUser, globalOrderedMatchIds, matches, normalizeModifierName, ocrMode, ocrRegions, pushNotification, rerunRuntimeOptions, selectedIds, sessionShipTypes, sessionTeams, setQueueOnly, setSelectedMatchId, setSmartCapturesOpenOcrReviewMatchId, setToast, showWizard, updateMatch]);
 
     const handlePreviewArtifactRepair = useCallback(async () => {
         setRepairBusy(true);
@@ -2832,14 +2832,14 @@ const SmartMatchDetail: React.FC<{
             setNewPlayerName('');
         };
 
-        const applyResult = (result: 'Win' | 'Loss' | 'Draw') => {
+        const applyResult = useCallback((result: 'Win' | 'Loss' | 'Draw') => {
             const placement = result === 'Win'
                 ? 1
                 : result === 'Loss'
                     ? (match.placement && match.placement >= 2 && match.placement <= 5 ? match.placement : 2)
                     : match.placement;
             onUpdate({ ...match, result, placement });
-        };
+        }, [match, onUpdate]);
         const moveOpponentPlayer = useCallback((
             fromTeamIndex: number,
             fromPlayerIndex: number,
@@ -2966,7 +2966,7 @@ const SmartMatchDetail: React.FC<{
                 shipType: String(match.ship || ''),
                 players: friendlyPlayers,
             }, ...opponentBoardTeams];
-        }, [dedupeBoardNames, isActiveUserLike, match, match.opponentTeams, match.opponents, match.ship, match.teammates]);
+        }, [dedupeBoardNames, isActiveUserLike, match]);
         const assignmentBoardFuzzyMatches = useMemo<Record<string, string>>(() => {
             if (!Array.isArray(pilotRegistry) || pilotRegistry.length === 0) return {};
             const next: Record<string, string> = {};
@@ -3164,7 +3164,7 @@ const SmartMatchDetail: React.FC<{
                 onUpdate({ ...match, artifacts: reordered });
             }
         };
-        const handleRerunAnalysis = async () => {
+        const handleRerunAnalysis = useCallback(async () => {
             const artifactCandidates = artifacts.images.length > 0 ? artifacts.images : (match.artifacts || []);
             if (!artifactCandidates || artifactCandidates.length === 0) return;
             setRerunning(true);
@@ -3297,7 +3297,29 @@ const SmartMatchDetail: React.FC<{
             } finally {
                 setRerunning(false);
             }
-        };
+        }, [
+            activeUser,
+            applyReviewDataToSession,
+            artifacts.images,
+            displayNumber,
+            getLatestMatchSnapshot,
+            match.artifacts,
+            match.id,
+            ocrMode,
+            ocrRegions,
+            onApplyToSession,
+            onUpdate,
+            openWizardForMatch,
+            persistNameSourceHintsToPendingDraft,
+            pushNotification,
+            rerunRuntimeOptions,
+            setOcrNameSources,
+            setRerunProgress,
+            setRerunResults,
+            setRerunning,
+            setReviewData,
+            setToast,
+        ]);
         const maxTeammatesForShip = (shipType?: string | null) => getMaxTeammatesForShipLimit(shipType);
         const TEAM_COLOR_MAP: Record<string, string> = {
             red: 'bg-danger', orange: 'bg-warning', yellow: 'bg-warning',
@@ -3379,7 +3401,7 @@ const SmartMatchDetail: React.FC<{
                 durationDeltaSeconds: evaluated.durationDeltaSeconds,
                 durationToleranceSeconds: evaluated.durationToleranceSeconds,
             };
-        }, [artifacts.telemetry, match.mode, match.teammates, match.telemetryConsistency, match.time]);
+        }, [artifacts.telemetry, match]);
         const telemetryConsistencyChips = telemetryConsistency
             ? getTelemetryConsistencyWarningChips({ ...match, telemetryConsistency })
             : [];
@@ -3539,7 +3561,7 @@ const SmartMatchDetail: React.FC<{
 
             window.addEventListener('keydown', onKeyDown);
             return () => window.removeEventListener('keydown', onKeyDown);
-        }, [applyResult, applyReviewDataToSession, isActive, match, queueOnly, onNext, onPrev, onResolve, rerunning, onApplyToSession]);
+        }, [applyResult, applyReviewDataToSession, handleRerunAnalysis, isActive, match, onApplyToSession, onNext, onPrev, onResolve, queueOnly, rerunning]);
 
         return (
             <div className="relative px-3 lg:px-4 pb-3 lg:pb-4 sc-detail-workspace">

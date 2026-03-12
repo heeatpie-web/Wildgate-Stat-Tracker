@@ -23,6 +23,7 @@ import { useAppStore } from '../../store/useAppStore';
 import type { OCRExtractedData } from '../../utils/ocr/ocrTypes';
 import type { Match } from '../../types';
 import { runtimeConfig } from '../../config/runtimeConfig';
+import { resolveSmartCaptureMatchId } from '../../utils/smartCaptureScope';
 
 interface ActionPanelProps {
     variant?: 'default' | 'transparent';
@@ -94,22 +95,12 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         const state = (typeof storeApi.getState === 'function'
             ? storeApi.getState()
             : {}) as any;
-        const pendingId = Number(state.pendingMatchData?.id || 0);
-        if (Number.isInteger(pendingId) && pendingId > 0) return pendingId;
-
-        const sourceMatches = Array.isArray(state.matches) ? state.matches : matches;
-        const sourceSessionStart = typeof state.sessionStartTime === 'number' ? state.sessionStartTime : sessionStartTime;
-        const sourceUser = state.activeUser || activeUser || '';
-        const recentCutoff = (typeof sourceSessionStart === 'number' && sourceSessionStart > 0)
-            ? (sourceSessionStart - 60_000)
-            : (Date.now() - (6 * 60 * 60 * 1000));
-        const unresolvedDraft = (sourceMatches || []).find((m: any) => {
-            if (!m || m.subType !== 'Telemetry Draft') return false;
-            if (!m.timestamp || Number(m.timestamp) < recentCutoff) return false;
-            if (sourceUser && m.player && m.player !== sourceUser) return false;
-            return true;
+        return resolveSmartCaptureMatchId({
+            activeUser: state.activeUser || activeUser || '',
+            matches: Array.isArray(state.matches) ? state.matches : matches,
+            pendingMatchData: state.pendingMatchData,
+            sessionStartTime: typeof state.sessionStartTime === 'number' ? state.sessionStartTime : sessionStartTime,
         });
-        return unresolvedDraft?.id ?? null;
     }, [activeUser, matches, sessionStartTime]);
 
     const submissionMatchId = resolveSubmissionMatchId();
@@ -469,7 +460,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         }, runtimeConfig.actionPanel.resultRippleDurationMs);
     };
 
-    const initiateSubmission = async (result: MatchResult) => {
+    const initiateSubmission = React.useCallback(async (result: MatchResult) => {
         const now = Date.now();
         const lastSignal = lastSubmitSignalRef.current;
         if (lastSignal && lastSignal.result === result && (now - lastSignal.at) < 250) {
@@ -553,7 +544,21 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
 
         openResultWizard(result);
         syncDraftArtifacts(submissionMatchId ?? null);
-    };
+    }, [
+        activeUser,
+        dispatchOcrGate,
+        getPendingData,
+        onSmartCaptureData,
+        openResultWizard,
+        pendingData,
+        pendingOcrCountForSubmission,
+        processAllStored,
+        pushNotification,
+        resultOcrFlowMode,
+        setBackgroundOcrState,
+        submissionMatchId,
+        syncDraftArtifacts,
+    ]);
 
     const handleOcrPromptCancel = () => {
         setOcrDecisionPrompt(null);

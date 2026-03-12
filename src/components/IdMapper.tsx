@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Save, Trash2, Download, Upload, Users, UserMinus, UserCheck, Eye, ChevronDown, FileJson, X, Pencil } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
@@ -342,7 +342,7 @@ export const IdMapper: React.FC = () => {
         },
     };
 
-    const inferRelationshipTag = (id: string, name: string): MappingTag => {
+    const inferRelationshipTag = useCallback((id: string, name: string): MappingTag => {
         const unknownTypeTag = getTagFromUnknownType(normalizedUnknowns?.[id]?.type);
         if (unknownTypeTag) return unknownTypeTag;
 
@@ -367,11 +367,11 @@ export const IdMapper: React.FC = () => {
         if (inferredByName) return inferredByName;
 
         return 'player';
-    };
+    }, [normalizedUnknowns, uidMappings]);
 
     // Computed relationship data
-    const topOpponents = useMemo(() => getMostFrequentOpponents(5), [playerProfiles]);
-    const topTeammates = useMemo(() => getMostFrequentTeammates(5), [playerProfiles]);
+    const topOpponents = useMemo(() => getMostFrequentOpponents(5), [getMostFrequentOpponents]);
+    const topTeammates = useMemo(() => getMostFrequentTeammates(5), [getMostFrequentTeammates]);
     const knownEntries = useMemo(() => {
         const entries: Array<{ key: string; id: string; name: string; domain: MappingDomain }> = [];
         const pushDomain = (domain: MappingDomain, mappings: Record<string, string>) => {
@@ -397,7 +397,7 @@ export const IdMapper: React.FC = () => {
     const relationshipEntries = useMemo(
         () => Object.entries(playerProfiles)
             .filter(([id, profile]: [string, any]) => inferRelationshipTag(id, profile.name || '') === 'player'),
-        [playerProfiles, uidMappings, normalizedUnknowns]
+        [inferRelationshipTag, playerProfiles]
     );
 
     useEffect(() => {

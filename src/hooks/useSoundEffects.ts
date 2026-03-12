@@ -18,6 +18,15 @@ const getAudioContext = (): AudioContext | null => {
 export const useSoundEffects = () => {
     const soundEnabled = useAppStore((state) => state.soundEnabled);
 
+    const prepareAudio = useCallback(() => {
+        if (!soundEnabled) return;
+
+        const ctx = getAudioContext();
+        if (!ctx || ctx.state !== 'suspended') return;
+
+        void ctx.resume().catch(() => undefined);
+    }, [soundEnabled]);
+
     const playTone = useCallback((freq: number, type: 'sine' | 'square' | 'sawtooth' | 'triangle', duration: number, delay = 0) => {
         if (!soundEnabled) return;
 
@@ -100,5 +109,5 @@ export const useSoundEffects = () => {
         playTone(440, 'triangle', 0.5, 0.3);
     }, [playTone]);
 
-    return { playCapture, playStart, playVictory, playDefeat, playClick, playSuccess, playError, playEnd };
+    return { prepareAudio, playCapture, playStart, playVictory, playDefeat, playClick, playSuccess, playError, playEnd };
 };

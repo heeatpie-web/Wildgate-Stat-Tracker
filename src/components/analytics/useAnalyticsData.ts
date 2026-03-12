@@ -30,7 +30,8 @@ import {
 } from '../../utils/analytics';
 import { useGameData } from '../../providers/GameDataProvider';
 import { useUIState } from '../../providers/UIStateProvider';
-import { getMatchEquipment, getMatchEra, getMatchPerks, getMatchProspectorWeapons, getMatchShip } from '../patch/patchEntityCatalog';
+import { getUpdateLabel } from '../../data/gamePatches';
+import { getMatchEquipment, getMatchPerks, getMatchProspectorWeapons, getMatchShip, getMatchUpdateKey } from '../patch/patchEntityCatalog';
 
 const METRIC_MIN_SAMPLE = 5;
 const DELTA_MIN_SAMPLE = 10;
@@ -95,7 +96,7 @@ const EMPTY_ENTITY_FILTERS: EntityAnalyticsFilters = {
     prospectorWeapon: [],
     equipment: [],
     perk: [],
-    era: [],
+    update: [],
 };
 
 const toPct = (value: number): number => Math.round(value * 1000) / 10;
@@ -157,6 +158,7 @@ const buildEntityRows = (
     dimension: EntityDimensionKey
 ): EntityMetricRow[] => {
     const counters: Record<string, {
+        label: string;
         total: number;
         wins: number;
         placements: Record<string, number>;
@@ -174,8 +176,8 @@ const buildEntityRows = (
                     return getMatchEquipment(match);
                 case 'perk':
                     return getMatchPerks(match);
-                case 'era':
-                    return [getMatchEra(match)];
+                case 'update':
+                    return [getMatchUpdateKey(match)];
                 default:
                     return [];
             }
@@ -184,7 +186,7 @@ const buildEntityRows = (
         unique.forEach((label) => {
             const key = label.toLowerCase();
             if (!counters[key]) {
-                counters[key] = { total: 0, wins: 0, placements: {} };
+                counters[key] = { label, total: 0, wins: 0, placements: {} };
             }
             counters[key].total += 1;
             if (match.result === 'Win') counters[key].wins += 1;
@@ -196,7 +198,7 @@ const buildEntityRows = (
     return Object.entries(counters)
         .map(([key, value]) => ({
             key,
-            label: key === 'expansion' ? 'Expansion' : key === 'baseline' ? 'Baseline' : key,
+            label: dimension === 'update' ? getUpdateLabel(key) : value.label,
             sampleCount: value.total,
             usageRate: toPct(value.total / totalMatches),
             winRate: toPct(value.wins / Math.max(value.total, 1)),
@@ -212,7 +214,7 @@ const matchPassesFilters = (match: any, filters: EntityAnalyticsFilters): boolea
     const weapons = getMatchProspectorWeapons(match);
     const equipment = getMatchEquipment(match);
     const perks = getMatchPerks(match);
-    const era = getMatchEra(match);
+    const update = getMatchUpdateKey(match);
     if (filters.ship.length > 0 && !filters.ship.some((candidate) => candidate.toLowerCase() === ship.toLowerCase())) {
         return false;
     }
@@ -225,7 +227,7 @@ const matchPassesFilters = (match: any, filters: EntityAnalyticsFilters): boolea
     if (filters.perk.length > 0 && !filters.perk.every((candidate) => perks.some((entry) => entry.toLowerCase() === candidate.toLowerCase()))) {
         return false;
     }
-    if (filters.era.length > 0 && !filters.era.includes(era)) {
+    if (filters.update.length > 0 && !filters.update.includes(update)) {
         return false;
     }
     return true;
@@ -244,7 +246,7 @@ const EMPTY_ENTITY_ANALYTICS: EntityAnalyticsData = {
         prospectorWeapon: [],
         equipment: [],
         perk: [],
-        era: [],
+        update: [],
     },
     comparisons: {
         periodVsPrevious: {
@@ -457,7 +459,7 @@ export const useAnalyticsData = (
                 prospectorWeapon: buildEntityRows(selectedMatches, 'prospectorWeapon'),
                 equipment: buildEntityRows(selectedMatches, 'equipment'),
                 perk: buildEntityRows(selectedMatches, 'perk'),
-                era: buildEntityRows(selectedMatches, 'era'),
+                update: buildEntityRows(selectedMatches, 'update'),
             },
             comparisons: {
                 periodVsPrevious: calculateComparison('Current Period vs Previous Period', currentPeriodMatches, previousPeriodMatches),

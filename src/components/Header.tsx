@@ -10,7 +10,8 @@ import { useUIState } from '../providers/UIStateProvider';
 import SystemPulse from './SystemPulse';
 import { useAppStore } from '../store/useAppStore';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
-import { APP_VERSION, Match } from '../types';
+import { APP_VERSION } from '../types';
+import { resolveSmartCaptureMatchId } from '../utils/smartCaptureScope';
 import { Button } from './ui';
 import NotificationCenter from './NotificationCenter';
 
@@ -55,29 +56,17 @@ export const Header: React.FC<HeaderProps> = ({
 
     const devClicks = useRef(0);
 
-    const resolveHeaderCaptureMatchId = () => {
-        const pendingMatchId = Number((pendingMatchData as Match | null)?.id || 0);
-        if (Number.isInteger(pendingMatchId) && pendingMatchId > 0) {
-            return pendingMatchId;
-        }
-        const recentCutoff = (typeof sessionStartTime === 'number' && sessionStartTime > 0)
-            ? (sessionStartTime - 60_000)
-            : (Date.now() - (6 * 60 * 60 * 1000));
-        const activeDraft = (matches || []).find((m: Match) => {
-            if (m.subType !== 'Telemetry Draft') return false;
-            if (Number(m.timestamp || 0) < recentCutoff) return false;
-            if (activeUser && m.player && m.player !== activeUser) return false;
-            return true;
-        });
-        return activeDraft?.id ?? null;
-    };
-
     const handleTopbarSmartCapture = async () => {
         try {
             if (activeView !== 'recording') {
                 React.startTransition(() => setActiveView('recording'));
             }
-            const captureMatchId = resolveHeaderCaptureMatchId();
+            const captureMatchId = resolveSmartCaptureMatchId({
+                activeUser,
+                matches,
+                pendingMatchData,
+                sessionStartTime,
+            });
             const requestId = requestSmartCapture({
                 activeUser: activeUser || null,
                 source: 'header',

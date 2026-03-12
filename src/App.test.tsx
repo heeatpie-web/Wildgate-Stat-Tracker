@@ -71,6 +71,7 @@ const uiState = {
 
 const gameDataState = {
   matches: [],
+  setMatches: vi.fn(),
   sessionStartTime: Date.now() - 1_000,
   setPendingMatchData: vi.fn(),
   pilotRegistry: [],
@@ -107,6 +108,7 @@ const appStoreState = {
   ocrLearningStrictMode: false,
   ocrLearningReviewMode: 'balanced',
   ocrLearningAutoPromoteCount: 3,
+  dismissedRosterCandidateKeys: [] as string[],
   ocrCorrections: {},
   ocrAliasModel: {},
   matches: [] as any[],
@@ -203,6 +205,7 @@ describe('App', () => {
     window.sessionStorage.clear();
     getElectronAPIMock.mockReturnValue(null);
     discardTelemetryDraftMock.mockReset();
+    uiState.activeUser = 'Pilot';
     uiState.activeView = 'recording';
     uiState.isOverlayMode = false;
     uiState.showChangelog = false;
@@ -211,7 +214,9 @@ describe('App', () => {
     gameDataState.selectedReachModifiers = [];
     gameDataState.sessionTeams = {};
     gameDataState.sessionShipTypes = {};
+    gameDataState.setMatches.mockReset();
     appStoreState.selectedTeammates = [];
+    appStoreState.dismissedRosterCandidateKeys = [];
     appStoreState.matches = [];
     appStoreState.pendingMatchData = {};
   });
@@ -644,6 +649,56 @@ describe('App', () => {
       ],
       ocrState: 'reviewing',
     }));
+  });
+
+  it('uses the latest active user when OCR gate data arrives after a user switch', async () => {
+    const { default: App } = await import('./App');
+    const { rerender } = render(<App />);
+
+    uiState.activeUser = 'Ace';
+    rerender(<App />);
+
+    const ocrPayload = {
+      screenshotType: 'crew_hub',
+      playerShip: { shipType: 'Hunter', confidence: 92 },
+      playerTeamName: '',
+      playerShipName: '',
+      reachModifiers: [],
+      enemyShips: [],
+      teammates: [],
+      opponentTeams: [
+        {
+          teamName: 'Enemy Team',
+          shipType: 'Scout',
+          color: 'blue',
+          players: [
+            { name: 'Ace', confidence: 93 },
+            { name: 'Enemy1', confidence: 88 },
+          ],
+          confidence: 90,
+        },
+      ],
+      artifacts: ['ocr.png'],
+      overallConfidence: 90,
+      captureTimestamp: Date.now(),
+    } as const;
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('submission:ocr-gate', {
+        detail: {
+          result: 'Win',
+          data: ocrPayload,
+        },
+      }));
+    });
+
+    await waitFor(() => {
+      expect(appStoreState.setPendingMatchData).toHaveBeenCalledWith(expect.objectContaining({
+        teammates: ['Enemy1'],
+        opponents: [],
+        opponentTeams: [],
+      }));
+    });
   });
 });
 

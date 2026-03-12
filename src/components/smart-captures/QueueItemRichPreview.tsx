@@ -170,7 +170,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
     >
       <span
         aria-hidden="true"
-        className={`absolute inset-y-0 left-0 w-3px rounded-r-full transition-all ${
+        className={`absolute inset-y-0 left-0 w-[5px] rounded-r-full transition-all ${
           match.result === 'Win'
             ? 'bg-success'
             : match.result === 'Loss'

@@ -239,13 +239,16 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
     }, [updateTarget]);
 
     useEffect(() => {
+        const initialView = initialViewRef.current;
+        const initialSettings = initialSettingsRef.current;
+        const initialSidebarCollapsed = initialSidebarCollapsedRef.current;
         return () => {
-            setActiveView(initialViewRef.current);
-            if (initialSettingsRef.current !== showSettings) {
-                setShowSettings(initialSettingsRef.current);
+            setActiveView(initialView);
+            if (initialSettings !== showSettings) {
+                setShowSettings(initialSettings);
             }
             if (openedSidebarForTutorialRef.current) {
-                setSidebarCollapsed(initialSidebarCollapsedRef.current);
+                setSidebarCollapsed(initialSidebarCollapsed);
             }
         };
     }, [setActiveView, setShowSettings, setSidebarCollapsed, showSettings]);

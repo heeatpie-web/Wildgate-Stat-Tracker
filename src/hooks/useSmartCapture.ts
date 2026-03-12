@@ -103,7 +103,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   const ocrAliasModel = useAppStore(s => s.ocrAliasModel);
   const playerProfiles = useAppStore(s => s.playerProfiles);
   const { visionStatus, setVisionStatus, setToast } = useUIState();
-  const { playCapture, playSuccess, playError: playSoundError } = useSoundEffects();
+  const { prepareAudio, playCapture, playSuccess, playError: playSoundError } = useSoundEffects();
   const {
     setTimeMin, setTimeSec, setDamageTaken,
     setSelectedReachModifiers,
@@ -1037,6 +1037,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   }, [applyTemporalFusion, canonicalizeOcrData, normalizeMatchScope, withScopeArtifacts]);
 
   const processSingleCapture = useCallback(async (activeUser?: string | null) => {
+    prepareAudio();
     const captureResult = await captureGameWindow();
 
     if (!captureResult.success || !captureResult.imageBase64) {
@@ -1105,7 +1106,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     }
 
     return ocrResult.data;
-  }, [applySmartScanResult, assessCaptureQuality, ocrMode, ocrRegions, ocrRuntimeOptions, playCapture, refineQualityFromOcr]);
+  }, [applySmartScanResult, assessCaptureQuality, ocrMode, ocrRegions, ocrRuntimeOptions, playCapture, prepareAudio, refineQualityFromOcr]);
 
   const captureOnly = useCallback(async (matchId?: string | number | null): Promise<SavedCapture | null> => {
     if (!isElectron()) {
@@ -1119,6 +1120,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     captureInFlightRef.current = true;
     setError(null);
     setVisionStatus('capturing');
+    prepareAudio();
 
     try {
       const captureResult = await captureGameWindow();
@@ -1158,7 +1160,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       setVisionStatus('idle');
       captureInFlightRef.current = false;
     }
-  }, [playCapture, playSoundError, setVisionStatus, assessCaptureQuality, normalizeMatchScope, syncArtifactsToMatchScope]);
+  }, [assessCaptureQuality, normalizeMatchScope, playCapture, playSoundError, prepareAudio, setVisionStatus, syncArtifactsToMatchScope]);
 
   const processStoredImage = useCallback(async (filePath: string, activeUser?: string | null) => {
     setVisionStatus('processing');
@@ -1293,6 +1295,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       setProcessingProgress(null);
     }
   }, [
+    clearPendingScope,
     ocrMode,
     ocrRegions,
     ocrRuntimeOptions,

@@ -247,6 +247,40 @@ describe('ActionPanel', () => {
     expect(smartScan.handleSmartScan).not.toHaveBeenCalled();
   });
 
+  it('routes smart capture to the active telemetry draft instead of stale pending data', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    const now = Date.now();
+    const onSmartCaptureData = vi.fn();
+    gameData.sessionStartTime = now - 120_000;
+    appStoreState.pendingMatchData = {
+      id: 501,
+      timestamp: now - 300_000,
+      player: 'TestPilot',
+      subType: 'Combat',
+    };
+    appStoreState.matches = [
+      {
+        id: 501,
+        timestamp: now - 300_000,
+        player: 'TestPilot',
+        subType: 'Combat',
+      },
+      {
+        id: 9001,
+        timestamp: now - 10_000,
+        player: 'TestPilot',
+        subType: 'Telemetry Draft',
+      },
+    ];
+
+    render(<ActionPanel variant="transparent" onSmartCaptureData={onSmartCaptureData} />);
+    fireEvent.click(screen.getByRole('button', { name: /smart capture/i }));
+
+    await waitFor(() => {
+      expect(smartCaptureActions.capture).toHaveBeenCalledWith('TestPilot', 9001);
+    });
+  });
+
   it('consumes smart capture request from shared UI state channel', async () => {
     const { ActionPanel } = await import('./ActionPanel');
     uiState.smartCaptureRequest = {
@@ -262,6 +296,26 @@ describe('ActionPanel', () => {
       expect(smartCaptureActions.capture).toHaveBeenCalledWith('TestPilot', 42);
     });
     expect(uiState.clearSmartCaptureRequest).toHaveBeenCalledWith('header_1');
+  });
+
+  it('routes new captures to the active telemetry draft instead of a stale pending review during an in-progress match', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    gameData.isMatchInProgress = true;
+    gameData.matches = [{
+      id: 901,
+      subType: 'Telemetry Draft',
+      timestamp: Date.now(),
+      player: 'TestPilot',
+    }];
+    appStoreState.pendingMatchData = { id: 77 };
+    appStoreState.matches = gameData.matches;
+
+    render(<ActionPanel onSmartCaptureData={vi.fn()} />);
+    fireEvent.click(screen.getAllByRole('button', { name: /smart capture/i })[0]);
+
+    await waitFor(() => {
+      expect(smartCaptureActions.capture).toHaveBeenCalledWith('TestPilot', 901);
+    });
   });
 
   it('sends pending smart capture payload into review callback and clears pending state', async () => {

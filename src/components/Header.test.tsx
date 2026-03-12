@@ -146,6 +146,43 @@ describe('Header', () => {
     window.removeEventListener('smart-capture-request', eventSpy as EventListener);
   });
 
+  it('prefers the active telemetry draft over stale pending submission state', async () => {
+    const { Header } = await import('./Header');
+    const now = Date.now();
+    const eventSpy = vi.fn();
+    appStoreState.sessionStartTime = now - 120_000;
+    appStoreState.pendingMatchData = {
+      id: 77,
+      timestamp: now - 300_000,
+      player: 'TestPilot',
+      subType: 'Combat',
+    };
+    appStoreState.matches = [
+      {
+        id: 77,
+        timestamp: now - 300_000,
+        player: 'TestPilot',
+        subType: 'Combat',
+      },
+      {
+        id: 9001,
+        timestamp: now - 10_000,
+        player: 'TestPilot',
+        subType: 'Telemetry Draft',
+      },
+    ];
+    window.addEventListener('smart-capture-request', eventSpy as EventListener);
+
+    render(<Header />);
+    fireEvent.click(screen.getByRole('button', { name: /smart capture/i }));
+
+    expect(eventSpy).toHaveBeenCalledTimes(1);
+    const event = eventSpy.mock.calls[0][0] as CustomEvent;
+    expect(event.detail).toEqual({ activeUser: 'TestPilot', source: 'header', matchId: 9001, requestId: 'sc_req_1' });
+
+    window.removeEventListener('smart-capture-request', eventSpy as EventListener);
+  });
+
   it('disables smart capture CTA while vision capture/processing is active', async () => {
     const { Header } = await import('./Header');
     uiState.visionStatus = 'processing';

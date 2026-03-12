@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { AnalyticsView, AnalyticsTimeRange, DrillDownTarget, EntityAnalyticsFilters } from '../../types';
 import { Activity, ArrowLeft, Download, LayoutGrid, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useGameData } from '../../providers/GameDataProvider';
@@ -24,8 +24,8 @@ import { MomentumView } from './MomentumView';
 import { VisualEssayView } from './VisualEssayView';
 import { AnalyticsNavigation, AnalyticsCategory } from './AnalyticsNavigation';
 import { EntityAnalyticsView } from './EntityAnalyticsView';
-import { ERA_DEFINITIONS } from './eraConfig';
-import { getMatchEra, getMatchEquipment, getMatchPerks, getMatchProspectorWeapons, getMatchShip } from '../patch/patchEntityCatalog';
+import { getUpdateLabel, UPDATE_DEFINITIONS } from '../../data/gamePatches';
+import { getMatchEquipment, getMatchPerks, getMatchProspectorWeapons, getMatchShip } from '../patch/patchEntityCatalog';
 
 const VIEW_LABELS: Record<AnalyticsView, string> = {
     overview: 'Overview',
@@ -93,7 +93,7 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
         prospectorWeapon: [],
         equipment: [],
         perk: [],
-        era: [],
+        update: [],
     });
     const contentRef = useRef<HTMLDivElement>(null);
 
@@ -118,10 +118,6 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
         () => collectSortedUnique(data.filteredMatches.flatMap((match) => getMatchPerks(match))),
         [data.filteredMatches]
     );
-    const eraFilterOptions = useMemo(
-        () => collectSortedUnique(data.filteredMatches.map((match) => getMatchEra(match))),
-        [data.filteredMatches]
-    );
     const activeContextTags = useMemo(() => {
         const timeRangeLabel = TIME_RANGE_OPTIONS.find((option) => option.value === timeRange)?.label || 'All Time';
         const tags = [`Range: ${timeRangeLabel}`];
@@ -129,21 +125,20 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
         if (entityFilters.prospectorWeapon[0]) tags.push(`Weapon: ${entityFilters.prospectorWeapon[0]}`);
         if (entityFilters.equipment[0]) tags.push(`Equipment: ${entityFilters.equipment[0]}`);
         if (entityFilters.perk[0]) tags.push(`Perk: ${entityFilters.perk[0]}`);
-        if (entityFilters.era[0]) {
-            const eraLabel = ERA_DEFINITIONS.find((era) => era.key === entityFilters.era[0])?.label || entityFilters.era[0];
-            tags.push(`Era: ${eraLabel}`);
+        if (entityFilters.update[0]) {
+            tags.push(`Update: ${getUpdateLabel(entityFilters.update[0])}`);
         }
         return tags;
     }, [entityFilters, timeRange]);
     const filterSelectClassName = 'px-2.5 py-1.5 rounded-control border border-md-sys-outline/20 bg-md-sys-surface text-md-sys-on-surface text-label-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary';
 
-    const onDrillDown = (name: string, type: DrillDownTarget['type']) => {
+    const onDrillDown = useCallback((name: string, type: DrillDownTarget['type']) => {
         setDrillDownTarget({
             name,
             type,
             matchIds: data.filteredMatches.map((match) => Number(match.id)).filter((id) => Number.isFinite(id)),
         });
-    };
+    }, [data.filteredMatches, setDrillDownTarget]);
 
     const navigateTo = (view: AnalyticsView) => setCurrentView(view);
     const goBack = () => setCurrentView('overview');
@@ -491,13 +486,13 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
                             ))}
                         </select>
                         <select
-                            value={entityFilters.era[0] || ''}
-                            onChange={(e) => setEntityFilters((prev) => ({ ...prev, era: e.target.value ? [e.target.value] : [] }))}
+                            value={entityFilters.update[0] || ''}
+                            onChange={(e) => setEntityFilters((prev) => ({ ...prev, update: e.target.value ? [e.target.value] : [] }))}
                             className={filterSelectClassName}
                         >
-                            <option value="">All Eras</option>
-                            {ERA_DEFINITIONS.filter((era) => eraFilterOptions.includes(era.key)).map((era) => (
-                                <option key={era.key} value={era.key}>{era.label}</option>
+                            <option value="">All Updates</option>
+                            {UPDATE_DEFINITIONS.map((update) => (
+                                <option key={update.key} value={update.key}>{update.label}</option>
                             ))}
                         </select>
                     </div>

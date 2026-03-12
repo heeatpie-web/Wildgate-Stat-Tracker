@@ -841,7 +841,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     const displayFriendlyTeamIndex = useMemo(() => {
         if (teamDraft.length === 0) return -1;
         return inferredFriendlyTeamIndex >= 0 ? inferredFriendlyTeamIndex : 0;
-    }, [inferredFriendlyTeamIndex, previewTeamDraft.length]);
+    }, [inferredFriendlyTeamIndex, teamDraft.length]);
     const friendlyPlayerKeys = useMemo(() => {
         if (displayFriendlyTeamIndex < 0) return new Set<string>();
         return new Set(

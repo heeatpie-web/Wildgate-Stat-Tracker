@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-/* eslint-disable no-console */
 const { execSync } = require('node:child_process');
 
 const argv = process.argv.slice(2);

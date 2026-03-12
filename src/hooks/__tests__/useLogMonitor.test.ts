@@ -130,6 +130,7 @@ describe('useLogMonitor', () => {
     gameDataState.setActiveShip.mockClear();
     gameDataState.clearTelemetryDetected.mockClear();
     gameDataState.updatePlayerIdMapping.mockClear();
+    uiState.activeMode = 'Artifact Brawl';
     uiState.setToast.mockClear();
     gameDataState.sessionStartTime = Date.now() - 5_000;
     gameDataState.isMatchInProgress = false;
@@ -248,6 +249,28 @@ describe('useLogMonitor', () => {
     });
     expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-started' }));
     dispatchSpy.mockRestore();
+  });
+
+  it('uses the latest active mode when creating telemetry drafts after a mode change', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    const { rerender } = renderHook(() => useLogMonitor('Pilot'));
+
+    uiState.activeMode = 'Fleet Battle';
+    rerender();
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'DesolationReach' },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    expect(addMatch).toHaveBeenCalledWith(expect.objectContaining({
+      mode: 'Fleet Battle',
+    }));
   });
 
   it('skips stale map-start events before they can create telemetry drafts', async () => {
@@ -598,6 +621,61 @@ describe('useLogMonitor', () => {
     expect(latestActiveWeapons['Double Whammy']).toBeUndefined();
     expect(latestActiveWeapons['The Doctor']).toBeUndefined();
     expect(latestActiveWeapons['Repair Drone']).toBeUndefined();
+  });
+
+  it('drops stale prospector equipment beyond the two-slot limit when telemetry loadout syncs', async () => {
+    gameDataState.currentLoadout = {
+      hero: 'Adrian',
+      ship: 'Hunter',
+      weapons: [],
+      equipment: ['Shield Matrix'],
+      characterWeapons: ['Double Whammy'],
+      characterEquipment: ['Repair Drone', 'Repulsor'],
+    };
+    appStoreState.activeWeapons = {
+      'Double Whammy': 1,
+      'Repair Drone': 1,
+      'Repulsor': 1,
+      'Shield Matrix': 1,
+      Railgun: 3,
+    };
+
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'CharacterLoadoutChanged',
+          Payload: {
+            isLocalPlayer: true,
+            hero: 'Adrian',
+            ship: 'Hunter',
+            characterWeapons: ['Double Whammy'],
+            characterEquipment: ['Repair Drone', 'Repulsor'],
+          },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    const latestLoadout = gameDataState.setCurrentLoadout.mock.calls.at(-1)?.[0] as {
+      equipment?: string[];
+      characterWeapons?: string[];
+      characterEquipment?: string[];
+    };
+    expect(latestLoadout?.equipment || []).toEqual(['Shield Matrix']);
+    expect(latestLoadout?.characterWeapons || []).toEqual(['Double Whammy']);
+    expect(latestLoadout?.characterEquipment || []).toEqual(['Repair Drone', 'Repulsor']);
+
+    const latestActiveWeapons = gameDataState.setActiveWeapons.mock.calls.at(-1)?.[0] as Record<string, number>;
+    expect(latestActiveWeapons).toMatchObject({
+      'Double Whammy': 1,
+      'Repair Drone': 1,
+      'Repulsor': 1,
+      Railgun: 3,
+    });
+    expect(latestActiveWeapons['Shield Matrix']).toBeUndefined();
   });
 
   it('applies NebLoadoutSaved payloads to telemetry draft loadout while queue is active', async () => {

@@ -621,7 +621,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                     <table className="w-full text-left border-collapse history-table">
                         <thead className="sticky top-0 z-10">
                             <tr className="text-label-sm font-bold uppercase tracking-wide-10 text-md-sys-on-surface/60 border-b border-md-sys-outline/10 bg-md-sys-surface-container">
-                                <th className="w-1 p-0"></th>
+                                <th className="w-[5px] p-0"></th>
                                 <th className="px-3 py-3.5 cursor-pointer hover:text-md-sys-primary transition-colors select-none" onClick={() => handleSort('result')}>
                                     <span className="inline-flex items-center gap-1.5">Outcome <ArrowUpDown size={10} className="opacity-40" /></span>
                                 </th>
@@ -688,8 +688,8 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                                                     title="Click to select. Double-click to open details."
                                                 >
                                                     {/* left accent bar */}
-                                                    <td className="w-1 p-0 relative">
-                                                        <div className={`absolute inset-y-0 left-0 w-3px rounded-r-full transition-all ${
+                                                    <td className="w-[5px] p-0 relative">
+                                                        <div className={`absolute inset-y-0 left-0 w-[5px] rounded-r-full transition-all ${
                                                             isWin ? 'bg-success'
                                                                 : isLoss ? 'bg-danger'
                                                                     : isOngoing ? 'bg-info'
