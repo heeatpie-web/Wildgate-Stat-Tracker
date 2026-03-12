@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useDeferredValue } from 'react';
 import {
     Users, Search, Star, Edit2, Trash2, ChevronRight, ChevronDown, Merge,
     Undo2, ScanEye, Swords, Handshake, TrendingUp, X, Plus,
@@ -160,13 +160,14 @@ const PlayerHub: React.FC = () => {
         return (mergeHistory || []).find((entry) => entry.id === activeMergeNotificationId) || null;
     }, [activeMergeNotificationId, mergeHistory]);
 
+    const deferredPilotRegistry = useDeferredValue(pilotRegistry);
     const possibleMergeGroups = useMemo(() => buildRosterMergeSuggestionGroups({
-        pilotRegistry,
+        pilotRegistry: deferredPilotRegistry,
         pilotAliases,
         pendingReviews,
         dismissedPairKeys: dismissedRosterMergePairKeys,
         autoMergeThresholdPct: Math.round((Number(ocrAutoApplyMinScore) || 0.83) * 100),
-    }), [dismissedRosterMergePairKeys, ocrAutoApplyMinScore, pendingReviews, pilotAliases, pilotRegistry]);
+    }), [dismissedRosterMergePairKeys, ocrAutoApplyMinScore, pendingReviews, pilotAliases, deferredPilotRegistry]);
 
     const findRosterMatch = (value: string): string | null => {
         const normalizedValue = normalizeOcrName(value || '').toLowerCase();

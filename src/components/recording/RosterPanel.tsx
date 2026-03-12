@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Users, Star, Filter, Search, Edit2, Plus, X, Trash2, Check, Undo2 } from 'lucide-react';
 import { useGameData } from '../../providers/GameDataProvider';
@@ -125,11 +125,14 @@ export const RosterPanel: React.FC = () => {
         });
     };
 
-    const filtered = Array.from(new Set(pilotRegistry))
-        .filter((p: string) => !selectedTeammates.includes(p) && !selectedOpponents.includes(p))
-        .filter((p: string) => p.toLowerCase().includes(searchTerm.toLowerCase()));
+    const filtered = useMemo(() => {
+        const query = searchTerm.toLowerCase();
+        return Array.from(new Set(pilotRegistry))
+            .filter((p: string) => !selectedTeammates.includes(p) && !selectedOpponents.includes(p))
+            .filter((p: string) => p.toLowerCase().includes(query));
+    }, [pilotRegistry, selectedTeammates, selectedOpponents, searchTerm]);
 
-    const sorted = [...filtered].sort((a: string, b: string) => {
+    const sorted = useMemo(() => [...filtered].sort((a: string, b: string) => {
         if (sortMode === 'pinned') {
             const aFav = favorites.includes(a);
             const bFav = favorites.includes(b);
@@ -137,7 +140,15 @@ export const RosterPanel: React.FC = () => {
             if (!aFav && bFav) return 1;
         }
         return a.localeCompare(b);
-    });
+    }), [filtered, sortMode, favorites]);
+
+    const pilotTeamColorMap = useMemo(() => {
+        const map = new Map<string, string>();
+        Object.entries(sessionTeams || {}).forEach(([color, members]) => {
+            (members as string[]).forEach((m) => map.set(m, color));
+        });
+        return map;
+    }, [sessionTeams]);
 
     const tryToggleTeammate = (pilotName: string) => {
         const normalizedPilot = normalizeOcrName(pilotName || '').toLowerCase();
@@ -467,7 +478,7 @@ export const RosterPanel: React.FC = () => {
                         </div>
                     )}
                     {sorted.map((p: string) => {
-                        const teamColor = Object.entries(sessionTeams || {}).find(([_, members]) => (members as string[]).includes(p))?.[0];
+                        const teamColor = pilotTeamColorMap.get(p);
 
                         return (
                             <div key={p} className="roster-player-row group md3-surface rounded-control px-3 py-2.5 border border-md-sys-outline/12 hover:border-md-sys-primary/28 hover:bg-md-sys-on-surface/5 transition-colors flex items-center justify-between gap-2 min-w-0">

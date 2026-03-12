@@ -1425,6 +1425,9 @@ export const Wizard: React.FC = () => {
                                         <div className="mt-2 text-label-sm text-md-sys-on-surface/65">
                                             OCR is still running in the background. Review fields will unlock automatically when processing completes.
                                         </div>
+                                        <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-md-sys-outline/20">
+                                            <div className="h-full w-2/5 rounded-full bg-md-sys-primary animate-progress-indeterminate" />
+                                        </div>
                                     </div>
                                 </div>
                             )}

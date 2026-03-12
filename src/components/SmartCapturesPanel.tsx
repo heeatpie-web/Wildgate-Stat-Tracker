@@ -97,6 +97,7 @@ import {
     getRosterCandidatePruneIdsForAcceptedName,
     shouldQueueCanonicalRosterCandidate,
 } from '../utils/pendingReviewUtils';
+import { ROSTER_MERGE_REVIEW_MIN_SCORE } from '../utils/rosterMergeSuggestions';
 
 export { backfillOpponentTeamShipTypes } from '../utils/ocr/opponentTeamShipTypes';
 
@@ -380,6 +381,7 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
         updateMatch,
         deleteMatch,
         pilotRegistry,
+        mergePilots,
         addToRegistry,
         setSelectedTeammates,
         setSelectedOpponents,
@@ -1528,6 +1530,9 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
                                         <div className="mt-2 text-label-sm text-md-sys-on-surface/65">
                                             Results are still being prepared in the background. This review view will unlock automatically when processing completes.
                                         </div>
+                                        <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-md-sys-outline/20">
+                                            <div className="h-full w-2/5 rounded-full bg-md-sys-primary animate-progress-indeterminate" />
+                                        </div>
                                     </div>
                                 ) : undefined}
                                 content={selectedMatch ? (
@@ -1817,6 +1822,28 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
                                         }}
                                         onQueueRosterCandidate={queueRosterCandidate}
                                         onAddPilotToRoster={handleAddPilotToRoster}
+                                        onMergePilots={(fromName, intoName) => {
+                                            const fromKey = normalizeOcrName(fromName).toLowerCase();
+                                            const intoKey = normalizeOcrName(intoName).toLowerCase();
+                                            if (!fromKey || !intoKey || fromKey === intoKey) return;
+
+                                            mergePilots(fromName, intoName);
+
+                                            const latest = useAppStore.getState().matches.find((m) => m.id === selectedMatch.id) || selectedMatch;
+                                            const updatedTeammates = (latest.teammates || []).map((name) => (
+                                                normalizeOcrName(name).toLowerCase() === fromKey ? intoName : name
+                                            ));
+                                            const updatedOpponents = (latest.opponents || []).map((name) => (
+                                                normalizeOcrName(name).toLowerCase() === fromKey ? intoName : name
+                                            ));
+
+                                            updateMatch({
+                                                ...latest,
+                                                teammates: updatedTeammates,
+                                                opponents: updatedOpponents,
+                                            });
+                                            setToast({ message: `Merged "${fromName}" into "${intoName}"`, type: 'success' });
+                                        }}
                                         onDeleteMatch={handleDeleteSingleMatch}
                                         devMode={devMode}
                                     />
@@ -2139,6 +2166,7 @@ const SmartMatchDetail: React.FC<{
     onApplyToSession?: (data: OCRExtractedData) => ApplyToSessionResult;
     onQueueRosterCandidate?: (name: string) => void;
     onAddPilotToRoster?: (name: string) => void;
+    onMergePilots?: (fromName: string, intoName: string) => void;
     onDeleteMatch?: (match: Match) => void;
     onBeginArtifactDrag?: (payload: { sourceMatchId: number; artifactId: string; imagePath: string; filename: string }) => void;
     onEndArtifactDrag?: () => void;
@@ -2160,6 +2188,7 @@ const SmartMatchDetail: React.FC<{
     onApplyToSession,
     onQueueRosterCandidate,
     onAddPilotToRoster,
+    onMergePilots,
     onDeleteMatch,
     onBeginArtifactDrag,
     onEndArtifactDrag,
@@ -2770,10 +2799,11 @@ const SmartMatchDetail: React.FC<{
             onUpdate({ ...match, [type === 'teammate' ? 'teammates' : 'opponents']: arr });
         };
 
-        const savePlayerEdit = () => {
+        const savePlayerEdit = (overrideName?: string) => {
             if (!editingPlayerIdx) { setEditingPlayerIdx(null); return; }
             const { type, idx } = editingPlayerIdx;
-            const resolvedName = resolveRosterName(editPlayerValue, { allowFuzzy: false });
+            const rawValue = overrideName !== undefined ? overrideName : editPlayerValue;
+            const resolvedName = overrideName !== undefined ? overrideName : resolveRosterName(rawValue, { allowFuzzy: false });
             if (!resolvedName) { setEditingPlayerIdx(null); return; }
             const arr = type === 'teammate' ? [...(match.teammates || [])] : [...(match.opponents || [])];
             const existing = new Set(
@@ -2982,6 +3012,35 @@ const SmartMatchDetail: React.FC<{
             });
             return next;
         }, [assignmentBoardTeams, pilotRegistry]);
+        const mergeHintsByName = useMemo(() => {
+            const hints = new Map<string, string[]>();
+            if (!Array.isArray(pilotRegistry) || pilotRegistry.length === 0) return hints;
+
+            const registryKeys = new Set(
+                pilotRegistry
+                    .map((name) => normalizeOcrName(name).toLowerCase())
+                    .filter(Boolean)
+            );
+            const allPlayers = [...(match.teammates || []), ...(match.opponents || [])];
+
+            allPlayers.forEach((rawName) => {
+                const normalized = normalizeOcrName(rawName || '').toLowerCase();
+                if (!normalized || hints.has(normalized)) return;
+                if (!registryKeys.has(normalized)) return;
+
+                const nearDups = getRosterCandidateSuggestions(rawName, pilotRegistry)
+                    .filter((candidate) => (
+                        candidate.score >= ROSTER_MERGE_REVIEW_MIN_SCORE
+                        && normalizeOcrName(candidate.name).toLowerCase() !== normalized
+                    ));
+
+                if (nearDups.length > 0) {
+                    hints.set(normalized, nearDups.map((candidate) => candidate.name));
+                }
+            });
+
+            return hints;
+        }, [match.opponents, match.teammates, pilotRegistry]);
         const commitAssignmentBoardTeams = useCallback((nextTeams: OcrTeamAssignmentTeam[]) => {
             if (!Array.isArray(nextTeams) || nextTeams.length === 0) return;
             const [friendlyTeam, ...opponentTeamsRaw] = nextTeams;
@@ -3034,18 +3093,70 @@ const SmartMatchDetail: React.FC<{
                 <div className="flex flex-wrap gap-1.5 items-center">
                     {players.map((p, idx) => (
                         editingPlayerIdx?.type === type && editingPlayerIdx?.idx === idx ? (
-                            <div key={idx} className="flex items-center gap-1">
-                                <input
-                                    type="text"
-                                    value={editPlayerValue}
-                                    onChange={e => setEditPlayerValue(e.target.value)}
-                                    onKeyDown={e => { if (e.key === 'Enter') savePlayerEdit(); if (e.key === 'Escape') setEditingPlayerIdx(null); }}
-                                    className="md3-surface rounded px-2 py-1 text-label-sm outline-none w-24"
-                                    list={pilotRegistry.length > 0 ? rosterSuggestionsId : undefined}
-                                    autoFocus
-                                />
-                                <button onClick={savePlayerEdit} className="hover:text-success"><Check size={10} /></button>
-                                <button onClick={() => setEditingPlayerIdx(null)} className="hover:text-danger"><X size={10} /></button>
+                            <div key={idx} className="flex flex-col gap-1">
+                                <div className="flex items-center gap-1">
+                                    <input
+                                        type="text"
+                                        value={editPlayerValue}
+                                        onChange={e => setEditPlayerValue(e.target.value)}
+                                        onKeyDown={e => { if (e.key === 'Enter') savePlayerEdit(); if (e.key === 'Escape') setEditingPlayerIdx(null); }}
+                                        className="md3-surface rounded px-2 py-1 text-label-sm outline-none w-24"
+                                        list={pilotRegistry.length > 0 ? rosterSuggestionsId : undefined}
+                                        autoFocus
+                                    />
+                                    <button onClick={() => savePlayerEdit()} className="hover:text-success"><Check size={10} /></button>
+                                    <button onClick={() => setEditingPlayerIdx(null)} className="hover:text-danger"><X size={10} /></button>
+                                </div>
+                                {(() => {
+                                    const fuzzySuggestions = getRosterCandidateSuggestions(editPlayerValue, pilotRegistry)
+                                        .filter(s => s.name.toLowerCase() !== editPlayerValue.trim().toLowerCase());
+                                    if (fuzzySuggestions.length === 0) return null;
+                                    return (
+                                        <div className="flex flex-wrap gap-1">
+                                            {fuzzySuggestions.map(s => (
+                                                <button
+                                                    key={s.name}
+                                                    type="button"
+                                                    onClick={() => savePlayerEdit(s.name)}
+                                                    className="ocr-assignment-fuzzy-badge ocr-assignment-fuzzy-badge--apply text-label-xs px-1.5 py-0.5"
+                                                    title={`Apply fuzzy match: ${s.name}`}
+                                                >
+                                                    ~ {s.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    );
+                                })()}
+                                {(() => {
+                                    const normalizedEditing = normalizeOcrName(editPlayerValue).toLowerCase();
+                                    const mergeTargets = mergeHintsByName.get(normalizedEditing);
+                                    if (!mergeTargets || mergeTargets.length === 0) return null;
+                                    const registryName = pilotRegistry.find((entry) => (
+                                        normalizeOcrName(entry).toLowerCase() === normalizedEditing
+                                    ));
+                                    if (!registryName) return null;
+                                    return (
+                                        <div className="flex flex-wrap gap-1 items-center">
+                                            <span className="text-label-xs text-warning/80 font-semibold shrink-0">
+                                                Duplicate?
+                                            </span>
+                                            {mergeTargets.map((target) => (
+                                                <button
+                                                    key={target}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        onMergePilots?.(registryName, target);
+                                                        setEditingPlayerIdx(null);
+                                                    }}
+                                                    className="ocr-assignment-fuzzy-badge ocr-assignment-fuzzy-badge--apply !border-warning !text-warning text-label-xs px-1.5 py-0.5"
+                                                    title={`Merge "${registryName}" into "${target}"`}
+                                                >
+                                                    {target} - Merge
+                                                </button>
+                                            ))}
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         ) : (
                             <span
@@ -3056,6 +3167,18 @@ const SmartMatchDetail: React.FC<{
                                 {type === 'teammate' && (
                                     <ShieldCheck size={10} className="text-info shrink-0" />
                                 )}
+                                {(() => {
+                                    const normalizedKey = normalizeOcrName(p).toLowerCase();
+                                    const mergeTargets = mergeHintsByName.get(normalizedKey);
+                                    if (!mergeTargets || mergeTargets.length === 0 || isActiveUserLike(p)) return null;
+                                    return (
+                                        <AlertTriangle
+                                            size={9}
+                                            className="text-warning shrink-0"
+                                            title={`Possible duplicate: ${mergeTargets.join(', ')}`}
+                                        />
+                                    );
+                                })()}
                                 <span className="truncate max-w-[280px]">{isActiveUserLike(p) ? p : toDisplayPlayerName(p)}</span>
                                 {isActiveUserLike(p) && (
                                     <span className="ocr-active-user-pill ocr-active-user-pill--success">
