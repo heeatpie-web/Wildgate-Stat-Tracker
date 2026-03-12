@@ -400,6 +400,9 @@ export const useMatchSubmission = () => {
             matches,
             sessionStartTime
         } = state;
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a7d49972-e6dd-4654-bed0-f48690fb9224',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ce3ae1'},body:JSON.stringify({sessionId:'ce3ae1',runId:'wizard-rerun-pre-fix-1',hypothesisId:'H5',location:'useMatchSubmission.ts:processFinalSubmission',message:'process-final-entry',data:{subType,hasPendingMatchData:Boolean(pendingMatchData),showWizard:showWizard??null,pendingResult:String(pendingMatchData?.result||''),pendingSubType:String(pendingMatchData?.subType||''),pendingPlacement:pendingPlacement??null,submitting},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
 
         if (!pendingMatchData || submitting) return;
         const draftResult = pendingMatchData?.result;
@@ -567,6 +570,9 @@ export const useMatchSubmission = () => {
             const matchEnd = (totalDurationMs > 0 && matchStart > 0)
                 ? Math.min(submissionTime, matchStart + totalDurationMs + 90_000)
                 : submissionTime;
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/a7d49972-e6dd-4654-bed0-f48690fb9224',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ce3ae1'},body:JSON.stringify({sessionId:'ce3ae1',runId:'pre-fix-1',hypothesisId:'H2',location:'useMatchSubmission.ts:initiateSubmission',message:'artifact-bundle-window',data:{matchId:newMatch.id,submissionTime,matchStart,matchEnd,totalDurationMs,pendingArtifacts:Array.isArray(pendingMatchData.artifacts)?pendingMatchData.artifacts.length:0,existingArtifacts:Array.isArray(existingMatch?.artifacts)?existingMatch?.artifacts.length:0,isTelemetryDraftSource:Boolean(isTelemetryDraftSource)},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
 
             const bundledArtifacts = await bundleMatchArtifacts(newMatch.id, matchStart, matchEnd);
             let scopedRepairAppliedLinks = 0;
@@ -610,6 +616,9 @@ export const useMatchSubmission = () => {
             (newMatch.artifacts || []).forEach(pushArtifact);
             bundledArtifacts.forEach(pushArtifact);
             diskArtifacts.forEach(pushArtifact);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/a7d49972-e6dd-4654-bed0-f48690fb9224',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ce3ae1'},body:JSON.stringify({sessionId:'ce3ae1',runId:'pre-fix-1',hypothesisId:'H3',location:'useMatchSubmission.ts:initiateSubmission',message:'artifact-merge-results',data:{matchId:newMatch.id,bundledCount:Array.isArray(bundledArtifacts)?bundledArtifacts.length:0,diskCount:diskArtifacts.length,missingCount:Array.isArray(structuredArtifacts.missingImages)?structuredArtifacts.missingImages.length:0,resolvedFromDisk:Boolean(structuredArtifacts.resolvedFromDisk),mergedCount:mergedArtifacts.length},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
 
             const existingArtifacts = newMatch.artifacts || [];
             const artifactsChanged = mergedArtifacts.length !== existingArtifacts.length
@@ -640,6 +649,9 @@ export const useMatchSubmission = () => {
 
 
             const consumedArtifactPaths = mergeArtifactLists(existingMatch?.artifacts, pendingMatchData.artifacts, bundledArtifacts);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/a7d49972-e6dd-4654-bed0-f48690fb9224',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ce3ae1'},body:JSON.stringify({sessionId:'ce3ae1',runId:'pre-fix-1',hypothesisId:'H4',location:'useMatchSubmission.ts:initiateSubmission',message:'artifacts-consumed-notify',data:{matchId:newMatch.id,consumedCount:consumedArtifactPaths.length,consumedWithoutDiskCount:mergeArtifactLists(existingMatch?.artifacts,pendingMatchData.artifacts).length},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
             notifyArtifactsConsumed(newMatch.id, consumedArtifactPaths);
             window.dispatchEvent(new CustomEvent('recording:match-complete', { detail: { result: submittedResult, matchId: newMatch.id } }));
             if (scopedRepairRemovedLinks > 0) {

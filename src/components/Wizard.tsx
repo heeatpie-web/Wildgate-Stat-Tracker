@@ -399,6 +399,9 @@ export const Wizard: React.FC = () => {
         if (hasSavedOcrReview && activeTab === 'result') {
             setGuidedResultStep('save');
         }
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a7d49972-e6dd-4654-bed0-f48690fb9224',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ce3ae1'},body:JSON.stringify({sessionId:'ce3ae1',runId:'wizard-rerun-pre-fix-1',hypothesisId:'H3',location:'Wizard.tsx:guided-step-effect',message:'guided-step-state',data:{activeTab,showGuidedDetails,hasSavedOcrReview,hasPendingOcrReview,guidedResultStep,nextStep:(hasSavedOcrReview&&activeTab==='result')?'save':'unchanged'},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
     }, [activeTab, hasSavedOcrReview, isWizardOpen, showGuidedDetails]);
 
     if (!showWizard || !pendingMatchData) return null;
@@ -1407,6 +1410,9 @@ export const Wizard: React.FC = () => {
                                                 } as Match);
                                             }
                                         }
+                                        // #region agent log
+                                        fetch('http://127.0.0.1:7242/ingest/a7d49972-e6dd-4654-bed0-f48690fb9224',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ce3ae1'},body:JSON.stringify({sessionId:'ce3ae1',runId:'wizard-rerun-pre-fix-1',hypothesisId:'H2',location:'Wizard.tsx:onAcceptAll',message:'accept-all-switching-tab',data:{matchId:matchId??null,latestPendingOcrState:String(latestPending?.ocrState||''),latestPendingReviewedAt:Boolean(latestPending?.ocrReviewedAt),activeTabBefore:activeTab,selectedResult},timestamp:Date.now()})}).catch(()=>{});
+                                        // #endregion
                                         React.startTransition(() => setActiveTab('result'));
                                     }}
                                     screenshots={deferredWizardReviewScreenshots}
@@ -1464,6 +1470,9 @@ export const Wizard: React.FC = () => {
                             </button>
                             <button
                                 onClick={() => {
+                                    // #region agent log
+                                    fetch('http://127.0.0.1:7242/ingest/a7d49972-e6dd-4654-bed0-f48690fb9224',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ce3ae1'},body:JSON.stringify({sessionId:'ce3ae1',runId:'wizard-rerun-pre-fix-1',hypothesisId:'H4',location:'Wizard.tsx:finalize-button',message:'finalize-click-branch',data:{hasPendingOcrReview,canFinalizeResult,guidedResultStep,selectedResult,selectedWinType,pendingPlacement:pendingPlacement??null,submitting},timestamp:Date.now()})}).catch(()=>{});
+                                    // #endregion
                                     if (hasPendingOcrReview) {
                                         React.startTransition(() => setActiveTab('ocr'));
                                         return;
