@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.1.9": [
+    "Fix: Telemetry match-start prompts can now launch Smart Capture directly and route you back to Recording when capture starts from another view.",
+    "Fix: Queued OCR processing now shows live progress and status feedback in the blocking review prompt instead of a static waiting state.",
+    "Reliability: Inactive recording and dashboard views now pause their listeners/work so Smart Capture, OCR follow-up, and result routing stay scoped to the active surface."
+  ],
   "v3.1.8": [
     "Fix: Saving OCR review from the match-result wizard now returns to the result flow instead of closing back to Recording with the reviewed hostile roster still visible.",
     "Fix: Final save and submission cleanup now clears teammate, hostile, and team-ship session state so reviewed OCR roster context does not bleed into the next recording."

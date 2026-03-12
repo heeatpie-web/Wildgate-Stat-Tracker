@@ -1988,7 +1988,7 @@ ipcMain.on('start-log-monitoring', (_event, options = {}) => {
             win.webContents.send('log-data', data);
             const hasUsableTelemetry = usableTelemetryEvents.length > 0;
             if (hasUsableTelemetry) {
-              telemetryArchiveHelpers.archiveTelemetry(telemetryArchiveHelpers.getArchiveDir(app), data);
+              await telemetryArchiveHelpers.archiveTelemetry(telemetryArchiveHelpers.getArchiveDir(app), data);
             }
 
             let historyResult = { addedCount: 0, skippedCount: 0 };

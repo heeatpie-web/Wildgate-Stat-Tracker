@@ -1,10 +1,14 @@
 import React from 'react';
 import { AnalyticsShell } from './analytics/AnalyticsShell';
 
-const AnalyticsPanel: React.FC = () => {
+interface AnalyticsPanelProps {
+    isActive?: boolean;
+}
+
+const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ isActive = true }) => {
     return (
         <div data-tour="view-analytics" className="h-full">
-            <AnalyticsShell />
+            <AnalyticsShell isActive={isActive} />
         </div>
     );
 };

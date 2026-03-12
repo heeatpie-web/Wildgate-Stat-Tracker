@@ -63,7 +63,7 @@ export interface SmartCaptureActions {
   processAllStored: (activeUser?: string | null, matchId?: string | number | null) => Promise<void>;
   clearCaptures: () => void;
   clearError: () => void;
-  dismissPendingData: () => void;
+  dismissPendingData: (matchId?: string | number | null) => void;
   getPendingData: (matchId?: string | number | null) => OCRExtractedData | null;
   getMergedData: () => OCRExtractedData | null;
   reanalyzeCaptures: (matchId?: string | number | null) => void;
@@ -148,70 +148,18 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     pendingDataRef.current = pendingData;
   }, [pendingData]);
 
-  // Clear auto-OCR timer on unmount to prevent state updates after unmount.
-  useEffect(() => {
-    return () => {
-      if (autoOcrTimerRef.current) {
-        clearTimeout(autoOcrTimerRef.current);
-        autoOcrTimerRef.current = null;
-      }
-    };
-  }, []);
-
   const normalizeMatchScope = useCallback((matchId?: string | number | null): string | null => {
     if (matchId === null || matchId === undefined || matchId === '') return null;
     const normalized = String(matchId).trim();
     return normalized.length > 0 ? normalized : null;
   }, []);
 
+  const toScopeStorageKey = useCallback((matchId?: string | number | null): string => (
+    normalizeMatchScope(matchId) || 'unscoped'
+  ), [normalizeMatchScope]);
+
   const toArtifactKey = useCallback((artifactPath: string): string =>
     String(artifactPath || '').trim().replace(/[\\/]+/g, '\\').toLowerCase(), []);
-
-  useEffect(() => {
-    const onArtifactsConsumed = (evt: Event) => {
-      const customEvt = evt as CustomEvent<{ matchId?: string | number | null; artifactPaths?: string[] }>;
-      const scope = normalizeMatchScope(customEvt.detail?.matchId);
-      const consumedKeys = new Set(
-        (Array.isArray(customEvt.detail?.artifactPaths) ? customEvt.detail.artifactPaths : [])
-          .map((artifactPath) => toArtifactKey(artifactPath))
-          .filter(Boolean)
-      );
-      if (!scope && consumedKeys.size === 0) return;
-
-      setSavedCaptures((prev) => {
-        const next = prev.filter((capture) => {
-          const captureKey = toArtifactKey(capture.filePath);
-          if (consumedKeys.has(captureKey)) return false;
-          if (!scope) return true;
-          return normalizeMatchScope(capture.matchId) !== scope;
-        });
-        savedCapturesRef.current = next;
-        return next;
-      });
-
-      if (scope) {
-        delete pendingDataByScopeRef.current[scope];
-        delete nameEvidenceByScopeRef.current[scope];
-      } else if (consumedKeys.size > 0) {
-        delete pendingDataByScopeRef.current.unscoped;
-        delete nameEvidenceByScopeRef.current.unscoped;
-      }
-
-      setPendingData((current) => {
-        if (!current) return null;
-        if (scope) return null;
-        const currentArtifacts = Array.isArray(current.artifacts) ? current.artifacts : [];
-        return currentArtifacts.some((artifactPath) => consumedKeys.has(toArtifactKey(artifactPath))) ? null : current;
-      });
-
-      capturedScreenshotsRef.current = [];
-      setCapturedScreenshots([]);
-      setProcessingStatus((current) => (current?.phase === 'completed' ? null : current));
-    };
-
-    window.addEventListener('smart-capture:artifacts-consumed', onArtifactsConsumed as EventListener);
-    return () => window.removeEventListener('smart-capture:artifacts-consumed', onArtifactsConsumed as EventListener);
-  }, [normalizeMatchScope, toArtifactKey]);
 
   const mergeArtifactPaths = useCallback((existing: string[] = [], incoming: string[] = []): string[] => {
     const next: string[] = [];
@@ -246,7 +194,12 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     const mergedArtifacts = mergeArtifactPaths([], artifactPaths);
     if (!scope || mergedArtifacts.length === 0) return;
 
-    const state = useAppStore.getState();
+    const storeApi = useAppStore as typeof useAppStore & {
+      getState?: () => Record<string, any>;
+    };
+    const state = typeof storeApi.getState === 'function' ? storeApi.getState() : null;
+    if (!state) return;
+
     const pendingDraft = state.pendingMatchData;
     if (pendingDraft && normalizeMatchScope(pendingDraft.id) === scope) {
       state.setPendingMatchData({
@@ -324,14 +277,112 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   const isProcessingQueueRef = useRef(false);
   const captureInFlightRef = useRef(false);
   const lastCaptureAtRef = useRef(0);
+  const autoOcrQueuedCapturePathsByScopeRef = useRef<Map<string, Set<string>>>(new Map());
 
   // In "auto" mode, don't kick off OCR immediately for each keypress.
   // Instead, treat captures as a burst and OCR after a short quiet period.
   const autoOcrBundleDelayMs = runtimeConfig.smartCapture.autoOcrBundleDelayMs;
-  const autoOcrTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoOcrTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   // Keep a stable ref to processAllStored so scheduleAutoOcr's timer always
-  // calls the latest version even after ocrMode/ocrRegions change.
-  const processAllStoredRef = useRef<typeof processAllStored | null>(null);
+  // calls the latest auto-OCR handler even after ocrMode/ocrRegions change.
+  const processQueuedAutoOcrScopeRef = useRef<((activeUser?: string | null, matchId?: string | number | null) => Promise<void>) | null>(null);
+
+  const queueAutoOcrCaptureForScope = useCallback((matchId: string | number | null | undefined, filePath: string) => {
+    const normalizedPath = String(filePath || '').trim();
+    if (!normalizedPath) return;
+    const scopeKey = toScopeStorageKey(matchId);
+    const artifactKey = toArtifactKey(normalizedPath);
+    const queuedPaths = autoOcrQueuedCapturePathsByScopeRef.current.get(scopeKey) || new Set<string>();
+    const hasQueuedPath = Array.from(queuedPaths).some((queuedPath) => toArtifactKey(queuedPath) === artifactKey);
+    if (!hasQueuedPath) {
+      queuedPaths.add(normalizedPath);
+      autoOcrQueuedCapturePathsByScopeRef.current.set(scopeKey, queuedPaths);
+    }
+  }, [toArtifactKey, toScopeStorageKey]);
+
+  const clearAutoOcrTimer = useCallback((matchId?: string | number | null) => {
+    const scopeKey = toScopeStorageKey(matchId);
+    const timer = autoOcrTimersRef.current.get(scopeKey);
+    if (!timer) return;
+    clearTimeout(timer);
+    autoOcrTimersRef.current.delete(scopeKey);
+  }, [toScopeStorageKey]);
+
+  const clearAllAutoOcrTimers = useCallback(() => {
+    autoOcrTimersRef.current.forEach((timer) => clearTimeout(timer));
+    autoOcrTimersRef.current.clear();
+  }, []);
+
+  const clearQueuedAutoOcrScope = useCallback((matchId?: string | number | null) => {
+    const scopeKey = toScopeStorageKey(matchId);
+    autoOcrQueuedCapturePathsByScopeRef.current.delete(scopeKey);
+    clearAutoOcrTimer(matchId);
+  }, [clearAutoOcrTimer, toScopeStorageKey]);
+
+  const clearAllQueuedAutoOcrScopes = useCallback(() => {
+    autoOcrQueuedCapturePathsByScopeRef.current.clear();
+    clearAllAutoOcrTimers();
+  }, [clearAllAutoOcrTimers]);
+
+  const clearPendingScopeState = useCallback((matchId?: string | number | null) => {
+    const scopeKey = toScopeStorageKey(matchId);
+    const scopedPending = pendingDataByScopeRef.current[scopeKey];
+    if (scopedPending && pendingDataRef.current === scopedPending) {
+      pendingDataRef.current = null;
+      setPendingData(null);
+    }
+    delete pendingDataByScopeRef.current[scopeKey];
+    delete nameEvidenceByScopeRef.current[scopeKey];
+  }, [toScopeStorageKey]);
+
+  const clearPendingScope = useCallback((matchId?: string | number | null) => {
+    clearPendingScopeState(matchId);
+    clearQueuedAutoOcrScope(matchId);
+  }, [clearPendingScopeState, clearQueuedAutoOcrScope]);
+
+  // Clear auto-OCR timers on unmount to prevent state updates after unmount.
+  useEffect(() => {
+    return () => {
+      clearAllQueuedAutoOcrScopes();
+    };
+  }, [clearAllQueuedAutoOcrScopes]);
+
+  useEffect(() => {
+    const onArtifactsConsumed = (evt: Event) => {
+      const customEvt = evt as CustomEvent<{ matchId?: string | number | null; artifactPaths?: string[] }>;
+      const scope = normalizeMatchScope(customEvt.detail?.matchId);
+      const consumedKeys = new Set(
+        (Array.isArray(customEvt.detail?.artifactPaths) ? customEvt.detail.artifactPaths : [])
+          .map((artifactPath) => toArtifactKey(artifactPath))
+          .filter(Boolean)
+      );
+      if (!scope && consumedKeys.size === 0) return;
+
+      setSavedCaptures((prev) => {
+        const next = prev.filter((capture) => {
+          const captureKey = toArtifactKey(capture.filePath);
+          if (consumedKeys.has(captureKey)) return false;
+          if (!scope) return true;
+          return normalizeMatchScope(capture.matchId) !== scope;
+        });
+        savedCapturesRef.current = next;
+        return next;
+      });
+
+      if (scope) {
+        clearPendingScope(scope);
+      } else if (consumedKeys.size > 0) {
+        clearPendingScope(null);
+      }
+
+      capturedScreenshotsRef.current = [];
+      setCapturedScreenshots([]);
+      setProcessingStatus((current) => (current?.phase === 'completed' ? null : current));
+    };
+
+    window.addEventListener('smart-capture:artifacts-consumed', onArtifactsConsumed as EventListener);
+    return () => window.removeEventListener('smart-capture:artifacts-consumed', onArtifactsConsumed as EventListener);
+  }, [clearPendingScope, normalizeMatchScope, toArtifactKey]);
 
   const applySmartScanResult = useCallback((res: SmartScanResult | null | undefined, activeUser?: string | null) => {
     if (!res) return;
@@ -1156,8 +1207,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     if (unprocessed.length === 0) return;
 
     if (scope) {
-      delete pendingDataByScopeRef.current[scope];
-      setPendingData(null);
+      clearPendingScope(scope);
       capturedScreenshotsRef.current = [];
       setCapturedScreenshots([]);
     }
@@ -1256,6 +1306,125 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     getFileLabel,
   ]);
 
+  const processQueuedAutoOcrScope = useCallback(async (activeUser?: string | null, matchId?: string | number | null) => {
+    const scope = normalizeMatchScope(matchId);
+    const scopeKey = toScopeStorageKey(matchId);
+    const queuedPaths = Array.from(autoOcrQueuedCapturePathsByScopeRef.current.get(scopeKey) || []);
+    clearQueuedAutoOcrScope(matchId);
+    if (queuedPaths.length === 0) return;
+
+    const queuedArtifacts = queuedPaths.filter((filePath) => {
+      const artifactKey = toArtifactKey(filePath);
+      const savedCapture = savedCapturesRef.current.find((capture) => (
+        toScopeStorageKey(capture.matchId) === scopeKey && toArtifactKey(capture.filePath) === artifactKey
+      ));
+      return !savedCapture?.ocrProcessed;
+    });
+    if (queuedArtifacts.length === 0) return;
+
+    if (scope) {
+      clearPendingScopeState(scope);
+      capturedScreenshotsRef.current = [];
+      setCapturedScreenshots([]);
+    }
+
+    setVisionStatus('processing');
+    setError(null);
+    setProcessingProgress({ current: 0, total: queuedArtifacts.length });
+    setProcessingStatus({ phase: 'prepare', message: `Preparing OCR queue (${queuedArtifacts.length} files)...` });
+
+    try {
+      const concurrency = 1;
+      const interJobDelayMs = performanceMode ? 250 : 120;
+      const yieldEvery = performanceMode ? 2 : 4;
+      const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+      const results: Array<{ filePath: string; result: RerunOcrResult }> = [];
+      const queue = [...queuedArtifacts];
+      let completed = 0;
+
+      const runNext = async () => {
+        let processedByWorker = 0;
+        while (queue.length > 0) {
+          const next = queue.shift();
+          if (!next) break;
+          setProcessingStatus({
+            phase: 'analyzing',
+            message: `Analyzing ${getFileLabel(next)} (${completed + 1}/${queuedArtifacts.length})...`,
+          });
+          const result = await rerunOCROnArtifact(next, activeUser || '', ocrMode, ocrRegions, ocrRuntimeOptions);
+          completed += 1;
+          processedByWorker += 1;
+          setProcessingProgress({ current: completed, total: queuedArtifacts.length });
+          results.push({ filePath: next, result });
+
+          if (queue.length > 0 && interJobDelayMs > 0) {
+            await delay(interJobDelayMs);
+          }
+          if (processedByWorker % yieldEvery === 0) {
+            await delay(0);
+          }
+        }
+      };
+
+      const workers = Array.from({ length: Math.min(concurrency, queue.length) }, () => runNext());
+      await Promise.allSettled(workers);
+      setProcessingStatus({ phase: 'merging', message: 'Merging OCR queue results...' });
+
+      for (const outcome of results) {
+        if (outcome.result?.success && outcome.result.data) {
+          const { filePath, result } = outcome;
+          const processedData = result.data;
+          if (!processedData) continue;
+          setSavedCaptures((prev) => {
+            const next = prev.map((capture) =>
+              toArtifactKey(capture.filePath) === toArtifactKey(filePath) ? { ...capture, ocrProcessed: true, ocrData: processedData } : capture
+            );
+            savedCapturesRef.current = next;
+            return next;
+          });
+          mergeIntoPending(processedData, scope ?? null);
+          setQualityHint(refineQualityFromOcr(null, processedData));
+        }
+      }
+
+      const successCount = results.filter((entry) => entry.result?.success).length;
+      if (successCount > 0) playSuccess();
+      if (successCount < queuedArtifacts.length) {
+        setError(`${queuedArtifacts.length - successCount} of ${queuedArtifacts.length} images failed OCR`);
+        setProcessingStatus({
+          phase: 'error',
+          message: `Completed with ${queuedArtifacts.length - successCount} OCR failures.`,
+        });
+      } else {
+        setProcessingStatus({ phase: 'completed', message: `Completed OCR for ${successCount} files.` });
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Batch processing failed';
+      setError(errorMessage);
+      setProcessingStatus({ phase: 'error', message: `OCR failed: ${errorMessage}` });
+      playSoundError();
+    } finally {
+      setVisionStatus('idle');
+      setProcessingProgress(null);
+    }
+  }, [
+    clearPendingScopeState,
+    clearQueuedAutoOcrScope,
+    getFileLabel,
+    mergeIntoPending,
+    normalizeMatchScope,
+    ocrMode,
+    ocrRegions,
+    ocrRuntimeOptions,
+    performanceMode,
+    playSoundError,
+    playSuccess,
+    refineQualityFromOcr,
+    setVisionStatus,
+    toArtifactKey,
+    toScopeStorageKey,
+  ]);
+
   const processQueue = useCallback(async () => {
     if (isProcessingQueueRef.current) return;
     isProcessingQueueRef.current = true;
@@ -1298,15 +1467,18 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     isProcessingQueueRef.current = false;
   }, [processSingleCapture, mergeIntoPending, playSuccess, playSoundError, setVisionStatus]);
 
-  // Keep ref in sync so timers always call the latest processAllStored.
-  processAllStoredRef.current = processAllStored;
+  // Keep ref in sync so timers always call the latest auto-OCR scope handler.
+  processQueuedAutoOcrScopeRef.current = processQueuedAutoOcrScope;
 
   const scheduleAutoOcr = useCallback((activeUser?: string | null, matchId?: string | number | null) => {
-    if (autoOcrTimerRef.current) clearTimeout(autoOcrTimerRef.current);
-    autoOcrTimerRef.current = setTimeout(() => {
-      processAllStoredRef.current?.(activeUser || null, matchId ?? null);
+    const scopeKey = toScopeStorageKey(matchId);
+    clearAutoOcrTimer(matchId);
+    const timer = setTimeout(() => {
+      autoOcrTimersRef.current.delete(scopeKey);
+      processQueuedAutoOcrScopeRef.current?.(activeUser || null, matchId ?? null);
     }, autoOcrBundleDelayMs);
-  }, [autoOcrBundleDelayMs]);
+    autoOcrTimersRef.current.set(scopeKey, timer);
+  }, [autoOcrBundleDelayMs, clearAutoOcrTimer, toScopeStorageKey]);
 
   const capture = useCallback(async (activeUser?: string | null, matchId?: string | number | null) => {
     if (!isElectron()) {
@@ -1325,9 +1497,10 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     const resolvedMatchId = normalizeMatchScope(matchId);
     const entry = await captureOnly(resolvedMatchId);
     if (entry && captureMode === 'auto') {
+      queueAutoOcrCaptureForScope(resolvedMatchId, entry.filePath);
       scheduleAutoOcr(activeUser || null, resolvedMatchId);
     }
-  }, [captureOnly, captureMode, scheduleAutoOcr, normalizeMatchScope]);
+  }, [captureOnly, captureMode, scheduleAutoOcr, normalizeMatchScope, queueAutoOcrCaptureForScope]);
 
   const captureMultiple = useCallback(async (count: number = 2, activeUser?: string | null, matchId?: string | number | null) => {
     if (!isElectron()) {
@@ -1341,32 +1514,35 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     // Capture burst first (fast). If auto, OCR after the burst settles.
     const resolvedMatchId = normalizeMatchScope(matchId);
     for (let i = 0; i < count; i++) {
-      await captureOnly(resolvedMatchId);
+      const entry = await captureOnly(resolvedMatchId);
+      if (entry && captureMode === 'auto') {
+        queueAutoOcrCaptureForScope(resolvedMatchId, entry.filePath);
+      }
     }
     if (captureMode === 'auto') {
       scheduleAutoOcr(activeUser || null, resolvedMatchId);
     }
-  }, [captureOnly, captureMode, scheduleAutoOcr, normalizeMatchScope]);
+  }, [captureOnly, captureMode, scheduleAutoOcr, normalizeMatchScope, queueAutoOcrCaptureForScope]);
 
   const clearCaptures = useCallback(() => {
     capturedScreenshotsRef.current = [];
     setCapturedScreenshots([]);
+    pendingDataRef.current = null;
     setPendingData(null);
     pendingDataByScopeRef.current = {};
     nameEvidenceByScopeRef.current = {};
+    clearAllQueuedAutoOcrScopes();
     setError(null);
     setProcessingStatus(null);
-  }, []);
+  }, [clearAllQueuedAutoOcrScopes]);
 
   const clearError = useCallback(() => {
     setError(null);
   }, []);
 
-  const dismissPendingData = useCallback(() => {
-    setPendingData(null);
-    pendingDataByScopeRef.current = {};
-    nameEvidenceByScopeRef.current = {};
-  }, []);
+  const dismissPendingData = useCallback((matchId?: string | number | null) => {
+    clearPendingScope(matchId);
+  }, [clearPendingScope]);
 
   const getMergedData = useCallback((): OCRExtractedData | null => {
     return buildMergedData(capturedScreenshots);
@@ -1413,6 +1589,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     setCapturedScreenshots([]);
     savedCapturesRef.current = [];
     setSavedCaptures([]);
+    pendingDataRef.current = null;
     setPendingData(null);
     pendingDataByScopeRef.current = {};
     nameEvidenceByScopeRef.current = {};
@@ -1421,11 +1598,8 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     captureQueueRef.current = [];
     setQueueDepth(0);
     isProcessingQueueRef.current = false;
-    if (autoOcrTimerRef.current) {
-      clearTimeout(autoOcrTimerRef.current);
-      autoOcrTimerRef.current = null;
-    }
-  }, []);
+    clearAllQueuedAutoOcrScopes();
+  }, [clearAllQueuedAutoOcrScopes]);
 
   const state: SmartCaptureState = {
     isCapturing,
@@ -1457,4 +1631,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
 
   return [state, actions];
 }
+
+
+
 

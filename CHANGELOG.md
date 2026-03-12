@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.9] - 2026-03-12
+
+### Fixed
+- Telemetry match-start prompts can now launch Smart Capture directly and route you back to Recording when capture starts from another view
+- Queued OCR processing now shows live progress and status feedback in the blocking review prompt instead of a static waiting state
+- Inactive recording and dashboard views now pause their listeners and work so Smart Capture, OCR follow-up, and result routing stay scoped to the active surface
+
 ## [3.1.6] - 2026-03-11
 
 ### Fixed

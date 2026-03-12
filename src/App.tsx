@@ -20,7 +20,12 @@ import { WindowResizer } from './components/WindowResizer';
 import { getTipsForView } from './utils/tipsLibrary';
 const IS_DEV_BUILD = import.meta.env.DEV || process.env.NODE_ENV !== 'production';
 type LazyDashboardView = 'analytics' | 'smart-captures' | 'players' | 'dev-ocr';
-type LazyDashboardModule = { default: React.ComponentType<object> };
+type PauseableDashboardView = 'analytics' | 'smart-captures';
+type StandardDashboardView = 'players' | 'dev-ocr';
+type PauseableDashboardProps = { isActive?: boolean };
+type PauseableLazyDashboardModule = { default: React.ComponentType<PauseableDashboardProps> };
+type StandardLazyDashboardModule = { default: React.ComponentType<object> };
+type AnyLazyDashboardModule = PauseableLazyDashboardModule | StandardLazyDashboardModule;
 const DEFAULT_PRELOAD_QUEUE: LazyDashboardView[] = IS_DEV_BUILD
     ? ['analytics', 'smart-captures', 'players', 'dev-ocr']
     : ['analytics', 'smart-captures', 'players'];
@@ -30,10 +35,12 @@ const lazyDashboardStatus: Record<LazyDashboardView, 'idle' | 'loading' | 'ready
     players: 'idle',
     'dev-ocr': 'idle',
 };
-const lazyDashboardPromises: Partial<Record<LazyDashboardView, Promise<LazyDashboardModule>>> = {};
-const lazyDashboardLoaders: Record<LazyDashboardView, () => Promise<LazyDashboardModule>> = {
+const lazyDashboardPromises: Partial<Record<LazyDashboardView, Promise<AnyLazyDashboardModule>>> = {};
+const pauseableDashboardLoaders: Record<PauseableDashboardView, () => Promise<PauseableLazyDashboardModule>> = {
     analytics: () => import('./components/AnalyticsPanel'),
     'smart-captures': () => import('./components/SmartCapturesPanel'),
+};
+const standardDashboardLoaders: Record<StandardDashboardView, () => Promise<StandardLazyDashboardModule>> = {
     players: () => import('./components/PlayerHub'),
     'dev-ocr': () => import('./components/DevOCRPanel'),
 };
@@ -42,13 +49,11 @@ const isLazyDashboardView = (view: string): view is LazyDashboardView =>
     view === 'smart-captures' ||
     view === 'players' ||
     (view === 'dev-ocr' && IS_DEV_BUILD);
-const loadDashboardChunk = (view: LazyDashboardView): Promise<LazyDashboardModule> => {
-    if (view === 'dev-ocr' && !IS_DEV_BUILD) {
-        return Promise.reject(new Error('Dev OCR panel is disabled in production builds.'));
-    }
-    if (lazyDashboardPromises[view]) return lazyDashboardPromises[view] as Promise<LazyDashboardModule>;
+const loadPauseableDashboardChunk = (view: PauseableDashboardView): Promise<PauseableLazyDashboardModule> => {
+    const existing = lazyDashboardPromises[view] as Promise<PauseableLazyDashboardModule> | undefined;
+    if (existing) return existing;
     lazyDashboardStatus[view] = 'loading';
-    const task = lazyDashboardLoaders[view]()
+    const task = pauseableDashboardLoaders[view]()
         .then((mod) => {
             lazyDashboardStatus[view] = 'ready';
             return mod;
@@ -60,17 +65,41 @@ const loadDashboardChunk = (view: LazyDashboardView): Promise<LazyDashboardModul
     lazyDashboardPromises[view] = task;
     return task;
 };
-const loadAnalyticsPanel = () => loadDashboardChunk('analytics');
+const loadStandardDashboardChunk = (view: StandardDashboardView): Promise<StandardLazyDashboardModule> => {
+    if (view === 'dev-ocr' && !IS_DEV_BUILD) {
+        return Promise.reject(new Error('Dev OCR panel is disabled in production builds.'));
+    }
+    const existing = lazyDashboardPromises[view] as Promise<StandardLazyDashboardModule> | undefined;
+    if (existing) return existing;
+    lazyDashboardStatus[view] = 'loading';
+    const task = standardDashboardLoaders[view]()
+        .then((mod) => {
+            lazyDashboardStatus[view] = 'ready';
+            return mod;
+        })
+        .catch((error) => {
+            lazyDashboardStatus[view] = 'error';
+            throw error;
+        });
+    lazyDashboardPromises[view] = task;
+    return task;
+};
+const loadAnalyticsPanel = () => loadPauseableDashboardChunk('analytics');
 const AnalyticsPanel = React.lazy(loadAnalyticsPanel);
 import { APP_VERSION, Match, MatchResult, WizardResult } from './types';
 import { UNKNOWN_PLAYER_LABELS } from './utils/constants';
 import { Toast } from './components/Toast';
-const loadDevOCRPanel = () => loadDashboardChunk('dev-ocr');
+const loadDevOCRPanel = () => loadStandardDashboardChunk('dev-ocr');
 const DevOCRPanel = React.lazy(loadDevOCRPanel);
-const loadSmartCapturesPanel = () => loadDashboardChunk('smart-captures');
+const loadSmartCapturesPanel = () => loadPauseableDashboardChunk('smart-captures');
 const SmartCapturesPanel = React.lazy(loadSmartCapturesPanel);
-const loadPlayerHub = () => loadDashboardChunk('players');
+const loadPlayerHub = () => loadStandardDashboardChunk('players');
 const PlayerHub = React.lazy(loadPlayerHub);
+const loadLazyDashboardChunk = (view: LazyDashboardView): Promise<AnyLazyDashboardModule> => (
+    view === 'analytics' || view === 'smart-captures'
+        ? loadPauseableDashboardChunk(view)
+        : loadStandardDashboardChunk(view)
+);
 const IdMapper = React.lazy(() => import('./components/IdMapper').then((m) => ({ default: m.IdMapper })));
 const RenameModal = React.lazy(() => import('./components/RenameModal').then((m) => ({ default: m.RenameModal })));
 const SetupWizard = React.lazy(() => import('./components/SetupWizard').then((m) => ({ default: m.SetupWizard })));
@@ -1416,7 +1445,7 @@ const App: React.FC = () => {
                 if (!cancelled) scheduleNext();
                 return;
             }
-            void loadDashboardChunk(nextView)
+            void loadLazyDashboardChunk(nextView)
                 .then(() => {
                     if (!cancelled) markReady(nextView);
                 })
@@ -1658,6 +1687,9 @@ const App: React.FC = () => {
     const handleTelemetryDraftSmartCapture = useCallback(() => {
         if (!telemetryDraftPrompt) return;
         const maxMidmatchCaptures = 4;
+        if (activeView !== 'recording') {
+            React.startTransition(() => setActiveView('recording'));
+        }
         const requestId = requestSmartCapture({
             activeUser: activeUser || null,
             source: 'telemetry-draft-prompt',
@@ -1672,6 +1704,16 @@ const App: React.FC = () => {
                 matchId: telemetryDraftPrompt.matchId,
             },
         }));
+        if (telemetryDraftPrompt.phase === 'start') {
+            setTelemetryDraftPrompt(null);
+            setToast({
+                message: activeView !== 'recording'
+                    ? 'Smart Capture started. Opening Recording so you can capture immediately.'
+                    : 'Smart Capture started. Capture Crew Hub or Tactical when ready.',
+                type: 'info',
+            });
+            return;
+        }
         if (telemetryDraftPrompt.phase === 'midmatch') {
             const clicks = (telemetryDraftCaptureClicksRef.current.get(telemetryDraftPrompt.matchId) || 0) + 1;
             telemetryDraftCaptureClicksRef.current.set(telemetryDraftPrompt.matchId, clicks);
@@ -1685,7 +1727,7 @@ const App: React.FC = () => {
             return;
         }
         setToast({ message: 'Smart Capture started. You can submit result when ready.', type: 'info' });
-    }, [activeUser, requestSmartCapture, setToast, telemetryDraftPrompt]);
+    }, [activeUser, activeView, requestSmartCapture, setActiveView, setToast, telemetryDraftPrompt]);
 
     const handleTelemetryDraftResult = useCallback((result: FinalMatchResult) => {
         if (!telemetryDraftPrompt || telemetryDraftPrompt.phase !== 'postmatch') return;
@@ -1761,10 +1803,14 @@ const App: React.FC = () => {
 
     useEffect(() => {
         if (!telemetryDraftPendingResult || activeView !== 'recording') return;
-        window.dispatchEvent(new CustomEvent('submission:open-result', {
-            detail: { result: telemetryDraftPendingResult, source: 'telemetry-draft-prompt' }
-        }));
-        setTelemetryDraftPendingResult(null);
+        const pendingResult = telemetryDraftPendingResult;
+        const timerId = window.setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('submission:open-result', {
+                detail: { result: pendingResult, source: 'telemetry-draft-prompt' }
+            }));
+            setTelemetryDraftPendingResult(null);
+        }, 0);
+        return () => window.clearTimeout(timerId);
     }, [activeView, telemetryDraftPendingResult]);
 
     useEffect(() => {
@@ -2586,26 +2632,26 @@ const App: React.FC = () => {
         return () => window.removeEventListener('submission:ocr-gate', onOcrGateRequest as EventListener);
     }, [handleApplyOCRData]);
 
-    const renderView = (view: AppView) => {
+    const renderView = (view: AppView, isActiveView: boolean) => {
         switch (view) {
             case 'recording':
-                return <RecordingView onSmartCaptureData={handleSmartCaptureData} />;
+                return <RecordingView isActive={isActiveView} onSmartCaptureData={handleSmartCaptureData} />;
             case 'analytics':
                 return (
                     <div className="h-full min-h-0 overflow-y-auto custom-scrollbar p-3">
-                        <AnalyticsPanel />
+                        <AnalyticsPanel isActive={isActiveView} />
                     </div>
                 );
             case 'history':
                 return (
                     <div className="h-full min-h-0 overflow-y-auto custom-scrollbar p-3">
-                        <HistoryTable />
+                        <HistoryTable isActive={isActiveView} />
                     </div>
                 );
             case 'smart-captures':
                 return (
                     <div className="h-full min-h-0 overflow-y-auto custom-scrollbar p-3">
-                        <SmartCapturesPanel />
+                        <SmartCapturesPanel isActive={isActiveView} />
                     </div>
                 );
             case 'players':
@@ -2622,7 +2668,7 @@ const App: React.FC = () => {
                 );
             case 'dev-ocr':
                 if (!IS_DEV_BUILD) {
-                    return <RecordingView onSmartCaptureData={handleSmartCaptureData} />;
+                    return <RecordingView isActive={isActiveView} onSmartCaptureData={handleSmartCaptureData} />;
                 }
                 return (
                     <div className="h-full min-h-0 overflow-y-auto custom-scrollbar p-3">
@@ -2630,7 +2676,7 @@ const App: React.FC = () => {
                     </div>
                 );
             default:
-                return <RecordingView onSmartCaptureData={handleSmartCaptureData} />;
+                return <RecordingView isActive={isActiveView} onSmartCaptureData={handleSmartCaptureData} />;
         }
     };
 
@@ -2735,7 +2781,7 @@ const App: React.FC = () => {
                                             >
                                                 <Suspense fallback={isActiveView ? viewFallback : null}>
                                                     <ErrorBoundary>
-                                                        {renderView(view)}
+                                                        {renderView(view, isActiveView)}
                                                     </ErrorBoundary>
                                                 </Suspense>
                                             </section>
@@ -2985,34 +3031,22 @@ const App: React.FC = () => {
                             )}
                         </div>
                         <div className="md3-dialog-actions flex-col gap-2 sm:flex-row sm:justify-end">
-                            {telemetryDraftPrompt.phase === 'start' ? (
-                                <button
-                                    type="button"
-                                    onClick={handleTelemetryDraftLater}
-                                    className="md3-btn-filled"
-                                >
-                                    Continue
-                                </button>
-                            ) : (
-                                <>
-                                    <button
-                                        type="button"
-                                        onClick={handleTelemetryDraftLater}
-                                        disabled={telemetryDraftDiscarding}
-                                        className="md3-btn-outlined"
-                                    >
-                                        Later
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleTelemetryDraftSmartCapture}
-                                        disabled={telemetryDraftDiscarding}
-                                        className="md3-btn-filled"
-                                    >
-                                        Start Smart Capture
-                                    </button>
-                                </>
-                            )}
+                            <button
+                                type="button"
+                                onClick={handleTelemetryDraftLater}
+                                disabled={telemetryDraftPrompt.phase !== 'start' && telemetryDraftDiscarding}
+                                className="md3-btn-outlined"
+                            >
+                                {telemetryDraftPrompt.phase === 'start' ? 'Continue' : 'Later'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleTelemetryDraftSmartCapture}
+                                disabled={telemetryDraftPrompt.phase !== 'start' && telemetryDraftDiscarding}
+                                className="md3-btn-filled"
+                            >
+                                Start Smart Capture
+                            </button>
                         </div>
                     </div>
                 </div>

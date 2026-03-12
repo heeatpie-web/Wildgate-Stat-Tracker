@@ -312,6 +312,72 @@ describe('useSmartCapture', () => {
     expect(actions.getPendingData('match-consumed')).toBeNull();
   });
 
+  it('dismisses one scope without canceling another scope queued for auto OCR', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-12T12:00:00.000Z'));
+    try {
+      vi.mocked(isElectron).mockReturnValue(true);
+      vi.mocked(captureGameWindow).mockResolvedValue({
+        success: true,
+        imageBase64: 'ZmFrZQ==',
+      });
+      vi.mocked(saveScreenshot).mockImplementation(async (_image, matchId) => {
+        const scope = String(matchId || 'unscoped');
+        return {
+          success: true,
+          filePath: `C:\\captures\\${scope}.png`,
+          filename: `${scope}.png`,
+        };
+      });
+      vi.mocked(rerunOCROnArtifact).mockImplementation(async (filePath) => ({
+        success: true,
+        data: {
+          screenshotType: 'crew_hub',
+          playerShip: undefined,
+          playerTeamName: '',
+          reachModifiers: [],
+          enemyShips: [],
+          teammates: [{
+            name: String(filePath).includes('match-b') ? 'Match B Wingman' : 'Match A Wingman',
+            confidence: 88,
+            isTeammate: true,
+            rawText: 'Wingman',
+          }],
+          opponentTeams: [],
+          overallConfidence: 88,
+          captureTimestamp: Date.now(),
+        },
+      }));
+
+      const { result } = renderHook(() => useSmartCapture());
+      const [, actions] = result.current;
+
+      await act(async () => {
+        await actions.capture('Pilot', 'match-a');
+      });
+
+      vi.setSystemTime(new Date('2026-03-12T12:00:00.700Z'));
+      await act(async () => {
+        await actions.capture('Pilot', 'match-b');
+      });
+
+      act(() => {
+        actions.dismissPendingData('match-a');
+      });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+
+      expect(vi.mocked(rerunOCROnArtifact)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(rerunOCROnArtifact).mock.calls[0]?.[0]).toBe('C:\\captures\\match-b.png');
+      expect(actions.getPendingData('match-a')).toBeNull();
+      expect(actions.getPendingData('match-b')?.teammates?.[0]?.name).toBe('Match B Wingman');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('preserves hazards in pending OCR data and merged results', async () => {
     vi.mocked(isElectron).mockReturnValue(true);
     vi.mocked(captureGameWindow).mockResolvedValue({

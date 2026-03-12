@@ -749,6 +749,15 @@ export const useLogMonitor = (activeUser?: string) => {
                     const loadingMapName = typeof payload.loadedMap === 'string'
                         ? payload.loadedMap
                         : (typeof payload.loadingMap === 'string' ? payload.loadingMap : '');
+                    const isRelevantToSession = gameTime >= (sessionStartTimeRef.current - 60000);
+                    const allowSessionEvent = isRelevantToSession || devModeRef.current;
+                    const ageSeconds = Math.floor((Date.now() - gameTime) / 1000);
+                    const payloadKeys = Object.keys(payload).join(',');
+                    Logger.debug('LogMonitor', `EVENT: ${name} | Age: ${ageSeconds}s | Keys: ${payloadKeys}`);
+                    if (!allowSessionEvent) {
+                        Logger.debug('LogMonitor', `Skipping old event: ${name} (age: ${ageSeconds}s, before session start)`);
+                        return;
+                    }
                     const mapStartSignal = name === 'NebLoadingScreen' && !!loadingMapName && !loadingMapName.includes('Frontend');
                     const mapEndSignal = name === 'NebLoadingScreen' && loadingMapName.includes('Frontend');
                     const sessionEndSignal = !currentMatchSessionId && !!previousMatchSessionId;
@@ -767,10 +776,6 @@ export const useLogMonitor = (activeUser?: string) => {
                     if (startLifecycleSignal && !telemetryDraftMatchIdRef.current) {
                         createTelemetryDraftIfNeeded(gameTime);
                     }
-                    const isRelevantToSession = gameTime >= (sessionStartTimeRef.current - 60000);
-                    const ageSeconds = Math.floor((Date.now() - gameTime) / 1000);
-                    const payloadKeys = Object.keys(payload).join(',');
-                    Logger.debug('LogMonitor', `EVENT: ${name} | Age: ${ageSeconds}s | Keys: ${payloadKeys}`);
 
                     if (name === 'NebClientMatchmakerStateChange') {
                         if (!telemetryLifecycleActiveRef.current) {
@@ -1519,13 +1524,9 @@ export const useLogMonitor = (activeUser?: string) => {
                         pilotRegistry: pilotRegistryRef.current,
                         lastMatchSessionId: lastMatchSessionIdRef.current
                     };
-                    if (isRelevantToSession || devModeRef.current) {
-                        processTelemetryEvent(e, actions, context);
-                        if (startLifecycleSignal && !telemetryLifecycleActiveRef.current) {
-                            telemetryLifecycleActiveRef.current = true;
-                        }
-                    } else {
-                        Logger.debug('LogMonitor', `Skipping old event: ${name} (age: ${ageSeconds}s, before session start)`);
+                    processTelemetryEvent(e, actions, context);
+                    if (startLifecycleSignal && !telemetryLifecycleActiveRef.current) {
+                        telemetryLifecycleActiveRef.current = true;
                     }
                     lastMatchSessionIdRef.current = currentMatchSessionId;
                     if (endLifecycleSignal && telemetryLifecycleActiveRef.current) {

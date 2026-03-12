@@ -588,6 +588,39 @@ describe('useMatchSubmission', () => {
     expect(matchCompleteEvent?.detail).toEqual(expect.objectContaining({ result: 'Win' }));
   });
 
+  it('preserves the cached telemetry loadout after final submission for the next match reseed', async () => {
+    mockStoreState.activeUser = 'Tester';
+    mockStoreState.currentLoadout = {
+      hero: 'Adrian',
+      ship: 'Hunter',
+      weapons: ['Pulse'],
+      equipment: ['Shield'],
+      characterWeapons: ['Voltaic Pistol'],
+      characterEquipment: ['Pulse Scanner'],
+      characterPerks: ['Quick Hands'],
+    };
+    mockStoreState.pendingMatchData = {
+      mode: 'Artifact Brawl',
+      player: 'Tester',
+      teammates: [],
+      opponents: [],
+      kills: {},
+      reachModifiers: [],
+    };
+    mockStoreState.showWizard = 'Win';
+    mockStoreState.timeMin = '06';
+    mockStoreState.timeSec = '10';
+
+    const { result } = renderHook(() => useMatchSubmission());
+
+    await act(async () => {
+      await result.current.processFinalSubmission('Combat');
+    });
+
+    expect(addMatch).toHaveBeenCalled();
+    expect(setCurrentLoadout).not.toHaveBeenCalled();
+  });
+
   it('updates an existing telemetry draft match instead of adding a duplicate', async () => {
     const draftId = 987654;
     mockStoreState.activeUser = 'Tester';

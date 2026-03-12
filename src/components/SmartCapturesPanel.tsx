@@ -370,7 +370,11 @@ const applyPositionalTeamColorFallback = (
     });
 };
 
-const SmartCapturesPanel: React.FC = () => {
+interface SmartCapturesPanelProps {
+    isActive?: boolean;
+}
+
+const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true }) => {
     const {
         matches,
         updateMatch,
@@ -508,7 +512,7 @@ const SmartCapturesPanel: React.FC = () => {
         window.dispatchEvent(new CustomEvent('settings:focus-section', { detail }));
     }, []);
     useEffect(() => {
-        if (!isResizing) return;
+        if (!isActive || !isResizing) return;
         const onMove = (event: MouseEvent) => {
             const viewportWidth = window.innerWidth || 1;
             const nextPct = Math.min(42, Math.max(24, (event.clientX / viewportWidth) * 100));
@@ -521,9 +525,10 @@ const SmartCapturesPanel: React.FC = () => {
             window.removeEventListener('mousemove', onMove);
             window.removeEventListener('mouseup', onUp);
         };
-    }, [isResizing]);
+    }, [isActive, isResizing]);
 
     useEffect(() => {
+        if (!isActive) return;
         const artifactSignature = matches
             .flatMap((match) => (
                 Array.isArray(match.artifacts)
@@ -557,7 +562,7 @@ const SmartCapturesPanel: React.FC = () => {
         return () => {
             cancelled = true;
         };
-    }, [matches]);
+    }, [isActive, matches]);
 
 
     useEffect(() => {
@@ -1527,6 +1532,7 @@ const SmartCapturesPanel: React.FC = () => {
                                 ) : undefined}
                                 content={selectedMatch ? (
                                     <SmartMatchDetail
+                                        isActive={isActive}
                                         match={selectedMatch}
                                         displayNumber={getQueueDisplayNumber(selectedMatch.id, globalOrderedMatchIds)}
                                         onUpdate={updateMatch}
@@ -2117,6 +2123,7 @@ export const getBestRosterSuggestion = (
 };
 
 const SmartMatchDetail: React.FC<{
+    isActive?: boolean;
     match: Match;
     displayNumber: number;
     onUpdate: (m: Match) => void;
@@ -2137,6 +2144,7 @@ const SmartMatchDetail: React.FC<{
     onEndArtifactDrag?: () => void;
     devMode?: boolean;
 }> = ({
+    isActive = true,
     match: matchSnapshot,
     displayNumber,
     onUpdate,
@@ -2566,11 +2574,12 @@ const SmartMatchDetail: React.FC<{
         }, [activeUser, ensureNonCurrentWizardSnapshot, isActiveUserLike, match, setDamageTaken, setKills, setPendingKilledBy, setPendingKilledByShip, setPendingPlacement, setPoiEasy, setPoiEpic, setPoiMedium, setSelectedOpponents, setSelectedReachModifiers, setSelectedTeammates, setSessionShipTypes, setSessionTeams, setShowWizard, setTimeMin, setTimeSec, setToast]);
 
         useEffect(() => {
+            if (!isActive) return;
             if (!smartCapturesOpenOcrReviewMatchId) return;
             if (Number(match.id || 0) !== Number(smartCapturesOpenOcrReviewMatchId)) return;
             openWizardForMatch({ openOcrReview: getSmartCaptureWizardInitialTab('ocr-review') === 'ocr' });
             setSmartCapturesOpenOcrReviewMatchId(null);
-        }, [match.id, openWizardForMatch, setSmartCapturesOpenOcrReviewMatchId, smartCapturesOpenOcrReviewMatchId]);
+        }, [isActive, match.id, openWizardForMatch, setSmartCapturesOpenOcrReviewMatchId, smartCapturesOpenOcrReviewMatchId]);
 
         useEffect(() => {
             if (showWizard !== null) return;
@@ -2645,6 +2654,7 @@ const SmartMatchDetail: React.FC<{
         }, [match.id]);
 
         useEffect(() => {
+            if (!isActive) return;
             if (!showSecondaryActions) return;
             const onPointerDown = (event: MouseEvent) => {
                 if (!secondaryActionsRef.current) return;
@@ -2662,9 +2672,10 @@ const SmartMatchDetail: React.FC<{
                 window.removeEventListener('mousedown', onPointerDown);
                 window.removeEventListener('keydown', onKeyDown);
             };
-        }, [showSecondaryActions]);
+        }, [isActive, showSecondaryActions]);
 
         useEffect(() => {
+            if (!isActive) return;
             let cancelled = false;
             setArtifacts({ images: [], imageFiles: [], telemetry: [], missingImages: [], resolvedFromDisk: false });
             setRerunResults(null);
@@ -2711,7 +2722,7 @@ const SmartMatchDetail: React.FC<{
             return () => {
                 cancelled = true;
             };
-        }, [match, match.artifacts, match.id, onUpdate, setToast]);
+        }, [isActive, match, match.artifacts, match.id, onUpdate, setToast]);
 
         const totalKills = Object.values(match.kills || {}).reduce((a, b) => a + (Number(b) || 0), 0);
         const startEdit = (field: string, currentValue: string) => {
@@ -3486,6 +3497,7 @@ const SmartMatchDetail: React.FC<{
         };
 
         useEffect(() => {
+            if (!isActive) return;
             const onKeyDown = (e: KeyboardEvent) => {
                 const target = e.target as HTMLElement | null;
                 const tag = target?.tagName?.toLowerCase();
@@ -3527,7 +3539,7 @@ const SmartMatchDetail: React.FC<{
 
             window.addEventListener('keydown', onKeyDown);
             return () => window.removeEventListener('keydown', onKeyDown);
-        }, [applyResult, applyReviewDataToSession, match, queueOnly, onNext, onPrev, onResolve, rerunning, onApplyToSession]);
+        }, [applyResult, applyReviewDataToSession, isActive, match, queueOnly, onNext, onPrev, onResolve, rerunning, onApplyToSession]);
 
         return (
             <div className="relative px-3 lg:px-4 pb-3 lg:pb-4 sc-detail-workspace">

@@ -72,7 +72,11 @@ const PRO_CATEGORY_OPTIONS: Array<{ value: ProCategory; label: string }> = [
     { value: 'detailed', label: 'Detailed' },
 ];
 
-export const AnalyticsShell: React.FC = () => {
+interface AnalyticsShellProps {
+    isActive?: boolean;
+}
+
+export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true }) => {
     const { setDrillDownTarget } = useGameData();
     const { activeMode: currentMode, activeUser: currentUser } = useUIState();
     const { language, visualMode, setVisualMode } = useUserPreferences();
@@ -149,6 +153,7 @@ export const AnalyticsShell: React.FC = () => {
     };
 
     useEffect(() => {
+        if (!isActive) return;
         const onExternalNavigate = (evt: Event) => {
             const customEvt = evt as CustomEvent<{ view?: AnalyticsView; proMode?: boolean }>;
             const targetView = customEvt?.detail?.view;
@@ -162,7 +167,7 @@ export const AnalyticsShell: React.FC = () => {
         };
         window.addEventListener('analytics:navigate-view', onExternalNavigate as EventListener);
         return () => window.removeEventListener('analytics:navigate-view', onExternalNavigate as EventListener);
-    }, []);
+    }, [isActive]);
 
     const isInteractiveTarget = (target: EventTarget | null) => {
         const el = target as HTMLElement | null;

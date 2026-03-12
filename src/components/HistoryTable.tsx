@@ -17,10 +17,10 @@ import { useAppStore } from '../store/useAppStore';
 import { Button } from './ui';
 
 interface HistoryTableProps {
-    // No props needed
+    isActive?: boolean;
 }
 
-const HistoryTable: React.FC<HistoryTableProps> = () => {
+const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
     const { matches, deleteMatch: onDelete, updateMatch: onEdit, toggleMatchPin: onPin, setDrillDownTarget } = useGameData();
     const { language } = useUserPreferences();
     const { setActiveView, setSmartCapturesFocusMatchId, activeUser, pushNotification } = useUIState();
@@ -111,9 +111,10 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
     }, [searchTerm, itemsPerPage, sortField, sortDesc]);
 
     useEffect(() => {
+        if (!isActive) return;
         const interval = setInterval(() => setNowTick(Date.now()), runtimeConfig.history.relativeTimeRefreshMs);
         return () => clearInterval(interval);
-    }, []);
+    }, [isActive]);
 
     const filteredMatches = useMemo(() => {
         const fromTs = filterDateFrom ? new Date(filterDateFrom).getTime() : 0;

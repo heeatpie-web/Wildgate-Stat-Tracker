@@ -9,6 +9,7 @@ const fsPromises = require('fs').promises;
 
 const ARCHIVE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 const archiveStateByPath = new Map();
+const archiveQueueByPath = new Map();
 const shouldInfoLog = process.env.NODE_ENV !== 'production';
 
 function infoLog(...args) {
@@ -60,6 +61,18 @@ async function getArchiveState(archivePath) {
 
 function clearArchiveState(archivePath) {
   archiveStateByPath.delete(archivePath);
+}
+
+function queueArchiveOperation(archivePath, operation) {
+  const previous = archiveQueueByPath.get(archivePath) || Promise.resolve();
+  const queuedOperation = previous.catch(() => {}).then(operation);
+  const queueTail = queuedOperation.catch(() => {});
+  archiveQueueByPath.set(archivePath, queueTail);
+  return queuedOperation.finally(() => {
+    if (archiveQueueByPath.get(archivePath) === queueTail) {
+      archiveQueueByPath.delete(archivePath);
+    }
+  });
 }
 
 /**
@@ -124,21 +137,23 @@ async function archiveTelemetry(archiveDir, data) {
 
     const safeMatchId = matchId.toString().replace(/[^a-z0-9_-]/gi, '_');
     const archivePath = path.join(archiveDir, `match_${safeMatchId}.json`);
-    const state = await getArchiveState(archivePath);
     const newEvents = normalizeEvents(data);
-    let addedCount = 0;
+    await queueArchiveOperation(archivePath, async () => {
+      const state = await getArchiveState(archivePath);
+      let addedCount = 0;
 
-    for (const event of newEvents) {
-      const signature = telemetryEventSignature(event);
-      if (signature && state.signatures.has(signature)) continue;
-      if (signature) state.signatures.add(signature);
-      state.events.push(event);
-      addedCount += 1;
-    }
+      for (const event of newEvents) {
+        const signature = telemetryEventSignature(event);
+        if (signature && state.signatures.has(signature)) continue;
+        if (signature) state.signatures.add(signature);
+        state.events.push(event);
+        addedCount += 1;
+      }
 
-    // Skip expensive rewrites when this tick introduced no new archive events.
-    if (addedCount === 0) return;
-    await fsPromises.writeFile(archivePath, JSON.stringify(state.events), 'utf8');
+      // Skip expensive rewrites when this tick introduced no new archive events.
+      if (addedCount === 0) return;
+      await fsPromises.writeFile(archivePath, JSON.stringify(state.events), 'utf8');
+    });
   } catch (e) {
     console.error('Failed to archive telemetry:', e);
   }
@@ -212,8 +227,10 @@ async function clearArchiveFiles(archiveDir) {
   const files = (await fsPromises.readdir(archiveDir)).filter(f => f.endsWith('.json'));
   await Promise.all(files.map((file) => {
     const fullPath = path.join(archiveDir, file);
-    clearArchiveState(fullPath);
-    return fsPromises.unlink(fullPath);
+    return queueArchiveOperation(fullPath, async () => {
+      clearArchiveState(fullPath);
+      await fsPromises.unlink(fullPath);
+    });
   }));
   return { success: true, count: files.length };
 }

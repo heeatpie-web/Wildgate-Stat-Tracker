@@ -87,6 +87,8 @@ export const useSmartScan = () => {
     const [scanProgress, setScanProgress] = useState({ status: '', pct: 0 });
     const [scanLogs, setScanLogs] = useState<string[]>([]);
     const isScanning = visionStatus === 'scanning';
+    const activeScanRequestRef = useRef<number | null>(null);
+    const nextScanRequestIdRef = useRef(0);
 
     // Tick scanProgress.pct slowly while scanning to give visual feedback during the
     // long Tesseract IPC call. Caps at 88% so real onProgress(100) always advances.
@@ -156,6 +158,14 @@ export const useSmartScan = () => {
             setToast({ message: 'Smart Scan is only available in the desktop app', type: 'warning' });
             return;
         }
+        if (activeScanRequestRef.current !== null) {
+            Logger.debug('SmartScan', 'Ignored duplicate smart scan request while another scan is active');
+            return;
+        }
+        const requestId = nextScanRequestIdRef.current + 1;
+        nextScanRequestIdRef.current = requestId;
+        activeScanRequestRef.current = requestId;
+        const isActiveRequest = () => activeScanRequestRef.current === requestId;
 
         setVisionStatus('scanning');
         setScanProgress({ status: 'Capturing screen...', pct: 0 });
@@ -168,6 +178,7 @@ export const useSmartScan = () => {
             if (img) {
                 const options: ScanOptions = {
                     onProgress: (status, pct) => {
+                        if (!isActiveRequest()) return;
                         // flushSync ensures each milestone is committed to the DOM before
                         // the next await, so the progress bar updates are actually visible.
                         flushSync(() => setScanProgress({ status, pct }));
@@ -183,6 +194,7 @@ export const useSmartScan = () => {
                     { ...options, ocrMode, ocrCalibration, ocrRegions },
                     activeUser || null
                 );
+                if (!isActiveRequest()) return;
                 const sourceCapture = {
                     screenshotPath: img.debugPath,
                     screenshotLabel: img.filename,
@@ -513,13 +525,17 @@ export const useSmartScan = () => {
                     Logger.warn('SmartScan', 'Smart scan: no data detected');
                 }
             } else {
+                if (!isActiveRequest()) return;
                 setToast({ message: "Screen capture failed: No image data", type: 'error' });
             }
         } catch (e: any) {
+            if (!isActiveRequest()) return;
             Logger.error('SmartScan', 'Smart scan failed', e);
             const msg = e?.message || "Unknown error";
             setToast({ message: `Scan failed: ${msg}`, type: 'error' });
         } finally {
+            if (!isActiveRequest()) return;
+            activeScanRequestRef.current = null;
             setVisionStatus('idle');
             setScanProgress({ status: '', pct: 0 });
         }

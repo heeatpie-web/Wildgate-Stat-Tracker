@@ -612,6 +612,7 @@ export const Wizard: React.FC = () => {
             source: 'wizard',
             matchId: Number.isInteger(pendingMatchId) && pendingMatchId > 0 ? pendingMatchId : null,
             requestId: `wizard-${Date.now()}`,
+            forceOcr: true,
         });
         window.dispatchEvent(new CustomEvent('smart-capture-request', {
             detail: {

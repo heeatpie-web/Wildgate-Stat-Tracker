@@ -250,6 +250,26 @@ describe('useLogMonitor', () => {
     dispatchSpy.mockRestore();
   });
 
+  it('skips stale map-start events before they can create telemetry drafts', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    gameDataState.sessionStartTime = Date.now();
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'DesolationReach' },
+          ClientTimestamp: Math.floor((Date.now() - 180_000) / 1000),
+        },
+      ]);
+    });
+
+    expect(addMatch).not.toHaveBeenCalled();
+    expect(appStoreState.resetSelectionSourcesForNewMatch).not.toHaveBeenCalled();
+    expect(processTelemetryEvent).not.toHaveBeenCalled();
+  });
+
   it('clears a stale active-match flag when the next mission start is detected', async () => {
     gameDataState.isMatchInProgress = true;
     const { useLogMonitor } = await import('../useLogMonitor');
@@ -627,6 +647,60 @@ describe('useLogMonitor', () => {
       })
       .find((match) => Array.isArray(match?.telemetryConsistency?.loadoutSaves) && match.telemetryConsistency.loadoutSaves.length > 0);
     expect(updatedDraftWithSave?.telemetryConsistency?.loadoutSaves?.[0]?.source).toBe('NebLoadoutSaved');
+  });
+
+  it('skips stale loadout-save events before they can mutate draft or player state', async () => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    gameDataState.sessionStartTime = Date.now();
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'DesolationReach' },
+          ClientTimestamp: nowSec,
+        },
+      ]);
+    });
+
+    const createdDraft = addMatch.mock.calls[0]?.[0];
+    expect(createdDraft).toBeTruthy();
+    appStoreState.matches = [createdDraft];
+    updateMatch.mockClear();
+    processTelemetryEvent.mockClear();
+    appStoreState.setPlayerName.mockClear();
+    gameDataState.setCurrentLoadout.mockClear();
+    gameDataState.updatePlayerIdMapping.mockClear();
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadoutSaved',
+          Payload: {
+            accountId: 'stale-player-id',
+            displayName: 'Stale Pilot',
+            event: {
+              isLocalPlayer: true,
+              bWasSavedInGame: true,
+              loadout: {
+                hero: 'Venture',
+                ship: 'Scout',
+                characterWeapons: ['The Doctor'],
+              },
+            },
+          },
+          ClientTimestamp: nowSec - 180,
+        },
+      ]);
+    });
+
+    expect(updateMatch).not.toHaveBeenCalled();
+    expect(processTelemetryEvent).not.toHaveBeenCalled();
+    expect(appStoreState.setPlayerName).not.toHaveBeenCalled();
+    expect(gameDataState.updatePlayerIdMapping).not.toHaveBeenCalled();
+    expect(gameDataState.setCurrentLoadout).not.toHaveBeenCalled();
   });
 
   it('applies local loadout when telemetry only provides platform-account identity variants', async () => {

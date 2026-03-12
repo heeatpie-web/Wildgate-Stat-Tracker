@@ -26,6 +26,7 @@ interface SmartCaptureRequest {
     activeUser: string | null;
     source?: string;
     matchId?: string | number | null;
+    forceOcr?: boolean;
 }
 
 interface UIStateContextType {
@@ -69,6 +70,7 @@ interface UIStateContextType {
         source?: string;
         matchId?: string | number | null;
         requestId?: string;
+        forceOcr?: boolean;
     }) => string;
     clearSmartCaptureRequest: (requestId?: string) => void;
 
@@ -188,6 +190,7 @@ export const UIStateProvider: React.FC<{ children: React.ReactNode }> = ({ child
         source?: string;
         matchId?: string | number | null;
         requestId?: string;
+        forceOcr?: boolean;
     }) => {
         const requestId = request.requestId || `sc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         setSmartCaptureRequest({
@@ -195,6 +198,7 @@ export const UIStateProvider: React.FC<{ children: React.ReactNode }> = ({ child
             activeUser: request.activeUser ?? null,
             source: request.source,
             matchId: request.matchId ?? null,
+            forceOcr: request.forceOcr === true,
         });
         return requestId;
     }, []);

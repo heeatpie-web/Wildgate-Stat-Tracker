@@ -28,11 +28,12 @@ interface ActionPanelProps {
     variant?: 'default' | 'transparent';
     density?: 'standard' | 'compact';
     onSmartCaptureData?: (data: OCRExtractedData) => void;
+    isActive?: boolean;
 }
 
 type MatchResult = 'Win' | 'Loss' | 'Draw';
 
-export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', density = 'standard', onSmartCaptureData }) => {
+export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', density = 'standard', onSmartCaptureData, isActive = true }) => {
     const {
         sessionStartTime,
         matches,
@@ -239,7 +240,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                 matchId: queueScopeMatchId ?? null,
                 source: 'manual-review',
             });
-            dismissPendingData();
+            dismissPendingData(queueScopeMatchId ?? null);
         }
     };
 
@@ -269,6 +270,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     // Dedicated mission timer display so match time remains visible at a glance.
     const [matchElapsed, setMatchElapsed] = React.useState('00:00');
     React.useEffect(() => {
+        if (!isActive) return;
         if (!isMatchInProgress || !matchStartTime) {
             setMatchElapsed('00:00');
             return;
@@ -282,7 +284,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         tick();
         const id = setInterval(tick, 1000);
         return () => clearInterval(id);
-    }, [isMatchInProgress, matchStartTime]);
+    }, [isActive, isMatchInProgress, matchStartTime]);
 
     const handleNewSmartCapture = async () => {
         if (onSmartCaptureData) {
@@ -310,16 +312,23 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     const [ocrDecisionPrompt, setOcrDecisionPrompt] = React.useState<{ result: MatchResult; processing: boolean } | null>(null);
     const processingToastShownRef = React.useRef(false);
     const backgroundOcrInFlightRef = React.useRef(false);
+    const processingPercent = React.useMemo(() => {
+        if (!processingProgress || processingProgress.total <= 0) return null;
+        const pct = Math.round((processingProgress.current / processingProgress.total) * 100);
+        return Math.max(0, Math.min(100, pct));
+    }, [processingProgress]);
     React.useEffect(() => {
+        if (!isActive) return;
         const container = logsContainerRef.current;
         if (!container) return;
         const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
         const shouldStickToBottom = container.scrollTop === 0 || distanceFromBottom <= 24;
         if (!shouldStickToBottom) return;
         container.scrollTop = container.scrollHeight;
-    }, [scanLogs.length]);
+    }, [isActive, scanLogs.length]);
 
     React.useEffect(() => {
+        if (!isActive) return;
         const onCaptureRequest = (evt: Event) => {
             const custom = evt as CustomEvent<{ activeUser?: string | null; requestId?: string; matchId?: string | number | null; forceOcr?: boolean }>;
             const requestId = custom?.detail?.requestId || null;
@@ -346,9 +355,10 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         };
         window.addEventListener('smart-capture-request', onCaptureRequest as EventListener);
         return () => window.removeEventListener('smart-capture-request', onCaptureRequest as EventListener);
-    }, [triggerSmartCapture, processAllStored, activeUser]);
+    }, [isActive, triggerSmartCapture, processAllStored, activeUser]);
 
     React.useEffect(() => {
+        if (!isActive) return;
         if (!smartCaptureRequest?.requestId) return;
         const requestId = smartCaptureRequest.requestId;
         if (handledCaptureRequestRef.current === requestId) {
@@ -358,16 +368,19 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         handledCaptureRequestRef.current = requestId;
         const requestedUser = smartCaptureRequest.activeUser;
         const requestedMatchId = smartCaptureRequest.matchId;
-        if (requestedMatchId != null && requestedMatchId !== '') {
+        if (smartCaptureRequest.forceOcr === true) {
+            void processAllStored(requestedUser ?? activeUser ?? null, requestedMatchId ?? undefined);
+        } else if (requestedMatchId != null && requestedMatchId !== '') {
             void triggerSmartCapture(requestedUser ?? activeUser ?? null, requestedMatchId);
         } else {
             void triggerSmartCapture(requestedUser ?? activeUser ?? null);
         }
         clearSmartCaptureRequest(requestId);
-    }, [activeUser, clearSmartCaptureRequest, smartCaptureRequest, triggerSmartCapture]);
+    }, [isActive, activeUser, clearSmartCaptureRequest, processAllStored, smartCaptureRequest, triggerSmartCapture]);
 
     const autoOpenedForPendingRef = React.useRef<string | null>(null);
     React.useEffect(() => {
+        if (!isActive) return;
         if (isProcessing && !processingToastShownRef.current) {
             processingToastShownRef.current = true;
             pushNotification({
@@ -380,10 +393,11 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         if (!isProcessing) {
             processingToastShownRef.current = false;
         }
-    }, [isProcessing, pushNotification]);
+    }, [isActive, isProcessing, pushNotification]);
 
     // Rerun/queued OCR completion can open review automatically, but this is configurable.
     React.useEffect(() => {
+        if (!isActive) return;
         if (processingStatus?.phase !== 'completed') return;
         const promotionMatchId = queueScopeMatchId ?? submissionMatchId ?? null;
         const promotionData = promotionMatchId != null ? getPendingData(promotionMatchId) : pendingData;
@@ -421,6 +435,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         autoOpenedForPendingRef,
         dispatchOcrGate,
         getPendingData,
+        isActive,
         ocrAutoOpenAfterRerun,
         pendingData,
         processingStatus?.phase,
@@ -431,6 +446,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     ]);
 
     React.useEffect(() => {
+        if (!isActive) return;
         const onMatchComplete = (evt: Event) => {
             const customEvt = evt as CustomEvent<{ result?: MatchResult }>;
             const result = customEvt?.detail?.result;
@@ -440,7 +456,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         };
         window.addEventListener('recording:match-complete', onMatchComplete as EventListener);
         return () => window.removeEventListener('recording:match-complete', onMatchComplete as EventListener);
-    }, []);
+    }, [isActive]);
 
     const triggerResultRipple = (result: MatchResult, event: React.PointerEvent<HTMLButtonElement>) => {
         const rect = event.currentTarget.getBoundingClientRect();
@@ -580,6 +596,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     };
 
     React.useEffect(() => {
+        if (!isActive) return;
         const onOpenResultRequest = (evt: Event) => {
             const customEvt = evt as CustomEvent<{ result?: MatchResult }>;
             const result = customEvt?.detail?.result;
@@ -588,7 +605,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         };
         window.addEventListener('submission:open-result', onOpenResultRequest as EventListener);
         return () => window.removeEventListener('submission:open-result', onOpenResultRequest as EventListener);
-    }, [initiateSubmission]);
+    }, [isActive, initiateSubmission]);
 
     const ResultButtons: React.FC<{ compact: boolean }> = ({ compact }) => (
         <div className={`grid grid-cols-3 ${compact ? 'gap-1.5' : 'gap-2'}`}>
@@ -618,6 +635,37 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     )}
                 </button>
             ))}
+        </div>
+    );
+
+    const renderProgressTrack = ({
+        label,
+        percent,
+        indeterminate = false,
+    }: {
+        label: string;
+        percent: number | null;
+        indeterminate?: boolean;
+    }) => (
+        <div
+            className="h-1.5 bg-md-sys-on-surface/5 rounded-full overflow-hidden w-full"
+            role="progressbar"
+            aria-label={label}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={typeof percent === 'number' ? percent : undefined}
+            aria-valuetext={typeof percent === 'number' ? `${percent}%` : 'In progress'}
+        >
+            {indeterminate ? (
+                <div className="relative h-full w-full overflow-hidden">
+                    <div className="absolute inset-y-0 left-0 w-3/5 rounded-full bg-gradient-to-r from-md-sys-primary/20 via-md-sys-primary to-md-sys-primary/20 animate-pulse" />
+                </div>
+            ) : (
+                <div
+                    className="h-full bg-md-sys-primary transition-all duration-300 ease-out"
+                    style={{ width: `${percent ?? 0}%` }}
+                />
+            )}
         </div>
     );
 
@@ -651,15 +699,28 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                         </div>
                     </div>
                     <div className="text-label-sm font-mono font-bold text-md-sys-primary">
-                        {isScanning ? `${Math.round(scanProgress.pct)}%` : ''}
+                        {isScanning
+                            ? `${Math.round(scanProgress.pct)}%`
+                            : isProcessing && processingPercent != null
+                                ? `${processingPercent}%`
+                                : ''}
                     </div>
                 </div>
-                <div className="h-1.5 bg-md-sys-on-surface/5 rounded-full overflow-hidden w-full">
-                    <div
-                        className="h-full bg-md-sys-primary transition-all duration-300 ease-out"
-                        style={{ width: isScanning ? `${scanProgress.pct}%` : (isCapturing ? '30%' : isProcessing ? '70%' : '0%') }}
-                    />
-                </div>
+                {isScanning
+                    ? renderProgressTrack({
+                        label: 'Smart scan progress',
+                        percent: Math.round(scanProgress.pct),
+                    })
+                    : isProcessing
+                        ? renderProgressTrack({
+                            label: 'OCR processing progress',
+                            percent: processingPercent,
+                            indeterminate: processingPercent == null,
+                        })
+                        : renderProgressTrack({
+                            label: 'Capture progress',
+                            percent: 30,
+                        })}
                 {isScanning && scanLogs.length > 0 && (
                     <div
                         ref={logsContainerRef}
@@ -682,8 +743,35 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
             <div className="fixed inset-0 z-modal-top md3-dialog-scrim flex items-center justify-center p-4" onClick={handleOcrPromptCancel}>
                 <div className="md3-dialog rounded-modal w-full max-w-md" onClick={(e) => e.stopPropagation()}>
                     <div className="md3-dialog-title">Queued Smart Captures Detected</div>
-                    <div className="md3-dialog-content text-md-sys-on-surface/70">
-                        Result selection no longer auto-runs OCR. Choose whether to process queued captures before entering the wizard.
+                    <div className="md3-dialog-content text-md-sys-on-surface/70 space-y-3">
+                        <div>
+                            Result selection no longer auto-runs OCR. Choose whether to process queued captures before entering the wizard.
+                        </div>
+                        {ocrDecisionPrompt.processing ? (
+                            <div className="rounded-control border border-md-sys-primary/15 bg-md-sys-primary/5 p-3 space-y-2">
+                                <div className="flex items-center gap-2 text-md-sys-primary">
+                                    <Loader2 size={16} className="animate-spin" />
+                                    <span className="text-label-sm font-bold uppercase tracking-wide">
+                                        {processingProgress
+                                            ? `Processing ${processingProgress.current}/${processingProgress.total}`
+                                            : 'Processing queued captures'}
+                                    </span>
+                                </div>
+                                <div className="text-label-sm text-md-sys-on-surface/70">
+                                    {processingStatus?.message || 'OCR is analyzing the queued screenshots now.'}
+                                </div>
+                                {renderProgressTrack({
+                                    label: 'Queued OCR review progress',
+                                    percent: processingPercent,
+                                    indeterminate: processingPercent == null,
+                                })}
+                                <div className="text-label-xs text-md-sys-on-surface/55">
+                                    {processingProgress
+                                        ? `${processingProgress.current}/${processingProgress.total} images complete`
+                                        : 'This can take a moment while each screenshot is analyzed.'}
+                                </div>
+                            </div>
+                        ) : null}
                     </div>
                     <div className="md3-dialog-actions flex-col gap-2 sm:flex-row sm:justify-end">
                         <button

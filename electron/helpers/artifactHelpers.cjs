@@ -6,6 +6,7 @@
 const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
+const crypto = require('crypto');
 const { normalizeEvents } = require('./telemetryArchiveHelpers.cjs');
 
 const IMAGE_EXTS = ['.png', '.jpg', '.jpeg', '.bmp', '.webp'];
@@ -34,14 +35,29 @@ function getArtifactPaths(app) {
 
 /**
  * Scan a directory for image files within a time window and copy into matchDir.
- * Deduplicates by filename and file size.
+ * Deduplicates by filename and, for size collisions, by content hash.
  * @param {string} dir - Directory to scan
  * @param {string} matchDir - Destination directory for copied files
  * @param {number} startTime - Window start (ms)
  * @param {number} endTime - Window end (ms)
- * @param {{ bundledNames: Set<string>, bundledSizes: Set<string>, assignedCaptureNames?: Set<string>, consumeSource?: boolean, onCopy?: (srcPath: string, destPath: string) => Promise<void> }} state
+ * @param {{ bundledNames: Set<string>, bundledSizes: Set<string>, bundledContentHashesBySize?: Map<string, Set<string>>, assignedCaptureNames?: Set<string>, consumeSource?: boolean, onCopy?: (srcPath: string, destPath: string) => Promise<void> }} state
  * @returns {Promise<string[]>} - Paths of copied files (destPath)
  */
+function getBundledContentHashesBySize(state) {
+  if (state.bundledContentHashesBySize instanceof Map) {
+    return state.bundledContentHashesBySize;
+  }
+
+  const bundledContentHashesBySize = new Map();
+  state.bundledContentHashesBySize = bundledContentHashesBySize;
+  return bundledContentHashesBySize;
+}
+
+async function hashFileContents(filePath) {
+  const buffer = await fsPromises.readFile(filePath);
+  return crypto.createHash('sha256').update(buffer).digest('hex');
+}
+
 async function scanDirForImagesInWindow(dir, matchDir, startTime, endTime, state) {
   const {
     bundledNames,
@@ -50,6 +66,7 @@ async function scanDirForImagesInWindow(dir, matchDir, startTime, endTime, state
     consumeSource = false,
     onCopy,
   } = state;
+  const bundledContentHashesBySize = getBundledContentHashesBySize(state);
   const copied = [];
   if (!fs.existsSync(dir)) return copied;
 
@@ -68,13 +85,23 @@ async function scanDirForImagesInWindow(dir, matchDir, startTime, endTime, state
     if (birthtime < startTime - TIME_MARGIN_MS.before || birthtime > endTime + TIME_MARGIN_MS.after) continue;
 
     const sizeKey = `${stat.size}`;
-    if (bundledSizes.has(sizeKey)) continue;
+    let contentHash = null;
+    if (bundledSizes.has(sizeKey)) {
+      contentHash = await hashFileContents(srcPath);
+      const hashesForSize = bundledContentHashesBySize.get(sizeKey);
+      if (hashesForSize?.has(contentHash)) continue;
+    }
 
     const destPath = path.join(matchDir, file);
     await fsPromises.copyFile(srcPath, destPath);
     copied.push(destPath);
     bundledNames.add(file);
     bundledSizes.add(sizeKey);
+    const hashesForSize = bundledContentHashesBySize.get(sizeKey) || new Set();
+    if (!bundledContentHashesBySize.has(sizeKey)) {
+      bundledContentHashesBySize.set(sizeKey, hashesForSize);
+    }
+    hashesForSize.add(contentHash || await hashFileContents(srcPath));
     if (assignedCaptureNames && isAutoCaptureImage(file)) {
       assignedCaptureNames.add(fileKey);
     }

@@ -67,4 +67,32 @@ describe('artifactHelpers.scanDirForImagesInWindow', () => {
     expect(fs.existsSync(path.join(matchDir, fileName))).toBe(false);
     expect(fs.existsSync(sourcePath)).toBe(true);
   });
+
+  it('bundles distinct same-size screenshots while skipping true duplicates', async () => {
+    const root = makeTempDir();
+    tempDirs.push(root);
+    const screenshotsDir = path.join(root, 'screenshots');
+    const matchDir = path.join(root, 'match_artifacts', '103');
+    fs.mkdirSync(matchDir, { recursive: true });
+
+    writeImage(path.join(screenshotsDir, 'capture_a.png'), 'same-size-A');
+    writeImage(path.join(screenshotsDir, 'capture_b.png'), 'same-size-B');
+    writeImage(path.join(screenshotsDir, 'capture_c.png'), 'same-size-A');
+
+    const copied = await scanDirForImagesInWindow(screenshotsDir, matchDir, 0, Date.now(), {
+      bundledNames: new Set(),
+      bundledSizes: new Set(),
+      assignedCaptureNames: new Set(),
+      consumeSource: false,
+      onCopy: () => {},
+    });
+
+    expect(copied).toHaveLength(2);
+
+    const bundledPayloads = fs.readdirSync(matchDir)
+      .map(fileName => fs.readFileSync(path.join(matchDir, fileName), 'utf8'))
+      .sort();
+
+    expect(bundledPayloads).toEqual(['same-size-A', 'same-size-B']);
+  });
 });

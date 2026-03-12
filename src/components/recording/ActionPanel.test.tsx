@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 const gameData = {
@@ -268,8 +268,12 @@ describe('ActionPanel', () => {
     const { ActionPanel } = await import('./ActionPanel');
     const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
     const pendingPayload = { teammates: [{ name: 'Pilot' }] };
-    smartCaptureState.pendingData = pendingPayload;
-    smartCaptureState.savedCaptures = [{ matchId: null, ocrProcessed: false }];
+    appStoreState.pendingMatchData = { id: 77 };
+    smartCaptureState.pendingData = null;
+    smartCaptureState.savedCaptures = [{ matchId: 77, ocrProcessed: false }];
+    smartCaptureActions.getPendingData.mockImplementation((matchId?: number | null) => (
+      matchId === 77 ? pendingPayload : null
+    ));
 
     render(<ActionPanel onSmartCaptureData={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /review/i }));
@@ -279,9 +283,102 @@ describe('ActionPanel', () => {
       .find((evt) => evt.type === 'submission:ocr-gate') as CustomEvent | undefined;
     expect(gateEvent).toBeDefined();
     expect(gateEvent?.detail?.data).toBe(pendingPayload);
-    expect(gateEvent?.detail?.matchId).toBeNull();
-    expect(smartCaptureActions.dismissPendingData).toHaveBeenCalledTimes(1);
+    expect(gateEvent?.detail?.matchId).toBe(77);
+    expect(smartCaptureActions.dismissPendingData).toHaveBeenCalledWith(77);
     dispatchSpy.mockRestore();
+  });
+
+  it('defers queued smart capture requests until the panel becomes active', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    uiState.smartCaptureRequest = {
+      requestId: 'queued_1',
+      activeUser: 'TestPilot',
+      matchId: 42,
+      source: 'header',
+    };
+
+    const { rerender } = render(<ActionPanel isActive={false} />);
+
+    expect(smartCaptureActions.capture).not.toHaveBeenCalled();
+    expect(uiState.clearSmartCaptureRequest).not.toHaveBeenCalled();
+
+    rerender(<ActionPanel isActive />);
+
+    await waitFor(() => {
+      expect(smartCaptureActions.capture).toHaveBeenCalledWith('TestPilot', 42);
+    });
+    expect(uiState.clearSmartCaptureRequest).toHaveBeenCalledWith('queued_1');
+  });
+
+  it('ignores hidden smart-capture-request window events until active', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    const { rerender } = render(<ActionPanel isActive={false} />);
+
+    window.dispatchEvent(new CustomEvent('smart-capture-request', {
+      detail: {
+        requestId: 'event_1',
+        activeUser: 'TestPilot',
+        matchId: 99,
+      },
+    }));
+    expect(smartCaptureActions.capture).not.toHaveBeenCalled();
+    expect(smartCaptureActions.processAllStored).not.toHaveBeenCalled();
+
+    rerender(<ActionPanel isActive />);
+    window.dispatchEvent(new CustomEvent('smart-capture-request', {
+      detail: {
+        requestId: 'event_2',
+        activeUser: 'TestPilot',
+        matchId: 99,
+      },
+    }));
+
+    await waitFor(() => {
+      expect(smartCaptureActions.capture).toHaveBeenCalledWith('TestPilot', 99);
+    });
+  });
+
+  it('ignores hidden submission-open events until the panel is active again', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    const { rerender } = render(<ActionPanel isActive={false} />);
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('submission:open-result', { detail: { result: 'Win' } }));
+    });
+    expect(initiateSubmission).not.toHaveBeenCalled();
+
+    await act(async () => {
+      rerender(<ActionPanel isActive />);
+    });
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('submission:open-result', { detail: { result: 'Win' } }));
+    });
+
+    await waitFor(() => {
+      expect(initiateSubmission).toHaveBeenCalledWith('Win');
+    });
+  });
+
+  it('preserves the OCR decision prompt across isActive toggles', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    smartCaptureState.savedCaptures = [{
+      filePath: 'queued.png',
+      filename: 'queued.png',
+      timestamp: Date.now(),
+      matchId: null,
+      ocrProcessed: false,
+    }];
+
+    const { rerender } = render(<ActionPanel onSmartCaptureData={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /win/i }));
+
+    expect(screen.getByText(/queued smart captures detected/i)).toBeInTheDocument();
+
+    rerender(<ActionPanel isActive={false} onSmartCaptureData={vi.fn()} />);
+    expect(screen.getByText(/queued smart captures detected/i)).toBeInTheDocument();
+
+    rerender(<ActionPanel isActive onSmartCaptureData={vi.fn()} />);
+    expect(screen.getByText(/queued smart captures detected/i)).toBeInTheDocument();
   });
 
   it('uses unified result button styling and 3-way layout', async () => {
@@ -414,6 +511,38 @@ describe('ActionPanel', () => {
     expect(gateEvent?.detail?.result).toBe('Draw');
     expect(gateEvent?.detail?.matchId).toBeNull();
     dispatchSpy.mockRestore();
+  });
+
+  it('shows queued OCR progress inside the blocking prompt while processing', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    let resolveProcess: (() => void) | null = null;
+    smartCaptureState.processingProgress = { current: 1, total: 4 };
+    smartCaptureState.processingStatus = {
+      phase: 'analyzing',
+      message: 'Analyzing queued-1.png (1/4)...',
+    };
+    smartCaptureState.savedCaptures = [{
+      filePath: 'queued.png',
+      filename: 'queued.png',
+      timestamp: Date.now(),
+      matchId: null,
+      ocrProcessed: false,
+    }];
+    smartCaptureActions.processAllStored.mockImplementation(() => new Promise<void>((resolve) => {
+      resolveProcess = resolve;
+    }));
+
+    render(<ActionPanel onSmartCaptureData={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /win/i }));
+    fireEvent.click(screen.getByRole('button', { name: /process ocr and review/i }));
+
+    expect(screen.getByText('Analyzing queued-1.png (1/4)...')).toBeInTheDocument();
+    expect(screen.getByText('1/4 images complete')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: /queued ocr review progress/i })).toHaveAttribute('aria-valuenow', '25');
+
+    await act(async () => {
+      resolveProcess?.();
+    });
   });
 
   it('opens wizard immediately and processes queued OCR in background when configured', async () => {

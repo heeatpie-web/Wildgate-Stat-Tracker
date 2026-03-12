@@ -7,9 +7,10 @@ import { ActionPanel } from './recording/ActionPanel';
 
 interface RecordingViewProps {
     onSmartCaptureData?: (data: any) => void;
+    isActive?: boolean;
 }
 
-export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData }) => {
+export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData, isActive = true }) => {
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const [viewport, setViewport] = React.useState(() => ({
         w: typeof window !== 'undefined' ? window.innerWidth : 1920,
@@ -17,6 +18,7 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
     }));
 
     React.useEffect(() => {
+        if (!isActive) return;
         const measure = () => {
             const el = containerRef.current;
             if (!el) return;
@@ -42,7 +44,7 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
             window.removeEventListener('resize', onResize);
             observer?.disconnect();
         };
-    }, []);
+    }, [isActive]);
 
     // Use measured container size (not raw window size) so mode switching follows available dashboard space.
     const isNarrow = viewport.w < 980;
@@ -91,14 +93,14 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
                         <SquadronPanel density="compact" />
                     </div>
                     <div data-tour="action-panel" className="shrink-0">
-                        <ActionPanel onSmartCaptureData={onSmartCaptureData} density="compact" />
+                        <ActionPanel isActive={isActive} onSmartCaptureData={onSmartCaptureData} density="compact" />
                     </div>
                 </>
             ) : (
                 <div className="min-h-0">
                     {leftTab === 'actions' ? (
                         <div data-tour="action-panel" className="min-h-0">
-                            <ActionPanel onSmartCaptureData={onSmartCaptureData} density="compact" />
+                            <ActionPanel isActive={isActive} onSmartCaptureData={onSmartCaptureData} density="compact" />
                         </div>
                     ) : (
                         <div className="min-h-0">

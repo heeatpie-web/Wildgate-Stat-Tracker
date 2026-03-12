@@ -172,6 +172,11 @@ vi.mock('./utils/logger', () => ({
 
 vi.mock('./components/Sidebar', () => ({ Sidebar: () => <div data-testid="sidebar" /> }));
 vi.mock('./components/RecordingView', () => ({ RecordingView: () => <div data-testid="recording-view" /> }));
+vi.mock('./components/AnalyticsPanel', () => ({ default: () => <div data-testid="analytics-panel" /> }));
+vi.mock('./components/HistoryTable', () => ({ default: () => <div data-testid="history-table" /> }));
+vi.mock('./components/SmartCapturesPanel', () => ({ default: () => <div data-testid="smart-captures-panel" /> }));
+vi.mock('./components/PlayerHub', () => ({ default: () => <div data-testid="player-hub" /> }));
+vi.mock('./components/DevOCRPanel', () => ({ default: () => <div data-testid="dev-ocr-panel" /> }));
 vi.mock('./components/Header', () => ({ Header: () => <div data-testid="header" /> }));
 vi.mock('./components/WindowFrame', () => ({ WindowFrame: () => <div data-testid="window-frame" /> }));
 vi.mock('./components/OverlayView', () => ({ OverlayView: () => <div data-testid="overlay-view" /> }));
@@ -319,6 +324,49 @@ describe('App', () => {
 
     expect(screen.getByRole('dialog', { name: /telemetry match detected/i })).toBeInTheDocument();
     expect(screen.getByText(/telemetry detected mission start/i)).toBeInTheDocument();
+  });
+
+  it('starts smart capture directly from the telemetry match-start prompt', async () => {
+    const { default: App } = await import('./App');
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    uiState.activeView = 'analytics';
+    render(<App />);
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('telemetry:draft-started', {
+        detail: { matchId: 321 },
+      }));
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /start smart capture/i }));
+
+    expect(uiState.requestSmartCapture).toHaveBeenCalledWith(expect.objectContaining({
+      activeUser: 'Pilot',
+      source: 'telemetry-draft-prompt',
+      matchId: 321,
+      requestId: expect.stringMatching(/^telemetry-draft-321-/),
+    }));
+
+    const captureEvent = dispatchSpy.mock.calls
+      .map(([evt]) => evt as Event)
+      .find((evt) => evt.type === 'smart-capture-request') as CustomEvent | undefined;
+    expect(captureEvent).toBeDefined();
+    expect(captureEvent?.detail).toEqual(expect.objectContaining({
+      activeUser: 'Pilot',
+      source: 'telemetry-draft-prompt',
+      matchId: 321,
+      requestId: 'req_1',
+    }));
+    expect(uiState.setActiveView).toHaveBeenCalledWith('recording');
+    expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'Smart Capture started. Opening Recording so you can capture immediately.',
+      type: 'info',
+    }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /telemetry match detected/i })).not.toBeInTheDocument();
+    });
+
+    dispatchSpy.mockRestore();
   });
 
   it('renders recording view in default dashboard mode', async () => {

@@ -179,10 +179,11 @@ export const useMatchSubmission = () => {
         setDamageTaken("");
         setCurrentNote("");
         setActiveWeapons({}, false);
-        setCurrentLoadout(null);
+        // Preserve the latest telemetry loadout snapshot between matches so
+        // the next loading-screen transition can reseed telemetry hero/ship
+        // even when no fresh loadout event fires.
     }, [
         setActiveWeapons,
-        setCurrentLoadout,
         setCurrentNote,
         setDamageTaken,
         setIsMatchInProgress,

@@ -1,6 +1,6 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 const analyticsData = {
@@ -164,5 +164,30 @@ describe('AnalyticsShell', () => {
     expect(screen.getByRole('heading', { name: /analytics cockpit/i }).closest('.twilight-solid-scope')).not.toBeNull();
     expect(screen.queryByRole('button', { name: /all updates/i })).toBeNull();
     expect(screen.queryByText(/game patch history/i)).toBeNull();
+  });
+
+  it('ignores external navigation while inactive and preserves the current view', async () => {
+    const { AnalyticsShell } = await import('./AnalyticsShell');
+    const { rerender } = render(<AnalyticsShell />);
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('analytics:navigate-view', {
+        detail: { view: 'social' },
+      }));
+    });
+
+    expect(screen.getByTestId('social-view')).toBeInTheDocument();
+
+    rerender(<AnalyticsShell isActive={false} />);
+    expect(screen.getByTestId('social-view')).toBeInTheDocument();
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('analytics:navigate-view', {
+        detail: { view: 'momentum' },
+      }));
+    });
+
+    expect(screen.getByTestId('social-view')).toBeInTheDocument();
+    expect(screen.queryByTestId('momentum-view')).toBeNull();
   });
 });
