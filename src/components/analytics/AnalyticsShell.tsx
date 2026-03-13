@@ -97,7 +97,13 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
     });
     const contentRef = useRef<HTMLDivElement>(null);
 
-    const data = useAnalyticsData(timeRange, lastN, currentView, entityFilters);
+    const requestedDataView = useMemo<AnalyticsView | undefined>(() => {
+        // Standard overview only needs lightweight metrics.
+        // Pro overview renders many tiles and should request full analytics.
+        if (isProMode && currentView === 'overview') return undefined;
+        return currentView;
+    }, [currentView, isProMode]);
+    const data = useAnalyticsData(timeRange, lastN, requestedDataView, entityFilters);
     const collectSortedUnique = (values: string[]): string[] => (
         Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)))
             .sort((a, b) => a.localeCompare(b))
@@ -241,7 +247,9 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
     };
 
     const modeBadge = currentMode === 'Artifact Brawl' ? 'bg-warning-soft text-warning border-warning-soft' : 'bg-info-soft text-info border-info-soft';
-    const proTiles = useMemo(() => ([
+    const proTiles = useMemo(() => {
+        if (!isProMode) return [];
+        return [
         {
             view: 'momentum' as AnalyticsView,
             label: 'Momentum',
@@ -331,7 +339,9 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
             category: 'detailed' as ProCategory,
             content: <EntityAnalyticsView data={data.entityAnalytics} />,
         },
-    ]), [
+        ];
+    }, [
+        isProMode,
         data.momentum,
         data.killEfficiency,
         data.placementData,

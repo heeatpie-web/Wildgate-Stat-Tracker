@@ -60,6 +60,8 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     const resultOcrFlowMode = useAppStore(s => s.resultOcrFlowMode);
     const ocrAutoOpenAfterRerun = useAppStore(s => s.ocrAutoOpenAfterRerun);
     const showSmartCaptureInHeader = useAppStore(s => s.showSmartCaptureInHeader);
+    const lifecycleTrackingPaused = useAppStore(s => s.lifecycleTrackingPaused);
+    const setLifecycleTrackingPaused = useAppStore(s => s.setLifecycleTrackingPaused);
     const selectedSmartCapturesMatchId = useAppStore(s => s.selectedMatchId);
     const resetMatchTrackingForNewMatch = useAppStore(s => s.resetMatchTrackingForNewMatch);
     const resetMatchMetricsForNewMatch = useAppStore(s => s.resetMatchMetricsForNewMatch);
@@ -197,6 +199,19 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
             ocrState: nextState,
         });
     }, [submissionMatchId]);
+
+    const toggleLifecycleTrackingPause = React.useCallback(() => {
+        const nextPaused = !lifecycleTrackingPaused;
+        setLifecycleTrackingPaused(nextPaused);
+        pushNotification({
+            message: nextPaused
+                ? 'Tracking paused: auto match start/end detection is disabled.'
+                : 'Tracking resumed: auto match start/end detection is enabled.',
+            type: 'info',
+            source: 'system',
+            durationMs: 4500,
+        });
+    }, [lifecycleTrackingPaused, pushNotification, setLifecycleTrackingPaused]);
 
     const dispatchOcrGate = React.useCallback((
         data: OCRExtractedData,
@@ -923,6 +938,19 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     onResetMatch={() => { setMatchStartTime(null); setIsMatchInProgress(false); }}
                     variant="compact"
                 />
+                <button
+                    type="button"
+                    onClick={toggleLifecycleTrackingPause}
+                    className={`w-full rounded-control border px-3 py-2 text-label-xs font-bold uppercase tracking-wide transition-colors ${
+                        lifecycleTrackingPaused
+                            ? 'bg-warning-soft border-warning-soft-strong text-warning'
+                            : 'bg-md-sys-surfaceContainerLow border-md-sys-outline/20 text-md-sys-on-surface/75 hover:bg-md-sys-surfaceContainerHigh'
+                    }`}
+                    title={lifecycleTrackingPaused ? 'Resume auto match tracking' : 'Pause auto match tracking'}
+                    aria-label={lifecycleTrackingPaused ? 'Resume auto match tracking' : 'Pause auto match tracking'}
+                >
+                    {lifecycleTrackingPaused ? 'Resume Tracking' : 'Pause Tracking'}
+                </button>
 
                 <div className="mt-1">
                     <ResultButtons compact />
@@ -971,6 +999,19 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     onResetMatch={() => { setMatchStartTime(null); setIsMatchInProgress(false); }}
                     variant={isCompact ? 'compact' : 'default'}
                 />
+                <button
+                    type="button"
+                    onClick={toggleLifecycleTrackingPause}
+                    className={`w-full rounded-control border px-3 py-2 text-label-sm font-bold uppercase tracking-wide transition-colors ${
+                        lifecycleTrackingPaused
+                            ? 'bg-warning-soft border-warning-soft-strong text-warning'
+                            : 'bg-md-sys-surfaceContainerLow border-md-sys-outline/20 text-md-sys-on-surface/75 hover:bg-md-sys-surfaceContainerHigh'
+                    }`}
+                    title={lifecycleTrackingPaused ? 'Resume auto match tracking' : 'Pause auto match tracking'}
+                    aria-label={lifecycleTrackingPaused ? 'Resume auto match tracking' : 'Pause auto match tracking'}
+                >
+                    {lifecycleTrackingPaused ? 'Resume Tracking' : 'Pause Tracking'}
+                </button>
 
                 <ResultButtons compact={isCompact} />
 

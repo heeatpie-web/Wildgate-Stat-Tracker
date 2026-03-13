@@ -7,7 +7,7 @@
 import { EQUIPMENT_DB } from './equipmentDb';
 import HAZARD_CATALOG from '../../electron/hazardCatalog.json';
 
-export const APP_VERSION = "v3.1.9";
+export const APP_VERSION = "v3.1.10";
 
 /** Prefix used for unnamed players discovered via telemetry (e.g. "Member 1"). */
 export const UNNAMED_PLAYER_PREFIX = 'Member ';
@@ -41,7 +41,7 @@ export const SHIP_CAPACITY: Record<string, number> = {
   Bastion: 4,
   Privateer: 4,
   Scout: 3,
-  "Battle Scout": 3,
+  "Battle Scout": 4,
   Outlaw: 2,
   "Solo Outlaw": 1,
 };
@@ -53,6 +53,7 @@ export const SHIP_NAME_ALIASES: Record<string, string> = {
   "Bastion (4 Player)": "Bastion",
   "Privateer (4 Player)": "Privateer",
   "Scout (3 Player)": "Scout",
+  "Battle Scout (4 Player)": "Battle Scout",
   "Battle Scout (3 Player)": "Battle Scout",
   "Outlaw (2 Player)": "Outlaw",
   "Scout (Solo Outlaw)": "Solo Outlaw",

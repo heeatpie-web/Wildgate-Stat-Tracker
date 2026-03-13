@@ -271,9 +271,12 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                                     {(friendlyTeam || isOcrDetected) && (
                                         <div className="ocr-assignment-team-badges">
                                             {friendlyTeam && (
-                                                <span className="ocr-teammate-chip ocr-teammate-chip--compact">
+                                                <span
+                                                    className="ocr-teammate-chip ocr-teammate-chip--compact"
+                                                    title="Friendly team"
+                                                    aria-label="Friendly team"
+                                                >
                                                     <Shield size={10} />
-                                                    Friendly
                                                 </span>
                                             )}
                                             {isOcrDetected && (

@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.1.10": [
+    "Feature: Added a Pause Tracking control in the timer panel to temporarily disable automatic telemetry match start/end detection without closing the app.",
+    "Fix: Team assignment now keeps the friendly shield badge icon-only by removing the extra Friendly label text.",
+    "Fix: Friendly roster teammate capping now filters placeholder names (Unknown Player/N/A/?) and Battle Scout now uses 4-player capacity rules."
+  ],
   "v3.1.9": [
     "Fix: Telemetry match-start prompts can now launch Smart Capture directly and route you back to Recording when capture starts from another view.",
     "Fix: Queued OCR processing now shows live progress and status feedback in the blocking review prompt instead of a static waiting state.",

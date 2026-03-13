@@ -1,4 +1,4 @@
-import { getShipCapacity } from '../types';
+import { getShipCapacity, UNKNOWN_PLAYER_LABELS } from '../types';
 import { normalizeOcrName } from './stringUtils';
 
 const toMaxTeammates = (capacity: number): number => {
@@ -12,6 +12,9 @@ export const getMaxTeammatesForShip = (shipType?: string | null): number =>
 const toNameKey = (value: string): string =>
   normalizeOcrName(value).toLowerCase();
 
+const isUnknownPlayerLabel = (value: string): boolean =>
+  UNKNOWN_PLAYER_LABELS.has(toNameKey(value));
+
 export const capTeammateNames = (
   names: Array<string | null | undefined> | null | undefined,
   shipType?: string | null
@@ -23,6 +26,7 @@ export const capTeammateNames = (
   for (const raw of names) {
     const cleaned = String(raw || '').trim();
     if (!cleaned) continue;
+    if (isUnknownPlayerLabel(cleaned)) continue;
     const key = toNameKey(cleaned);
     if (!key || seen.has(key)) continue;
     seen.add(key);
@@ -44,6 +48,7 @@ export const capTeammatePlayers = <T extends { name?: string | null }>(
     if (!teammate) continue;
     const cleaned = String(teammate.name || '').trim();
     if (!cleaned) continue;
+    if (isUnknownPlayerLabel(cleaned)) continue;
     const key = toNameKey(cleaned);
     if (!key || seen.has(key)) continue;
     seen.add(key);

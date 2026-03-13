@@ -241,6 +241,7 @@ export const useLogMonitor = (activeUser?: string) => {
     const isStoreLoading = useAppStore(s => s.isLoading);
     const telemetryPerformanceProfile = useAppStore(s => s.telemetryPerformanceProfile);
     const adaptiveTelemetryPollingEnabled = useAppStore(s => s.adaptiveTelemetryPollingEnabled);
+    const lifecycleTrackingPaused = useAppStore(s => s.lifecycleTrackingPaused);
     const {
         addMatch, updateMatch,
         playerIdMap, updatePlayerIdMapping,
@@ -287,6 +288,7 @@ export const useLogMonitor = (activeUser?: string) => {
     const activeUserRef = useRef(activeUser);
     const activeModeRef = useRef(activeMode);
     const devModeRef = useRef(devMode);
+    const lifecycleTrackingPausedRef = useRef(lifecycleTrackingPaused);
     const lastMatchSessionIdRef = useRef<string>('');
     const telemetryDraftMatchIdRef = useRef<number | null>(null);
     const telemetryDraftStartedAtRef = useRef<number | null>(null);
@@ -607,6 +609,7 @@ export const useLogMonitor = (activeUser?: string) => {
     useEffect(() => { activeUserRef.current = activeUser; }, [activeUser]);
     useEffect(() => { activeModeRef.current = activeMode; }, [activeMode]);
     useEffect(() => { devModeRef.current = devMode; }, [devMode]);
+    useEffect(() => { lifecycleTrackingPausedRef.current = lifecycleTrackingPaused; }, [lifecycleTrackingPaused]);
     useEffect(() => { sessionStartTimeRef.current = sessionStartTime; }, [sessionStartTime]);
     useEffect(() => () => clearTelemetryDraftCapturePromptTimer(), [clearTelemetryDraftCapturePromptTimer]);
 
@@ -657,7 +660,7 @@ export const useLogMonitor = (activeUser?: string) => {
         const effectiveTelemetryProfile = startupLifecycleEstablished
             ? (adaptiveTelemetryPollingEnabled ? runtimeTelemetryProfile : telemetryPerformanceProfile)
             : 'high-accuracy';
-        if (enableAutoLogRecording) {
+        if (enableAutoLogRecording && !lifecycleTrackingPaused) {
             ipcRenderer.send('start-log-monitoring', { performanceProfile: effectiveTelemetryProfile });
         } else {
             ipcRenderer.send('stop-log-monitoring');
@@ -665,7 +668,7 @@ export const useLogMonitor = (activeUser?: string) => {
         return () => {
             ipcRenderer.send('stop-log-monitoring');
         };
-    }, [adaptiveTelemetryPollingEnabled, enableAutoLogRecording, isStoreLoading, monitorListenersReady, runtimeTelemetryProfile, startupLifecycleEstablished, telemetryPerformanceProfile]);
+    }, [adaptiveTelemetryPollingEnabled, enableAutoLogRecording, isStoreLoading, lifecycleTrackingPaused, monitorListenersReady, runtimeTelemetryProfile, startupLifecycleEstablished, telemetryPerformanceProfile]);
 
     useEffect(() => {
         if (isMatchInProgress && !wasMatchInProgressRef.current) {
@@ -726,6 +729,7 @@ export const useLogMonitor = (activeUser?: string) => {
         };
         const onLogData = (data: unknown) => {
             if (data) {
+                if (lifecycleTrackingPausedRef.current) return;
                 if (!startupLifecycleEstablished) {
                     setStartupLifecycleEstablished(true);
                 }

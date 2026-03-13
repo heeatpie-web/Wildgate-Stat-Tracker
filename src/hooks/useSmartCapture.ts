@@ -193,9 +193,6 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     const scope = normalizeMatchScope(matchId);
     const mergedArtifacts = mergeArtifactPaths([], artifactPaths);
     if (!scope || mergedArtifacts.length === 0) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/a7d49972-e6dd-4654-bed0-f48690fb9224',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ce3ae1'},body:JSON.stringify({sessionId:'ce3ae1',runId:'pre-fix-1',hypothesisId:'H1',location:'useSmartCapture.ts:syncArtifactsToMatchScope',message:'scope-or-artifacts-empty',data:{hasScope:Boolean(scope),artifactCount:mergedArtifacts.length,inputMatchId:matchId ?? null},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       return;
     }
 
@@ -218,21 +215,12 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
 
     const numericScope = Number(scope);
     if (!Number.isInteger(numericScope) || numericScope <= 0) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/a7d49972-e6dd-4654-bed0-f48690fb9224',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ce3ae1'},body:JSON.stringify({sessionId:'ce3ae1',runId:'pre-fix-1',hypothesisId:'H1',location:'useSmartCapture.ts:syncArtifactsToMatchScope',message:'non-numeric-scope',data:{scope,numericScope,artifactCount:mergedArtifacts.length},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       return;
     }
     const scopedMatch = (state.matches || []).find((match) => Number(match.id || 0) === numericScope);
     if (!scopedMatch) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/a7d49972-e6dd-4654-bed0-f48690fb9224',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ce3ae1'},body:JSON.stringify({sessionId:'ce3ae1',runId:'pre-fix-1',hypothesisId:'H4',location:'useSmartCapture.ts:syncArtifactsToMatchScope',message:'scoped-match-not-found',data:{scope,numericScope,matchesCount:Array.isArray(state.matches)?state.matches.length:0,artifactCount:mergedArtifacts.length},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       return;
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/a7d49972-e6dd-4654-bed0-f48690fb9224',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ce3ae1'},body:JSON.stringify({sessionId:'ce3ae1',runId:'pre-fix-1',hypothesisId:'H4',location:'useSmartCapture.ts:syncArtifactsToMatchScope',message:'syncing-artifacts-into-match-scope',data:{scope,numericScope,existingArtifacts:Array.isArray(scopedMatch.artifacts)?scopedMatch.artifacts.length:0,incomingArtifacts:mergedArtifacts.length},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     state.updateMatch({
       ...scopedMatch,
       artifacts: mergeArtifactPaths(scopedMatch.artifacts || [], mergedArtifacts),
@@ -383,9 +371,6 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
           if (!scope) return true;
           return normalizeMatchScope(capture.matchId) !== scope;
         });
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/a7d49972-e6dd-4654-bed0-f48690fb9224',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ce3ae1'},body:JSON.stringify({sessionId:'ce3ae1',runId:'pre-fix-1',hypothesisId:'H4',location:'useSmartCapture.ts:onArtifactsConsumed',message:'saved-captures-pruned',data:{scope:scope ?? null,consumedKeyCount:consumedKeys.size,beforeCount:prev.length,afterCount:next.length,removedCount:prev.length-next.length},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         savedCapturesRef.current = next;
         return next;
       });
@@ -1156,9 +1141,6 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       if (!saved.success || !saved.filePath) {
         throw new Error(saved.error || 'Failed to save screenshot');
       }
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/a7d49972-e6dd-4654-bed0-f48690fb9224',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ce3ae1'},body:JSON.stringify({sessionId:'ce3ae1',runId:'pre-fix-1',hypothesisId:'H1',location:'useSmartCapture.ts:captureOnly',message:'capture-saved',data:{resolvedMatchId:resolvedMatchId ?? null,hasResolvedMatchId:Boolean(resolvedMatchId),savedSuccess:saved.success,hasFilePath:Boolean(saved.filePath)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
 
       const entry: SavedCapture = {
         filePath: saved.filePath,

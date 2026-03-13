@@ -331,25 +331,30 @@ export const useAnalyticsData = (
     }, [completedModeMatches, isMatchInProgress, matchStartTime]);
 
     const filteredMatches = useMemo(() => {
-        if (timeRange === 'lastN') return stableCompletedModeMatches.slice(-lastN);
-        if (timeRange === 'today' || timeRange === 'week' || timeRange === 'month') {
-            return stableCompletedModeMatches.filter(m => m.timestamp >= rangeStart);
+        let result: typeof stableCompletedModeMatches;
+        if (timeRange === 'lastN') {
+            result = stableCompletedModeMatches.slice(-lastN);
+        } else if (timeRange === 'today' || timeRange === 'week' || timeRange === 'month') {
+            result = stableCompletedModeMatches.filter(m => m.timestamp >= rangeStart);
+        } else {
+            result = stableCompletedModeMatches;
         }
-        return stableCompletedModeMatches;
+        return result;
     }, [stableCompletedModeMatches, timeRange, lastN, rangeStart]);
 
-    const wantOverview = view === 'overview' || view === 'reactor' || view === 'essay' || !view;
-    const wantSession = wantOverview || view === 'session';
-    const wantMomentum = wantOverview || view === 'momentum';
-    const wantPeriod = wantOverview || view === 'period';
-    const wantTimePatterns = wantOverview || view === 'timePatterns';
-    const wantStreaks = wantOverview || view === 'streaks';
-    const wantKillEfficiency = wantOverview || view === 'killEfficiency';
-    const wantPlacement = wantOverview || view === 'placement';
-    const wantInsights = wantOverview || view === 'insights';
-    const wantSocial = wantOverview || view === 'social';
-    const wantSynergy = wantOverview || view === 'synergy';
-    const wantEntities = wantOverview || view === 'pro';
+    const isOverview = view === 'overview';
+    const wantFullSuite = view === 'reactor' || view === 'essay' || !view;
+    const wantSession = wantFullSuite || view === 'session';
+    const wantMomentum = wantFullSuite || isOverview || view === 'momentum';
+    const wantPeriod = wantFullSuite || view === 'period';
+    const wantTimePatterns = wantFullSuite || view === 'timePatterns';
+    const wantStreaks = wantFullSuite || view === 'streaks';
+    const wantKillEfficiency = wantFullSuite || view === 'killEfficiency';
+    const wantPlacement = wantFullSuite || isOverview || view === 'placement';
+    const wantInsights = wantFullSuite || view === 'insights';
+    const wantSocial = wantFullSuite || view === 'social';
+    const wantSynergy = wantFullSuite || view === 'synergy';
+    const wantEntities = wantFullSuite || view === 'pro';
 
     const winRate = useMemo(() => {
         if (filteredMatches.length === 0) return 0;
@@ -446,7 +451,7 @@ export const useAnalyticsData = (
         const selectedPerkMatches = entityFilters.perk.length > 0
             ? allInRange.filter((match) => matchPassesFilters(match, { ...EMPTY_ENTITY_FILTERS, perk: entityFilters.perk }))
             : selectedMatches;
-        return {
+        const analytics = {
             filters: entityFilters,
             filteredCount: selectedMatches.length,
             thresholds: {
@@ -467,6 +472,7 @@ export const useAnalyticsData = (
                 selectedLoadoutVsGlobal: calculateComparison('Selected Ship/Loadout vs Global Baseline', selectedMatches, allInRange),
             },
         } satisfies EntityAnalyticsData;
+        return analytics;
     }, [wantEntities, filteredMatches, entityFilters]);
 
     return {

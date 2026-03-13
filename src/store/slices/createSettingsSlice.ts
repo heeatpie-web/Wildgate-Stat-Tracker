@@ -133,6 +133,7 @@ export interface SettingsSlice {
   soundEnabled: boolean;
   language: Language;
   showSessionTimer: boolean;
+  lifecycleTrackingPaused: boolean;
   customBgUrl: string;
   enableAutoLogRecording: boolean;
   telemetryPerformanceProfile: TelemetryPerformanceProfile;
@@ -183,6 +184,7 @@ export interface SettingsSlice {
   setSoundEnabled: (enabled: boolean) => void;
   setLanguage: (lang: Language) => void;
   setShowSessionTimer: (show: boolean) => void;
+  setLifecycleTrackingPaused: (paused: boolean) => void;
   setCustomBgUrl: (url: string) => void;
   setEnableAutoLogRecording: (enabled: boolean) => void;
   setTelemetryPerformanceProfile: (profile: TelemetryPerformanceProfile) => void;
@@ -248,6 +250,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   soundEnabled: true,
   language: 'en',
   showSessionTimer: true,
+  lifecycleTrackingPaused: false,
   customBgUrl: '',
   enableAutoLogRecording: true,
   telemetryPerformanceProfile: 'balanced',
@@ -311,6 +314,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   setSoundEnabled: (enabled) => set({ soundEnabled: enabled }),
   setLanguage: (lang) => set({ language: lang }),
   setShowSessionTimer: (show) => set({ showSessionTimer: show }),
+  setLifecycleTrackingPaused: (paused) => set({ lifecycleTrackingPaused: paused }),
   setCustomBgUrl: (url) => set({ customBgUrl: url }),
   setEnableAutoLogRecording: (enabled) => set({ enableAutoLogRecording: enabled }),
   setTelemetryPerformanceProfile: (profile) => set({ telemetryPerformanceProfile: profile }),

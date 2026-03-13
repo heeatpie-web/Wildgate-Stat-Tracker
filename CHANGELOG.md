@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.1.10] - 2026-03-12
+
+### Added
+- Pause Tracking control in the timer panel to temporarily disable automatic telemetry match start/end detection without closing the app
+
+### Fixed
+- Friendly team assignment chip now shows only the shield icon (no extra Friendly text)
+- Friendly teammate capping now drops placeholder names like Unknown Player / N/A / ?
+- Battle Scout is now treated as a 4-player ship for teammate-cap calculations
+
 ## [3.1.9] - 2026-03-12
 
 ### Fixed

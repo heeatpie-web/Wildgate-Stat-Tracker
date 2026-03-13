@@ -1179,13 +1179,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                 : `OCR review applied: ${corrected + added} player decisions ready to save.`,
             type: 'success',
         });
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/a7d49972-e6dd-4654-bed0-f48690fb9224',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ce3ae1'},body:JSON.stringify({sessionId:'ce3ae1',runId:'wizard-rerun-pre-fix-1',hypothesisId:'H1',location:'OcrCorrectionModal.tsx:handleSubmitCorrections',message:'submit-corrections-finished',data:{closeAfterApply,correctedCount:corrected,addedCount:added,nextOcrState:closeAfterApply?'saved':'ready'},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         if (closeAfterApply) {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/a7d49972-e6dd-4654-bed0-f48690fb9224',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ce3ae1'},body:JSON.stringify({sessionId:'ce3ae1',runId:'wizard-rerun-pre-fix-1',hypothesisId:'H1',location:'OcrCorrectionModal.tsx:handleSubmitCorrections',message:'calling-onAcceptAll',data:{closeAfterApply:true},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
             onAcceptAll();
         }
     };
