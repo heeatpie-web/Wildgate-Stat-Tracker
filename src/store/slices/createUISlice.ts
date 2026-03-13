@@ -345,7 +345,7 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
     isAlwaysOnTop: false,
     overlayTab: 'Mission',
     overlayPhase: 'Setup',
-    sidebarCollapsed: true,
+    sidebarCollapsed: false,
     activeView: 'recording',
     visionStatus: 'idle',
     telemetryStatus: { exists: false },

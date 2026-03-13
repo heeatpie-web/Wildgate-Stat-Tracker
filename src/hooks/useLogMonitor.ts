@@ -88,6 +88,28 @@ const toStringOrEmpty = (value: unknown): string => {
     return '';
 };
 
+const toTelemetryTimestampMs = (event: TelemetryEventEnvelope): number | null => {
+    const raw = event.ClientTimestamp ?? (event as TelemetryRecord).timestamp ?? (event as TelemetryRecord).ts;
+    const numeric = Number(raw);
+    if (!Number.isFinite(numeric) || numeric <= 0) return null;
+    return numeric < 100000000000 ? numeric * 1000 : numeric;
+};
+
+const getRecordValueCaseInsensitive = (
+    record: unknown,
+    keys: string[],
+): unknown => {
+    if (!isRecord(record) || !Array.isArray(keys) || keys.length === 0) return undefined;
+    for (const key of keys) {
+        if (record[key] !== undefined) return record[key];
+    }
+    const expected = new Set(keys.map((key) => key.toLowerCase()));
+    for (const [key, value] of Object.entries(record)) {
+        if (expected.has(key.toLowerCase())) return value;
+    }
+    return undefined;
+};
+
 const extractTelemetryStringList = (value: unknown, depth = 0): string[] => {
     if (value == null || depth > 3) return [];
     if (typeof value === 'string' || typeof value === 'number') {
@@ -174,6 +196,15 @@ const findNestedTelemetryRecord = (
 
     visit(value, 0);
     return bestRecord;
+};
+
+const buildNebLoadoutPayloadSignature = (value: unknown): string => {
+    if (!isRecord(value)) return '';
+    try {
+        return JSON.stringify(value);
+    } catch {
+        return '';
+    }
 };
 
 const normalizeEntityLabel = (value: unknown): string => String(value || '')
@@ -296,6 +327,7 @@ export const useLogMonitor = (activeUser?: string) => {
     const telemetryDraftCapturePromptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const telemetryLifecycleActiveRef = useRef(isMatchInProgress);
     const latestNebLoadoutSavedTimestampRef = useRef<number>(0);
+    const latestNebLoadoutSavedSignatureRef = useRef<string>('');
     const pendingTelemetryConsistencyRef = useRef<Partial<TelemetryConsistency>>({
         durationToleranceSeconds: DEFAULT_DURATION_TOLERANCE_SECONDS,
     });
@@ -591,6 +623,7 @@ export const useLogMonitor = (activeUser?: string) => {
         telemetryDraftStartedAtRef.current = null;
         telemetryDraftLoadoutSignatureRef.current = '';
         latestNebLoadoutSavedTimestampRef.current = 0;
+        latestNebLoadoutSavedSignatureRef.current = '';
         pendingTelemetryConsistencyRef.current = {
             durationToleranceSeconds: DEFAULT_DURATION_TOLERANCE_SECONDS,
         };
@@ -747,18 +780,20 @@ export const useLogMonitor = (activeUser?: string) => {
                 events.forEach(e => {
                     const name = typeof e.EventName === 'string' ? e.EventName : '';
                     const payload = extractEventPayload(e);
-                    const clientTimestamp = Number(e.ClientTimestamp);
-                    const gameTime = Number.isFinite(clientTimestamp) ? clientTimestamp * 1000 : Date.now();
+                    const gameTime = toTelemetryTimestampMs(e) ?? Date.now();
                     const eventContext = asRecord(e.context);
                     const payloadContext = asRecord(asRecord(e.Payload).context);
                     const payloadContextAlt = asRecord(asRecord(e.payload).context);
                     const currentMatchSessionId = toStringOrEmpty(
-                        eventContext.matchSessionId || payloadContext.matchSessionId || payloadContextAlt.matchSessionId
+                        getRecordValueCaseInsensitive(eventContext, ['matchSessionId', 'sessionId', 'sESSIONId'])
+                        || getRecordValueCaseInsensitive(payloadContext, ['matchSessionId', 'sessionId', 'sESSIONId'])
+                        || getRecordValueCaseInsensitive(payloadContextAlt, ['matchSessionId', 'sessionId', 'sESSIONId'])
+                        || getRecordValueCaseInsensitive(payload, ['matchSessionId', 'sessionId', 'sESSIONId'])
                     );
                     const previousMatchSessionId = lastMatchSessionIdRef.current || '';
-                    const loadingMapName = typeof payload.loadedMap === 'string'
-                        ? payload.loadedMap
-                        : (typeof payload.loadingMap === 'string' ? payload.loadingMap : '');
+                    const loadingMapRaw = getRecordValueCaseInsensitive(payload, ['loadedMap', 'loadingMap']);
+                    const loadingMapName = typeof loadingMapRaw === 'string' ? loadingMapRaw : '';
+                    const loadingMapNameLower = loadingMapName.toLowerCase();
                     const isRelevantToSession = gameTime >= (sessionStartTimeRef.current - 60000);
                     const allowSessionEvent = isRelevantToSession || devModeRef.current;
                     const ageSeconds = Math.floor((Date.now() - gameTime) / 1000);
@@ -768,11 +803,13 @@ export const useLogMonitor = (activeUser?: string) => {
                         Logger.debug('LogMonitor', `Skipping old event: ${name} (age: ${ageSeconds}s, before session start)`);
                         return;
                     }
-                    const mapStartSignal = name === 'NebLoadingScreen' && !!loadingMapName && !loadingMapName.includes('Frontend');
-                    const mapEndSignal = name === 'NebLoadingScreen' && loadingMapName.includes('Frontend');
+                    const mapStartSignal = name === 'NebLoadingScreen' && !!loadingMapName && !loadingMapNameLower.includes('frontend');
+                    const mapEndSignal = name === 'NebLoadingScreen' && loadingMapNameLower.includes('frontend');
+                    const sessionStartSignal = !!currentMatchSessionId
+                        && !previousMatchSessionId
+                        && (name === 'NebClientMatchmakerStateChange' || name === 'NebLoadingScreen');
                     const sessionEndSignal = !currentMatchSessionId && !!previousMatchSessionId;
-                    // Keep start strict to map transitions. Session ID clear remains an emergency end signal.
-                    const startLifecycleSignal = mapStartSignal;
+                    const startLifecycleSignal = mapStartSignal || sessionStartSignal;
                     const endLifecycleSignal = mapEndSignal || sessionEndSignal;
                     if (startLifecycleSignal && telemetryLifecycleActiveRef.current && !telemetryDraftMatchIdRef.current) {
                         telemetryLifecycleActiveRef.current = false;
@@ -852,14 +889,23 @@ export const useLogMonitor = (activeUser?: string) => {
                     const nebLoadoutSavedPayloadRaw = payloadEnvelopeEvent.loadout;
                     let isStaleNebLoadoutSaved = false;
                     if (isNebLoadoutSavedEvent) {
+                        const latestSavedTimestamp = latestNebLoadoutSavedTimestampRef.current;
+                        const incomingSignature = buildNebLoadoutPayloadSignature(nebLoadoutSavedPayloadRaw);
+                        const signatureChanged = !!incomingSignature && incomingSignature !== latestNebLoadoutSavedSignatureRef.current;
+                        const outOfOrderMs = latestSavedTimestamp > 0 ? (latestSavedTimestamp - gameTime) : 0;
+                        const allowOutOfOrderUpdate = signatureChanged && outOfOrderMs >= 8000 && outOfOrderMs <= 30000;
                         if (
-                            latestNebLoadoutSavedTimestampRef.current > 0
-                            && gameTime < latestNebLoadoutSavedTimestampRef.current
+                            latestSavedTimestamp > 0
+                            && gameTime < latestSavedTimestamp
+                            && !allowOutOfOrderUpdate
                         ) {
                             isStaleNebLoadoutSaved = true;
-                            Logger.info('LogMonitor', `Ignored stale NebLoadoutSaved event (${gameTime} < ${latestNebLoadoutSavedTimestampRef.current})`);
+                            Logger.info('LogMonitor', `Ignored stale NebLoadoutSaved event (${gameTime} < ${latestSavedTimestamp})`);
                         } else {
-                            latestNebLoadoutSavedTimestampRef.current = gameTime;
+                            latestNebLoadoutSavedTimestampRef.current = Math.max(latestSavedTimestamp, gameTime);
+                            if (incomingSignature) {
+                                latestNebLoadoutSavedSignatureRef.current = incomingSignature;
+                            }
                             const wasSavedInGame = Boolean(
                                 payload.bWasSavedInGame === true
                                 || payload.wasSavedInGame === true

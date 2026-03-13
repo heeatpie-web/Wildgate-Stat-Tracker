@@ -447,6 +447,56 @@ describe('App', () => {
     expect(screen.queryByText(/telemetry retention needs cleanup/i)).not.toBeInTheDocument();
   });
 
+  it('starts smart capture when the global hotkey event is received from electron', async () => {
+    const { default: App } = await import('./App');
+    uiState.activeView = 'analytics';
+    uiState.requestSmartCapture.mockReturnValue('req_hotkey');
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    const handlers: Record<string, (...args: unknown[]) => void> = {};
+    const api = {
+      invoke: vi.fn(() => Promise.resolve(null)),
+      send: vi.fn(),
+      on: vi.fn((channel: string, cb: (...args: unknown[]) => void) => {
+        handlers[channel] = cb;
+        return vi.fn();
+      }),
+      removeAllListeners: vi.fn(),
+    };
+    getElectronAPIMock.mockReturnValue(api);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(handlers['hotkey-smart-capture']).toBeTypeOf('function');
+    });
+
+    act(() => {
+      handlers['hotkey-smart-capture']();
+    });
+
+    expect(uiState.setActiveView).toHaveBeenCalledWith('recording');
+    expect(uiState.requestSmartCapture).toHaveBeenCalledWith(expect.objectContaining({
+      activeUser: 'Pilot',
+      source: 'global-hotkey',
+      matchId: null,
+    }));
+    expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'smart-capture-request',
+      detail: expect.objectContaining({
+        activeUser: 'Pilot',
+        source: 'global-hotkey',
+        requestId: 'req_hotkey',
+        matchId: null,
+      }),
+    }));
+    expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'Smart Capture started from F10. Opening Recording now.',
+      type: 'info',
+    }));
+
+    dispatchSpy.mockRestore();
+  });
+
   it('renders changelog dialog semantics and closes on Escape', async () => {
     uiState.showChangelog = true;
     const { default: App } = await import('./App');

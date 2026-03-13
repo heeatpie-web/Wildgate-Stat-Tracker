@@ -138,6 +138,7 @@ export interface SettingsSlice {
   enableAutoLogRecording: boolean;
   telemetryPerformanceProfile: TelemetryPerformanceProfile;
   adaptiveTelemetryPollingEnabled: boolean;
+  telemetryDefaultsVersion: number;
   enableAutoBackup: boolean;
   startupSmartPreloadEnabled: boolean;
   overlayStyle: OverlayStyle;
@@ -254,7 +255,8 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   customBgUrl: '',
   enableAutoLogRecording: true,
   telemetryPerformanceProfile: 'balanced',
-  adaptiveTelemetryPollingEnabled: true,
+  adaptiveTelemetryPollingEnabled: false,
+  telemetryDefaultsVersion: 1,
   enableAutoBackup: true,
   startupSmartPreloadEnabled: true,
   overlayStyle: 'compact',

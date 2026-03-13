@@ -42,6 +42,7 @@ const RECEIVE_CHANNELS = [
   'window-restored',
   'update_available', 'update_downloaded', 'update_not_available', 'update_error',
   'hotkey-toggle-overlay',
+  'hotkey-smart-capture',
   'telemetry-prune-needed',
 ];
 

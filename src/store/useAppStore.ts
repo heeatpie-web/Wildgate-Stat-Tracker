@@ -184,6 +184,11 @@ const customStorage: PersistStorage<AppState> = {
       const liveSession = typeof data.liveSession === 'object' && data.liveSession !== null
         ? data.liveSession as Record<string, unknown>
         : {};
+      const persistedTelemetryDefaultsVersionRaw = Number(settings.telemetryDefaultsVersion ?? 0);
+      const persistedTelemetryDefaultsVersion = Number.isFinite(persistedTelemetryDefaultsVersionRaw)
+        ? Math.max(0, Math.floor(persistedTelemetryDefaultsVersionRaw))
+        : 0;
+      const shouldApplyTelemetryBaselineV1 = persistedTelemetryDefaultsVersion < 1;
 
       return {
         state: {
@@ -226,8 +231,13 @@ const customStorage: PersistStorage<AppState> = {
           lifecycleTrackingPaused: settings.lifecycleTrackingPaused ?? false,
           customBgUrl: settings.bgUrl || '',
           enableAutoLogRecording: settings.autoLog ?? true,
-          telemetryPerformanceProfile: settings.telemetryPerformanceProfile || 'balanced',
-          adaptiveTelemetryPollingEnabled: settings.adaptiveTelemetryPollingEnabled ?? true,
+          telemetryPerformanceProfile: shouldApplyTelemetryBaselineV1
+            ? 'balanced'
+            : (settings.telemetryPerformanceProfile || 'balanced'),
+          adaptiveTelemetryPollingEnabled: shouldApplyTelemetryBaselineV1
+            ? false
+            : (settings.adaptiveTelemetryPollingEnabled ?? false),
+          telemetryDefaultsVersion: Math.max(1, persistedTelemetryDefaultsVersion),
           enableAutoBackup: settings.autoBackup ?? true,
           startupSmartPreloadEnabled: settings.startupSmartPreloadEnabled ?? true,
           isAlwaysOnTop: settings.alwaysOnTop ?? false,
@@ -364,6 +374,9 @@ const customStorage: PersistStorage<AppState> = {
         autoLog: state.enableAutoLogRecording,
         telemetryPerformanceProfile: state.telemetryPerformanceProfile,
         adaptiveTelemetryPollingEnabled: state.adaptiveTelemetryPollingEnabled,
+        telemetryDefaultsVersion: Number.isFinite(state.telemetryDefaultsVersion)
+          ? Math.max(1, Math.floor(Number(state.telemetryDefaultsVersion)))
+          : 1,
         autoBackup: state.enableAutoBackup,
         startupSmartPreloadEnabled: state.startupSmartPreloadEnabled,
         alwaysOnTop: state.isAlwaysOnTop,
@@ -469,6 +482,7 @@ export const useAppStore = create<AppState>()(
         enableAutoLogRecording: state.enableAutoLogRecording,
         telemetryPerformanceProfile: state.telemetryPerformanceProfile,
         adaptiveTelemetryPollingEnabled: state.adaptiveTelemetryPollingEnabled,
+        telemetryDefaultsVersion: state.telemetryDefaultsVersion,
         enableAutoBackup: state.enableAutoBackup,
         startupSmartPreloadEnabled: state.startupSmartPreloadEnabled,
         isAlwaysOnTop: state.isAlwaysOnTop,

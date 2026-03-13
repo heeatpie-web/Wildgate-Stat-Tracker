@@ -216,7 +216,7 @@ describe('SettingsModal', () => {
     const { SettingsModal } = await import('./SettingsModal');
     render(<SettingsModal />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Capture Recommended smart-capture and OCR setup controls\./i }));
+    fireEvent.click(screen.getByRole('button', { name: /^capture$/i }));
 
     const grid = screen.getByTestId('settings-quick-setup-grid');
     expect(grid).toHaveStyle({ gridTemplateColumns: 'repeat(auto-fit, minmax(16rem, 1fr))' });

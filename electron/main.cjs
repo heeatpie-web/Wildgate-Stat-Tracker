@@ -2494,6 +2494,11 @@ app.whenReady().then(async () => {
       // State (Overlay vs Dashboard) is preserved.
     }
   });
+  globalShortcut.register('F10', () => {
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('hotkey-smart-capture');
+    }
+  });
 });
 
 // Telemetry Decoding - PORTED FROM decode_script.cjs

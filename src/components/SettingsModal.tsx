@@ -41,6 +41,8 @@ type SettingsSectionId =
     | 'telemetry-monitoring'
     | 'data-updates';
 type DashboardStatView = 'analytics' | 'history' | 'smart-captures' | 'players' | 'dev-ocr';
+type DataActionKey = 'backup' | 'exportCsv' | 'exportJson' | 'copyLogs';
+type DataActionStatus = 'idle' | 'working' | 'done';
 interface SettingsFocusSectionRequest {
     tab?: SettingsTabId;
     search?: string;
@@ -246,6 +248,12 @@ const SettingsModalContent: React.FC = () => {
     const [saved, setSaved] = useState(false);
     const [activeSection, setActiveSection] = useState<SettingsSectionId>('appearance');
     const [settingsSearch, setSettingsSearch] = useState('');
+    const [dataActionStatus, setDataActionStatus] = useState<Record<DataActionKey, DataActionStatus>>({
+        backup: 'idle',
+        exportCsv: 'idle',
+        exportJson: 'idle',
+        copyLogs: 'idle',
+    });
     const [isPresent, setIsPresent] = useState(showSettings && !isOverlayMode);
     const dialogTitleId = useId();
     const dialogDescriptionId = useId();
@@ -386,15 +394,52 @@ const SettingsModalContent: React.FC = () => {
     }, [setShowSettings]);
 
     const handleBackupDB = async () => {
-        const res = await StorageService.backup();
-        if (res && res.success) {
-            const lines = [`Backup saved to:\n${res.path}`];
-            if ((res as { bundlePath?: string }).bundlePath) {
-                lines.push(`\nArtifacts bundled at:\n${(res as { bundlePath?: string }).bundlePath}`);
+        setDataActionStatus((prev) => ({ ...prev, backup: 'working' }));
+        try {
+            const res = await StorageService.backup();
+            if (res && res.success) {
+                const lines = [`Backup saved to:\n${res.path}`];
+                if ((res as { bundlePath?: string }).bundlePath) {
+                    lines.push(`\nArtifacts bundled at:\n${(res as { bundlePath?: string }).bundlePath}`);
+                }
+                alert(lines.join(''));
+                setDataActionStatus((prev) => ({ ...prev, backup: 'done' }));
+                window.setTimeout(() => setDataActionStatus((prev) => ({ ...prev, backup: 'idle' })), 1600);
+                return;
             }
-            alert(lines.join(''));
-        } else {
             alert("Backup failed: " + (res?.error || "Unknown error"));
+        } finally {
+            setDataActionStatus((prev) => (
+                prev.backup === 'working' ? { ...prev, backup: 'idle' } : prev
+            ));
+        }
+    };
+
+    const handleExportCsv = () => {
+        setDataActionStatus((prev) => ({ ...prev, exportCsv: 'working' }));
+        try {
+            exportToCSV(matches);
+            setToast({ message: 'CSV export started.', type: 'success' });
+            setDataActionStatus((prev) => ({ ...prev, exportCsv: 'done' }));
+            window.setTimeout(() => setDataActionStatus((prev) => ({ ...prev, exportCsv: 'idle' })), 1600);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            setToast({ message: `CSV export failed: ${message}`, type: 'error' });
+            setDataActionStatus((prev) => ({ ...prev, exportCsv: 'idle' }));
+        }
+    };
+
+    const handleExportJson = () => {
+        setDataActionStatus((prev) => ({ ...prev, exportJson: 'working' }));
+        try {
+            exportToJSON({ matches, players, pilotRegistry });
+            setToast({ message: 'JSON export started.', type: 'success' });
+            setDataActionStatus((prev) => ({ ...prev, exportJson: 'done' }));
+            window.setTimeout(() => setDataActionStatus((prev) => ({ ...prev, exportJson: 'idle' })), 1600);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            setToast({ message: `JSON export failed: ${message}`, type: 'error' });
+            setDataActionStatus((prev) => ({ ...prev, exportJson: 'idle' }));
         }
     };
 
@@ -441,10 +486,12 @@ const SettingsModalContent: React.FC = () => {
             setToast({ message: 'Copy Logs is available only in the desktop app.', type: 'warning' });
             return;
         }
+        setDataActionStatus((prev) => ({ ...prev, copyLogs: 'working' }));
         try {
             const result = await api.invoke('read-logs');
             if (!result?.success) {
                 setToast({ message: `Could not read logs: ${result?.error || 'Unknown error'}`, type: 'error' });
+                setDataActionStatus((prev) => ({ ...prev, copyLogs: 'idle' }));
                 return;
             }
             const content = String(result.content || '').trim();
@@ -465,9 +512,16 @@ const SettingsModalContent: React.FC = () => {
                 document.body.removeChild(textarea);
             }
             setToast({ message: 'Logs copied to clipboard.', type: 'success' });
+            setDataActionStatus((prev) => ({ ...prev, copyLogs: 'done' }));
+            window.setTimeout(() => setDataActionStatus((prev) => ({ ...prev, copyLogs: 'idle' })), 1600);
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error';
             setToast({ message: `Copy Logs failed: ${message}`, type: 'error' });
+            setDataActionStatus((prev) => ({ ...prev, copyLogs: 'idle' }));
+        } finally {
+            setDataActionStatus((prev) => (
+                prev.copyLogs === 'working' ? { ...prev, copyLogs: 'idle' } : prev
+            ));
         }
     };
 
@@ -666,7 +720,6 @@ const SettingsModalContent: React.FC = () => {
                                                                     }`}
                                                             >
                                                                 <div className="text-label-sm font-bold">{section.label}</div>
-                                                                <div className={`mt-1 text-label-xs leading-relaxed ${active ? 'text-md-sys-on-primary/80' : 'text-md-sys-on-surface/55'}`}>{section.description}</div>
                                                             </button>
                                                         );
                                                     })}
@@ -1572,10 +1625,17 @@ const SettingsModalContent: React.FC = () => {
                             <div className="grid grid-cols-2 gap-3">
                                 <button
                                     onClick={handleBackupDB}
+                                    disabled={dataActionStatus.backup === 'working'}
                                     className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high rounded-card hover:bg-md-sys-on-surface/5 transition-colors border border-md-sys-outline/10"
                                 >
-                                    <Save size={20} />
-                                    <span className="text-label-sm font-bold">Backup</span>
+                                    {dataActionStatus.backup === 'working'
+                                        ? <RefreshCw size={20} className="animate-spin" />
+                                        : (dataActionStatus.backup === 'done' ? <Check size={20} /> : <Save size={20} />)}
+                                    <span className="text-label-sm font-bold">
+                                        {dataActionStatus.backup === 'working'
+                                            ? 'Backing up...'
+                                            : (dataActionStatus.backup === 'done' ? 'Backed up!' : 'Backup')}
+                                    </span>
                                 </button>
                                 <button
                                     onClick={handleRestoreBackup}
@@ -1585,25 +1645,46 @@ const SettingsModalContent: React.FC = () => {
                                     <span className="text-label-sm font-bold">Restore</span>
                                 </button>
                                 <button
-                                    onClick={() => exportToCSV(matches)}
+                                    onClick={handleExportCsv}
+                                    disabled={dataActionStatus.exportCsv === 'working'}
                                     className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high rounded-card hover:bg-md-sys-on-surface/5 transition-colors border border-md-sys-outline/10"
                                 >
-                                    <Download size={20} />
-                                    <span className="text-label-sm font-bold">Export CSV</span>
+                                    {dataActionStatus.exportCsv === 'working'
+                                        ? <RefreshCw size={20} className="animate-spin" />
+                                        : (dataActionStatus.exportCsv === 'done' ? <Check size={20} /> : <Download size={20} />)}
+                                    <span className="text-label-sm font-bold">
+                                        {dataActionStatus.exportCsv === 'working'
+                                            ? 'Exporting...'
+                                            : (dataActionStatus.exportCsv === 'done' ? 'Exported!' : 'Export CSV')}
+                                    </span>
                                 </button>
                                 <button
-                                    onClick={() => exportToJSON({ matches, players, pilotRegistry })}
+                                    onClick={handleExportJson}
+                                    disabled={dataActionStatus.exportJson === 'working'}
                                     className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high rounded-card hover:bg-md-sys-on-surface/5 transition-colors border border-md-sys-outline/10"
                                 >
-                                    <FileJson size={20} />
-                                    <span className="text-label-sm font-bold">Export JSON</span>
+                                    {dataActionStatus.exportJson === 'working'
+                                        ? <RefreshCw size={20} className="animate-spin" />
+                                        : (dataActionStatus.exportJson === 'done' ? <Check size={20} /> : <FileJson size={20} />)}
+                                    <span className="text-label-sm font-bold">
+                                        {dataActionStatus.exportJson === 'working'
+                                            ? 'Exporting...'
+                                            : (dataActionStatus.exportJson === 'done' ? 'Exported!' : 'Export JSON')}
+                                    </span>
                                 </button>
                                 <button
                                     onClick={handleCopyLogs}
+                                    disabled={dataActionStatus.copyLogs === 'working'}
                                     className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high rounded-card hover:bg-md-sys-on-surface/5 transition-colors border border-md-sys-outline/10"
                                 >
-                                    <Copy size={20} />
-                                    <span className="text-label-sm font-bold">Copy Logs</span>
+                                    {dataActionStatus.copyLogs === 'working'
+                                        ? <RefreshCw size={20} className="animate-spin" />
+                                        : (dataActionStatus.copyLogs === 'done' ? <Check size={20} /> : <Copy size={20} />)}
+                                    <span className="text-label-sm font-bold">
+                                        {dataActionStatus.copyLogs === 'working'
+                                            ? 'Copying...'
+                                            : (dataActionStatus.copyLogs === 'done' ? 'Copied!' : 'Copy Logs')}
+                                    </span>
                                 </button>
                                 <button
                                     onClick={() => setShowResetConfirm(true)}

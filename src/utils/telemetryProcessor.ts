@@ -34,6 +34,26 @@ const applyTelemetryDuration = (
     }
 };
 
+const toTelemetryTimestampMs = (event: any): number => {
+    const raw = event?.ClientTimestamp ?? event?.timestamp ?? event?.ts;
+    const numeric = Number(raw);
+    if (!Number.isFinite(numeric) || numeric <= 0) return Date.now();
+    return numeric < 100000000000 ? numeric * 1000 : numeric;
+};
+
+const getCaseInsensitiveValue = (record: unknown, keys: string[]): unknown => {
+    if (!record || typeof record !== 'object') return undefined;
+    const source = record as Record<string, unknown>;
+    for (const key of keys) {
+        if (source[key] !== undefined) return source[key];
+    }
+    const expected = new Set(keys.map((key) => key.toLowerCase()));
+    for (const [key, value] of Object.entries(source)) {
+        if (expected.has(key.toLowerCase())) return value;
+    }
+    return undefined;
+};
+
 /** Store actions injected into the processor by useLogMonitor. */
 export interface TelemetryActions {
     setTimeMin: (v: string, source?: DataSource) => void;
@@ -62,7 +82,7 @@ export const processTelemetryEvent = (
 ) => {
     const name = event.EventName;
     const payload = event.Payload?.event || event.Payload || {};
-    const gameTime = event.ClientTimestamp ? event.ClientTimestamp * 1000 : Date.now(); // Simulation time or Live time
+    const gameTime = toTelemetryTimestampMs(event); // Simulation time or live time
 
     // --- ID Discovery ---
     // Check context for Platform ID (Epic)
@@ -84,7 +104,12 @@ export const processTelemetryEvent = (
     }
 
     // --- matchSessionId lifecycle tracking ---
-    const matchSessionId = event.context?.matchSessionId || event.Payload?.context?.matchSessionId || '';
+    const matchSessionId = String(
+        getCaseInsensitiveValue(event.context, ['matchSessionId', 'sessionId', 'sESSIONId'])
+        || getCaseInsensitiveValue(event.Payload?.context, ['matchSessionId', 'sessionId', 'sESSIONId'])
+        || getCaseInsensitiveValue(payload, ['matchSessionId', 'sessionId', 'sESSIONId'])
+        || ''
+    ).trim();
     if (matchSessionId && matchSessionId.length > 0 && !context.isMatchInProgress && (!context.lastMatchSessionId || context.lastMatchSessionId.length === 0)) {
         // matchSessionId appeared (empty → non-empty) while not in match → match starting
         Logger.info('TelemetryProcessor', `matchSessionId appeared: ${matchSessionId} — secondary match start signal`);
@@ -116,7 +141,8 @@ export const processTelemetryEvent = (
 
     // Match Start: check BOTH loadedMap and loadingMap for compatibility with different telemetry formats
     const startMapName = payload.loadedMap || payload.loadingMap;
-    if (name === 'NebLoadingScreen' && startMapName && !startMapName.includes('Frontend') && !context.isMatchInProgress) {
+    const normalizedStartMapName = typeof startMapName === 'string' ? startMapName.toLowerCase() : '';
+    if (name === 'NebLoadingScreen' && startMapName && !normalizedStartMapName.includes('frontend') && !context.isMatchInProgress) {
         const matchId = payload.matchId || payload.match_id || payload.MatchId;
         actions.setMatchStartTime(gameTime);
         actions.setIsMatchInProgress(true);
@@ -128,7 +154,8 @@ export const processTelemetryEvent = (
     // Match End
     // FIXED: Check both loadedMap and loadingMap for compatibility with different telemetry formats
     const mapName = payload.loadedMap || payload.loadingMap;
-    if (name === 'NebLoadingScreen' && mapName?.includes('Frontend') && context.isMatchInProgress) {
+    const normalizedMapName = typeof mapName === 'string' ? mapName.toLowerCase() : '';
+    if (name === 'NebLoadingScreen' && normalizedMapName.includes('frontend') && context.isMatchInProgress) {
         let totalSeconds = 0;
         const payloadDurationSeconds = Number(payload.matchDuration);
         if (Number.isFinite(payloadDurationSeconds) && payloadDurationSeconds > 0) {

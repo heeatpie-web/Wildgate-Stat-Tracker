@@ -1551,6 +1551,43 @@ const App: React.FC = () => {
         if (aot) api.send('set-always-on-top', true);
     }, []);
 
+    const handleGlobalHotkeySmartCapture = useCallback(() => {
+        const api = getElectronAPI();
+        if (!api) {
+            setToast({ message: 'Smart Capture hotkey unavailable: desktop bridge not ready.', type: 'error' });
+            return;
+        }
+        try {
+            if (activeView !== 'recording') {
+                React.startTransition(() => setActiveView('recording'));
+            }
+            const requestId = requestSmartCapture({
+                activeUser: activeUser || null,
+                source: 'global-hotkey',
+                requestId: `global-hotkey-${Date.now()}`,
+                matchId: null,
+            });
+            window.dispatchEvent(new CustomEvent('smart-capture-request', {
+                detail: {
+                    activeUser: activeUser || null,
+                    source: 'global-hotkey',
+                    requestId,
+                    matchId: null,
+                },
+            }));
+            setToast({
+                message: activeView !== 'recording'
+                    ? 'Smart Capture started from F10. Opening Recording now.'
+                    : 'Smart Capture started from F10.',
+                type: 'info',
+            });
+        } catch (error: unknown) {
+            Logger.warn('Hotkeys', 'Global smart capture hotkey failed', error);
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            setToast({ message: `Smart Capture hotkey failed: ${message}`, type: 'error' });
+        }
+    }, [activeUser, activeView, requestSmartCapture, setActiveView, setToast]);
+
     useEffect(() => {
         const api = getElectronAPI();
         if (!api) return;
@@ -1566,6 +1603,9 @@ const App: React.FC = () => {
                 setIsOverlayMode(!useAppStore.getState().isOverlayMode);
             }
         });
+        const unsubSmartCaptureHotkey = api.on('hotkey-smart-capture', () => {
+            handleGlobalHotkeySmartCapture();
+        });
 
         return () => {
             unsubAvailable();
@@ -1573,8 +1613,9 @@ const App: React.FC = () => {
             unsubNotAvailable();
             unsubError();
             unsubHotkey();
+            unsubSmartCaptureHotkey();
         };
-    }, [setUpdateStatus, setIsOverlayMode]);
+    }, [handleGlobalHotkeySmartCapture, setUpdateStatus, setIsOverlayMode]);
 
     useEffect(() => {
         const api = getElectronAPI();
