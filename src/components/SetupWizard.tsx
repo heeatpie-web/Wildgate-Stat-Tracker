@@ -44,7 +44,7 @@ export const SetupWizard: React.FC = () => {
         setActiveUser,
         pushNotification,
     } = useUIState();
-    const { addPlayer } = useGameData();
+    const { addPlayer, addToRegistry } = useGameData();
     const {
         appearanceMode,
         setAppearanceMode,
@@ -154,6 +154,7 @@ export const SetupWizard: React.FC = () => {
         setStartupTestRunning(true);
         setIsExiting(true);
         addPlayer(normalized);
+        addToRegistry(normalized, { origin: 'manual', status: 'confirmed' });
         setActiveUser(normalized);
         try {
             const userScope = getOnboardingUserScope(normalized);

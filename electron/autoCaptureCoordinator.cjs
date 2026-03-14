@@ -1,0 +1,369 @@
+const fs = require('fs');
+
+const AUTO_CAPTURE_COOLDOWN_MS = 5000;
+const AUTO_CAPTURE_CAPTURE_TIMEOUT_MS = 8000;
+
+const STEP_DEFINITIONS = Object.freeze({
+  openMap: { number: 1, label: 'Open Tactical Map' },
+  captureMap: { number: 2, label: 'Tactical Map (Primary View)' },
+  closeMap: { number: 3, label: 'Close Tactical Map' },
+  openCrewHub: { number: 4, label: 'Navigate to Crew Hub' },
+  moveCrewHubRight: { number: 5, label: 'Navigate to Crew Hub Panel (Right)' },
+  captureCrewHubA: { number: 6, label: 'Crew Hub Panel A' },
+  moveCrewHubEnd: { number: 7, label: 'Navigate to Crew Hub Panel End' },
+  captureCrewHubB: { number: 8, label: 'Crew Hub Panel B' },
+  exit: { number: 9, label: 'Exit' },
+});
+
+const DEFAULT_GAME_SETTINGS_CANDIDATES = Object.freeze([
+  process.env.WILDGATE_GAME_SETTINGS_PATH,
+  process.env.LOCALAPPDATA
+    ? `${process.env.LOCALAPPDATA}\\Nebula\\Saved\\Config\\WindowsClient\\Input.ini`
+    : '',
+  process.env.LOCALAPPDATA
+    ? `${process.env.LOCALAPPDATA}\\Nebula\\Saved\\Config\\WindowsClient\\GameUserSettings.ini`
+    : '',
+].filter(Boolean));
+
+const TACTICAL_MAP_BIND_PATTERNS = Object.freeze([
+  /ActionMappings=\([^\r\n)]*ActionName="?([^"\r\n)]*Tactical[^"\r\n)]*Map[^"\r\n)]*)"?.*?\bKey=([^,\r\n)]+)/i,
+  /ActionMappings=\([^\r\n)]*ActionName="?([^"\r\n)]*Map[^"\r\n)]*)"?.*?\bKey=([^,\r\n)]+)/i,
+  /(?:TacticalMap|ToggleTacticalMap|OpenTacticalMap|OpenMap|MapKey)\s*=\s*("?)([^\r\n"]+)\1/i,
+  /Tactical[^"\r\n]*Map[^\r\n]*?(?:PrimaryKey|Key)\s*[:=]\s*"?([A-Za-z0-9_:+-]+)"?/i,
+]);
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function clampWaitMultiplier(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 1;
+  return Math.max(0.5, Math.min(3, numeric));
+}
+
+function withTimeout(promiseFactory, timeoutMs, label) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timer = null;
+
+    const finish = (callback) => (value) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      callback(value);
+    };
+
+    timer = setTimeout(() => {
+      finish(reject)(new Error(`${label} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    Promise.resolve()
+      .then(promiseFactory)
+      .then(finish(resolve))
+      .catch(finish(reject));
+  });
+}
+
+function normalizeKeybindToSendKeys(rawValue) {
+  const raw = String(rawValue || '')
+    .trim()
+    .replace(/^EKeys::/i, '')
+    .replace(/^["']|["']$/g, '');
+  if (!raw) return null;
+
+  const compact = raw.replace(/\s+/g, '').toLowerCase();
+  if (!compact) return null;
+  if (compact.includes('mouse') || compact.includes('gamepad')) return null;
+
+  if (/^[a-z0-9]$/i.test(raw)) {
+    return raw.length === 1 ? raw.toLowerCase() : raw;
+  }
+  if (/^f\d{1,2}$/i.test(raw)) {
+    return `{${raw.toUpperCase()}}`;
+  }
+
+  const specialMap = {
+    tab: '{TAB}',
+    escape: '{ESC}',
+    esc: '{ESC}',
+    space: ' ',
+    spacebar: ' ',
+    enter: '{ENTER}',
+    return: '{ENTER}',
+    up: '{UP}',
+    uparrow: '{UP}',
+    down: '{DOWN}',
+    downarrow: '{DOWN}',
+    left: '{LEFT}',
+    leftarrow: '{LEFT}',
+    right: '{RIGHT}',
+    rightarrow: '{RIGHT}',
+    end: '{END}',
+    home: '{HOME}',
+    pgup: '{PGUP}',
+    pageup: '{PGUP}',
+    pgdn: '{PGDN}',
+    pagedown: '{PGDN}',
+    insert: '{INSERT}',
+    ins: '{INSERT}',
+    delete: '{DEL}',
+    del: '{DEL}',
+    backspace: '{BS}',
+  };
+
+  return specialMap[compact] || null;
+}
+
+function extractTacticalMapKeybindFromText(fileText) {
+  const text = String(fileText || '');
+  if (!text.trim()) return null;
+
+  for (const pattern of TACTICAL_MAP_BIND_PATTERNS) {
+    const match = text.match(pattern);
+    if (!match) continue;
+    const candidate = match[2] || match[1];
+    const normalized = normalizeKeybindToSendKeys(candidate);
+    if (normalized) {
+      return {
+        raw: String(candidate).trim(),
+        sendKeys: normalized,
+      };
+    }
+  }
+
+  return null;
+}
+
+async function lookupTacticalMapKeybind(options = {}) {
+  const candidates = Array.isArray(options.candidates) && options.candidates.length > 0
+    ? options.candidates
+    : DEFAULT_GAME_SETTINGS_CANDIDATES;
+
+  for (const candidate of candidates) {
+    try {
+      if (!candidate || !fs.existsSync(candidate)) continue;
+      const contents = await fs.promises.readFile(candidate, 'utf8');
+      const resolved = extractTacticalMapKeybindFromText(contents);
+      if (resolved) {
+        return {
+          ...resolved,
+          sourcePath: candidate,
+        };
+      }
+    } catch {
+      // Try the next candidate.
+    }
+  }
+
+  return null;
+}
+
+function buildFailedPayload(message, step, detail) {
+  return {
+    phase: 'failed',
+    message,
+    stepNumber: step?.number || null,
+    stepLabel: step?.label || null,
+    detail: detail || null,
+  };
+}
+
+function createAutoCaptureCoordinator({
+  notify,
+  sendKeySequence,
+  captureAndProcess,
+  lookupMapKeybind = lookupTacticalMapKeybind,
+  delayFn = delay,
+  now = () => Date.now(),
+}) {
+  let inProgress = false;
+  let lastCompletedAt = 0;
+
+  const scaleWait = (baseMs, multiplier) => Math.max(0, Math.round(baseMs * clampWaitMultiplier(multiplier)));
+
+  const runSequence = async ({
+    matchId,
+    activeUser = null,
+    sendKeypresses = true,
+    waitMultiplier = 1,
+    ocrMode = 'local',
+    ocrRegions = null,
+    runtimeOptions = {},
+    tacticalMapKeybind,
+  }) => {
+    const sendStepKeys = async (step, sequence) => {
+      if (!sendKeypresses) return;
+      const result = await sendKeySequence(sequence, step.label);
+      if (!result?.success) {
+        const reason = result?.error || 'keypress failed';
+        throw new Error(`${step.label}: ${reason}`);
+      }
+    };
+
+    const waitStep = async (baseMs) => {
+      const scaled = scaleWait(baseMs, waitMultiplier);
+      if (scaled > 0) {
+        await delayFn(scaled);
+      }
+    };
+
+    const captureStep = async (step, captureIndex) => {
+      const result = await withTimeout(() => captureAndProcess({
+        matchId,
+        activeUser,
+        ocrMode,
+        ocrRegions,
+        runtimeOptions,
+      }), AUTO_CAPTURE_CAPTURE_TIMEOUT_MS, step.label);
+
+      if (!result?.success || !result.filePath) {
+        const reason = result?.error || 'capture failed';
+        throw new Error(`${step.label}: ${reason}`);
+      }
+
+      notify({
+        phase: 'capture-progress',
+        captureIndex,
+        totalCaptures: 3,
+        matchId,
+        filePath: result.filePath,
+        filename: result.filename || null,
+      });
+    };
+
+    await sendStepKeys(STEP_DEFINITIONS.openMap, tacticalMapKeybind.sendKeys);
+    await waitStep(1000);
+
+    await captureStep(STEP_DEFINITIONS.captureMap, 1);
+
+    await sendStepKeys(STEP_DEFINITIONS.closeMap, tacticalMapKeybind.sendKeys);
+    await waitStep(300);
+
+    await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{UP}{UP}{UP}{UP} ');
+    await waitStep(1200);
+
+    await sendStepKeys(STEP_DEFINITIONS.moveCrewHubRight, '{RIGHT}{RIGHT}{RIGHT}{RIGHT}');
+    await waitStep(400);
+
+    await captureStep(STEP_DEFINITIONS.captureCrewHubA, 2);
+
+    await sendStepKeys(STEP_DEFINITIONS.moveCrewHubEnd, '{END}');
+    await waitStep(400);
+
+    await captureStep(STEP_DEFINITIONS.captureCrewHubB, 3);
+
+    await sendStepKeys(STEP_DEFINITIONS.exit, '{ESC}');
+    await waitStep(200);
+  };
+
+  const tryEscapeCleanup = async (sendKeypresses) => {
+    if (!sendKeypresses) return;
+    try {
+      await sendKeySequence('{ESC}', 'Auto-Capture cleanup');
+    } catch {
+      // Cleanup is best-effort.
+    }
+  };
+
+  return {
+    async start(request = {}) {
+      if (inProgress) {
+        return { started: false, ignored: true, reason: 'in-progress' };
+      }
+
+      if (lastCompletedAt > 0 && (now() - lastCompletedAt) < AUTO_CAPTURE_COOLDOWN_MS) {
+        return { started: false, ignored: true, reason: 'cooldown' };
+      }
+
+      const lifecycleActive = request.lifecycleActive === true;
+      const matchId = Number(request.matchId || 0);
+      if (!lifecycleActive || !Number.isInteger(matchId) || matchId <= 0) {
+        notify(buildFailedPayload('F10 Auto-Capture: No active match in progress.'));
+        return { started: false, reason: 'no-active-match' };
+      }
+
+      const tacticalMapKeybind = await lookupMapKeybind();
+      if (!tacticalMapKeybind?.sendKeys) {
+        notify(buildFailedPayload('F10 Auto-Capture: No tactical map keybind configured — set it in Settings.'));
+        return { started: false, reason: 'missing-tactical-map-keybind' };
+      }
+
+      const payload = {
+        matchId,
+        activeUser: typeof request.activeUser === 'string' && request.activeUser.trim()
+          ? request.activeUser.trim()
+          : null,
+        sendKeypresses: request.autoCaptureSendKeypresses !== false,
+        waitMultiplier: clampWaitMultiplier(request.autoCaptureWaitMultiplier),
+        ocrMode: typeof request.ocrMode === 'string' && request.ocrMode.trim()
+          ? request.ocrMode.trim()
+          : 'local',
+        ocrRegions: request.ocrRegions && typeof request.ocrRegions === 'object'
+          ? request.ocrRegions
+          : null,
+        runtimeOptions: request.runtimeOptions && typeof request.runtimeOptions === 'object'
+          ? request.runtimeOptions
+          : {},
+        tacticalMapKeybind,
+      };
+
+      inProgress = true;
+      notify({
+        phase: 'started',
+        matchId,
+        totalCaptures: 3,
+      });
+
+      void (async () => {
+        try {
+          await runSequence(payload);
+          lastCompletedAt = now();
+          notify({
+            phase: 'completed',
+            matchId,
+            totalCaptures: 3,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unknown error';
+          const step = Object.values(STEP_DEFINITIONS).find((candidate) => message.includes(candidate.label))
+            || null;
+          await tryEscapeCleanup(payload.sendKeypresses);
+          notify(buildFailedPayload(
+            step
+              ? `Auto-Capture failed at Step ${step.number} — ${step.label}`
+              : 'Auto-Capture failed.',
+            step,
+            message
+          ));
+        } finally {
+          inProgress = false;
+        }
+      })();
+
+      return {
+        started: true,
+        matchId,
+        tacticalMapKeybind: tacticalMapKeybind.raw,
+      };
+    },
+    __test__: {
+      get inProgress() {
+        return inProgress;
+      },
+      get lastCompletedAt() {
+        return lastCompletedAt;
+      },
+    },
+  };
+}
+
+module.exports = {
+  AUTO_CAPTURE_CAPTURE_TIMEOUT_MS,
+  AUTO_CAPTURE_COOLDOWN_MS,
+  STEP_DEFINITIONS,
+  createAutoCaptureCoordinator,
+  extractTacticalMapKeybindFromText,
+  lookupTacticalMapKeybind,
+  normalizeKeybindToSendKeys,
+};

@@ -34,8 +34,10 @@ const _fs = require('fs');
 const _os = require('os');
 const DLOG_PATH = require('path').join(_os.tmpdir(), 'wildgate-ocr.log');
 const dlog = msg => { try { _fs.appendFileSync(DLOG_PATH, new Date().toISOString() + ' ' + msg + '\n'); } catch(_e) {} };
+const REFERENCE_WIDTH = 1920;
 
 /**
+ * // LAYOUT-DEPENDENT
  * Screen layout constants (percentage-based, calibrated from real 1920×1080 screenshots)
  */
 const LAYOUT = {
@@ -112,6 +114,64 @@ function resolveCrewHubLayout(layoutOverrides) {
       yMax: LAYOUT.ENEMY_PANEL.yMax,
     }),
   };
+}
+
+function getGeometryScale(geometry, axis = 'y', fallback = 1) {
+  const key = axis === 'x' ? 'ocrScaleX' : 'ocrScaleY';
+  const value = Number(geometry?.[key]);
+  if (Number.isFinite(value) && value > 0) return value;
+  const fallbackValue = Number(fallback);
+  if (Number.isFinite(fallbackValue) && fallbackValue > 0) return fallbackValue;
+  return 1;
+}
+
+function scaleReferencePx(referencePx, geometry, axis = 'y', fallback = 1) {
+  const value = Number(referencePx);
+  if (!Number.isFinite(value) || value <= 0) return 1;
+  return Math.max(1, Math.round(value * getGeometryScale(geometry, axis, fallback)));
+}
+
+function computeLineMergeThreshold(imageHeight, geometry) {
+  return Math.min(
+    imageHeight * 0.012,
+    scaleReferencePx(15, geometry, 'y', 1)
+  );
+}
+
+function computeXProximityThreshold(imageWidth, options = {}) {
+  const geometry = options?.geometry || null;
+  const regionWidth = Number(options?.regionWidth);
+  const activeWidth = Number.isFinite(regionWidth) && regionWidth > 0
+    ? regionWidth
+    : (Number.isFinite(imageWidth) && imageWidth > 0 ? imageWidth : 0);
+  const aspectProfile = String(geometry?.aspectProfile || 'standard').toLowerCase();
+  const xProximityFactor = aspectProfile === 'standard' ? 0.25 : 0.12;
+  const regionThreshold = activeWidth > 0 ? activeWidth * xProximityFactor : 0;
+  const baselineXThresholdPx = Number(options?.baselineXThresholdPx);
+  const baselineThreshold = Number.isFinite(baselineXThresholdPx) && baselineXThresholdPx > 0
+    ? scaleReferencePx(baselineXThresholdPx, geometry, 'x', 1)
+    : 0;
+  const minimumThreshold = scaleReferencePx(80, geometry, 'x', 1);
+  return Math.max(regionThreshold, baselineThreshold, minimumThreshold);
+}
+
+function formatLayoutBounds(bounds, imageWidth, imageHeight) {
+  return {
+    x: [
+      Math.round(imageWidth * bounds.xMin),
+      Math.round(imageWidth * bounds.xMax),
+    ],
+    y: [
+      Math.round(imageHeight * bounds.yMin),
+      Math.round(imageHeight * bounds.yMax),
+    ],
+  };
+}
+
+function logCrewHubLayoutDebug(enabled, label, payload) {
+  if (!enabled) return;
+  const message = typeof payload === 'string' ? payload : JSON.stringify(payload);
+  console.log(`[CrewHub][Layout] ${label}: ${message}`);
 }
 
 /**
@@ -351,11 +411,15 @@ async function extractCrewHub(
   imageHeight,
   scale = 1,
   colorImageBuffer = null,
-  layoutOverrides = null
+  layoutOverrides = null,
+  options = null
 ) {
   console.log('[CrewHub] Starting extraction, activeUser:', activeUser);
   const colorBuffer = colorImageBuffer || imageBuffer;
   const layout = resolveCrewHubLayout(layoutOverrides);
+  const extractorOptions = (options && typeof options === 'object') ? options : {};
+  const geometry = extractorOptions.geometry || null;
+  const debugLayout = extractorOptions.debugLayout === true;
 
   const result = {
     screenType: 'crewHub',
@@ -387,6 +451,19 @@ async function extractCrewHub(
   try {
     // Initialise the debug log for this extraction run
     try { _fs.appendFileSync(DLOG_PATH, '=== extractCrewHub ' + new Date().toISOString() + ' ===\n'); } catch(_e) {}
+    logCrewHubLayoutDebug(debugLayout, 'geometry', {
+      original: geometry ? `${geometry.originalWidth}x${geometry.originalHeight}` : null,
+      ocrInput: geometry ? `${geometry.ocrWidth}x${geometry.ocrHeight}` : `${imageWidth}x${imageHeight}`,
+      aspectProfile: geometry?.aspectProfile || 'unknown',
+      ocrScaleX: Number(geometry?.ocrScaleX || 1).toFixed(4),
+      ocrScaleY: Number(geometry?.ocrScaleY || 1).toFixed(4),
+    });
+    logCrewHubLayoutDebug(debugLayout, 'regions', {
+      leftPanel: formatLayoutBounds(layout.LEFT_PANEL, imageWidth, imageHeight),
+      enemyPanel: formatLayoutBounds(layout.ENEMY_PANEL, imageWidth, imageHeight),
+      enemyName: formatLayoutBounds(layout.ENEMY_NAME, imageWidth, imageHeight),
+      teamHeader: formatLayoutBounds(layout.TEAM_HEADER, imageWidth, imageHeight),
+    });
 
     // Step 1: Extract your team from left panel
     result.yourTeam = await extractLeftPanel(
@@ -398,7 +475,8 @@ async function extractCrewHub(
       imageWidth,
       imageHeight,
       layout,
-      ocrResult && ocrResult.leftPanelTeamName
+      ocrResult && ocrResult.leftPanelTeamName,
+      { geometry, debugLayout }
     );
 
     // Step 2: Extract enemy teams from right panel using row-based card scanner
@@ -410,7 +488,8 @@ async function extractCrewHub(
       imageWidth,
       imageHeight,
       scale,
-      layout
+      layout,
+      { geometry, debugLayout }
     );
 
     // Step 3: Extract hazards from the "KNOWN HAZARDS" section of the crew hub.
@@ -476,8 +555,10 @@ async function extractCrewHub(
 /**
  * Extract your team data from left panel
  */
-async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, imageWidth, imageHeight, layout = LAYOUT, leftPanelTeamName = null) {
+async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, imageWidth, imageHeight, layout = LAYOUT, leftPanelTeamName = null, options = null) {
   dlog('[CrewHub] Extracting left panel (your team)');
+  const geometry = options?.geometry || null;
+  const debugLayout = options?.debugLayout === true;
 
   const teamData = {
     name: '',
@@ -522,7 +603,12 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
   dlog('[CrewHub] Left panel all words: ' + leftPanelWords.map(w => '"' + w.text + '"(c' + Math.round(w.confidence) + ')@x' + Math.round((w.bbox.x0+w.bbox.x1)/2) + '@y' + Math.round((w.bbox.y0+w.bbox.y1)/2)).join(' '));
 
   // Step 3: Group words into lines by Y position
-  const groupedLines = groupWordsIntoLines(leftPanelWords, imageHeight, imageWidth);
+  const groupedLines = groupWordsIntoLines(leftPanelWords, imageHeight, imageWidth, {
+    geometry,
+    regionWidth: Math.max(1, leftBounds.xMax - leftBounds.xMin),
+    debugLayout,
+    debugLabel: 'leftPanel',
+  });
   dlog('[CrewHub] Left panel lines: ' + groupedLines.length + ' ys=' + groupedLines.map(l=>Math.round(l.y)).join(','));
 
   // Step 4: Try to find activeUser first (anchor)
@@ -687,7 +773,7 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
     }
   }
 
-  const bottomLeftCandidates = extractBottomLeftTeammateCandidates(words, imageWidth, imageHeight);
+  const bottomLeftCandidates = extractBottomLeftTeammateCandidates(words, imageWidth, imageHeight, { geometry, debugLayout });
   if (bottomLeftCandidates.length > 0) {
     const repairedPlayers = [];
     const usedBottomIdx = new Set();
@@ -759,9 +845,11 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
  * @param {number} scale - Image scale factor from preprocessing (default 1)
  * @param {Object} layout - Layout constants
  */
-async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidth, imageHeight, scale = 1, layout = LAYOUT) {
+async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidth, imageHeight, scale = 1, layout = LAYOUT, options = null) {
   dlog('=== extractEnemyPanel ' + new Date().toISOString() + ' ===');
   dlog('[CrewHub] Extracting enemy panel — row-based card scanner v3');
+  const geometry = options?.geometry || null;
+  const debugLayout = options?.debugLayout === true;
 
   const SPECTATOR_PATTERNS = [
     /FIEND\s*(OR|0R)\s*FOE/i,
@@ -779,6 +867,8 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
   // Enemy name X-band: narrower filter to isolate player name text
   const nameXMin = imageWidth * layout.ENEMY_NAME.xMin;      // ~0.63
   const nameXMax = imageWidth * layout.ENEMY_NAME.xMax;      // ~0.92
+  const enemyRegionWidth = Math.max(1, panelXMax - panelXMin);
+  const referenceEnemyRegionWidth = REFERENCE_WIDTH * (LAYOUT.ENEMY_PANEL.xMax - LAYOUT.ENEMY_PANEL.xMin);
 
   const topHudWords = (words || []).filter((word) => {
     if (!word?.bbox || !word?.text) return false;
@@ -852,7 +942,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
           const lineH = w.bbox.y1 - w.bbox.y0;
           if (Math.abs(cy1 - cy2) > lineH * 1.2) continue; // different row
           const gap = n.bbox.x0 - w.bbox.x1;
-          const charW = Math.max(4, (w.bbox.x1 - w.bbox.x0) / Math.max(1, t.length));
+          const charW = Math.max(scaleReferencePx(4, geometry, 'x', scale), (w.bbox.x1 - w.bbox.x0) / Math.max(1, t.length));
           if (gap < charW * 2) {
             // Merge: "[6*]" + "Tiblolan" → "[6*]Tiblolan"
             const mergedWord = {
@@ -882,17 +972,33 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
   }
 
   // ── Step 2: Group words into lines ──────────────────────────────────────────
-  const groupedLines = groupWordsIntoLines(enemyWords, imageHeight, imageWidth);
+  const groupedLines = groupWordsIntoLines(enemyWords, imageHeight, imageWidth, {
+    geometry,
+    regionWidth: enemyRegionWidth,
+    baselineXThresholdPx: referenceEnemyRegionWidth * 0.25,
+    debugLayout,
+    debugLabel: 'enemyPanel',
+  });
   dlog('[CrewHub] Enemy lines found: ' + groupedLines.length + ' | ys=' + groupedLines.map(l => Math.round(l.y)).join(','));
 
   // ── Step 3: For each line, extract name + sample color bar below ────────────
-  // Card height is ~78px at 1080p original resolution; OCR bbox Y coords are in
-  // scaled image space, so multiply by scale for correct threshold comparisons.
-  const CARD_HEIGHT = Math.round(78 * (scale || 1));
-  // BAR_HEIGHT: the team-name bar is ~22px tall at original res = 22*scale in OCR coords
-  // BAR_OFFSET: bar sits ~11px below name text bottom at original res = 11*scale in OCR coords
-  const BAR_OFFSET = Math.round(11 * (scale || 1));
-  const BAR_HEIGHT = Math.round(28 * (scale || 1)); // slightly generous
+  const CARD_HEIGHT = scaleReferencePx(78, geometry, 'y', scale);
+  const BAR_OFFSET = scaleReferencePx(11, geometry, 'y', scale);
+  const BAR_HEIGHT = scaleReferencePx(28, geometry, 'y', scale);
+  const BAR_ZONE_MARGIN = scaleReferencePx(5, geometry, 'y', scale);
+  const MIN_COLOR_BBOX_WIDTH = scaleReferencePx(24, geometry, 'x', scale);
+  const COLOR_BBOX_INSET_MIN = scaleReferencePx(2, geometry, 'x', scale);
+  logCrewHubLayoutDebug(debugLayout, 'enemyThresholds', {
+    lineMergeThreshold: Number(computeLineMergeThreshold(imageHeight, geometry).toFixed(2)),
+    xProximityThreshold: Number(computeXProximityThreshold(imageWidth, {
+      geometry,
+      regionWidth: enemyRegionWidth,
+      baselineXThresholdPx: referenceEnemyRegionWidth * 0.25,
+    }).toFixed(2)),
+    cardHeight: CARD_HEIGHT,
+    barOffset: BAR_OFFSET,
+    barHeight: BAR_HEIGHT,
+  });
 
   // Tracks Y zones (in scaled OCR coords) occupied by detected color bars.
   // Any OCR line whose center falls in one of these zones is bar text, not a player name.
@@ -973,8 +1079,8 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     };
 
     const width = Math.max(0, bbox.x1 - bbox.x0);
-    if (width >= 24) {
-      const inset = Math.max(2, Math.round(width * 0.08));
+    if (width >= MIN_COLOR_BBOX_WIDTH) {
+      const inset = Math.max(COLOR_BBOX_INSET_MIN, Math.round(width * 0.08));
       if ((bbox.x1 - inset) > (bbox.x0 + inset)) {
         bbox = {
           ...bbox,
@@ -1148,7 +1254,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
       try {
         const colorDetectWidth = Math.max(0, (colorDetectBbox?.x1 || 0) - (colorDetectBbox?.x0 || 0));
         const colorDetectHeight = Math.max(0, (colorDetectBbox?.y1 || 0) - (colorDetectBbox?.y0 || 0));
-        if (colorDetectWidth < 20 || colorDetectHeight < 20) {
+        if (colorDetectWidth < scaleReferencePx(20, geometry, 'x', scale) || colorDetectHeight < scaleReferencePx(20, geometry, 'y', scale)) {
           dlog('[CrewHub] SKIP color detect: tiny bbox w=' + Math.round(colorDetectWidth) + ' h=' + Math.round(colorDetectHeight) + ' for "' + playerName + '"');
         } else {
           const cr = await detectTeamColorBarBelow(colorImageBuffer, colorDetectBbox, scale);
@@ -1184,7 +1290,10 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     const looksLikeShipNameBar = /^[A-Z0-9]+(-[A-Z0-9]+)+$/.test(playerName)
       || (/^[A-Z]{6,}$/.test(playerName) && /(?:LANTERN|PLEASE|WITCH|ATTACK|SPAGHURDER)/.test(playerName));
     if (!looksLikeShipNameBar) {
-      barZones.push({ min: lineBbox.y1 + BAR_OFFSET - 5, max: lineBbox.y1 + BAR_OFFSET + BAR_HEIGHT + 5 });
+      barZones.push({
+        min: lineBbox.y1 + BAR_OFFSET - BAR_ZONE_MARGIN,
+        max: lineBbox.y1 + BAR_OFFSET + BAR_HEIGHT + BAR_ZONE_MARGIN,
+      });
     } else {
       dlog('[CrewHub] SKIP bar-zone for ship-name-like card: "' + playerName + '"');
     }
@@ -1219,8 +1328,20 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     }
     deduped.push(card);
   }
+  logCrewHubLayoutDebug(debugLayout, 'cardsPreDedup', cards.map((card) => ({
+    name: card.name,
+    color: card.color,
+    y: Math.round(card.y),
+    confidence: card.confidence,
+  })));
   const uniqueCards = deduped;
   dlog('[CrewHub] Cards after dedup: ' + uniqueCards.length + ' — ' + uniqueCards.map(c => c.name + '(' + c.color + ')').join(', '));
+  logCrewHubLayoutDebug(debugLayout, 'cardsPostDedup', uniqueCards.map((card) => ({
+    name: card.name,
+    color: card.color,
+    y: Math.round(card.y),
+    confidence: card.confidence,
+  })));
 
   // ── Step 3b-post: Remove cards whose name is a garbled form of a captured team name ─
   // e.g. "Fancy Goose" == "FANCY GOOSE", "ANGUAR" ⊂ "VANGUARD", "VANCUARP" ≈ "VANGUARD"
@@ -1340,8 +1461,9 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
   }
 
   // ── Step 4a: Badge-first grouping (player line + repeated badge line below) ─
-  const minBadgeGap = Math.max(10, Math.round(18 * (scale || 1)));
-  const maxBadgeGap = Math.max(80, Math.round(120 * (scale || 1)));
+  const minBadgeGap = scaleReferencePx(18, geometry, 'y', scale);
+  const maxBadgeGap = scaleReferencePx(120, geometry, 'y', scale);
+  const idealBadgeGap = scaleReferencePx(38, geometry, 'y', scale);
   const badgeLineCandidates = [];
   const badgeFreq = new Map();
   const badgeDisplay = new Map();
@@ -1375,7 +1497,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     for (const cand of badgeLineCandidates) {
       const gap = cand.y - card.y;
       if (gap < minBadgeGap || gap > maxBadgeGap) continue;
-      const dist = Math.abs(gap - Math.round(38 * (scale || 1)));
+      const dist = Math.abs(gap - idealBadgeGap);
       if (!best || dist < best.dist) {
         best = { ...cand, gap, dist };
       }
@@ -1845,6 +1967,11 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
 
   // Sort by player count (most players first), cap at 4 teams
   enemyTeams.sort((a, b) => b.players.length - a.players.length);
+  logCrewHubLayoutDebug(debugLayout, 'finalTeamGrouping', enemyTeams.map((team) => ({
+    teamName: team.name || '',
+    color: team.color,
+    players: [...(team.players || [])],
+  })));
   if (enemyTeams.length > 4) {
     console.warn('[CrewHub] More than 4 enemy teams detected, merging overflow into top 4');
     const kept = enemyTeams.slice(0, 4);
@@ -1865,12 +1992,21 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
  * Group words into lines by Y position with X-proximity clustering
  * This prevents horizontally distant words from merging into the same line
  */
-function groupWordsIntoLines(words, imageHeight, imageWidth = null) {
+function groupWordsIntoLines(words, imageHeight, imageWidth = null, options = null) {
   const lines = [];
-  // FIXED: Use 1.2% of height or max 15px (was 2.5% = 27px on 1080p, too loose)
-  const lineThreshold = Math.min(15, imageHeight * 0.012);
-  // X-proximity threshold: words farther apart than this are separate lines
-  const xProximityThreshold = imageWidth ? imageWidth * 0.25 : 400; // 25% of width or 400px default
+  const groupOptions = (options && typeof options === 'object') ? options : {};
+  const geometry = groupOptions.geometry || null;
+  const lineThreshold = Number.isFinite(Number(groupOptions.lineThreshold))
+    ? Number(groupOptions.lineThreshold)
+    : computeLineMergeThreshold(imageHeight, geometry);
+  const xProximityThreshold = Number.isFinite(Number(groupOptions.xProximityThreshold))
+    ? Number(groupOptions.xProximityThreshold)
+    : computeXProximityThreshold(imageWidth, groupOptions);
+  logCrewHubLayoutDebug(groupOptions.debugLayout === true, groupOptions.debugLabel || 'lineGrouping', {
+    lineMergeThreshold: Number(lineThreshold.toFixed(2)),
+    xProximityThreshold: Number(xProximityThreshold.toFixed(2)),
+    regionWidth: Number.isFinite(Number(groupOptions.regionWidth)) ? Number(groupOptions.regionWidth) : null,
+  });
 
   for (const word of words) {
     if (!word.bbox || !word.text) continue;
@@ -2439,7 +2575,7 @@ function isLikelyShortUiSuffixTagCandidate(lineWords, candidate) {
   return /[a-z]/.test(rawToken) && normalizedRaw === normalizedRaw.toLowerCase();
 }
 
-function extractBottomLeftTeammateCandidates(words, imageWidth, imageHeight) {
+function extractBottomLeftTeammateCandidates(words, imageWidth, imageHeight, options = null) {
   const bounds = {
     xMin: imageWidth * 0.0,
     xMax: imageWidth * 0.42,
@@ -2454,7 +2590,12 @@ function extractBottomLeftTeammateCandidates(words, imageWidth, imageHeight) {
   });
   if (bottomWords.length === 0) return [];
 
-  const lines = groupWordsIntoLines(bottomWords, imageHeight, imageWidth);
+  const lines = groupWordsIntoLines(bottomWords, imageHeight, imageWidth, {
+    geometry: options?.geometry || null,
+    regionWidth: Math.max(1, bounds.xMax - bounds.xMin),
+    debugLayout: options?.debugLayout === true,
+    debugLabel: 'bottomLeftTeammates',
+  });
   const out = [];
   for (const line of lines) {
     const lineMinX = getLineMinX(line.words);
@@ -2807,6 +2948,8 @@ module.exports = {
   scoreAsPlayerName,
   formatTeamName,
   __test__: {
+    computeLineMergeThreshold,
+    computeXProximityThreshold,
     countAnchorsBetween,
     getSameColorSplitGap,
     getSameColorMergeGap,

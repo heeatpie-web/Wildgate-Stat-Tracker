@@ -4,14 +4,16 @@ import {
     Undo2, ScanEye, Swords, Handshake, TrendingUp, X, Plus,
     Check, AlertTriangle, Image as ImageIcon
 } from 'lucide-react';
-import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
+import type { RosterEntryMeta } from '../store/slices/createDataSlice';
 import type { Match } from '../types';
 import { getShipColor } from '../types';
 import { normalizeOcrName, similarityScore } from '../utils/stringUtils';
 import { buildRosterMergeSuggestionGroups, type RosterMergeSuggestionGroup } from '../utils/rosterMergeSuggestions';
 import { LocalImage } from './LocalImage';
+import { useShallow } from 'zustand/react/shallow';
+import Logger from '../utils/logger';
 
 type SortMode = 'alpha' | 'favorites' | 'recent' | 'encounters';
 type PlayerHubMode = 'roster' | 'ocr-work';
@@ -19,6 +21,7 @@ type PlayerHubMode = 'roster' | 'ocr-work';
 interface PlayerDetail {
     name: string;
     isFavorite: boolean;
+    rosterMeta: RosterEntryMeta | null;
     note: string;
     asTeammate: { wins: number; total: number } | null;
     asOpponent: { wins: number; total: number } | null;
@@ -58,6 +61,11 @@ const normalizeNameKey = (value: string | null | undefined): string => (
     normalizeOcrName(String(value || '')).toLowerCase()
 );
 
+const getRosterBadgeLabel = (meta: RosterEntryMeta | null | undefined): string | null => {
+    if (!meta || meta.origin !== 'ocr') return null;
+    return meta.status === 'detected' ? 'Detected' : 'Confirmed';
+};
+
 const getMatchOpponentNames = (match: Match): string[] => {
     const opponentsFromTeams = Array.isArray(match.opponentTeams)
         ? match.opponentTeams.flatMap((team) => (Array.isArray(team.players) ? team.players : []))
@@ -68,9 +76,15 @@ const getMatchOpponentNames = (match: Match): string[] => {
     ];
 };
 
+const IS_DEV_BUILD = import.meta.env.DEV || process.env.NODE_ENV !== 'production';
+const DEFAULT_ROSTER_VIEWPORT_HEIGHT = 640;
+const ROSTER_GRID_ROW_HEIGHT = 74;
+const ROSTER_GRID_OVERSCAN_ROWS = 3;
+
 const PlayerHub: React.FC = () => {
     const {
         pilotRegistry,
+        rosterEntryMeta,
         favorites,
         pilotNotes,
         pilotAliases,
@@ -89,18 +103,51 @@ const PlayerHub: React.FC = () => {
         dismissedRosterCandidateKeys,
         dismissRosterCandidateKeys,
         addToRegistry,
+        confirmRosterEntry,
         removePendingReview,
         addPilotAlias,
         removePilotAlias,
         matches,
         playerProfiles,
         setDrillDownTarget,
-    } = useGameData();
+        ocrAliasModel,
+        ocrAutoApplyMinScore,
+        recordOcrAliasCorrection,
+        removeOcrAliasCorrection,
+    } = useAppStore(useShallow((state) => ({
+        pilotRegistry: state.pilotRegistry,
+        rosterEntryMeta: state.rosterEntryMeta,
+        favorites: state.favorites,
+        pilotNotes: state.pilotNotes,
+        pilotAliases: state.pilotAliases,
+        toggleFavorite: state.toggleFavorite,
+        updatePilotNote: state.updatePilotNote,
+        removeFromRegistry: state.removeFromRegistry,
+        renamePilot: state.renamePilot,
+        mergePilots: state.mergePilots,
+        undoLastMerge: state.undoLastMerge,
+        mergeHistory: state.mergeHistory,
+        activeMergeNotificationId: state.activeMergeNotificationId,
+        dismissActiveMergeNotification: state.dismissActiveMergeNotification,
+        pendingReviews: state.pendingReviews,
+        dismissedRosterMergePairKeys: state.dismissedRosterMergePairKeys,
+        dismissRosterMergeSuggestionPairs: state.dismissRosterMergeSuggestionPairs,
+        dismissedRosterCandidateKeys: state.dismissedRosterCandidateKeys,
+        dismissRosterCandidateKeys: state.dismissRosterCandidateKeys,
+        addToRegistry: state.addToRegistry,
+        confirmRosterEntry: state.confirmRosterEntry,
+        removePendingReview: state.removePendingReview,
+        addPilotAlias: state.addPilotAlias,
+        removePilotAlias: state.removePilotAlias,
+        matches: state.matches,
+        playerProfiles: state.playerProfiles,
+        setDrillDownTarget: state.setDrillDownTarget,
+        ocrAliasModel: state.ocrAliasModel,
+        ocrAutoApplyMinScore: state.ocrAutoApplyMinScore,
+        recordOcrAliasCorrection: state.recordOcrAliasCorrection,
+        removeOcrAliasCorrection: state.removeOcrAliasCorrection,
+    })));
     const { setActiveView, setToast } = useUIState();
-    const ocrAliasModel = useAppStore(s => s.ocrAliasModel);
-    const ocrAutoApplyMinScore = useAppStore(s => s.ocrAutoApplyMinScore);
-    const recordOcrAliasCorrection = useAppStore(s => s.recordOcrAliasCorrection);
-    const removeOcrAliasCorrection = useAppStore(s => s.removeOcrAliasCorrection);
 
     const [searchTerm, setSearchTerm] = useState('');
     const [ocrSearchTerm, setOcrSearchTerm] = useState('');
@@ -121,8 +168,17 @@ const PlayerHub: React.FC = () => {
     const [pendingCandidateEdits, setPendingCandidateEdits] = useState<Record<string, string>>({});
     const [sourcePreview, setSourcePreview] = useState<{ src: string; label: string } | null>(null);
     const [possibleMergesExpanded, setPossibleMergesExpanded] = useState(false);
+    const [rosterViewportWidth, setRosterViewportWidth] = useState<number>(() => (
+        typeof window !== 'undefined' && Number.isFinite(window.innerWidth) && window.innerWidth > 0
+            ? window.innerWidth
+            : 1280
+    ));
+    const [rosterViewportHeight, setRosterViewportHeight] = useState(DEFAULT_ROSTER_VIEWPORT_HEIGHT);
+    const [rosterScrollTop, setRosterScrollTop] = useState(0);
     const hadPossibleMergesRef = useRef(false);
     const mergeKeepNameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const rosterScrollRef = useRef<HTMLDivElement | null>(null);
+    const uniquePilotRegistry = useMemo(() => Array.from(new Set(pilotRegistry || [])), [pilotRegistry]);
     const pendingRosterCandidates = useMemo(() => {
         const seen = new Set<string>();
         return (pendingReviews || [])
@@ -146,6 +202,39 @@ const PlayerHub: React.FC = () => {
         });
     }, [pendingRosterCandidates]);
 
+    useEffect(() => {
+        if (typeof window === 'undefined') return undefined;
+        const handleResize = () => {
+            if (Number.isFinite(window.innerWidth) && window.innerWidth > 0) {
+                setRosterViewportWidth(window.innerWidth);
+            }
+        };
+        handleResize();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    useEffect(() => {
+        const node = rosterScrollRef.current;
+        if (!node) return undefined;
+        const measure = () => {
+            const nextHeight = node.clientHeight || DEFAULT_ROSTER_VIEWPORT_HEIGHT;
+            setRosterViewportHeight(nextHeight);
+        };
+        measure();
+        if (typeof ResizeObserver === 'undefined') return undefined;
+        const observer = new ResizeObserver(() => measure());
+        observer.observe(node);
+        return () => observer.disconnect();
+    }, [pendingRosterCandidates.length, panelMode, searchTerm]);
+
+    useEffect(() => {
+        setRosterScrollTop(0);
+        if (rosterScrollRef.current) {
+            rosterScrollRef.current.scrollTop = 0;
+        }
+    }, [searchTerm, sortMode, panelMode]);
+
     const filteredOcrCandidates = useMemo(() => {
         const query = ocrSearchTerm.trim().toLowerCase();
         if (!query) return pendingRosterCandidates;
@@ -160,19 +249,43 @@ const PlayerHub: React.FC = () => {
         return (mergeHistory || []).find((entry) => entry.id === activeMergeNotificationId) || null;
     }, [activeMergeNotificationId, mergeHistory]);
 
-    const deferredPilotRegistry = useDeferredValue(pilotRegistry);
-    const possibleMergeGroups = useMemo(() => buildRosterMergeSuggestionGroups({
-        pilotRegistry: deferredPilotRegistry,
-        pilotAliases,
-        pendingReviews,
-        dismissedPairKeys: dismissedRosterMergePairKeys,
-        autoMergeThresholdPct: Math.round((Number(ocrAutoApplyMinScore) || 0.83) * 100),
-    }), [dismissedRosterMergePairKeys, ocrAutoApplyMinScore, pendingReviews, pilotAliases, deferredPilotRegistry]);
+    const deferredPilotRegistry = useDeferredValue(uniquePilotRegistry);
+    const favoritePilotKeys = useMemo(() => (
+        new Set((favorites || []).map((entry) => normalizeNameKey(entry)).filter(Boolean))
+    ), [favorites]);
+    const normalizedPilotNameMap = useMemo(() => {
+        const lookup = new Map<string, string>();
+        uniquePilotRegistry.forEach((name) => {
+            const key = normalizeNameKey(name);
+            if (!key || lookup.has(key)) return;
+            lookup.set(key, name);
+        });
+        return lookup;
+    }, [uniquePilotRegistry]);
+    const rosterCandidateMatchMap = useMemo(() => {
+        const lookup = new Map<string, string | null>();
+        if (panelMode !== 'ocr-work') return lookup;
+        pendingRosterCandidates.forEach((candidate) => {
+            const key = normalizeNameKey(candidate.value);
+            lookup.set(candidate.id, key ? (normalizedPilotNameMap.get(key) || null) : null);
+        });
+        return lookup;
+    }, [normalizedPilotNameMap, panelMode, pendingRosterCandidates]);
+    const possibleMergeGroups = useMemo(() => {
+        if (panelMode !== 'ocr-work') return [] as RosterMergeSuggestionGroup[];
+        return buildRosterMergeSuggestionGroups({
+            pilotRegistry: deferredPilotRegistry,
+            pilotAliases,
+            pendingReviews,
+            dismissedPairKeys: dismissedRosterMergePairKeys,
+            autoMergeThresholdPct: Math.round((Number(ocrAutoApplyMinScore) || 0.83) * 100),
+        });
+    }, [dismissedRosterMergePairKeys, ocrAutoApplyMinScore, panelMode, pendingReviews, pilotAliases, deferredPilotRegistry]);
 
     const findRosterMatch = (value: string): string | null => {
-        const normalizedValue = normalizeOcrName(value || '').toLowerCase();
+        const normalizedValue = normalizeNameKey(value);
         if (!normalizedValue) return null;
-        return pilotRegistry.find((entry) => normalizeOcrName(entry || '').toLowerCase() === normalizedValue) || null;
+        return normalizedPilotNameMap.get(normalizedValue) || null;
     };
 
     useEffect(() => {
@@ -244,7 +357,7 @@ const PlayerHub: React.FC = () => {
 
     const identityKeysByPilot = useMemo(() => {
         const lookup = new Map<string, Set<string>>();
-        Array.from(new Set(pilotRegistry)).forEach((name) => {
+        uniquePilotRegistry.forEach((name) => {
             const keys = new Set<string>();
             const normalizedName = normalizeNameKey(name);
             if (normalizedName) keys.add(normalizedName);
@@ -259,7 +372,7 @@ const PlayerHub: React.FC = () => {
             lookup.set(name, keys);
         });
         return lookup;
-    }, [learnedAliasInsightsByTarget, pilotAliases, pilotRegistry]);
+    }, [learnedAliasInsightsByTarget, pilotAliases, uniquePilotRegistry]);
 
     const pilotNamesByIdentityKey = useMemo(() => {
         const lookup = new Map<string, Set<string>>();
@@ -279,7 +392,7 @@ const PlayerHub: React.FC = () => {
 
     const encounterSnapshotsByPilot = useMemo(() => {
         const snapshots = new Map<string, EncounterSnapshot>();
-        Array.from(new Set(pilotRegistry)).forEach((name) => {
+        uniquePilotRegistry.forEach((name) => {
             snapshots.set(name, {
                 totalEncounters: 0,
                 firstSeen: null,
@@ -334,16 +447,18 @@ const PlayerHub: React.FC = () => {
             });
 
         return snapshots;
-    }, [matches, pilotNamesByIdentityKey, pilotRegistry]);
+    }, [matches, pilotNamesByIdentityKey, uniquePilotRegistry]);
 
-    const enrichedPilots = useMemo(() => {
-        const unique = Array.from(new Set(pilotRegistry));
-        return unique.map(name => {
+    const rosterModel = useMemo(() => {
+        const startedAt = performance.now();
+        const enrichedPilots = uniquePilotRegistry.map((name) => {
             const profile = playerProfiles?.[name];
             const encounterSnapshot = encounterSnapshotsByPilot.get(name);
-            const detail: PlayerDetail = {
+            const rosterMeta = rosterEntryMeta?.[normalizeNameKey(name)] || null;
+            return {
                 name,
-                isFavorite: favorites.includes(name),
+                isFavorite: favoritePilotKeys.has(normalizeNameKey(name)),
+                rosterMeta,
                 note: pilotNotes[name] || '',
                 asTeammate: encounterSnapshot?.asTeammate || null,
                 asOpponent: encounterSnapshot?.asOpponent || null,
@@ -355,15 +470,38 @@ const PlayerHub: React.FC = () => {
                 ocrSightings: profile?.ocrSightings || 0,
                 manualSightings: profile?.manualSightings || 0,
                 lastOcrConfidence: profile?.lastOcrConfidence ?? null,
-            };
-            return detail;
+            } satisfies PlayerDetail;
         });
-    }, [encounterSnapshotsByPilot, favorites, pilotNotes, pilotRegistry, playerProfiles]);
+        const enrichedPilotsByName = new Map(enrichedPilots.map((pilot) => [pilot.name, pilot]));
+        if (IS_DEV_BUILD) {
+            Logger.debug('PlayerHub', 'Derived roster model', {
+                durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
+                pilotCount: uniquePilotRegistry.length,
+                pendingCandidateCount: pendingRosterCandidates.length,
+                panelMode,
+            });
+        }
+        return {
+            enrichedPilots,
+            enrichedPilotsByName,
+        };
+    }, [
+        encounterSnapshotsByPilot,
+        favoritePilotKeys,
+        panelMode,
+        pendingRosterCandidates.length,
+        pilotNotes,
+        playerProfiles,
+        rosterEntryMeta,
+        uniquePilotRegistry,
+    ]);
+    const enrichedPilots = rosterModel.enrichedPilots;
+    const deferredSearchTerm = useDeferredValue(searchTerm);
 
     const filtered = useMemo(() => {
         let list = enrichedPilots;
-        if (searchTerm) {
-            const q = searchTerm.toLowerCase();
+        if (deferredSearchTerm) {
+            const q = deferredSearchTerm.toLowerCase();
             list = list.filter(p => p.name.toLowerCase().includes(q));
         }
         list = [...list].sort((a, b) => {
@@ -382,12 +520,14 @@ const PlayerHub: React.FC = () => {
             }
         });
         return list;
-    }, [enrichedPilots, searchTerm, sortMode]);
+    }, [deferredSearchTerm, enrichedPilots, sortMode]);
 
     const selected = useMemo(() => {
         if (!selectedPilot) return null;
-        return enrichedPilots.find(p => p.name === selectedPilot) || null;
-    }, [selectedPilot, enrichedPilots]);
+        return rosterModel.enrichedPilotsByName.get(selectedPilot) || null;
+    }, [rosterModel.enrichedPilotsByName, selectedPilot]);
+    const selectedRosterBadgeLabel = getRosterBadgeLabel(selected?.rosterMeta);
+    const isSelectedDetectedEntry = selected?.rosterMeta?.origin === 'ocr' && selected?.rosterMeta?.status === 'detected';
 
     const selectedAliasInsights = useMemo(() => {
         if (!selected) return { manual: [] as AliasInsight[], learned: [] as AliasInsight[] };
@@ -548,6 +688,19 @@ const PlayerHub: React.FC = () => {
         };
     }, [matches, selected]);
 
+    const rosterColumnCount = rosterViewportWidth >= 1536 ? 3 : 2;
+    const rosterTotalRows = Math.ceil(filtered.length / rosterColumnCount);
+    const rosterVisibleRowStart = Math.max(0, Math.floor(rosterScrollTop / ROSTER_GRID_ROW_HEIGHT) - ROSTER_GRID_OVERSCAN_ROWS);
+    const rosterVisibleRowEnd = Math.min(
+        rosterTotalRows,
+        Math.ceil((rosterScrollTop + rosterViewportHeight) / ROSTER_GRID_ROW_HEIGHT) + ROSTER_GRID_OVERSCAN_ROWS
+    );
+    const rosterVisibleStartIndex = rosterVisibleRowStart * rosterColumnCount;
+    const rosterVisibleEndIndex = Math.min(filtered.length, rosterVisibleRowEnd * rosterColumnCount);
+    const rosterVisiblePilots = filtered.slice(rosterVisibleStartIndex, rosterVisibleEndIndex);
+    const rosterVisibleOffsetY = rosterVisibleRowStart * ROSTER_GRID_ROW_HEIGHT;
+    const rosterTotalHeight = Math.max(rosterTotalRows * ROSTER_GRID_ROW_HEIGHT, rosterViewportHeight);
+
     const selectedTopTeammate = selectedPatternSignals.topTeammate;
     const selectedTopOpponent = selectedPatternSignals.topOpponent;
 
@@ -571,10 +724,13 @@ const PlayerHub: React.FC = () => {
     const handleSaveRename = () => {
         if (renaming && renameValue.trim() && renameValue !== renaming) {
             const trimmedValue = renameValue.trim();
-            const collision = pilotRegistry.find((entry) => (
-                entry !== renaming
-                && normalizeOcrName(entry || '').toLowerCase() === normalizeOcrName(trimmedValue).toLowerCase()
-            ));
+            const normalizedRenameValue = normalizeNameKey(trimmedValue);
+            const collisionCandidate = normalizedRenameValue
+                ? normalizedPilotNameMap.get(normalizedRenameValue)
+                : null;
+            const collision = collisionCandidate && collisionCandidate !== renaming
+                ? collisionCandidate
+                : null;
             if (collision) {
                 setShowFullProfile(true);
                 setMergeTarget(collision);
@@ -639,6 +795,17 @@ const PlayerHub: React.FC = () => {
         removeFromRegistry(pilot);
         if (selectedPilot === pilot) setSelectedPilot(null);
         setConfirmDelete(null);
+    };
+
+    const handleConfirmDetectedEntry = (pilot: string) => {
+        confirmRosterEntry(pilot, 'ocr');
+        setToast({ message: `Confirmed "${pilot}" in the roster`, type: 'success' });
+    };
+
+    const handleDismissDetectedEntry = (pilot: string) => {
+        removeFromRegistry(pilot);
+        if (selectedPilot === pilot) setSelectedPilot(null);
+        setToast({ message: `Dismissed detected roster entry "${pilot}"`, type: 'info' });
     };
 
     const timeAgo = (ts: number | null) => {
@@ -718,7 +885,7 @@ const PlayerHub: React.FC = () => {
                 confidenceWeight: 1,
             });
         }
-        addToRegistry(resolvedTarget);
+        addToRegistry(resolvedTarget, { origin: 'ocr', status: 'confirmed' });
         clearResolvedRosterCandidates(candidate, resolvedTarget, 'merge');
         setSelectedPilot(resolvedTarget);
         setToast({
@@ -742,7 +909,7 @@ const PlayerHub: React.FC = () => {
                 setToast({ message: `"${existingMatch}" is already in the roster. Review merge suggestions instead.`, type: 'info' });
                 return;
             }
-            addToRegistry(value);
+            addToRegistry(value, { origin: 'ocr', status: 'confirmed' });
             setToast({ message: `Added "${value}" to roster as a new player`, type: 'success' });
         }
         if (action === 'dismiss') {
@@ -913,7 +1080,7 @@ const PlayerHub: React.FC = () => {
                                         ? new Date(sourceCapturedAt).toLocaleString()
                                         : '';
                                     const normalizedPendingValue = normalizeOcrName(pendingValue);
-                                    const existingRosterMatch = findRosterMatch(pendingValue);
+                                    const existingRosterMatch = rosterCandidateMatchMap.get(candidate.id) ?? findRosterMatch(pendingValue);
                                     const mergeSuggestions = [
                                         candidate.bestMatch && normalizeOcrName(candidate.bestMatch).toLowerCase() !== normalizeOcrName(candidate.value).toLowerCase()
                                             ? {
@@ -1070,7 +1237,7 @@ const PlayerHub: React.FC = () => {
                             </div>
                             <div>
                                 <h2 className="text-body font-bold text-md-sys-on-surface uppercase tracking-tight">Players</h2>
-                                <span className="text-label-xs text-md-sys-on-surface/60">{pilotRegistry.length} registered</span>
+                                <span className="text-label-xs text-md-sys-on-surface/60">{uniquePilotRegistry.length} registered</span>
                             </div>
                         </div>
                     </div>
@@ -1199,9 +1366,21 @@ const PlayerHub: React.FC = () => {
                             </span>
                         </div>
                     ) : (
-                        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1">
-                            <div className="grid grid-cols-2 2xl:grid-cols-3 gap-1.5 content-start">
-                                {filtered.map(pilot => (
+                        <div
+                            ref={rosterScrollRef}
+                            data-testid="playerhub-roster-viewport"
+                            onScroll={(event) => setRosterScrollTop(event.currentTarget.scrollTop)}
+                            className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1"
+                        >
+                            <div style={{ height: `${rosterTotalHeight}px` }}>
+                                <div
+                                    className="grid grid-cols-2 2xl:grid-cols-3 gap-1.5 content-start"
+                                    style={{ transform: `translateY(${rosterVisibleOffsetY}px)` }}
+                                >
+                                {rosterVisiblePilots.map((pilot) => {
+                                    const rosterBadgeLabel = getRosterBadgeLabel(pilot.rosterMeta);
+                                    const isDetectedBadge = pilot.rosterMeta?.origin === 'ocr' && pilot.rosterMeta?.status === 'detected';
+                                    return (
                                     <button
                                         key={pilot.name}
                                         onClick={() => {
@@ -1214,9 +1393,19 @@ const PlayerHub: React.FC = () => {
                                             }`}
                                     >
                                         <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-1.5">
+                                            <div className="flex items-center gap-1.5 min-w-0">
                                                 {pilot.isFavorite && <Star size={10} className="text-warning fill-amber-400 shrink-0" />}
                                                 <span className="player-list-name text-label-sm font-semibold truncate">{pilot.name}</span>
+                                                {rosterBadgeLabel && (
+                                                    <span
+                                                        className={`shrink-0 px-1.5 py-0.5 rounded-pill text-[10px] font-bold uppercase tracking-wide ${isDetectedBadge
+                                                            ? 'bg-info-soft text-info border border-info/20'
+                                                            : 'bg-success/10 text-success border border-success/20'
+                                                            }`}
+                                                    >
+                                                        {rosterBadgeLabel}
+                                                    </span>
+                                                )}
                                             </div>
                                             {pilot.totalEncounters > 0 && (
                                                 <span className="text-label-xs text-md-sys-on-surface/40">
@@ -1230,7 +1419,9 @@ const PlayerHub: React.FC = () => {
                                         )}
                                         <ChevronRight size={14} className="text-md-sys-on-surface/40 group-hover:text-md-sys-on-surface/40 shrink-0" />
                                     </button>
-                                ))}
+                                    );
+                                })}
+                                </div>
                             </div>
                         </div>
                     )}
@@ -1295,7 +1486,7 @@ const PlayerHub: React.FC = () => {
                             Select a player to view details
                         </span>
                         <span className="text-label-sm mt-1 opacity-60">
-                            {pilotRegistry.length} players in your roster
+                            {uniquePilotRegistry.length} players in your roster
                         </span>
                     </div>
                 ) : (
@@ -1322,7 +1513,19 @@ const PlayerHub: React.FC = () => {
                                                 <button onClick={() => setRenaming(null)} className="text-md-sys-on-surface/40" aria-label="Cancel rename"><X size={16} /></button>
                                             </div>
                                         ) : (
-                                            <h2 className="text-body font-bold text-md-sys-on-surface truncate">{selected.name}</h2>
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <h2 className="text-body font-bold text-md-sys-on-surface truncate">{selected.name}</h2>
+                                                {selectedRosterBadgeLabel && (
+                                                    <span
+                                                        className={`shrink-0 px-2 py-0.5 rounded-pill text-label-xs font-bold uppercase tracking-wide ${isSelectedDetectedEntry
+                                                            ? 'bg-info-soft text-info border border-info/20'
+                                                            : 'bg-success/10 text-success border border-success/20'
+                                                            }`}
+                                                    >
+                                                        {selectedRosterBadgeLabel}
+                                                    </span>
+                                                )}
+                                            </div>
                                         )}
                                         <div className="flex items-center gap-2 mt-0.5">
                                             {selected.totalEncounters > 0 && (
@@ -1341,9 +1544,38 @@ const PlayerHub: React.FC = () => {
                                                 </span>
                                             )}
                                         </div>
+                                        {selected.rosterMeta?.origin === 'ocr' && (
+                                            <div className="mt-1 text-label-xs text-md-sys-on-surface/52">
+                                                {isSelectedDetectedEntry
+                                                    ? 'Auto-added from OCR and still awaiting confirmation.'
+                                                    : 'Originally learned from OCR and confirmed into the roster.'}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-1 shrink-0">
+                                <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                                    {isSelectedDetectedEntry && (
+                                        <>
+                                            <button
+                                                onClick={() => handleConfirmDetectedEntry(selected.name)}
+                                                className="px-3 h-8 rounded-lg bg-success text-white text-label-xs font-bold uppercase tracking-wide flex items-center gap-1"
+                                                title="Confirm detected roster entry"
+                                                aria-label="Confirm detected roster entry"
+                                            >
+                                                <Check size={12} />
+                                                Confirm
+                                            </button>
+                                            <button
+                                                onClick={() => handleDismissDetectedEntry(selected.name)}
+                                                className="px-3 h-8 rounded-lg bg-md-sys-on-surface/10 text-md-sys-on-surface/70 text-label-xs font-bold uppercase tracking-wide flex items-center gap-1 hover:bg-md-sys-on-surface/15"
+                                                title="Dismiss detected roster entry"
+                                                aria-label="Dismiss detected roster entry"
+                                            >
+                                                <X size={12} />
+                                                Dismiss
+                                            </button>
+                                        </>
+                                    )}
                                     <button
                                         onClick={() => toggleFavorite(selected.name)}
                                         className={`md3-icon-btn w-8 h-8 ${selected.isFavorite ? 'text-warning' : 'text-md-sys-on-surface/40'}`}
@@ -1385,10 +1617,10 @@ const PlayerHub: React.FC = () => {
                             {confirmDelete === selected.name && (
                                 <div className="mt-3 bg-md-sys-errorContainer/20 border border-md-sys-error/20 rounded-xl px-4 py-3 flex items-center justify-between">
                                     <span className="text-label-sm text-md-sys-error font-semibold flex items-center gap-2">
-                                        <AlertTriangle size={14} /> Remove {selected.name} from roster?
+                                        <AlertTriangle size={14} /> Delete {selected.name} from the roster?
                                     </span>
                                     <div className="flex gap-2">
-                                        <button onClick={() => handleDelete(selected.name)} className="px-3 py-1 bg-md-sys-error text-md-sys-onError rounded-lg text-label-xs font-bold">Remove</button>
+                                        <button onClick={() => handleDelete(selected.name)} className="px-3 py-1 bg-md-sys-error text-md-sys-onError rounded-lg text-label-xs font-bold">Delete</button>
                                         <button onClick={() => setConfirmDelete(null)} className="px-3 py-1 bg-md-sys-on-surface/10 rounded-lg text-label-xs font-bold">Cancel</button>
                                     </div>
                                 </div>

@@ -163,6 +163,14 @@ const SettingsModalContent: React.FC = () => {
     const setResultOcrFlowMode = useAppStore(s => s.setResultOcrFlowMode);
     const ocrAutoOpenAfterRerun = useAppStore(s => s.ocrAutoOpenAfterRerun);
     const setOcrAutoOpenAfterRerun = useAppStore(s => s.setOcrAutoOpenAfterRerun);
+    const autoSequenceOnCapture = useAppStore(s => s.autoSequenceOnCapture);
+    const setAutoSequenceOnCapture = useAppStore(s => s.setAutoSequenceOnCapture);
+    const autoCaptureSendKeypresses = useAppStore(s => s.autoCaptureSendKeypresses);
+    const setAutoCaptureSendKeypresses = useAppStore(s => s.setAutoCaptureSendKeypresses);
+    const autoCaptureWaitMultiplier = useAppStore(s => s.autoCaptureWaitMultiplier);
+    const setAutoCaptureWaitMultiplier = useAppStore(s => s.setAutoCaptureWaitMultiplier);
+    const autoPopulateRosterOnSave = useAppStore(s => s.autoPopulateRosterOnSave);
+    const setAutoPopulateRosterOnSave = useAppStore(s => s.setAutoPopulateRosterOnSave);
     const showSmartCaptureInHeader = useAppStore(s => s.showSmartCaptureInHeader);
     const setShowSmartCaptureInHeader = useAppStore(s => s.setShowSmartCaptureInHeader);
     const tipsEnabled = useAppStore(s => s.tipsEnabled);
@@ -331,6 +339,7 @@ const SettingsModalContent: React.FC = () => {
             matches: state.matches,
             players: state.players,
             pilotRegistry: state.pilotRegistry,
+            rosterEntryMeta: state.rosterEntryMeta,
             favorites: state.favorites,
             pilotNotes: state.pilotNotes,
             playerIdMap: state.playerIdMap,
@@ -359,6 +368,10 @@ const SettingsModalContent: React.FC = () => {
                 captureMode: state.captureMode,
                 resultOcrFlowMode: state.resultOcrFlowMode,
                 ocrAutoOpenAfterRerun: (state as any).ocrAutoOpenAfterRerun,
+                autoSequenceOnCapture: (state as any).autoSequenceOnCapture,
+                autoCaptureSendKeypresses: (state as any).autoCaptureSendKeypresses,
+                autoCaptureWaitMultiplier: (state as any).autoCaptureWaitMultiplier,
+                autoPopulateRosterOnSave: (state as any).autoPopulateRosterOnSave,
                 lockOcrTeams: state.lockOcrTeams,
                 ocrEnhancedNameRecoveryEnabled: (state as any).ocrEnhancedNameRecoveryEnabled,
                 ocrNameRerouteThreshold: (state as any).ocrNameRerouteThreshold,
@@ -541,6 +554,7 @@ const SettingsModalContent: React.FC = () => {
         { id: 'alias-authority', section: 'ocr-alias-learning', label: 'OCR Alias Learning', keywords: ['alias', 'ocr', 'name', 'canonical', 'duplicate', 'former name'] },
         { id: 'ocr-engine', section: 'advanced-ocr-tuning', label: 'Advanced OCR Tuning', keywords: ['ocr', 'cloud', 'local', 'gemini', 'hybrid'] },
         { id: 'capture-flow', section: 'capture-defaults', label: 'Capture Mode', keywords: ['capture', 'deferred', 'auto', 'workflow'] },
+        { id: 'roster-auto-populate', section: 'capture', label: 'Roster Auto-Populate', keywords: ['roster', 'auto add', 'detected players', '83%', 'save'] },
         { id: 'ocr-roi', section: 'capture', label: 'OCR Scan Regions (ROI)', keywords: ['roi', 'region', 'hazard', 'players', 'map'] },
         { id: 'backup-db', section: 'data-updates', label: 'Backup Database', keywords: ['backup', 'db', 'export'] },
         { id: 'copy-logs', section: 'data-updates', label: 'Copy Logs', keywords: ['logs', 'errors', 'diagnostics', 'support'] },
@@ -1129,12 +1143,39 @@ const SettingsModalContent: React.FC = () => {
                             </button>
                             <button
                                 type="button"
+                                onClick={() => setAutoSequenceOnCapture(!autoSequenceOnCapture)}
+                                className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-3 text-left hover:bg-md-sys-surface-container-highest"
+                            >
+                                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">F10 hotkey</div>
+                                <div className="mt-1 text-body font-bold text-md-sys-on-surface">{autoSequenceOnCapture ? 'Auto-sequence' : 'Single capture'}</div>
+                                <div className="mt-1 text-label-sm text-md-sys-on-surface/60">{autoSequenceOnCapture ? 'F10 captures Tactical Map, then Crew Hub.' : 'F10 triggers one Smart Capture on the current screen.'}</div>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setAutoCaptureSendKeypresses(!autoCaptureSendKeypresses)}
+                                className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-3 text-left hover:bg-md-sys-surface-container-highest"
+                            >
+                                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">Auto-capture input</div>
+                                <div className="mt-1 text-body font-bold text-md-sys-on-surface">{autoCaptureSendKeypresses ? 'Send game keypresses' : 'Manual navigation only'}</div>
+                                <div className="mt-1 text-label-sm text-md-sys-on-surface/60">{autoCaptureSendKeypresses ? 'Main process sends map and crew-hub navigation inputs to Wildgate.' : 'Sequence waits and captures only. Use this if you want to drive the UI yourself.'}</div>
+                            </button>
+                            <button
+                                type="button"
                                 onClick={() => setOcrLearningEnabled(!ocrLearningEnabled)}
                                 className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-3 text-left hover:bg-md-sys-surface-container-highest"
                             >
                                 <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">OCR learning</div>
                                 <div className="mt-1 text-body font-bold text-md-sys-on-surface">{ocrLearningEnabled ? 'Enabled' : 'Disabled'}</div>
                                 <div className="mt-1 text-label-sm text-md-sys-on-surface/60">{ocrLearningEnabled ? `Review mode: ${ocrLearningReviewMode}` : 'Manual review only'}</div>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setAutoPopulateRosterOnSave(!autoPopulateRosterOnSave)}
+                                className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-3 text-left hover:bg-md-sys-surface-container-highest"
+                            >
+                                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">Roster auto-populate</div>
+                                <div className="mt-1 text-body font-bold text-md-sys-on-surface">{autoPopulateRosterOnSave ? 'Enabled on match save' : 'Disabled'}</div>
+                                <div className="mt-1 text-label-sm text-md-sys-on-surface/60">Auto-add detected players after match save at 83%+ confidence. Keep disabled until large-roster lag is cleared.</div>
                             </button>
                             <button
                                 type="button"
@@ -1145,6 +1186,31 @@ const SettingsModalContent: React.FC = () => {
                                 <div className="mt-1 text-body font-bold text-md-sys-on-surface">Adjust OCR boxes</div>
                                 <div className="mt-1 text-label-sm text-md-sys-on-surface/60">Only use this when your capture framing is visibly off.</div>
                             </button>
+                        </div>
+                        <div className="mt-4 rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-4 py-4">
+                            <div className="flex items-center justify-between gap-3">
+                                <div>
+                                    <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">Capture Speed</div>
+                                    <div className="mt-1 text-body font-bold text-md-sys-on-surface">{autoCaptureWaitMultiplier.toFixed(1)}x</div>
+                                    <div className="mt-1 text-label-sm text-md-sys-on-surface/60">Higher values wait longer between auto-capture steps for slower systems.</div>
+                                </div>
+                                <div className="text-label-sm font-bold text-md-sys-primary">{autoCaptureWaitMultiplier.toFixed(1)}x</div>
+                            </div>
+                            <input
+                                aria-label="Capture Speed"
+                                type="range"
+                                min={0.5}
+                                max={3}
+                                step={0.1}
+                                value={autoCaptureWaitMultiplier}
+                                onChange={(event) => setAutoCaptureWaitMultiplier(Number(event.target.value))}
+                                className="mt-4 h-2 w-full cursor-pointer accent-md-sys-primary"
+                            />
+                            <div className="mt-2 flex items-center justify-between text-label-xs text-md-sys-on-surface/45">
+                                <span>0.5x</span>
+                                <span>1.0x</span>
+                                <span>3.0x</span>
+                            </div>
                         </div>
                         <div className="mt-4 rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-4 py-3 text-left text-label-sm leading-relaxed text-md-sys-on-surface/60">
                             Advanced thresholds, learning policy, event rollback, and preload tuning stay below if you need finer OCR control.

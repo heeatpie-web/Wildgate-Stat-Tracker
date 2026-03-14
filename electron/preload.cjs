@@ -14,6 +14,8 @@ const INVOKE_CHANNELS = [
   'ocr-scan', 'ml-scan',
   'capture-game-window', 'ocr-process-capture',
   'save-screenshot',
+  'start-auto-capture',
+  'send-game-ui-action', 'wait-for-game-screen',
   'pick-roi-image',
   'bundle-artifacts', 'get-match-artifacts', 'rerun-ocr-on-artifact', 'rerun-ocr-multi',
   'list-match-artifacts',
@@ -43,6 +45,7 @@ const RECEIVE_CHANNELS = [
   'update_available', 'update_downloaded', 'update_not_available', 'update_error',
   'hotkey-toggle-overlay',
   'hotkey-smart-capture',
+  'auto-capture-status',
   'telemetry-prune-needed',
 ];
 

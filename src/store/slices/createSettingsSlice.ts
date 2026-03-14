@@ -147,6 +147,10 @@ export interface SettingsSlice {
   captureMode: CaptureMode;
   resultOcrFlowMode: ResultOcrFlowMode;
   ocrAutoOpenAfterRerun: boolean;
+  autoSequenceOnCapture: boolean;
+  autoCaptureSendKeypresses: boolean;
+  autoCaptureWaitMultiplier: number;
+  autoPopulateRosterOnSave: boolean;
   lockOcrTeams: boolean;
   ocrEnhancedNameRecoveryEnabled: boolean;
   ocrNameRerouteThreshold: number;
@@ -198,6 +202,10 @@ export interface SettingsSlice {
   setCaptureMode: (mode: CaptureMode) => void;
   setResultOcrFlowMode: (mode: ResultOcrFlowMode) => void;
   setOcrAutoOpenAfterRerun: (enabled: boolean) => void;
+  setAutoSequenceOnCapture: (enabled: boolean) => void;
+  setAutoCaptureSendKeypresses: (enabled: boolean) => void;
+  setAutoCaptureWaitMultiplier: (multiplier: number) => void;
+  setAutoPopulateRosterOnSave: (enabled: boolean) => void;
   setLockOcrTeams: (enabled: boolean) => void;
   setOcrEnhancedNameRecoveryEnabled: (enabled: boolean) => void;
   setOcrNameRerouteThreshold: (threshold: number) => void;
@@ -265,6 +273,10 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   captureMode: 'deferred',
   resultOcrFlowMode: 'background',
   ocrAutoOpenAfterRerun: false,
+  autoSequenceOnCapture: false,
+  autoCaptureSendKeypresses: true,
+  autoCaptureWaitMultiplier: 1,
+  autoPopulateRosterOnSave: false,
   lockOcrTeams: false,
   ocrEnhancedNameRecoveryEnabled: true,
   ocrNameRerouteThreshold: OCR_NAME_REROUTE_THRESHOLD_DEFAULT,
@@ -331,6 +343,12 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
     resultOcrFlowMode: mode === 'background' ? 'background' : 'prompt'
   }),
   setOcrAutoOpenAfterRerun: (enabled) => set({ ocrAutoOpenAfterRerun: enabled }),
+  setAutoSequenceOnCapture: (enabled) => set({ autoSequenceOnCapture: enabled }),
+  setAutoCaptureSendKeypresses: (enabled) => set({ autoCaptureSendKeypresses: enabled }),
+  setAutoCaptureWaitMultiplier: (multiplier) => set({
+    autoCaptureWaitMultiplier: Math.max(0.5, Math.min(3, Math.round((Number(multiplier) || 1) * 10) / 10))
+  }),
+  setAutoPopulateRosterOnSave: (enabled) => set({ autoPopulateRosterOnSave: enabled }),
   setLockOcrTeams: (enabled) => set({ lockOcrTeams: enabled }),
   setOcrEnhancedNameRecoveryEnabled: (enabled) => set({ ocrEnhancedNameRecoveryEnabled: enabled }),
   setOcrNameRerouteThreshold: (threshold) => set({

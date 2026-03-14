@@ -14,7 +14,8 @@ const artifactHelpers = require('./helpers/artifactHelpers.cjs');
 const { runArtifactCanonicalMigration } = require('./helpers/artifactCanonicalMigration.cjs');
 const telemetryArchiveHelpers = require('./helpers/telemetryArchiveHelpers.cjs');
 const dbHelpers = require('./helpers/dbHelpers.cjs');
-const { registerArtifactHandlers } = require('./handlers/artifactHandlers.cjs');
+const { registerArtifactHandlers, saveScreenshotImage } = require('./handlers/artifactHandlers.cjs');
+const { createAutoCaptureCoordinator } = require('./autoCaptureCoordinator.cjs');
 const {
   ok,
   fail,
@@ -93,6 +94,29 @@ const TELEMETRY_HISTORY_COMPACTION_MIN_INTERVAL_MS = Number(process.env.WILDGATE
 const LOG_SCAN_MAX_CONCURRENCY = Math.max(1, Number(process.env.WILDGATE_SCAN_EPIC_WORKERS || 4));
 const LOG_SCAN_MAX_FILE_BYTES = Math.max(128 * 1024, Number(process.env.WILDGATE_SCAN_EPIC_MAX_FILE_BYTES || (8 * 1024 * 1024)));
 const LOG_SCAN_MAX_DECODE_BYTES = Math.max(256 * 1024, Number(process.env.WILDGATE_SCAN_EPIC_MAX_DECODE_BYTES || (1024 * 1024)));
+const GAME_UI_ACTION_KEYS = Object.freeze({
+  'open-tactical-map': String(process.env.WILDGATE_GAME_KEY_TACTICAL_MAP || 'm').trim() || 'm',
+  'open-crew-hub': String(process.env.WILDGATE_GAME_KEY_CREW_HUB || 'c').trim() || 'c',
+  'close-current-ui': String(process.env.WILDGATE_GAME_KEY_CLOSE_UI || '{ESC}').trim() || '{ESC}',
+});
+const VALID_GAME_UI_ACTIONS = new Set(Object.keys(GAME_UI_ACTION_KEYS));
+const VALID_GAME_SCREEN_TYPES = new Set(['tactical_map', 'crew_hub']);
+const DEFAULT_GAME_WINDOW_PROCESS_NAMES = Object.freeze([
+  'NebulaClient-Win64-Shipping',
+  'Wildgate-Win64-Shipping',
+  'WildgateClient-Win64-Shipping',
+]);
+const GAME_WINDOW_PROCESS_NAMES = Object.freeze(
+  String(process.env.WILDGATE_GAME_PROCESS_NAMES || DEFAULT_GAME_WINDOW_PROCESS_NAMES.join(','))
+    .split(',')
+    .map(name => name.trim())
+    .filter(Boolean)
+);
+const GAME_WINDOW_TITLE_HINT = String(process.env.WILDGATE_GAME_WINDOW_TITLE_HINT || 'Wildgate').trim();
+const GAME_UI_FOCUS_DELAY_MS = Math.max(50, Number(process.env.WILDGATE_GAME_FOCUS_DELAY_MS || 120));
+const WAIT_FOR_GAME_SCREEN_TIMEOUT_MS = Math.max(1000, Number(process.env.WILDGATE_WAIT_FOR_GAME_SCREEN_TIMEOUT_MS || 15000));
+const WAIT_FOR_GAME_SCREEN_POLL_INTERVAL_MS = Math.max(150, Number(process.env.WILDGATE_WAIT_FOR_GAME_SCREEN_POLL_MS || 900));
+const VALID_OCR_MODES = new Set(['local', 'cloud', 'both', 'hybrid-plus']);
 const getTelemetryArchiveScope = (webContentsId) => `telemetry-archive:${String(webContentsId)}`;
 
 let telemetryRetentionTimer = null;
@@ -183,7 +207,6 @@ function getAllowedRendererRoots() {
     USER_DATA_ROOT,
     path.resolve(path.join(app.getPath('documents'), 'Wildgate Stat Tracker')),
     path.resolve(path.join(app.getPath('home'), 'AppData', 'Local', 'Nebula', 'Saved', 'Logs')),
-    path.resolve(path.join(app.getPath('home'), 'AppData', 'Local', 'Wildgate', 'Saved', 'Logs')),
   ];
 }
 
@@ -723,6 +746,376 @@ function runNodeScript(scriptPath, args = []) {
       resolve({ code: 1, stdout, stderr: err.message || String(err) });
     });
   });
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function runPowerShellScript(script, {
+  env = {},
+  timeoutMs = 5000,
+} = {}) {
+  return new Promise((resolve) => {
+    const powershellExe = process.platform === 'win32'
+      ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+      : 'powershell';
+    const child = spawn(powershellExe, [
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-Command',
+      script,
+    ], {
+      cwd: app.getAppPath(),
+      windowsHide: true,
+      env: {
+        ...process.env,
+        ...env,
+      },
+    });
+
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    let timer = null;
+
+    const finish = (payload) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve(payload);
+    };
+
+    child.stdout.on('data', chunk => {
+      stdout += String(chunk || '');
+    });
+    child.stderr.on('data', chunk => {
+      stderr += String(chunk || '');
+    });
+    child.on('close', code => {
+      finish({ code, stdout, stderr });
+    });
+    child.on('error', err => {
+      finish({ code: 1, stdout, stderr: err?.message || String(err) });
+    });
+
+    if (timeoutMs > 0) {
+      timer = setTimeout(() => {
+        try {
+          child.kill();
+        } catch {
+          // ignore kill failures
+        }
+        finish({
+          code: 1,
+          stdout,
+          stderr: stderr || `PowerShell helper timed out after ${timeoutMs}ms`,
+        });
+      }, timeoutMs);
+    }
+  });
+}
+
+function parseJsonSafely(value) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function buildGameUiPowerShellScript() {
+  return `
+$ErrorActionPreference = 'Stop'
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public static class CodexUser32 {
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+}
+"@
+
+$sendKeys = [string]$env:WILDGATE_GAME_SEND_KEYS
+if ([string]::IsNullOrWhiteSpace($sendKeys)) {
+  throw 'No SendKeys sequence configured.'
+}
+
+$action = [string]$env:WILDGATE_GAME_ACTION
+$titleHint = [string]$env:WILDGATE_GAME_WINDOW_TITLE_HINT
+$focusDelayMs = [Math]::Max(50, [int]($env:WILDGATE_GAME_FOCUS_DELAY_MS))
+$processNames = @(
+  [string]$env:WILDGATE_GAME_PROCESS_NAMES -split ';' |
+    ForEach-Object { $_.Trim() } |
+    Where-Object { $_ }
+)
+
+$target = Get-Process |
+  Where-Object {
+    $_.MainWindowHandle -ne 0 -and (
+      ($processNames -contains $_.ProcessName) -or
+      ($titleHint -and $_.MainWindowTitle -like "*$titleHint*")
+    )
+  } |
+  Sort-Object StartTime -Descending |
+  Select-Object -First 1
+
+if (-not $target) {
+  throw ('No matching game window found. Candidates: ' + (($processNames -join ', ') -replace '\s+', ' '))
+}
+
+[CodexUser32]::ShowWindowAsync($target.MainWindowHandle, 9) | Out-Null
+Start-Sleep -Milliseconds $focusDelayMs
+$setForeground = [CodexUser32]::SetForegroundWindow($target.MainWindowHandle)
+Start-Sleep -Milliseconds $focusDelayMs
+$shell = New-Object -ComObject WScript.Shell
+$appActivated = $shell.AppActivate($target.Id)
+Start-Sleep -Milliseconds $focusDelayMs
+$shell.SendKeys($sendKeys)
+
+[pscustomobject]@{
+  success = $true
+  action = $action
+  key = $sendKeys
+  processName = $target.ProcessName
+  processId = $target.Id
+  windowTitle = $target.MainWindowTitle
+  activated = [bool]($setForeground -or $appActivated)
+} | ConvertTo-Json -Compress
+`;
+}
+
+async function captureGameWindowForAutomation() {
+  const mainWindow = win;
+  const shouldHideWindow = Boolean(
+    mainWindow
+    && !mainWindow.isDestroyed()
+    && mainWindow.isVisible()
+  );
+
+  try {
+    if (shouldHideWindow) {
+      mainWindow.hide();
+      await delay(250);
+    }
+    return await captureGameWindow();
+  } finally {
+    if (shouldHideWindow && mainWindow && !mainWindow.isDestroyed()) {
+      if (typeof mainWindow.showInactive === 'function') {
+        mainWindow.showInactive();
+      } else {
+        mainWindow.show();
+      }
+    }
+  }
+}
+
+async function sendGameKeySequenceInternal(sendKeys, action = 'custom-sequence') {
+  if (process.platform !== 'win32') {
+    return {
+      success: false,
+      action,
+      error: 'Game UI actions are currently implemented for Windows only.',
+    };
+  }
+
+  const key = String(sendKeys || '').trim();
+  if (!key) {
+    return {
+      success: false,
+      action,
+      error: 'No SendKeys sequence configured.',
+    };
+  }
+
+  console.log(`[GameUI] action=${action} key=${key} candidates=${GAME_WINDOW_PROCESS_NAMES.join(',') || 'none'} titleHint=${GAME_WINDOW_TITLE_HINT || 'none'}`);
+
+  const result = await runPowerShellScript(buildGameUiPowerShellScript(), {
+    env: {
+      WILDGATE_GAME_ACTION: action,
+      WILDGATE_GAME_SEND_KEYS: key,
+      WILDGATE_GAME_PROCESS_NAMES: GAME_WINDOW_PROCESS_NAMES.join(';'),
+      WILDGATE_GAME_WINDOW_TITLE_HINT: GAME_WINDOW_TITLE_HINT,
+      WILDGATE_GAME_FOCUS_DELAY_MS: String(GAME_UI_FOCUS_DELAY_MS),
+    },
+    timeoutMs: Math.max(2000, (GAME_UI_FOCUS_DELAY_MS * 6) + 2000),
+  });
+
+  const stdout = String(result?.stdout || '').trim();
+  const stderr = String(result?.stderr || '').trim();
+  if (result?.code !== 0) {
+    const error = stderr || stdout || `PowerShell helper exited with code ${result?.code}`;
+    console.warn(`[GameUI] action=${action} failed: ${error}`);
+    return {
+      success: false,
+      action,
+      key,
+      error,
+    };
+  }
+
+  const parsed = parseJsonSafely(stdout);
+  if (!parsed || typeof parsed !== 'object') {
+    const error = stdout || 'Game UI helper returned an unexpected response.';
+    console.warn(`[GameUI] action=${action} returned non-JSON payload: ${error}`);
+    return {
+      success: false,
+      action,
+      key,
+      error,
+    };
+  }
+
+  return {
+    success: true,
+    action,
+    key,
+    ...parsed,
+  };
+}
+
+async function sendGameUiActionInternal(action) {
+  if (!VALID_GAME_UI_ACTIONS.has(action)) {
+    return {
+      success: false,
+      action,
+      error: `Unsupported game UI action: ${String(action)}`,
+    };
+  }
+
+  return sendGameKeySequenceInternal(GAME_UI_ACTION_KEYS[action], action);
+}
+
+const autoCaptureCoordinator = createAutoCaptureCoordinator({
+  notify: (payload) => {
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('auto-capture-status', payload);
+    }
+  },
+  sendKeySequence: (sendKeys, action) => sendGameKeySequenceInternal(sendKeys, action),
+  captureAndProcess: async ({ matchId, activeUser = null, ocrMode = 'local', ocrRegions = null, runtimeOptions = {} }) => {
+    const captureResult = await captureGameWindowForAutomation();
+    if (!captureResult?.success || !captureResult.imageBase64) {
+      return {
+        success: false,
+        error: captureResult?.error || 'Failed to capture game window',
+      };
+    }
+
+    const saved = await saveScreenshotImage(
+      { app, artifactHelpers },
+      { imageBase64: captureResult.imageBase64, matchId, channel: 'start-auto-capture' }
+    );
+    if (!saved?.success || !saved?.data?.filePath) {
+      return {
+        success: false,
+        error: saved?.message || saved?.error || 'Failed to save screenshot',
+      };
+    }
+
+    const ocrResult = await processCapture(captureResult.imageBase64, activeUser, null, ocrMode, {
+      ...(runtimeOptions && typeof runtimeOptions === 'object' ? runtimeOptions : {}),
+      skipDebugSave: true,
+      ocrRegions: ocrRegions && typeof ocrRegions === 'object' ? ocrRegions : null,
+    });
+
+    if (!ocrResult?.success || !ocrResult?.data) {
+      return {
+        success: false,
+        error: ocrResult?.error || 'OCR processing failed',
+      };
+    }
+
+    return {
+      success: true,
+      filePath: saved.data.filePath,
+      filename: saved.data.filename,
+      ocrData: ocrResult.data,
+    };
+  },
+});
+
+async function waitForGameScreenInternal(expectedType, options = {}) {
+  if (!VALID_GAME_SCREEN_TYPES.has(expectedType)) {
+    return {
+      success: false,
+      expectedType,
+      error: `Unsupported game screen type: ${String(expectedType)}`,
+    };
+  }
+
+  const safeOptions = (options && typeof options === 'object' && !Array.isArray(options))
+    ? options
+    : {};
+  const timeoutMs = Math.max(1000, Number(safeOptions.timeoutMs || WAIT_FOR_GAME_SCREEN_TIMEOUT_MS));
+  const pollIntervalMs = Math.max(150, Number(safeOptions.pollIntervalMs || WAIT_FOR_GAME_SCREEN_POLL_INTERVAL_MS));
+  const activeUser = typeof safeOptions.activeUser === 'string' && safeOptions.activeUser.trim()
+    ? safeOptions.activeUser.trim()
+    : null;
+  const requestedOcrMode = typeof safeOptions.ocrMode === 'string' && safeOptions.ocrMode.trim()
+    ? safeOptions.ocrMode.trim()
+    : 'local';
+  const ocrMode = VALID_OCR_MODES.has(requestedOcrMode) ? requestedOcrMode : 'local';
+  const ocrRegions = (safeOptions.ocrRegions && typeof safeOptions.ocrRegions === 'object')
+    ? safeOptions.ocrRegions
+    : null;
+
+  const startedAt = Date.now();
+  let attempts = 0;
+  let lastDetectedType = 'unknown';
+  let lastError = null;
+
+  console.log(`[GameUI] wait-for-screen start expected=${expectedType} timeoutMs=${timeoutMs} pollMs=${pollIntervalMs} ocrMode=${ocrMode}`);
+
+  while ((Date.now() - startedAt) < timeoutMs) {
+    attempts += 1;
+
+    const captureResult = await captureGameWindowForAutomation();
+    if (!captureResult?.success || !captureResult.imageBase64) {
+      lastError = captureResult?.error || 'Game capture failed.';
+      console.warn(`[GameUI] wait-for-screen capture attempt=${attempts} failed: ${lastError}`);
+    } else {
+      const ocrResult = await processCapture(captureResult.imageBase64, activeUser, null, ocrMode, {
+        skipDebugSave: true,
+        ocrRegions,
+      });
+
+      if (ocrResult?.success && ocrResult?.data) {
+        lastDetectedType = String(ocrResult.data.screenshotType || 'unknown');
+        console.log(`[GameUI] wait-for-screen attempt=${attempts} detected=${lastDetectedType}`);
+        if (lastDetectedType === expectedType) {
+          return {
+            success: true,
+            expectedType,
+            detectedType: lastDetectedType,
+            attempts,
+            elapsedMs: Date.now() - startedAt,
+          };
+        }
+      } else {
+        lastError = ocrResult?.error || 'OCR processing failed.';
+        console.warn(`[GameUI] wait-for-screen ocr attempt=${attempts} failed: ${lastError}`);
+      }
+    }
+
+    const elapsedMs = Date.now() - startedAt;
+    const remainingMs = timeoutMs - elapsedMs;
+    if (remainingMs <= 0) break;
+    await delay(Math.min(pollIntervalMs, remainingMs));
+  }
+
+  const error = lastError || `Timed out waiting for ${expectedType}. Last detected screen: ${lastDetectedType}`;
+  console.warn(`[GameUI] wait-for-screen timeout expected=${expectedType} lastDetected=${lastDetectedType} attempts=${attempts} error=${error}`);
+  return {
+    success: false,
+    expectedType,
+    detectedType: lastDetectedType,
+    attempts,
+    elapsedMs: Date.now() - startedAt,
+    error,
+  };
 }
 
 function resolveBundledScript(scriptName) {
@@ -1902,16 +2295,7 @@ ipcMain.on('start-log-monitoring', (_event, options = {}) => {
   const monitorCfg = getLogMonitorConfig(requestedProfile);
 
   const localAppData = path.join(app.getPath('home'), 'AppData', 'Local');
-  const pathNebula = path.join(localAppData, 'Nebula', 'Saved', 'Logs', 'AccelByteTelemetryCache');
-  const pathWildgate = path.join(localAppData, 'Wildgate', 'Saved', 'Logs', 'AccelByteTelemetryCache');
-
-  let nextLogPath = pathNebula;
-  // Logic: Prefer Wildgate (Local) if exists, else Nebula (Game)
-  if (fs.existsSync(pathWildgate)) {
-    nextLogPath = pathWildgate;
-  } else if (fs.existsSync(pathNebula)) {
-    nextLogPath = pathNebula;
-  }
+  const nextLogPath = path.join(localAppData, 'Nebula', 'Saved', 'Logs', 'AccelByteTelemetryCache');
 
   const nextFingerprint = `${nextLogPath}|${requestedProfile}|${monitorCfg.pollMs}|${monitorCfg.minDecodeIntervalMs}|${monitorCfg.snapshotWriteIntervalMs}`;
   if (logMonitorInterval && logMonitorFingerprint === nextFingerprint) {
@@ -2053,9 +2437,7 @@ ipcMain.on('stop-log-monitoring', () => {
 ipcMain.handle('scan-epic-ids', async () => {
   if (!LOG_PATH) {
     const localAppData = path.join(app.getPath('home'), 'AppData', 'Local');
-    const pathNebula = path.join(localAppData, 'Nebula', 'Saved', 'Logs', 'AccelByteTelemetryCache');
-    const pathWildgate = path.join(localAppData, 'Wildgate', 'Saved', 'Logs', 'AccelByteTelemetryCache');
-    LOG_PATH = fs.existsSync(pathWildgate) ? pathWildgate : pathNebula;
+    LOG_PATH = path.join(localAppData, 'Nebula', 'Saved', 'Logs', 'AccelByteTelemetryCache');
   }
 
   const ids = new Set();
@@ -2494,11 +2876,21 @@ app.whenReady().then(async () => {
       // State (Overlay vs Dashboard) is preserved.
     }
   });
-  globalShortcut.register('F10', () => {
+  console.log(`[Hotkey] Attempting to register F10 smart capture. alreadyRegistered=${globalShortcut.isRegistered('F10')}`);
+  const f10Registered = globalShortcut.register('F10', () => {
+    const hasLiveWindow = Boolean(win && !win.isDestroyed());
+    console.log(`[Hotkey] F10 invoked. hasLiveWindow=${hasLiveWindow}`);
     if (win && !win.isDestroyed()) {
+      console.log(`[Hotkey] Dispatching hotkey-smart-capture to renderer webContentsId=${win.webContents.id}`);
       win.webContents.send('hotkey-smart-capture');
+    } else {
+      console.warn('[Hotkey] F10 invoked but no renderer window was available.');
     }
   });
+  console.log(`[Hotkey] F10 registration success=${f10Registered} isRegistered=${globalShortcut.isRegistered('F10')}`);
+  if (!f10Registered) {
+    console.warn('[Hotkey] Failed to register F10 smart capture shortcut.');
+  }
 });
 
 // Telemetry Decoding - PORTED FROM decode_script.cjs
@@ -3188,8 +3580,60 @@ ipcMain.handle('open-path', async (event, targetPath) => {
   }
 });
 
+ipcMain.handle('send-game-ui-action', async (event, action) => {
+  try {
+    return await sendGameUiActionInternal(action);
+  } catch (e) {
+    const error = e?.message || String(e);
+    console.error(`[GameUI] send-game-ui-action crashed for action=${String(action)}:`, error);
+    return {
+      success: false,
+      action,
+      error,
+    };
+  }
+});
 
-app.on('will-quit', () => globalShortcut.unregisterAll());
+ipcMain.handle('wait-for-game-screen', async (event, expectedType, options = {}) => {
+  try {
+    return await waitForGameScreenInternal(expectedType, options);
+  } catch (e) {
+    const error = e?.message || String(e);
+    console.error(`[GameUI] wait-for-game-screen crashed for expectedType=${String(expectedType)}:`, error);
+    return {
+      success: false,
+      expectedType,
+      error,
+    };
+  }
+});
+
+ipcMain.handle('start-auto-capture', async (_event, request = {}) => {
+  try {
+    return await autoCaptureCoordinator.start(request);
+  } catch (e) {
+    const error = e?.message || String(e);
+    console.error('[AutoCapture] start-auto-capture crashed:', error);
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('auto-capture-status', {
+        phase: 'failed',
+        message: 'Auto-Capture failed.',
+        detail: error,
+      });
+    }
+    return {
+      started: false,
+      reason: 'error',
+      error,
+    };
+  }
+});
+
+
+app.on('will-quit', () => {
+  console.log('[Hotkey] will-quit -> unregisterAll global shortcuts');
+  globalShortcut.unregisterAll();
+});
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 
 app.on('before-quit', () => {

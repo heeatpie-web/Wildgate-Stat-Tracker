@@ -1200,6 +1200,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       setError(errorMessage);
       setProcessingStatus({ phase: 'error', message: `OCR failed: ${errorMessage}` });
       playSoundError();
+      throw err instanceof Error ? err : new Error(errorMessage);
     } finally {
       setVisionStatus('idle');
     }

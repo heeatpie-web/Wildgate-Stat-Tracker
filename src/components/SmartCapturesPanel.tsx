@@ -98,6 +98,7 @@ import {
     shouldQueueCanonicalRosterCandidate,
 } from '../utils/pendingReviewUtils';
 import { ROSTER_MERGE_REVIEW_MIN_SCORE } from '../utils/rosterMergeSuggestions';
+import { cloneLoadout, sanitizeLoadout } from '../utils/loadout';
 
 export { backfillOpponentTeamShipTypes } from '../utils/ocr/opponentTeamShipTypes';
 
@@ -501,7 +502,7 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
     const handleAddPilotToRoster = useCallback((rawName: string) => {
         const normalized = normalizeOcrName(rawName || '');
         if (!normalized || normalized.length < 2) return;
-        addToRegistry(normalized);
+        addToRegistry(normalized, { origin: 'ocr', status: 'confirmed' });
         const pendingPruneIds = getRosterCandidatePruneIdsForAcceptedName({
             pendingReviews,
             acceptedName: normalized,
@@ -2104,6 +2105,87 @@ export const commitPendingMatchDataForWizard = (
     return committedMatchId === expectedMatchId;
 };
 
+type ResolveOpenWizardSeedArgs = {
+    liveMatch: Match;
+    pendingDraft: Partial<Match> | null;
+    currentLoadout: Loadout | null | undefined;
+    reusePendingDraft?: boolean;
+};
+
+export const resolveOpenWizardSeed = ({
+    liveMatch,
+    pendingDraft,
+    currentLoadout,
+    reusePendingDraft = true,
+}: ResolveOpenWizardSeedArgs): {
+    isTelemetryDraftMatch: boolean;
+    shouldReusePendingDraft: boolean;
+    preferredLoadout: Loadout | null;
+    latestMatch: Match;
+} => {
+    const liveMatchId = Number(liveMatch.id || 0);
+    const pendingMatchId = Number(pendingDraft?.id || 0);
+    const shouldReusePendingDraft = reusePendingDraft
+        && Number.isInteger(pendingMatchId)
+        && pendingMatchId > 0
+        && pendingMatchId === liveMatchId;
+    const isTelemetryDraftMatch = String(liveMatch.subType || '').trim().toLowerCase() === 'telemetry draft';
+    const preferredLoadout = sanitizeLoadout(
+        (shouldReusePendingDraft
+            ? pendingDraft?.loadout as Loadout | null | undefined
+            : null)
+        || ((isTelemetryDraftMatch || shouldReusePendingDraft)
+            ? currentLoadout
+            : null)
+        || liveMatch.loadout
+    );
+    const latestMatch: Match = shouldReusePendingDraft
+        ? ({
+            ...liveMatch,
+            player: String(pendingDraft?.player || liveMatch.player || ''),
+            teammates: Array.isArray(pendingDraft?.teammates)
+                ? [...pendingDraft.teammates]
+                : [...(liveMatch.teammates || [])],
+            opponents: Array.isArray(pendingDraft?.opponents)
+                ? [...pendingDraft.opponents]
+                : [...(liveMatch.opponents || [])],
+            hero: String(pendingDraft?.hero || preferredLoadout?.hero || liveMatch.hero || ''),
+            ship: String(pendingDraft?.ship || preferredLoadout?.ship || liveMatch.ship || ''),
+            loadout: cloneLoadout(preferredLoadout) || liveMatch.loadout,
+            weapons: pendingDraft?.weapons || liveMatch.weapons || {},
+            reachModifiers: Array.isArray(pendingDraft?.reachModifiers)
+                ? [...pendingDraft.reachModifiers]
+                : [...(liveMatch.reachModifiers || [])],
+            artifactSource: String(pendingDraft?.artifactSource || liveMatch.artifactSource || '').trim() || undefined,
+            kills: pendingDraft?.kills
+                ? { ...(liveMatch.kills || {}), ...(pendingDraft.kills as Record<string, number>) }
+                : { ...(liveMatch.kills || {}) },
+            time: String(pendingDraft?.time || liveMatch.time || ''),
+            poiEasy: Number(pendingDraft?.poiEasy ?? liveMatch.poiEasy ?? 0),
+            poiMedium: Number(pendingDraft?.poiMedium ?? liveMatch.poiMedium ?? 0),
+            poiEpic: Number(pendingDraft?.poiEpic ?? liveMatch.poiEpic ?? 0),
+            damageTaken: Number(pendingDraft?.damageTaken ?? liveMatch.damageTaken ?? 0),
+            notes: String(pendingDraft?.notes || liveMatch.notes || ''),
+            artifacts: Array.isArray(pendingDraft?.artifacts)
+                ? [...pendingDraft.artifacts]
+                : [...(liveMatch.artifacts || [])],
+            ocrState: (pendingDraft?.ocrState || liveMatch.ocrState),
+            opponentTeams: Array.isArray(pendingDraft?.opponentTeams)
+                ? pendingDraft.opponentTeams
+                : (liveMatch.opponentTeams || undefined),
+            ocrDebug: pendingDraft?.ocrDebug || liveMatch.ocrDebug || undefined,
+            eliminatedByTeam: String(pendingDraft?.eliminatedByTeam || liveMatch.eliminatedByTeam || '') || undefined,
+        } as Match)
+        : liveMatch;
+
+    return {
+        isTelemetryDraftMatch,
+        shouldReusePendingDraft,
+        preferredLoadout: cloneLoadout(preferredLoadout) || null,
+        latestMatch,
+    };
+};
+
 export const getRosterCandidateSuggestions = (
     rawName: string,
     pilotRegistry: string[]
@@ -2375,13 +2457,16 @@ const SmartMatchDetail: React.FC<{
             const storeState = useAppStore.getState();
             const liveMatch = matchOverride || storeState.matches.find((entry) => entry.id === match.id) || match;
             const pendingDraft = (storeState.pendingMatchData || null) as Partial<Match> | null;
-            const liveMatchId = Number(liveMatch.id || 0);
-            const pendingMatchId = Number(pendingDraft?.id || 0);
-            const shouldReusePendingDraft = reusePendingDraft
-                && Number.isInteger(pendingMatchId)
-                && pendingMatchId > 0
-                && pendingMatchId === liveMatchId;
-            const isTelemetryDraftMatch = String(liveMatch.subType || '').trim().toLowerCase() === 'telemetry draft';
+            const {
+                isTelemetryDraftMatch,
+                preferredLoadout,
+                latestMatch,
+            } = resolveOpenWizardSeed({
+                liveMatch,
+                pendingDraft,
+                currentLoadout: storeState.currentLoadout,
+                reusePendingDraft,
+            });
             if (isTelemetryDraftMatch) {
                 const telemetryHero = hasTelemetrySelection(storeState.telemetryDetectedHero)
                     ? storeState.telemetryDetectedHero
@@ -2411,44 +2496,6 @@ const SmartMatchDetail: React.FC<{
                 }
             }
             ensureNonCurrentWizardSnapshot(storeState);
-            const latestMatch: Match = shouldReusePendingDraft
-                ? ({
-                    ...liveMatch,
-                    player: String(pendingDraft?.player || liveMatch.player || ''),
-                    teammates: Array.isArray(pendingDraft?.teammates)
-                        ? [...pendingDraft.teammates]
-                        : [...(liveMatch.teammates || [])],
-                    opponents: Array.isArray(pendingDraft?.opponents)
-                        ? [...pendingDraft.opponents]
-                        : [...(liveMatch.opponents || [])],
-                    hero: String(pendingDraft?.hero || liveMatch.hero || ''),
-                    ship: String(pendingDraft?.ship || liveMatch.ship || ''),
-                    loadout: pendingDraft?.loadout || liveMatch.loadout,
-                    weapons: pendingDraft?.weapons || liveMatch.weapons || {},
-                    reachModifiers: Array.isArray(pendingDraft?.reachModifiers)
-                        ? [...pendingDraft.reachModifiers]
-                        : [...(liveMatch.reachModifiers || [])],
-                    artifactSource: String(pendingDraft?.artifactSource || liveMatch.artifactSource || '').trim() || undefined,
-                    kills: pendingDraft?.kills
-                        ? { ...(liveMatch.kills || {}), ...(pendingDraft.kills as Record<string, number>) }
-                        : { ...(liveMatch.kills || {}) },
-                    time: String(pendingDraft?.time || liveMatch.time || ''),
-                    poiEasy: Number(pendingDraft?.poiEasy ?? liveMatch.poiEasy ?? 0),
-                    poiMedium: Number(pendingDraft?.poiMedium ?? liveMatch.poiMedium ?? 0),
-                    poiEpic: Number(pendingDraft?.poiEpic ?? liveMatch.poiEpic ?? 0),
-                    damageTaken: Number(pendingDraft?.damageTaken ?? liveMatch.damageTaken ?? 0),
-                    notes: String(pendingDraft?.notes || liveMatch.notes || ''),
-                    artifacts: Array.isArray(pendingDraft?.artifacts)
-                        ? [...pendingDraft.artifacts]
-                        : [...(liveMatch.artifacts || [])],
-                    ocrState: (pendingDraft?.ocrState || liveMatch.ocrState),
-                    opponentTeams: Array.isArray(pendingDraft?.opponentTeams)
-                        ? pendingDraft.opponentTeams
-                        : (liveMatch.opponentTeams || undefined),
-                    ocrDebug: pendingDraft?.ocrDebug || liveMatch.ocrDebug || undefined,
-                    eliminatedByTeam: String(pendingDraft?.eliminatedByTeam || liveMatch.eliminatedByTeam || '') || undefined,
-                } as Match)
-                : liveMatch;
             const dedupeNames = (names: string[]) => {
                 const seen = new Set<string>();
                 const next: string[] = [];
@@ -2561,7 +2608,7 @@ const SmartMatchDetail: React.FC<{
                 opponents: [...(latestMatch.opponents || [])],
                 hero: latestMatch.hero,
                 ship: latestMatch.ship,
-                loadout: latestMatch.loadout,
+                loadout: cloneLoadout(preferredLoadout || latestMatch.loadout) || undefined,
                 weapons: latestMatch.weapons || {},
                 reachModifiers: [...(latestMatch.reachModifiers || [])],
                 artifactSource: latestMatch.artifactSource || undefined,
@@ -3172,11 +3219,12 @@ const SmartMatchDetail: React.FC<{
                                     const mergeTargets = mergeHintsByName.get(normalizedKey);
                                     if (!mergeTargets || mergeTargets.length === 0 || isActiveUserLike(p)) return null;
                                     return (
-                                        <AlertTriangle
-                                            size={9}
-                                            className="text-warning shrink-0"
-                                            title={`Possible duplicate: ${mergeTargets.join(', ')}`}
-                                        />
+                                        <span title={`Possible duplicate: ${mergeTargets.join(', ')}`}>
+                                            <AlertTriangle
+                                                size={9}
+                                                className="text-warning shrink-0"
+                                            />
+                                        </span>
                                     );
                                 })()}
                                 <span className="truncate max-w-[280px]">{isActiveUserLike(p) ? p : toDisplayPlayerName(p)}</span>

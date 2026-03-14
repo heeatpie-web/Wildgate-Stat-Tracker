@@ -34,6 +34,7 @@ import {
     getRosterCandidatePruneIds,
     getRosterCandidatePruneIdsForAcceptedName,
 } from '../utils/pendingReviewUtils';
+import { remapOcrNameConfidenceMap } from '../utils/ocr/nameSourceHints';
 import { sanitizeOpponentTeamsAgainstFriendlyRoster } from '../utils/ocr/friendlyTeamDeduper';
 
 interface OcrCorrectionModalProps {
@@ -911,7 +912,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
 
     const handleAcceptNewPlayer = (name: string) => {
         if (!pilotRegistry.includes(name)) {
-            addToRegistry(name);
+            addToRegistry(name, { origin: 'ocr', status: 'confirmed' });
             Logger.info('OcrCorrection', `Added new player to registry: ${name}`);
         }
         handleCorrection(name, name);
@@ -921,7 +922,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     const handleAddRosterPlayer = useCallback((name: string) => {
         const normalized = normalizeOcrName(name || '');
         if (!normalized) return;
-        addToRegistry(normalized);
+        addToRegistry(normalized, { origin: 'ocr', status: 'confirmed' });
         const pendingPruneIds = getRosterCandidatePruneIdsForAcceptedName({
             pendingReviews,
             acceptedName: normalized,
@@ -979,7 +980,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
             if (ocrName !== correctedName) {
                 const correctedKey = normalizeNameKey(correctedName);
                 if (correctedKey && !registryKeys.has(correctedKey)) {
-                    addToRegistry(correctedName);
+                    addToRegistry(correctedName, { origin: 'ocr', status: 'confirmed' });
                     registryKeys.add(correctedKey);
                 }
                 // Record correction for future matching
@@ -1169,6 +1170,10 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
             ocrDebug: {
                 ...((pendingMatchData && pendingMatchData.ocrDebug) || {}),
                 hazards: nextHazardDebug,
+                nameConfidence: remapOcrNameConfidenceMap(
+                    pendingMatchData?.ocrDebug?.nameConfidence,
+                    effectiveCorrections
+                ),
             },
         });
 

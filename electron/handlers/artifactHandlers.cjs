@@ -111,6 +111,41 @@ function isAutoCaptureFilename(value) {
   return AUTO_CAPTURE_FILENAME_PATTERN.test(String(value || '').trim());
 }
 
+async function saveScreenshotImage({ app, artifactHelpers }, { imageBase64, matchId, channel = 'save-screenshot' }) {
+  if (!imageBase64 || imageBase64.length < 100) {
+    recordSecurityBlock(channel, IpcErrorCode.INVALID_INPUT, 'Invalid image data');
+    return fail(IpcErrorCode.INVALID_INPUT, 'Invalid image data');
+  }
+
+  const sizeCheck = validateBase64PayloadSize(imageBase64, MAX_SCREENSHOT_BYTES, 'image payload');
+  if (!sizeCheck.success) {
+    recordSecurityBlock(channel, sizeCheck.code, sizeCheck.message);
+    return sizeCheck;
+  }
+
+  const imageBuffer = Buffer.from(imageBase64, 'base64');
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = `capture_${timestamp}.png`;
+
+  const paths = artifactHelpers.getArtifactPaths(app);
+  let destDir = paths.screenshotsDir;
+  if (matchId != null) {
+    const validated = getValidatedMatchDir(app, artifactHelpers, matchId, { mode: 'write' });
+    if (!validated.success) {
+      recordSecurityBlock(channel, validated.code, validated.message);
+      return validated;
+    }
+    destDir = validated.data.matchDir;
+  }
+  if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+
+  const filePath = path.join(destDir, filename);
+  await fsPromises.writeFile(filePath, imageBuffer);
+  console.log(`[Screenshot] Saved ${filename} (${(imageBuffer.length / 1024).toFixed(1)}KB) to ${destDir}`);
+
+  return ok({ filePath, filename, size: imageBuffer.length });
+}
+
 function toPathKey(value) {
   return path.resolve(String(value || '')).replace(/[\\/]+/g, '\\').toLowerCase();
 }
@@ -521,36 +556,7 @@ function registerArtifactHandlers(ipcMain, ctx) {
 
   ipcMain.handle('save-screenshot', async (event, { imageBase64, matchId }) => {
     try {
-      if (!imageBase64 || imageBase64.length < 100) {
-        recordSecurityBlock('save-screenshot', IpcErrorCode.INVALID_INPUT, 'Invalid image data');
-        return fail(IpcErrorCode.INVALID_INPUT, 'Invalid image data');
-      }
-      const sizeCheck = validateBase64PayloadSize(imageBase64, MAX_SCREENSHOT_BYTES, 'image payload');
-      if (!sizeCheck.success) {
-        recordSecurityBlock('save-screenshot', sizeCheck.code, sizeCheck.message);
-        return sizeCheck;
-      }
-      const imageBuffer = Buffer.from(imageBase64, 'base64');
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `capture_${timestamp}.png`;
-
-      const paths = artifactHelpers.getArtifactPaths(app);
-      let destDir = paths.screenshotsDir;
-      if (matchId != null) {
-        const validated = getValidatedMatchDir(app, artifactHelpers, matchId, { mode: 'write' });
-        if (!validated.success) {
-          recordSecurityBlock('save-screenshot', validated.code, validated.message);
-          return validated;
-        }
-        destDir = validated.data.matchDir;
-      }
-      if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
-
-      const filePath = path.join(destDir, filename);
-      await fsPromises.writeFile(filePath, imageBuffer);
-      console.log(`[Screenshot] Saved ${filename} (${(imageBuffer.length / 1024).toFixed(1)}KB) to ${destDir}`);
-
-      return ok({ filePath, filename, size: imageBuffer.length });
+      return await saveScreenshotImage({ app, artifactHelpers }, { imageBase64, matchId });
     } catch (e) {
       console.error('[Screenshot] Save error:', e.message);
       return internal('Failed to save screenshot');
@@ -558,7 +564,7 @@ function registerArtifactHandlers(ipcMain, ctx) {
   });
 }
 
-module.exports = { registerArtifactHandlers };
+module.exports = { registerArtifactHandlers, saveScreenshotImage };
 
 
 

@@ -9,7 +9,7 @@ import { useAppStore } from '../store/useAppStore';
 import { useShallow } from 'zustand/react/shallow';
 import { Match, DrillDownTarget, KillMap, Loadout, GameMode, type DetectedUnknownMapping } from '../types';
 import { PlayerProfile } from '../store/slices/createMappingSlice';
-import type { PendingReview, TimelineEvent } from '../store/slices/createDataSlice';
+import type { PendingReview, RosterEntryMeta, TimelineEvent } from '../store/slices/createDataSlice';
 import { getElectronAPI } from '../utils/electronAPI';
 import Logger from '../utils/logger';
 
@@ -26,7 +26,7 @@ interface GameDataContextType {
     deletePlayer: (name: string) => void;
     pilotRegistry: string[];
     setPilotRegistry: (pilots: string[]) => void;
-    addToRegistry: (name: string) => void;
+    addToRegistry: (name: string, meta?: Partial<RosterEntryMeta>) => void;
     removeFromRegistry: (name: string) => void;
     favorites: string[]; // Match IDs/Names
     setFavorites: (favs: string[]) => void;
@@ -250,6 +250,7 @@ export const GameDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             dictionarySignatureRef.current = signature;
             dictionaryUpdateInFlightRef.current = true;
 
+            // TODO: enable if Paddle gains dictionary support.
             api.invoke('regenerate-ocr-dictionary', {
                 pilotRegistry: pilots,
                 matches: recentMatches,
@@ -259,6 +260,9 @@ export const GameDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                         const errorMessage = (result && typeof result === 'object' && 'error' in result)
                             ? String((result as { error?: string }).error || 'unknown error')
                             : 'unknown error';
+                        if (errorMessage === 'Dictionary regeneration is not supported with PaddleOCR runtime') {
+                            return;
+                        }
                         Logger.warn('OCR-Dict', `Auto dictionary regeneration failed: ${errorMessage}`);
                         return;
                     }

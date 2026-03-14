@@ -197,7 +197,7 @@ describe('useLogMonitor', () => {
     expect(ipcMock.send).toHaveBeenCalledWith('stop-log-monitoring');
   });
 
-  it('clears telemetry-derived loadout state when the game closes', async () => {
+  it('preserves telemetry-derived loadout state when the game closes', async () => {
     const { useLogMonitor } = await import('../useLogMonitor');
     gameDataState.currentLoadout = {
       hero: 'Adrian',
@@ -216,13 +216,8 @@ describe('useLogMonitor', () => {
     });
 
     expect(gameDataState.clearTelemetryDetected).toHaveBeenCalled();
-    expect(gameDataState.setCurrentLoadout).toHaveBeenCalledWith(expect.objectContaining({
-      characterWeapons: [],
-      characterEquipment: [],
-      characterPerks: [],
-      perks: [],
-    }));
-    expect(gameDataState.setActiveWeapons).toHaveBeenCalledWith({}, false);
+    expect(gameDataState.setCurrentLoadout).not.toHaveBeenCalled();
+    expect(gameDataState.setActiveWeapons).not.toHaveBeenCalled();
   });
 
   it('creates a telemetry draft on map-start signal', async () => {
@@ -466,6 +461,57 @@ describe('useLogMonitor', () => {
     expect(latestLoadout?.characterEquipment).toEqual(expect.arrayContaining(['Repair Drone']));
   });
 
+  it('sets hero and ship from nested loadout payloads after lifecycle start', async () => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'DesolationReach' },
+          ClientTimestamp: nowSec,
+        },
+      ]);
+    });
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'CharacterLoadoutChanged',
+          Payload: {
+            isLocalPlayer: true,
+            payload: {
+              snapshot: {
+                currentLoadout: {
+                  hero: 'Venture',
+                  ship: 'Scout',
+                  characterWeapons: ['The Doctor'],
+                  characterEquipment: ['Repair Drone'],
+                },
+              },
+            },
+          },
+          ClientTimestamp: nowSec + 1,
+        },
+      ]);
+    });
+
+    expect(gameDataState.setActiveHero).toHaveBeenCalledWith('Venture', 'telemetry');
+    expect(gameDataState.setActiveShip).toHaveBeenCalledWith('Scout', 'telemetry');
+    const latestLoadout = gameDataState.setCurrentLoadout.mock.calls.at(-1)?.[0] as {
+      hero?: string | null;
+      ship?: string | null;
+      characterWeapons?: string[];
+      characterEquipment?: string[];
+    };
+    expect(latestLoadout?.hero).toBe('Venture');
+    expect(latestLoadout?.ship).toBe('Scout');
+    expect(latestLoadout?.characterWeapons || []).toEqual(expect.arrayContaining(['The Doctor']));
+    expect(latestLoadout?.characterEquipment || []).toEqual(expect.arrayContaining(['Repair Drone']));
+  });
+
   it('resolves telemetry perk payloads into prospector perks on current loadout', async () => {
     const { useLogMonitor } = await import('../useLogMonitor');
     renderHook(() => useLogMonitor('Pilot'));
@@ -621,6 +667,51 @@ describe('useLogMonitor', () => {
     expect(latestActiveWeapons['Double Whammy']).toBeUndefined();
     expect(latestActiveWeapons['The Doctor']).toBeUndefined();
     expect(latestActiveWeapons['Repair Drone']).toBeUndefined();
+  });
+
+  it('does not clear prospector loadout when telemetry omits character slot fields', async () => {
+    gameDataState.currentLoadout = {
+      hero: 'Adrian',
+      ship: 'Hunter',
+      weapons: [],
+      equipment: [],
+      characterWeapons: ['Double Whammy'],
+      characterEquipment: ['Repair Drone'],
+    };
+    appStoreState.activeWeapons = {
+      'Double Whammy': 1,
+      'Repair Drone': 1,
+    };
+
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'CharacterLoadoutChanged',
+          Payload: {
+            isLocalPlayer: true,
+            hero: 'Adrian',
+            ship: 'Hunter',
+          },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    const latestLoadout = gameDataState.setCurrentLoadout.mock.calls.at(-1)?.[0] as {
+      characterWeapons?: string[];
+      characterEquipment?: string[];
+    };
+    expect(latestLoadout?.characterWeapons || []).toEqual(['Double Whammy']);
+    expect(latestLoadout?.characterEquipment || []).toEqual(['Repair Drone']);
+
+    const latestActiveWeapons = gameDataState.setActiveWeapons.mock.calls.at(-1)?.[0] as Record<string, number>;
+    expect(latestActiveWeapons).toMatchObject({
+      'Double Whammy': 1,
+      'Repair Drone': 1,
+    });
   });
 
   it('drops stale prospector equipment beyond the two-slot limit when telemetry loadout syncs', async () => {
@@ -779,6 +870,53 @@ describe('useLogMonitor', () => {
     expect(appStoreState.setPlayerName).not.toHaveBeenCalled();
     expect(gameDataState.updatePlayerIdMapping).not.toHaveBeenCalled();
     expect(gameDataState.setCurrentLoadout).not.toHaveBeenCalled();
+  });
+
+  it('accepts loadout events inside the session grace window and rejects older ones', async () => {
+    const baseNow = Date.now();
+    gameDataState.sessionStartTime = baseNow;
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'CharacterLoadoutChanged',
+          Payload: {
+            isLocalPlayer: true,
+            hero: 'Adrian',
+            ship: 'Hunter',
+            characterWeapons: ['Double Whammy'],
+          },
+          ClientTimestamp: Math.floor((baseNow - 55_000) / 1000),
+        },
+      ]);
+    });
+
+    expect(gameDataState.setCurrentLoadout).toHaveBeenCalled();
+
+    gameDataState.setCurrentLoadout.mockClear();
+    gameDataState.setActiveHero.mockClear();
+    gameDataState.setActiveShip.mockClear();
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'CharacterLoadoutChanged',
+          Payload: {
+            isLocalPlayer: true,
+            hero: 'Venture',
+            ship: 'Scout',
+            characterWeapons: ['The Doctor'],
+          },
+          ClientTimestamp: Math.floor((baseNow - 75_000) / 1000),
+        },
+      ]);
+    });
+
+    expect(gameDataState.setCurrentLoadout).not.toHaveBeenCalled();
+    expect(gameDataState.setActiveHero).not.toHaveBeenCalled();
+    expect(gameDataState.setActiveShip).not.toHaveBeenCalled();
   });
 
   it('applies local loadout when telemetry only provides platform-account identity variants', async () => {

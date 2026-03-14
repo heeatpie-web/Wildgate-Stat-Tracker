@@ -47,7 +47,7 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
 
     const handleAddRosterPlayer = (name: string) => {
         if (!canAddRosterPlayer(name)) return;
-        addToRegistry(name);
+        addToRegistry(name, { origin: 'manual', status: 'confirmed' });
         setToast({ message: `Added "${name}" to roster`, type: 'success' });
     };
 
@@ -64,7 +64,7 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
 
     const handleAddVisibleSocialPlayers = () => {
         if (visibleSocialAdds.length === 0) return;
-        visibleSocialAdds.forEach((name) => addToRegistry(name));
+        visibleSocialAdds.forEach((name) => addToRegistry(name, { origin: 'manual', status: 'confirmed' }));
         setToast({ message: `Added ${visibleSocialAdds.length} player(s) to roster`, type: 'success' });
     };
 

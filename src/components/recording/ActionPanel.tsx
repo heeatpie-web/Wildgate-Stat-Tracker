@@ -24,6 +24,7 @@ import type { OCRExtractedData } from '../../utils/ocr/ocrTypes';
 import type { Match } from '../../types';
 import { runtimeConfig } from '../../config/runtimeConfig';
 import { resolveSmartCaptureMatchId } from '../../utils/smartCaptureScope';
+import { sendGameUiAction, waitForGameScreen } from '../../utils/electronBridge';
 
 interface ActionPanelProps {
     variant?: 'default' | 'transparent';
@@ -33,6 +34,14 @@ interface ActionPanelProps {
 }
 
 type MatchResult = 'Win' | 'Loss' | 'Draw';
+type SmartCaptureRequestBehavior = 'single' | 'auto-sequence';
+type SmartCaptureRequestPayload = {
+    activeUser?: string | null;
+    requestId?: string;
+    matchId?: string | number | null;
+    forceOcr?: boolean;
+    behavior?: SmartCaptureRequestBehavior;
+};
 
 export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', density = 'standard', onSmartCaptureData, isActive = true }) => {
     const {
@@ -48,7 +57,8 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         activeUser,
         smartCaptureRequest,
         clearSmartCaptureRequest,
-        pushNotification
+        pushNotification,
+        setToast
     } = useUIState();
 
     const isTransparent = variant === 'transparent';
@@ -82,6 +92,8 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     } = smartCaptureState;
     const {
         capture: triggerSmartCapture,
+        captureOnly,
+        processStoredImage,
         processAllStored,
         clearError: clearCaptureError,
         clearCaptures,
@@ -307,6 +319,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     const logsContainerRef = React.useRef<HTMLDivElement>(null);
     const handledCaptureRequestRef = React.useRef<string | null>(null);
     const lastCaptureRequestAtRef = React.useRef(0);
+    const autoSequenceInFlightRef = React.useRef(false);
     const [lastSubmitted, setLastSubmitted] = React.useState<MatchResult | null>(null);
     const [pulseResult, setPulseResult] = React.useState<MatchResult | null>(null);
     const lastSubmitSignalRef = React.useRef<{ result: MatchResult; at: number } | null>(null);
@@ -333,35 +346,144 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         container.scrollTop = container.scrollHeight;
     }, [isActive, scanLogs.length]);
 
+    const resolveRequestedCaptureMatchId = React.useCallback((requestedMatchId?: string | number | null): string | number | null => {
+        if (requestedMatchId != null && requestedMatchId !== '') {
+            return requestedMatchId;
+        }
+        return resolveSubmissionMatchId();
+    }, [resolveSubmissionMatchId]);
+
+    const runAutoSequenceCapture = React.useCallback(async (
+        requestedUser?: string | null,
+        requestedMatchId?: string | number | null
+    ) => {
+        const captureUser = requestedUser ?? activeUser ?? null;
+        const captureMatchId = resolveRequestedCaptureMatchId(requestedMatchId);
+        if (autoSequenceInFlightRef.current) {
+            Logger.info('ActionPanel', 'Ignoring auto-sequence request because one is already running', {
+                activeUser: captureUser,
+                matchId: captureMatchId ?? null,
+            });
+            setToast({ message: 'Auto-capture already in progress.', type: 'warning' });
+            return;
+        }
+
+        const ensureStep = async (
+            stepLabel: string,
+            action: 'open-tactical-map' | 'open-crew-hub',
+            expectedScreen: 'tactical_map' | 'crew_hub'
+        ) => {
+            const actionResult = await sendGameUiAction(action);
+            if (!actionResult.success) {
+                throw new Error(`${stepLabel}: ${actionResult.error || 'game UI action failed'}`);
+            }
+
+            const waitResult = await waitForGameScreen(expectedScreen, {
+                activeUser: captureUser,
+                ocrMode,
+            });
+            if (!waitResult.success) {
+                throw new Error(`${stepLabel}: ${waitResult.error || `timed out waiting for ${expectedScreen}`}`);
+            }
+        };
+
+        const captureAndProcessStep = async (stepLabel: string) => {
+            const savedCapture = await captureOnly(captureMatchId);
+            if (!savedCapture?.filePath) {
+                throw new Error(`${stepLabel}: capture did not produce a saved screenshot`);
+            }
+            await processStoredImage(savedCapture.filePath, captureUser);
+        };
+
+        autoSequenceInFlightRef.current = true;
+        Logger.info('ActionPanel', 'Starting auto-sequence smart capture', {
+            activeUser: captureUser,
+            matchId: captureMatchId ?? null,
+        });
+
+        try {
+            await ensureStep('Open Tactical Map', 'open-tactical-map', 'tactical_map');
+            await captureAndProcessStep('Smart Capture: Map');
+            await ensureStep('Open Crew Hub', 'open-crew-hub', 'crew_hub');
+            await captureAndProcessStep('Smart Capture: Crew Hub');
+
+            const closeResult = await sendGameUiAction('close-current-ui');
+            if (!closeResult.success) {
+                Logger.warn('ActionPanel', 'Auto-sequence close-current-ui action failed', closeResult);
+            }
+
+            setToast({ message: 'Auto-capture complete - Map + Crew Hub captured', type: 'success' });
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            Logger.warn('ActionPanel', 'Auto-sequence smart capture failed', {
+                activeUser: captureUser,
+                matchId: captureMatchId ?? null,
+                error: message,
+            });
+            setToast({ message: `Auto-capture failed: ${message}`, type: 'error' });
+        } finally {
+            autoSequenceInFlightRef.current = false;
+        }
+    }, [activeUser, captureOnly, ocrMode, processStoredImage, resolveRequestedCaptureMatchId, setToast]);
+
+    const handleSmartCaptureRequest = React.useCallback(async (request: SmartCaptureRequestPayload) => {
+        const requestBehavior = request.behavior === 'auto-sequence' ? 'auto-sequence' : 'single';
+        const requestedUser = request.activeUser;
+        const requestedMatchId = request.matchId;
+
+        Logger.info('ActionPanel', 'Handling smart capture request', {
+            requestId: request.requestId || null,
+            behavior: requestBehavior,
+            activeUser: requestedUser ?? activeUser ?? null,
+            requestedMatchId: requestedMatchId ?? null,
+            forceOcr: request.forceOcr === true,
+            isActive,
+        });
+
+        try {
+            if (request.forceOcr === true) {
+                await processAllStored(requestedUser ?? activeUser ?? null, requestedMatchId ?? undefined);
+                return;
+            }
+
+            const resolvedMatchId = resolveRequestedCaptureMatchId(requestedMatchId);
+            if (requestBehavior === 'auto-sequence') {
+                await runAutoSequenceCapture(requestedUser, resolvedMatchId);
+                return;
+            }
+
+            if (resolvedMatchId != null && resolvedMatchId !== '') {
+                await triggerSmartCapture(requestedUser ?? activeUser ?? null, resolvedMatchId);
+            } else {
+                await triggerSmartCapture(requestedUser ?? activeUser ?? null);
+            }
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            Logger.warn('ActionPanel', 'Smart capture request failed', {
+                requestId: request.requestId || null,
+                error: message,
+            });
+            setToast({ message: `Smart Capture request failed: ${message}`, type: 'error' });
+        }
+    }, [activeUser, isActive, processAllStored, resolveRequestedCaptureMatchId, runAutoSequenceCapture, setToast, triggerSmartCapture]);
+
     React.useEffect(() => {
         if (!isActive) return;
+        Logger.info('ActionPanel', 'Mounted smart capture window-event listener');
         const onCaptureRequest = (evt: Event) => {
-            const custom = evt as CustomEvent<{ activeUser?: string | null; requestId?: string; matchId?: string | number | null; forceOcr?: boolean }>;
+            const custom = evt as CustomEvent<SmartCaptureRequestPayload>;
             const requestId = custom?.detail?.requestId || null;
             if (requestId && handledCaptureRequestRef.current === requestId) return;
             if (requestId) handledCaptureRequestRef.current = requestId;
             const now = Date.now();
             if (now - lastCaptureRequestAtRef.current < 350) return;
             lastCaptureRequestAtRef.current = now;
-            const requestedUser = custom?.detail?.activeUser;
-            const requestedMatchId = custom?.detail?.matchId;
-            const forceOcr = custom?.detail?.forceOcr === true;
-            const runCapture = async () => {
-                if (forceOcr) {
-                    // Re-run OCR from wizard: only process already-saved captures.
-                    // Skip taking a fresh screenshot to avoid capturing the wrong screen.
-                    await processAllStored(requestedUser ?? activeUser ?? null, requestedMatchId ?? undefined);
-                } else if (requestedMatchId != null && requestedMatchId !== '') {
-                    await triggerSmartCapture(requestedUser ?? activeUser ?? null, requestedMatchId);
-                } else {
-                    await triggerSmartCapture(requestedUser ?? activeUser ?? null);
-                }
-            };
-            void runCapture();
+            Logger.info('ActionPanel', 'Received smart-capture-request window event', custom?.detail || {});
+            void handleSmartCaptureRequest(custom?.detail || {});
         };
         window.addEventListener('smart-capture-request', onCaptureRequest as EventListener);
         return () => window.removeEventListener('smart-capture-request', onCaptureRequest as EventListener);
-    }, [isActive, triggerSmartCapture, processAllStored, activeUser]);
+    }, [handleSmartCaptureRequest, isActive]);
 
     React.useEffect(() => {
         if (!isActive) return;
@@ -372,17 +494,10 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
             return;
         }
         handledCaptureRequestRef.current = requestId;
-        const requestedUser = smartCaptureRequest.activeUser;
-        const requestedMatchId = smartCaptureRequest.matchId;
-        if (smartCaptureRequest.forceOcr === true) {
-            void processAllStored(requestedUser ?? activeUser ?? null, requestedMatchId ?? undefined);
-        } else if (requestedMatchId != null && requestedMatchId !== '') {
-            void triggerSmartCapture(requestedUser ?? activeUser ?? null, requestedMatchId);
-        } else {
-            void triggerSmartCapture(requestedUser ?? activeUser ?? null);
-        }
+        Logger.info('ActionPanel', 'Consuming shared smart capture request from UI state', smartCaptureRequest);
+        void handleSmartCaptureRequest(smartCaptureRequest);
         clearSmartCaptureRequest(requestId);
-    }, [isActive, activeUser, clearSmartCaptureRequest, processAllStored, smartCaptureRequest, triggerSmartCapture]);
+    }, [clearSmartCaptureRequest, handleSmartCaptureRequest, isActive, smartCaptureRequest]);
 
     const autoOpenedForPendingRef = React.useRef<string | null>(null);
     React.useEffect(() => {

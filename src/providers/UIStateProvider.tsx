@@ -21,12 +21,15 @@ interface RenameModalState {
     blocking?: boolean;
 }
 
+type SmartCaptureBehavior = 'single' | 'auto-sequence';
+
 interface SmartCaptureRequest {
     requestId: string;
     activeUser: string | null;
     source?: string;
     matchId?: string | number | null;
     forceOcr?: boolean;
+    behavior?: SmartCaptureBehavior;
 }
 
 interface UIStateContextType {
@@ -71,6 +74,7 @@ interface UIStateContextType {
         matchId?: string | number | null;
         requestId?: string;
         forceOcr?: boolean;
+        behavior?: SmartCaptureBehavior;
     }) => string;
     clearSmartCaptureRequest: (requestId?: string) => void;
 
@@ -191,6 +195,7 @@ export const UIStateProvider: React.FC<{ children: React.ReactNode }> = ({ child
         matchId?: string | number | null;
         requestId?: string;
         forceOcr?: boolean;
+        behavior?: SmartCaptureBehavior;
     }) => {
         const requestId = request.requestId || `sc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         setSmartCaptureRequest({
@@ -199,6 +204,7 @@ export const UIStateProvider: React.FC<{ children: React.ReactNode }> = ({ child
             source: request.source,
             matchId: request.matchId ?? null,
             forceOcr: request.forceOcr === true,
+            behavior: request.behavior === 'auto-sequence' ? 'auto-sequence' : 'single',
         });
         return requestId;
     }, []);

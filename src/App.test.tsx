@@ -108,6 +108,16 @@ const appStoreState = {
   ocrLearningStrictMode: false,
   ocrLearningReviewMode: 'balanced',
   ocrLearningAutoPromoteCount: 3,
+  autoSequenceOnCapture: false,
+   autoCaptureSendKeypresses: true,
+   autoCaptureWaitMultiplier: 1,
+   ocrEnhancedNameRecoveryEnabled: true,
+   ocrNameRerouteThreshold: 78,
+   ocrRegions: {
+     crewHub: {},
+     mapScreen: {},
+   },
+   isMatchInProgress: false,
   dismissedRosterCandidateKeys: [] as string[],
   ocrCorrections: {},
   ocrAliasModel: {},
@@ -212,6 +222,7 @@ describe('App', () => {
     uiState.showIdMapper = false;
     gameDataState.selectedOpponents = [];
     gameDataState.selectedReachModifiers = [];
+    gameDataState.matches = [];
     gameDataState.sessionTeams = {};
     gameDataState.sessionShipTypes = {};
     gameDataState.setMatches.mockReset();
@@ -219,6 +230,10 @@ describe('App', () => {
     appStoreState.dismissedRosterCandidateKeys = [];
     appStoreState.matches = [];
     appStoreState.pendingMatchData = {};
+    appStoreState.autoSequenceOnCapture = false;
+    appStoreState.autoCaptureSendKeypresses = true;
+    appStoreState.autoCaptureWaitMultiplier = 1;
+    appStoreState.isMatchInProgress = false;
   });
 
   it('uses first-launch welcome copy before the app has ever been opened', async () => {
@@ -479,6 +494,7 @@ describe('App', () => {
       activeUser: 'Pilot',
       source: 'global-hotkey',
       matchId: null,
+      behavior: 'single',
     }));
     expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({
       type: 'smart-capture-request',
@@ -487,6 +503,7 @@ describe('App', () => {
         source: 'global-hotkey',
         requestId: 'req_hotkey',
         matchId: null,
+        behavior: 'single',
       }),
     }));
     expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({
@@ -495,6 +512,54 @@ describe('App', () => {
     }));
 
     dispatchSpy.mockRestore();
+  });
+
+  it('queues the auto-sequence workflow when F10 capture sequencing is enabled', async () => {
+    const { default: App } = await import('./App');
+    appStoreState.autoSequenceOnCapture = true;
+    appStoreState.isMatchInProgress = true;
+    uiState.activeView = 'recording';
+    gameDataState.matches = [{
+      id: 321,
+      subType: 'Telemetry Draft',
+      timestamp: Date.now(),
+      player: 'Pilot',
+      artifacts: [],
+    }];
+    const handlers: Record<string, (...args: unknown[]) => void> = {};
+    const api = {
+      invoke: vi.fn(() => Promise.resolve({ started: true })),
+      send: vi.fn(),
+      on: vi.fn((channel: string, cb: (...args: unknown[]) => void) => {
+        handlers[channel] = cb;
+        return vi.fn();
+      }),
+      removeAllListeners: vi.fn(),
+    };
+    getElectronAPIMock.mockReturnValue(api);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(handlers['hotkey-smart-capture']).toBeTypeOf('function');
+    });
+
+    act(() => {
+      handlers['hotkey-smart-capture']();
+    });
+
+    await waitFor(() => {
+      expect(api.invoke).toHaveBeenCalledWith('start-auto-capture', expect.objectContaining({
+        activeUser: 'Pilot',
+        matchId: 321,
+        lifecycleActive: true,
+        autoCaptureSendKeypresses: true,
+        autoCaptureWaitMultiplier: 1,
+      }));
+    });
+    expect(uiState.requestSmartCapture).not.toHaveBeenCalled();
+    appStoreState.autoSequenceOnCapture = false;
+    gameDataState.matches = [];
   });
 
   it('renders changelog dialog semantics and closes on Escape', async () => {

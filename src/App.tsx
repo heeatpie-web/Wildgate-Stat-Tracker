@@ -132,6 +132,7 @@ import { capTeammatePlayers, getMaxTeammatesForShip } from './utils/teamLimits';
 import { buildActiveWeaponsFromLoadout, cloneLoadout, sanitizeUnknownLoadout } from './utils/loadout';
 import { extractArtifactSourceFromOcrData } from './utils/artifactSource';
 import { buildOcrNameConfidenceMapFromExtractedData } from './utils/ocr/nameSourceHints';
+import { resolveSmartCaptureMatchId } from './utils/smartCaptureScope';
 import {
     deriveCanonicalRosterCandidateTargetKey,
     getRosterCandidatePruneIds,
@@ -227,6 +228,20 @@ const asRecord = (value: unknown): UnknownRecord =>
 const toFiniteNumber = (value: unknown, fallback = 0): number => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const mergeCaptureArtifactPaths = (existing: string[] = [], incoming: string[] = []): string[] => {
+    const next: string[] = [];
+    const seen = new Set<string>();
+    [...existing, ...incoming].forEach((entry) => {
+        const normalized = String(entry || '').trim();
+        if (!normalized) return;
+        const key = normalized.replace(/[\\/]+/g, '\\').toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        next.push(normalized);
+    });
+    return next;
 };
 
 const readStoredSessionExitState = (): SessionExitState | null => {
@@ -488,6 +503,36 @@ const App: React.FC = () => {
         soundEnabled,
         performanceMode,
     } = useUserPreferences();
+    const autoSequenceOnCapture = useAppStore(s => s.autoSequenceOnCapture);
+    const syncAutoCaptureArtifactToMatch = useCallback((matchId: number | null | undefined, filePath: string | null | undefined) => {
+        const numericMatchId = Number(matchId || 0);
+        const normalizedPath = String(filePath || '').trim();
+        if (!Number.isInteger(numericMatchId) || numericMatchId <= 0 || !normalizedPath) {
+            return;
+        }
+
+        const state = useAppStore.getState();
+        const pendingDraft = state.pendingMatchData;
+        if (pendingDraft && Number(pendingDraft.id || 0) === numericMatchId) {
+            state.setPendingMatchData({
+                ...pendingDraft,
+                artifacts: mergeCaptureArtifactPaths(
+                    Array.isArray(pendingDraft.artifacts) ? pendingDraft.artifacts : [],
+                    [normalizedPath]
+                ),
+            });
+        }
+
+        const scopedMatch = (state.matches || []).find((match) => Number(match.id || 0) === numericMatchId);
+        if (!scopedMatch) {
+            return;
+        }
+        state.updateMatch({
+            ...scopedMatch,
+            artifacts: mergeCaptureArtifactPaths(scopedMatch.artifacts || [], [normalizedPath]),
+            ocrState: scopedMatch.ocrState || 'queued',
+        });
+    }, []);
 
     useEffect(() => {
         matchesRef.current = matches;
@@ -597,64 +642,6 @@ const App: React.FC = () => {
             deepLink: { type: 'openIdMapper' },
         });
     }, [pushNotification, showIdInfoPrompt, showIdMapper, unknownIdCount]);
-
-    useEffect(() => {
-        const minScorePct = Math.round((Number(ocrAutoApplyMinScore) || 0.83) * 100);
-        const autoMergeEligible = (pendingReviews || []).filter((review) => (
-            review.type === 'roster_candidate'
-            && Number(review.bestScore || 0) >= minScorePct
-            && String(review.bestMatch || '').trim().length > 0
-        ));
-        if (autoMergeEligible.length === 0) return;
-
-        let mergedCount = 0;
-        autoMergeEligible.forEach((review) => {
-            const source = normalizeOcrName(review.value || '');
-            const target = normalizeOcrName(review.bestMatch || '');
-            removePendingReview(review.id);
-            if (!source || !target) return;
-            if (source.toLowerCase() === target.toLowerCase()) return;
-
-            recordOcrAliasCorrection(source, target, {
-                source: 'manual_correction',
-                context: 'matchstats',
-                confidenceWeight: Math.min(1, Math.max(0.6, Number(review.bestScore || 0) / 100)),
-            });
-
-            const hasTarget = pilotRegistry.some((name) => (
-                normalizeOcrName(name).toLowerCase() === target.toLowerCase()
-            ));
-            if (!hasTarget) {
-                addToRegistry(target);
-            }
-            const duplicateIds = getRosterCandidatePruneIds({
-                pendingReviews: useAppStore.getState().pendingReviews || [],
-                rawName: source,
-                canonicalTargetKey: target,
-                excludeIds: [review.id],
-            });
-            if (duplicateIds.length > 0) {
-                removePendingReviews(duplicateIds);
-            }
-            mergedCount += 1;
-        });
-
-        if (mergedCount > 0) {
-            setToast({
-                message: `Auto-merged ${mergedCount} OCR name${mergedCount === 1 ? '' : 's'} at ${minScorePct}%+ confidence.`,
-                type: 'success',
-            });
-        }
-    }, [
-        addToRegistry,
-        ocrAutoApplyMinScore,
-        pendingReviews,
-        pilotRegistry,
-        recordOcrAliasCorrection,
-        removePendingReview,
-        removePendingReviews,
-        setToast,
-    ]);
 
     // Track changelog dismiss events so tip suppression can use the timestamp.
     useEffect(() => {
@@ -1551,13 +1538,50 @@ const App: React.FC = () => {
         if (aot) api.send('set-always-on-top', true);
     }, []);
 
-    const handleGlobalHotkeySmartCapture = useCallback(() => {
+    const handleGlobalHotkeySmartCapture = useCallback(async () => {
         const api = getElectronAPI();
         if (!api) {
             setToast({ message: 'Smart Capture hotkey unavailable: desktop bridge not ready.', type: 'error' });
             return;
         }
         try {
+            const behavior = autoSequenceOnCapture ? 'auto-sequence' : 'single';
+            Logger.info('Hotkeys', 'Renderer handling F10 smart capture', {
+                activeUser: activeUser || null,
+                activeView,
+                behavior,
+            });
+
+            if (behavior === 'auto-sequence') {
+                const currentState = useAppStore.getState();
+                const resolvedMatchId = resolveSmartCaptureMatchId({
+                    activeUser: activeUser || null,
+                    matches,
+                    pendingMatchData: currentState.pendingMatchData,
+                    sessionStartTime,
+                });
+                const started = await api.invoke('start-auto-capture', {
+                    activeUser: activeUser || null,
+                    matchId: resolvedMatchId,
+                    lifecycleActive: currentState.isMatchInProgress === true,
+                    autoCaptureSendKeypresses: currentState.autoCaptureSendKeypresses !== false,
+                    autoCaptureWaitMultiplier: currentState.autoCaptureWaitMultiplier,
+                    ocrMode: 'local',
+                    ocrRegions: currentState.ocrRegions || null,
+                    runtimeOptions: {
+                        routingProfile: currentState.ocrEnhancedNameRecoveryEnabled ? 'names-only' : 'default',
+                        fontProfile: currentState.ocrEnhancedNameRecoveryEnabled ? 'ealing-black-italic' : 'default',
+                        nameRerouteThreshold: currentState.ocrNameRerouteThreshold,
+                        maxReroutePasses: currentState.ocrEnhancedNameRecoveryEnabled ? 1 : 0,
+                    },
+                });
+
+                if (started?.ignored) {
+                    Logger.info('Hotkeys', 'Auto-capture hotkey ignored', started);
+                }
+                return;
+            }
+
             if (activeView !== 'recording') {
                 React.startTransition(() => setActiveView('recording'));
             }
@@ -1566,6 +1590,7 @@ const App: React.FC = () => {
                 source: 'global-hotkey',
                 requestId: `global-hotkey-${Date.now()}`,
                 matchId: null,
+                behavior,
             });
             window.dispatchEvent(new CustomEvent('smart-capture-request', {
                 detail: {
@@ -1573,6 +1598,7 @@ const App: React.FC = () => {
                     source: 'global-hotkey',
                     requestId,
                     matchId: null,
+                    behavior,
                 },
             }));
             setToast({
@@ -1586,11 +1612,14 @@ const App: React.FC = () => {
             const message = error instanceof Error ? error.message : 'Unknown error';
             setToast({ message: `Smart Capture hotkey failed: ${message}`, type: 'error' });
         }
-    }, [activeUser, activeView, requestSmartCapture, setActiveView, setToast]);
+    }, [activeUser, activeView, autoSequenceOnCapture, matches, requestSmartCapture, sessionStartTime, setActiveView, setToast]);
 
     useEffect(() => {
         const api = getElectronAPI();
         if (!api) return;
+        Logger.info('Hotkeys', 'Registering renderer hotkey listeners', {
+            channels: ['hotkey-toggle-overlay', 'hotkey-smart-capture', 'auto-capture-status'],
+        });
         const unsubAvailable = api.on('update_available', () => setUpdateStatus('available'));
         const unsubDownloaded = api.on('update_downloaded', () => setUpdateStatus('downloaded'));
         const unsubNotAvailable = api.on('update_not_available', () => setUpdateStatus('not-available'));
@@ -1604,7 +1633,37 @@ const App: React.FC = () => {
             }
         });
         const unsubSmartCaptureHotkey = api.on('hotkey-smart-capture', () => {
-            handleGlobalHotkeySmartCapture();
+            Logger.info('Hotkeys', 'Received hotkey-smart-capture IPC from main process');
+            void handleGlobalHotkeySmartCapture();
+        });
+        const unsubAutoCaptureStatus = api.on('auto-capture-status', (payload?: Record<string, unknown>) => {
+            const phase = String(payload?.phase || '');
+            if (phase === 'started') {
+                setToast({ message: 'Auto-Capture running…', type: 'info' });
+                return;
+            }
+            if (phase === 'capture-progress') {
+                const captureIndex = Number(payload?.captureIndex || 0);
+                const totalCaptures = Number(payload?.totalCaptures || 3);
+                syncAutoCaptureArtifactToMatch(
+                    Number(payload?.matchId || 0),
+                    typeof payload?.filePath === 'string' ? payload.filePath : null
+                );
+                if (captureIndex > 0) {
+                    setToast({ message: `${captureIndex}/${totalCaptures}`, type: 'info' });
+                }
+                return;
+            }
+            if (phase === 'completed') {
+                setToast({ message: 'Auto-Capture complete — 3 screenshots added to match', type: 'success' });
+                return;
+            }
+            if (phase === 'failed') {
+                const message = typeof payload?.message === 'string' && payload.message.trim()
+                    ? payload.message
+                    : 'Auto-Capture failed.';
+                setToast({ message, type: 'error' });
+            }
         });
 
         return () => {
@@ -1614,8 +1673,9 @@ const App: React.FC = () => {
             unsubError();
             unsubHotkey();
             unsubSmartCaptureHotkey();
+            unsubAutoCaptureStatus();
         };
-    }, [handleGlobalHotkeySmartCapture, setUpdateStatus, setIsOverlayMode]);
+    }, [handleGlobalHotkeySmartCapture, setUpdateStatus, setIsOverlayMode, setToast, syncAutoCaptureArtifactToMatch]);
 
     useEffect(() => {
         const api = getElectronAPI();

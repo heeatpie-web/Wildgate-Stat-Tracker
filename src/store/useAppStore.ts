@@ -8,7 +8,7 @@
  */
 import { create } from 'zustand';
 import { persist, PersistStorage } from 'zustand/middleware';
-import { DataSlice, createDataSlice } from './slices/createDataSlice';
+import { DataSlice, createDataSlice, normalizeRosterEntryMetaMap } from './slices/createDataSlice';
 import {
   SettingsSlice,
   createDefaultOcrRegions,
@@ -197,6 +197,7 @@ const customStorage: PersistStorage<AppState> = {
           nextCanonicalMatchNumber,
           players,
           pilotRegistry: data.pilotRegistry || [],
+          rosterEntryMeta: normalizeRosterEntryMetaMap(data.pilotRegistry || [], data.rosterEntryMeta),
           favorites: data.favorites || [],
           pilotNotes: data.pilotNotes || {},
           pilotAliases: data.pilotAliases || {},
@@ -247,6 +248,12 @@ const customStorage: PersistStorage<AppState> = {
           captureMode: settings.captureMode || 'deferred',
           resultOcrFlowMode: settings.resultOcrFlowMode === 'prompt' ? 'prompt' : 'background',
           ocrAutoOpenAfterRerun: settings.ocrAutoOpenAfterRerun ?? false,
+          autoSequenceOnCapture: settings.autoSequenceOnCapture ?? false,
+          autoCaptureSendKeypresses: settings.autoCaptureSendKeypresses ?? true,
+          autoCaptureWaitMultiplier: Number.isFinite(settings.autoCaptureWaitMultiplier)
+            ? Math.max(0.5, Math.min(3, Number(settings.autoCaptureWaitMultiplier)))
+            : 1,
+          autoPopulateRosterOnSave: settings.autoPopulateRosterOnSave ?? false,
           lockOcrTeams: settings.lockOcrTeams || false,
           ocrEnhancedNameRecoveryEnabled: settings.ocrEnhancedNameRecoveryEnabled ?? true,
           ocrNameRerouteThreshold: normalizeOcrNameRerouteThreshold(settings.ocrNameRerouteThreshold),
@@ -342,6 +349,7 @@ const customStorage: PersistStorage<AppState> = {
       matches: state.matches,
       players: state.players,
       pilotRegistry: state.pilotRegistry,
+      rosterEntryMeta: state.rosterEntryMeta,
       favorites: state.favorites,
       pilotNotes: state.pilotNotes,
       pilotAliases: state.pilotAliases,
@@ -386,6 +394,10 @@ const customStorage: PersistStorage<AppState> = {
                 captureMode: state.captureMode,
                 resultOcrFlowMode: state.resultOcrFlowMode,
                 ocrAutoOpenAfterRerun: state.ocrAutoOpenAfterRerun,
+                autoSequenceOnCapture: state.autoSequenceOnCapture,
+                autoCaptureSendKeypresses: state.autoCaptureSendKeypresses,
+                autoCaptureWaitMultiplier: state.autoCaptureWaitMultiplier,
+                autoPopulateRosterOnSave: state.autoPopulateRosterOnSave,
                 lockOcrTeams: state.lockOcrTeams,
                 ocrEnhancedNameRecoveryEnabled: state.ocrEnhancedNameRecoveryEnabled,
                 ocrNameRerouteThreshold: state.ocrNameRerouteThreshold,
@@ -458,6 +470,7 @@ export const useAppStore = create<AppState>()(
         nextCanonicalMatchNumber: state.nextCanonicalMatchNumber,
         players: state.players,
         pilotRegistry: state.pilotRegistry,
+        rosterEntryMeta: state.rosterEntryMeta,
         favorites: state.favorites,
         pilotNotes: state.pilotNotes,
         playerIdMap: state.playerIdMap,
@@ -492,6 +505,10 @@ export const useAppStore = create<AppState>()(
         captureMode: state.captureMode,
         resultOcrFlowMode: state.resultOcrFlowMode,
         ocrAutoOpenAfterRerun: state.ocrAutoOpenAfterRerun,
+        autoSequenceOnCapture: state.autoSequenceOnCapture,
+        autoCaptureSendKeypresses: state.autoCaptureSendKeypresses,
+        autoCaptureWaitMultiplier: state.autoCaptureWaitMultiplier,
+        autoPopulateRosterOnSave: state.autoPopulateRosterOnSave,
         lockOcrTeams: state.lockOcrTeams,
         ocrEnhancedNameRecoveryEnabled: state.ocrEnhancedNameRecoveryEnabled,
         ocrNameRerouteThreshold: state.ocrNameRerouteThreshold,

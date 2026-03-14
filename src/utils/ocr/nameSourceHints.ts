@@ -153,3 +153,49 @@ export const buildOcrNameConfidenceMapFromExtractedData = (
 
   return out;
 };
+
+export const remapOcrNameConfidenceMap = (
+  confidenceMap: OcrNameConfidenceMap | null | undefined,
+  corrections: Record<string, string> | null | undefined
+): OcrNameConfidenceMap => {
+  const entries = new Map<string, { name: string; confidence: number }>();
+
+  Object.entries(confidenceMap || {}).forEach(([name, confidence]) => {
+    const key = toNameKey(name);
+    const normalizedConfidence = toConfidence(confidence);
+    if (!key || normalizedConfidence === null) return;
+    const existing = entries.get(key);
+    if (!existing || normalizedConfidence >= existing.confidence) {
+      entries.set(key, { name: String(name || '').trim() || key, confidence: normalizedConfidence });
+    }
+  });
+
+  Object.entries(corrections || {}).forEach(([rawName, correctedName]) => {
+    const rawKey = toNameKey(rawName);
+    const corrected = String(correctedName || '').trim();
+    const correctedKey = toNameKey(corrected);
+    if (!rawKey || !correctedKey) return;
+
+    const sourceEntry = entries.get(rawKey);
+    const targetEntry = entries.get(correctedKey);
+    if (rawKey === correctedKey) {
+      if (targetEntry && corrected) {
+        entries.set(correctedKey, { ...targetEntry, name: corrected });
+      }
+      return;
+    }
+
+    if (!sourceEntry) return;
+    entries.set(correctedKey, {
+      name: corrected || targetEntry?.name || sourceEntry.name,
+      confidence: Math.max(sourceEntry.confidence, targetEntry?.confidence || 0),
+    });
+    entries.delete(rawKey);
+  });
+
+  return Array.from(entries.values()).reduce<OcrNameConfidenceMap>((acc, entry) => {
+    if (!entry.name) return acc;
+    acc[entry.name] = entry.confidence;
+    return acc;
+  }, {});
+};

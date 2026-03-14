@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createStore } from 'zustand/vanilla';
 import { createFormSlice, FormSlice } from '../createFormSlice';
+import type { Loadout } from '../../../types';
 
 const makeStore = () => createStore<FormSlice>()(createFormSlice);
 
@@ -145,6 +146,56 @@ describe('createFormSlice', () => {
       // Switch back to Kae
       store.getState().setActiveHero('Kae');
       expect(store.getState().activeWeapons).toEqual({ 'Laser': 1, 'Missile': 2 });
+    });
+
+    it('keeps activeWeapons intact when telemetry reselects the same hero', () => {
+      store.getState().setActiveHero('Kae');
+      store.getState().setActiveWeapons({ 'Laser': 1, 'Missile': 2 });
+
+      store.getState().setActiveHero('Kae', 'telemetry');
+
+      expect(store.getState().activeWeapons).toEqual({ 'Laser': 1, 'Missile': 2 });
+    });
+
+    it('preserves pending draft loadout weapons when switching to that hero', () => {
+      const pendingLoadout: Loadout = {
+        hero: 'Ion',
+        ship: 'Scout (3 Player)',
+        weapons: [],
+        equipment: [],
+        characterWeapons: ['Scattergun'],
+        characterEquipment: ['Repair Drone'],
+      };
+      store.getState().setActiveHero('Kae');
+      store.getState().setActiveWeapons({ 'Laser': 1 });
+      store.getState().setPendingMatchData({ id: 42, loadout: pendingLoadout });
+
+      store.getState().setActiveHero('Ion');
+
+      expect(store.getState().activeWeapons).toEqual({
+        Scattergun: 1,
+        'Repair Drone': 1,
+      });
+    });
+
+    it('preserves current loadout weapons when switching to a matching hero', () => {
+      (store as unknown as { setState: (value: unknown) => void }).setState({
+        currentLoadout: {
+          hero: 'Ion',
+          ship: 'Scout (3 Player)',
+          weapons: [],
+          equipment: [],
+          characterWeapons: ['The Doctor'],
+          characterEquipment: ['Shield Matrix'],
+        } satisfies Loadout,
+      });
+
+      store.getState().setActiveHero('Ion');
+
+      expect(store.getState().activeWeapons).toEqual({
+        'The Doctor': 1,
+        'Shield Matrix': 1,
+      });
     });
   });
 

@@ -14,6 +14,20 @@ describe('createSettingsSlice OCR policy', () => {
   it('defaults new users to deferred capture and background result OCR', () => {
     expect(store.getState().captureMode).toBe('deferred');
     expect(store.getState().resultOcrFlowMode).toBe('background');
+    expect(store.getState().autoSequenceOnCapture).toBe(false);
+    expect(store.getState().autoCaptureSendKeypresses).toBe(true);
+    expect(store.getState().autoCaptureWaitMultiplier).toBe(1);
+  });
+
+  it('clamps auto-capture wait multiplier into the supported range', () => {
+    store.getState().setAutoCaptureWaitMultiplier(2.37);
+    expect(store.getState().autoCaptureWaitMultiplier).toBe(2.4);
+
+    store.getState().setAutoCaptureWaitMultiplier(9);
+    expect(store.getState().autoCaptureWaitMultiplier).toBe(3);
+
+    store.getState().setAutoCaptureWaitMultiplier(0.1);
+    expect(store.getState().autoCaptureWaitMultiplier).toBe(0.5);
   });
 
   it('clamps OCR name reroute threshold to integer percent bounds', () => {

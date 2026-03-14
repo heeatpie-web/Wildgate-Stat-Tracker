@@ -66,6 +66,9 @@ const OCR_MAX_CONCURRENT = Math.min(8, Math.max(1, parseInt(process.env.WILDGATE
 const OCR_PREPROCESS_DOWNSCALE_WIDTH = Math.min(4096, Math.max(1200, parseInt(process.env.WILDGATE_OCR_PREPROCESS_MAX_WIDTH || '1920', 10) || 1920));
 const DEFAULT_SHARP_CONCURRENCY = CPU_COUNT <= 4 ? 1 : 2;
 const OCR_SHARP_CONCURRENCY = Math.min(4, Math.max(1, parseInt(process.env.WILDGATE_OCR_SHARP_CONCURRENCY || String(DEFAULT_SHARP_CONCURRENCY), 10) || DEFAULT_SHARP_CONCURRENCY));
+const REFERENCE_WIDTH = 1920;
+const REFERENCE_HEIGHT = 1080;
+const REFERENCE_ASPECT = REFERENCE_WIDTH / REFERENCE_HEIGHT;
 const ocrResultCache = new Map(); // hash → { result, timestamp }
 const ocrConcurrencyQueue = [];
 let activeOcrJobs = 0;
@@ -228,6 +231,51 @@ function cloneRegions(regions) {
   return JSON.parse(JSON.stringify(regions || createDefaultOcrRegions()));
 }
 
+function detectAspectProfile(width, height) {
+  const safeWidth = Number(width);
+  const safeHeight = Number(height);
+  if (!Number.isFinite(safeWidth) || !Number.isFinite(safeHeight) || safeWidth <= 0 || safeHeight <= 0) {
+    return 'unknown';
+  }
+  const ratio = safeWidth / safeHeight;
+  if (ratio <= 1.8) return 'standard';
+  if (ratio <= 2.5) return 'ultrawide';
+  if (ratio <= 4.0) return 'superultrawide';
+  return 'unknown';
+}
+
+function buildOcrGeometry(processed) {
+  const originalWidth = Math.max(1, Number(processed?.originalWidth) || REFERENCE_WIDTH);
+  const originalHeight = Math.max(1, Number(processed?.originalHeight) || REFERENCE_HEIGHT);
+  const ocrWidth = Math.max(1, Number(processed?.width) || Math.round(originalWidth));
+  const ocrHeight = Math.max(1, Number(processed?.height) || Math.round(originalHeight));
+  const preprocessScale = Number.isFinite(Number(processed?.scale)) && Number(processed?.scale) > 0
+    ? Number(processed.scale)
+    : (ocrWidth / originalWidth);
+  const aspectRatio = originalWidth / originalHeight;
+  const sourceScaleX = originalWidth / REFERENCE_WIDTH;
+  const sourceScaleY = originalHeight / REFERENCE_HEIGHT;
+  const ocrScaleX = sourceScaleX * preprocessScale;
+  const ocrScaleY = sourceScaleY * preprocessScale;
+
+  return {
+    referenceWidth: REFERENCE_WIDTH,
+    referenceHeight: REFERENCE_HEIGHT,
+    referenceAspect: REFERENCE_ASPECT,
+    originalWidth,
+    originalHeight,
+    ocrWidth,
+    ocrHeight,
+    preprocessScale,
+    aspectRatio,
+    aspectProfile: detectAspectProfile(originalWidth, originalHeight),
+    sourceScaleX,
+    sourceScaleY,
+    ocrScaleX,
+    ocrScaleY,
+  };
+}
+
 function clampNormalizedWindow(center, size, min = 0, max = 1) {
   const half = Math.max(0.005, size / 2);
   let start = Math.max(min, center - half);
@@ -315,6 +363,8 @@ function applyRuntimeAnchors(ocrRegions, anchors) {
 
   if (anchors.mapScreen?.enemyShipsHeaderY != null) {
     const headerY = anchors.mapScreen.enemyShipsHeaderY;
+    // LAYOUT-DEPENDENT: these normalized slot windows assume the current tactical-map
+    // enemy ship list stacks evenly below the ENEMY SHIPS header.
     const slotHeight = 0.105;
     const slotGap = 0.006;
     const firstStart = Math.max(0, headerY + 0.02);
@@ -1677,6 +1727,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       fontProfile: rawFontProfile = 'default',
       nameRerouteThreshold: rawNameRerouteThreshold = 78,
       maxReroutePasses: rawMaxReroutePasses = 1,
+      debugLayout: rawDebugLayout = false,
     } = options;
     const includeBboxes = rawIncludeBboxes === true;
     const shouldArchiveOcrSample = rawArchiveOcrSample === true;
@@ -1687,6 +1738,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     const fontProfile = rawFontProfile === 'ealing-black-italic' ? 'ealing-black-italic' : 'default';
     const nameRerouteThreshold = Math.max(50, Math.min(95, Number(rawNameRerouteThreshold) || 78));
     const maxReroutePasses = Math.max(0, Math.min(2, Math.round(Number(rawMaxReroutePasses) || 1)));
+    const debugLayout = rawDebugLayout === true || String(process.env.WILDGATE_OCR_DEBUG_LAYOUT || '').trim() === '1';
     const ocrRegions = sanitizeOcrRegions(rawOcrRegions);
     const inferredScreenType =
       (typeof rawScreenTypeHint === 'string' ? rawScreenTypeHint : '');
@@ -1738,11 +1790,18 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     console.log('[OCR] Preprocessing image...');
     const processed = await preprocessImage(imageBuffer);
     const preMeta = (processed && typeof processed.preprocessMeta === 'object') ? processed.preprocessMeta : {};
+    const geometry = buildOcrGeometry(processed);
     console.log(
       `[OCR] Preprocessing done: original=${processed.originalWidth}x${processed.originalHeight}, ` +
       `ocrInput=${processed.width}x${processed.height}, scale=${Number(processed.scale || 1).toFixed(4)}, ` +
       `mode=${preMeta.mode || 'unknown'}, downscaleCapWidth=${preMeta.downscaleCapWidth || OCR_PREPROCESS_DOWNSCALE_WIDTH}`
     );
+    console.log(
+      `[OCR] Geometry: original=${geometry.originalWidth}x${geometry.originalHeight}, ` +
+      `ocrInput=${geometry.ocrWidth}x${geometry.ocrHeight}, aspectProfile=${geometry.aspectProfile}, ` +
+      `ocrScaleX=${geometry.ocrScaleX.toFixed(4)}, ocrScaleY=${geometry.ocrScaleY.toFixed(4)}`
+    );
+    if (debugLayout) console.log('[OCR] Layout debug enabled');
 
     // Save raw capture debug image (also triggers cloud upload)
     // When sourceImagePath is provided (re-analysis), skip saving a duplicate
@@ -1797,6 +1856,10 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     let extractedData = null;
     const runtimeAnchors = deriveRuntimeAnchors(resolvedScreenType, ocrResult, processed, ocrRegions);
     const activeRegions = applyRuntimeAnchors(ocrRegions, runtimeAnchors);
+    if (debugLayout) {
+      console.log('[OCR] Runtime anchors:', JSON.stringify(runtimeAnchors || null));
+      console.log('[OCR] Active regions:', JSON.stringify(activeRegions || null));
+    }
     const targetedRetries = [];
 
     if (resolvedScreenType === SCREEN_TYPES.CREW_HUB) {
@@ -1810,7 +1873,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         processed.height,
         processed.scale,
         imageBuffer,
-        activeRegions.crewHub
+        activeRegions.crewHub,
+        { geometry, debugLayout }
       );
 
       extractedData = convertCrewHubToLegacy(extractedData, ocrResult.text);
@@ -1886,7 +1950,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         processed.width,
         processed.height,
         activeRegions.mapScreen,
-        { yourShipRegionWords: yourShipRegionWordsForMap }
+        { yourShipRegionWords: yourShipRegionWordsForMap, geometry, debugLayout }
       );
 
       if (imageBuffer && (Array.isArray(mapScreenData?.hazards) ? mapScreenData.hazards.length : 0) < 2) {
@@ -2909,8 +2973,10 @@ module.exports = {
   runOCR,
   extractModifiers,
   __test__: {
+    buildOcrGeometry,
     cleanupLegacyExtraction,
     convertCrewHubToLegacy,
+    detectAspectProfile,
     getMaxTeammatesForShipType,
   },
 };

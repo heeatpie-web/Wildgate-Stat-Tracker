@@ -24,6 +24,7 @@ const MAX_TELEMETRY_PROSPECTOR_SLOTS = 2;
 const ADAPTIVE_LOW_TELEMETRY_PROFILE = 'adaptive-low';
 const ADAPTIVE_LOW_PROFILE_DELAY_MS = 2 * 60 * 1000;
 const ADAPTIVE_MENU_PROFILE_DELAY_MS = 15 * 1000;
+const IS_TELEMETRY_DEBUG = import.meta.env.DEV || process.env.NODE_ENV === 'test';
 
 const isTrustedTelemetryDuration = (seconds: number) =>
     Number.isFinite(seconds) && seconds >= 0 && seconds <= MAX_TELEMETRY_MATCH_DURATION_SECONDS;
@@ -263,6 +264,11 @@ const toCanonicalProspectorPerkName = (value: unknown): string => {
     return PROSPECTOR_PERK_NAME_MAP.get(key) || '';
 };
 
+const traceTelemetryLoadout = (stage: string, detail: Record<string, unknown>) => {
+    if (!IS_TELEMETRY_DEBUG) return;
+    Logger.debug('LogMonitor', stage, detail);
+};
+
 
 /**
  * useLogMonitor - Monitors external game log files for telemetry events.
@@ -344,19 +350,6 @@ export const useLogMonitor = (activeUser?: string) => {
             telemetryDraftCapturePromptTimerRef.current = null;
         }
     }, []);
-
-    const clearTelemetryDerivedLoadout = useCallback(() => {
-        if (currentLoadoutRef.current) {
-            setCurrentLoadout({
-                ...currentLoadoutRef.current,
-                characterWeapons: [],
-                characterEquipment: [],
-                characterPerks: [],
-                perks: [],
-            });
-        }
-        setActiveWeapons({}, false);
-    }, [setActiveWeapons, setCurrentLoadout]);
 
     const scheduleTelemetryDraftCapturePrompt = useCallback((matchId: number) => {
         clearTelemetryDraftCapturePromptTimer();
@@ -757,7 +750,11 @@ export const useLogMonitor = (activeUser?: string) => {
                 setIsMatchInProgress(false);
                 setMatchStartTime(null);
                 clearTelemetryDetected();
-                clearTelemetryDerivedLoadout();
+                traceTelemetryLoadout('Telemetry source closed', {
+                    clearedTelemetryDetected: true,
+                    preservedCurrentLoadout: Boolean(currentLoadoutRef.current),
+                    activeWeaponCount: Object.keys(useAppStore.getState().activeWeapons || {}).length,
+                });
             }
         };
         const onLogData = (data: unknown) => {
@@ -794,11 +791,50 @@ export const useLogMonitor = (activeUser?: string) => {
                     const loadingMapRaw = getRecordValueCaseInsensitive(payload, ['loadedMap', 'loadingMap']);
                     const loadingMapName = typeof loadingMapRaw === 'string' ? loadingMapRaw : '';
                     const loadingMapNameLower = loadingMapName.toLowerCase();
+                    const payloadEnvelope = asRecord(e.Payload);
+                    const payloadEnvelopeEvent = asRecord(payloadEnvelope.event);
+                    const payloadEnvelopeLower = asRecord(e.payload);
+                    const payloadEnvelopeLowerEvent = asRecord(payloadEnvelopeLower.event);
+                    const recordKey = [
+                        payload.recordKey,
+                        payload.record_key,
+                        payload.key,
+                        payloadEnvelopeEvent.recordKey,
+                        payloadEnvelopeEvent.record_key,
+                        payloadEnvelopeEvent.key,
+                        payloadEnvelope.recordKey,
+                        payloadEnvelope.record_key,
+                        payloadEnvelope.key,
+                        payloadEnvelopeLowerEvent.recordKey,
+                        payloadEnvelopeLowerEvent.record_key,
+                        payloadEnvelopeLowerEvent.key,
+                        payloadEnvelopeLower.recordKey,
+                        payloadEnvelopeLower.record_key,
+                        payloadEnvelopeLower.key,
+                    ]
+                        .map((value) => String(value || '').trim())
+                        .find(Boolean) || '';
                     const isRelevantToSession = gameTime >= (sessionStartTimeRef.current - 60000);
                     const allowSessionEvent = isRelevantToSession || devModeRef.current;
                     const ageSeconds = Math.floor((Date.now() - gameTime) / 1000);
                     const payloadKeys = Object.keys(payload).join(',');
+                    const isLoadoutBearingEvent =
+                        name === 'NebLoadoutSaved'
+                        || name === 'NebCloudSaveRecordSize'
+                        || TELEMETRY_LOADOUT_RECORD_KEY_PATTERN.test(name)
+                        || payloadKeys.toLowerCase().split(',').some((key) => TELEMETRY_LOADOUT_SIGNAL_KEYS.has(key));
                     Logger.debug('LogMonitor', `EVENT: ${name} | Age: ${ageSeconds}s | Keys: ${payloadKeys}`);
+                    if (isLoadoutBearingEvent) {
+                        traceTelemetryLoadout('Loadout event received', {
+                            eventName: name,
+                            recordKey,
+                            timestampMs: gameTime,
+                            sessionStartTimeMs: sessionStartTimeRef.current,
+                            allowSessionEvent,
+                            lifecycleActive: telemetryLifecycleActiveRef.current,
+                            payloadKeys: payloadKeys ? payloadKeys.split(',').filter(Boolean) : [],
+                        });
+                    }
                     if (!allowSessionEvent) {
                         Logger.debug('LogMonitor', `Skipping old event: ${name} (age: ${ageSeconds}s, before session start)`);
                         return;
@@ -808,7 +844,7 @@ export const useLogMonitor = (activeUser?: string) => {
                     const sessionStartSignal = !!currentMatchSessionId
                         && !previousMatchSessionId
                         && (name === 'NebClientMatchmakerStateChange' || name === 'NebLoadingScreen');
-                    const sessionEndSignal = !currentMatchSessionId && !!previousMatchSessionId;
+                    const sessionEndSignal = !currentMatchSessionId && !!previousMatchSessionId && !mapStartSignal;
                     const startLifecycleSignal = mapStartSignal || sessionStartSignal;
                     const endLifecycleSignal = mapEndSignal || sessionEndSignal;
                     if (startLifecycleSignal && telemetryLifecycleActiveRef.current && !telemetryDraftMatchIdRef.current) {
@@ -862,29 +898,6 @@ export const useLogMonitor = (activeUser?: string) => {
                         }
                     }
 
-                    const payloadEnvelope = asRecord(e.Payload);
-                    const payloadEnvelopeEvent = asRecord(payloadEnvelope.event);
-                    const payloadEnvelopeLower = asRecord(e.payload);
-                    const payloadEnvelopeLowerEvent = asRecord(payloadEnvelopeLower.event);
-                    const recordKey = [
-                        payload.recordKey,
-                        payload.record_key,
-                        payload.key,
-                        payloadEnvelopeEvent.recordKey,
-                        payloadEnvelopeEvent.record_key,
-                        payloadEnvelopeEvent.key,
-                        payloadEnvelope.recordKey,
-                        payloadEnvelope.record_key,
-                        payloadEnvelope.key,
-                        payloadEnvelopeLowerEvent.recordKey,
-                        payloadEnvelopeLowerEvent.record_key,
-                        payloadEnvelopeLowerEvent.key,
-                        payloadEnvelopeLower.recordKey,
-                        payloadEnvelopeLower.record_key,
-                        payloadEnvelopeLower.key,
-                    ]
-                        .map((value) => String(value || '').trim())
-                        .find(Boolean) || '';
                     const isNebLoadoutSavedEvent = name === 'NebLoadoutSaved';
                     const nebLoadoutSavedPayloadRaw = payloadEnvelopeEvent.loadout;
                     let isStaleNebLoadoutSaved = false;
@@ -1177,113 +1190,107 @@ export const useLogMonitor = (activeUser?: string) => {
                         const canonicalWeaponDb = buildCanonicalGuidLookup(WEAPON_GUIDS);
                         const canonicalEquipmentDb = buildCanonicalGuidLookup(EQUIPMENT_GUIDS);
                         const canonicalPerkDb = buildCanonicalGuidLookup(PERK_GUIDS);
+                        const resolveTelemetrySelection = ({
+                            entityType,
+                            rawGuidValues,
+                            rawValue,
+                            uidDomainMappings,
+                            knownDomainMappings,
+                            guidDomainMappings,
+                            fallbackCatalog,
+                        }: {
+                            entityType: 'Hero' | 'Ship';
+                            rawGuidValues: unknown[];
+                            rawValue: unknown;
+                            uidDomainMappings: Record<string, string>;
+                            knownDomainMappings: Record<string, string>;
+                            guidDomainMappings: Record<string, string>;
+                            fallbackCatalog: string[];
+                        }): string => {
+                            const rawText = String(rawValue || '').trim();
+                            const nameHint = rawText.includes(':')
+                                ? String(rawText.split(':').pop() || '').trim()
+                                : rawText;
+                            const guidCandidates = rawGuidValues
+                                .map((candidate) => normalizeGuid(candidate))
+                                .filter((candidate) => isStableGuid(candidate));
+                            for (const guidCandidate of guidCandidates) {
+                                const guidUpper = guidCandidate.toUpperCase();
+                                const guidLower = guidCandidate.toLowerCase();
+                                const resolvedFromGuid =
+                                    uidDomainMappings[guidCandidate]
+                                    || uidDomainMappings[guidUpper]
+                                    || uidDomainMappings[guidLower]
+                                    || knownDomainMappings[guidCandidate]
+                                    || knownDomainMappings[guidUpper]
+                                    || knownDomainMappings[guidLower]
+                                    || guidDomainMappings[guidCandidate]
+                                    || guidDomainMappings[guidUpper]
+                                    || guidDomainMappings[guidLower];
+                                if (resolvedFromGuid) return resolvedFromGuid;
+
+                                const matchedHint = nameHint ? fuzzyMatchList(nameHint, fallbackCatalog) : null;
+                                if (matchedHint) return matchedHint;
+                                if (nameHint) return nameHint;
+
+                                registerUnknownId(guidCandidate, entityType);
+                                const unknownLabel = `Unknown (${guidCandidate.slice(0, 4)})`;
+                                Logger.warn('LogMonitor', `Unknown ${entityType} GUID: ${guidCandidate} | raw: "${rawValue}" | resolved: "${unknownLabel}"`);
+                                return unknownLabel;
+                            }
+
+                            if (!nameHint) return '';
+                            return fuzzyMatchList(nameHint, fallbackCatalog) || nameHint;
+                        };
 
                         if (allowHeroAndLoadoutSync) {
-                            const rawHeroGuid = getLoadoutField(loadoutData, ['guidhero', 'heroguid', 'guid_hero', 'heroid', 'hero_id']);
-                            const rawHero = getLoadoutField(loadoutData, ['hero', 'heroname', 'hero_name']);
-                            const normalizedHeroGuid = normalizeGuid(rawHeroGuid);
-                            const heroGuid = isStableGuid(normalizedHeroGuid) ? normalizedHeroGuid : undefined;
-                            const heroRawValue = String(rawHero || '');
-                            const heroNameHint = heroRawValue.includes(':')
-                                ? (heroRawValue.split(':').pop() || heroRawValue)
-                                : heroRawValue;
-                            if (heroGuid) {
-                                const heroGuidUpper = heroGuid.toUpperCase();
-                                const heroGuidLower = heroGuid.toLowerCase();
-                                heroName =
-                                    uidMappings.players[heroGuid]
-                                    || uidMappings.players[heroGuidUpper]
-                                    || uidMappings.players[heroGuidLower]
-                                    || knownMappings[heroGuid]
-                                    || knownMappings[heroGuidUpper]
-                                    || knownMappings[heroGuidLower]
-                                    || HERO_GUIDS[heroGuid]
-                                    || HERO_GUIDS[heroGuidUpper]
-                                    || HERO_GUIDS[heroGuidLower];
-
-                                if (!heroName) {
-                                    if (heroNameHint) {
-                                        const matched = fuzzyMatchList(heroNameHint, [...CHARACTERS]);
-                                        if (matched) heroName = matched;
-                                        else heroName = heroNameHint;
-                                    }
-
-                                    if (!heroName) {
-                                        registerUnknownId(heroGuid, 'Hero');
-                                        heroName = `Unknown (${heroGuid.substr(0, 4)})`;
-                                    }
-                                    Logger.warn('LogMonitor', `Unknown Hero GUID: ${heroGuid} | raw: "${rawHero}" | resolved: "${heroName}"`);
-                                }
-
-                                if (heroName && !heroName.startsWith('Unknown')) {
-                                    setActiveHero(heroName, 'telemetry');
-                                    if (heroName !== activeHeroRef.current) {
-                                        Logger.info('LogMonitor', `Auto-selected prospector: ${heroName}`);
-                                    }
-                                }
-                            } else if (heroNameHint) {
-                                const matched = fuzzyMatchList(heroNameHint, [...CHARACTERS]);
-                                heroName = matched || heroNameHint;
-                                if (heroName) {
-                                    setActiveHero(heroName, 'telemetry');
-                                    if (heroName !== activeHeroRef.current) {
-                                        Logger.info('LogMonitor', `Auto-selected prospector from raw telemetry: ${heroName}`);
-                                    }
+                            heroName = resolveTelemetrySelection({
+                                entityType: 'Hero',
+                                rawGuidValues: [
+                                    getLoadoutField(loadoutData, ['guidhero', 'heroguid', 'guid_hero', 'heroid', 'hero_id']),
+                                ],
+                                rawValue: getLoadoutField(loadoutData, ['hero', 'heroname', 'hero_name']),
+                                uidDomainMappings: uidMappings.players,
+                                knownDomainMappings: knownMappings,
+                                guidDomainMappings: HERO_GUIDS,
+                                fallbackCatalog: [...CHARACTERS],
+                            });
+                            if (heroName && !heroName.startsWith('Unknown')) {
+                                traceTelemetryLoadout('Apply telemetry hero', {
+                                    eventName: name,
+                                    hero: heroName,
+                                    source: 'telemetry',
+                                    lifecycleActive: telemetryLifecycleActiveRef.current,
+                                });
+                                setActiveHero(heroName, 'telemetry');
+                                if (heroName !== activeHeroRef.current) {
+                                    Logger.info('LogMonitor', `Auto-selected prospector: ${heroName}`);
                                 }
                             }
                         }
 
-                        const rawShipGuid = getLoadoutField(loadoutData, ['guidship', 'shipguid', 'guid_ship']);
-                        const rawShipId = getLoadoutField(loadoutData, ['shipid', 'ship_id']);
-                        const rawShip = getLoadoutField(loadoutData, ['ship', 'shipname', 'ship_name']);
-                        const shipRawValue = String(rawShip || '');
-                        const shipNameHint = shipRawValue.includes(':')
-                            ? (shipRawValue.split(':').pop() || shipRawValue)
-                            : shipRawValue;
-                        const guidCandidate = normalizeGuid(rawShipGuid || rawShipId);
-                        const shipGuid = isStableGuid(guidCandidate) ? guidCandidate : undefined;
-                        if (shipGuid) {
-                            const shipGuidUpper = shipGuid.toUpperCase();
-                            const shipGuidLower = shipGuid.toLowerCase();
-                            shipName =
-                                uidMappings.ships[shipGuid]
-                                || uidMappings.ships[shipGuidUpper]
-                                || uidMappings.ships[shipGuidLower]
-                                || knownMappings[shipGuid]
-                                || knownMappings[shipGuidUpper]
-                                || knownMappings[shipGuidLower]
-                                || SHIP_GUIDS[shipGuid]
-                                || SHIP_GUIDS[shipGuidUpper]
-                                || SHIP_GUIDS[shipGuidLower];
-
-                            if (!shipName) {
-                                if (shipNameHint) {
-                                    const matched = fuzzyMatchList(shipNameHint, [...SHIPS]);
-                                    if (matched) shipName = matched;
-                                    else shipName = shipNameHint;
-                                }
-
-                                if (!shipName) {
-                                    registerUnknownId(shipGuid, 'Ship');
-                                    shipName = `Unknown (${shipGuid.substr(0, 4)})`;
-                                }
-                                Logger.warn('LogMonitor', `Unknown Ship GUID: ${shipGuid} | raw: "${rawShip}" | resolved: "${shipName}"`);
-                            }
-
-                            if (shipName && !shipName.startsWith('Unknown')) {
-                                setActiveShip(shipName, 'telemetry');
-                                if (shipName !== activeShipRef.current) {
-                                    Logger.info('LogMonitor', `Auto-selected ship: ${shipName}`);
-                                }
-                            }
-                        } else if (shipNameHint) {
-                            const matched = fuzzyMatchList(shipNameHint, [...SHIPS]);
-                            shipName = matched || '';
-                            if (shipName) {
-                                setActiveShip(shipName, 'telemetry');
-                                if (shipName !== activeShipRef.current) {
-                                    Logger.info('LogMonitor', `Auto-selected ship from raw telemetry: ${shipName}`);
-                                }
+                        shipName = resolveTelemetrySelection({
+                            entityType: 'Ship',
+                            rawGuidValues: [
+                                getLoadoutField(loadoutData, ['guidship', 'shipguid', 'guid_ship']),
+                                getLoadoutField(loadoutData, ['shipid', 'ship_id']),
+                            ],
+                            rawValue: getLoadoutField(loadoutData, ['ship', 'shipname', 'ship_name']),
+                            uidDomainMappings: uidMappings.ships,
+                            knownDomainMappings: knownMappings,
+                            guidDomainMappings: SHIP_GUIDS,
+                            fallbackCatalog: [...SHIPS],
+                        });
+                        if (shipName && !shipName.startsWith('Unknown')) {
+                            traceTelemetryLoadout('Apply telemetry ship', {
+                                eventName: name,
+                                ship: shipName,
+                                source: shouldApplySharedShipSelection ? 'shared-ship-selection' : 'telemetry',
+                                lifecycleActive: telemetryLifecycleActiveRef.current,
+                            });
+                            setActiveShip(shipName, 'telemetry');
+                            if (shipName !== activeShipRef.current) {
+                                Logger.info('LogMonitor', `Auto-selected ship: ${shipName}`);
                             }
                         }
                         const collectCandidateStrings = (value: unknown, out: string[], depth = 0) => {
@@ -1505,6 +1512,27 @@ export const useLogMonitor = (activeUser?: string) => {
                         const shouldCommitSharedShipUpdate = shouldApplySharedShipSelection
                             && !!finalShip
                             && finalShip !== currentLoadoutRef.current?.ship;
+                        traceTelemetryLoadout('Resolved loadout ingestion', {
+                            eventName: name,
+                            recordKey,
+                            timestampMs: gameTime,
+                            allowSessionEvent,
+                            shouldApplyLoadout,
+                            shouldApplySharedShipSelection,
+                            loadoutMarkedLocal,
+                            actorIds,
+                            localIds,
+                            actorNames,
+                            localNames,
+                            hero: heroName || null,
+                            ship: shipName || null,
+                            characterWeapons: resolvedProspectorWeapons,
+                            characterEquipment: resolvedProspectorEquipment,
+                            characterPerks: resolvedProspectorPerks,
+                            shouldClearCharacterWeapons,
+                            shouldClearCharacterEquipment,
+                            shouldClearCharacterPerks,
+                        });
                         if (!allowHeroAndLoadoutSync && !shouldCommitSharedShipUpdate) {
                             Logger.debug('LogMonitor', `Skipped unresolved shared ship-selection event: ${name}`);
                             return;
@@ -1538,6 +1566,15 @@ export const useLogMonitor = (activeUser?: string) => {
                             characterPerks: [],
                             perks: [],
                         };
+                        traceTelemetryLoadout('Commit telemetry loadout', {
+                            eventName: name,
+                            matchLifecycleActive: telemetryLifecycleActiveRef.current,
+                            hero: nextLoadout.hero || null,
+                            ship: nextLoadout.ship || null,
+                            characterWeaponCount: nextLoadout.characterWeapons?.length || 0,
+                            characterEquipmentCount: nextLoadout.characterEquipment?.length || 0,
+                            characterPerkCount: nextLoadout.characterPerks?.length || 0,
+                        });
                         setCurrentLoadout(nextLoadout);
                         const replacedLoadoutNames = new Set([
                             ...(currentLoadoutRef.current?.weapons || []),
@@ -1564,6 +1601,11 @@ export const useLogMonitor = (activeUser?: string) => {
                             if (safeCount > 0) {
                                 nextActiveWeapons[name] = safeCount;
                             }
+                        });
+                        traceTelemetryLoadout('Commit telemetry active weapons', {
+                            eventName: name,
+                            activeWeaponCount: Object.keys(nextActiveWeapons).length,
+                            persistedHero: nextLoadout.hero || null,
                         });
                         setActiveWeapons(nextActiveWeapons);
                         if (!telemetryDraftMatchIdRef.current && telemetryLifecycleActiveRef.current) {
@@ -1612,7 +1654,7 @@ export const useLogMonitor = (activeUser?: string) => {
             unsubStatus();
             unsubData();
         };
-    }, [appendTelemetryLoadoutSave, clearTelemetryDerivedLoadout, createTelemetryDraftIfNeeded, finalizeTelemetryDraft, resetSelectionDefaultsForNewMatch, setActiveHero, setActiveShip, setActiveWeapons, setCurrentLoadout, setIsMatchInProgress, setLastActivity, setMatchStartTime, setOverlayPhase, setShowWizard, setTelemetryStatus, setTimeMin, setTimeSec, setToast, startupLifecycleEstablished, updatePlayerIdMapping, updateTelemetryDraftConsistency, updateTelemetryDraftFromLoadout, clearTelemetryDetected]);
+    }, [appendTelemetryLoadoutSave, createTelemetryDraftIfNeeded, finalizeTelemetryDraft, resetSelectionDefaultsForNewMatch, setActiveHero, setActiveShip, setActiveWeapons, setCurrentLoadout, setIsMatchInProgress, setLastActivity, setMatchStartTime, setOverlayPhase, setShowWizard, setTelemetryStatus, setTimeMin, setTimeSec, setToast, startupLifecycleEstablished, updatePlayerIdMapping, updateTelemetryDraftConsistency, updateTelemetryDraftFromLoadout, clearTelemetryDetected]);
 
     return { logFeed, logStatus: telemetryStatus };
 };

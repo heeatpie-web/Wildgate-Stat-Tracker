@@ -10,6 +10,7 @@ import {
   getSmartCaptureFriendlyTeamName,
   getSmartCaptureWizardInitialTab,
   getRosterCandidateSuggestions,
+  resolveOpenWizardSeed,
   resolveFriendlyTeamLabel,
   shouldSyncOcrApplyToCurrentSession,
 } from './SmartCapturesPanel';
@@ -247,6 +248,95 @@ describe('commitPendingMatchDataForWizard', () => {
     );
 
     expect(committed).toBe(false);
+  });
+});
+
+describe('resolveOpenWizardSeed', () => {
+  const baseMatch = {
+    id: 99,
+    timestamp: 1_700_000_000_000,
+    date: '1/1/2024',
+    mode: 'Artifact Brawl',
+    player: 'Pilot',
+    teammates: ['Wingman'],
+    opponents: ['Enemy'],
+    hero: 'Adrian',
+    ship: 'Hunter',
+    reachModifiers: [],
+    kills: {},
+    artifacts: ['capture.png'],
+    result: 'Ongoing',
+    subType: 'Telemetry Draft',
+    ocrState: 'reviewing',
+    loadout: {
+      hero: 'Adrian',
+      ship: 'Hunter',
+      weapons: ['Hunter Cannon'],
+      equipment: ['Repair Kit'],
+      characterWeapons: ['Pulse Rifle'],
+      characterEquipment: ['Shield'],
+    },
+  } as Match;
+
+  it('prefers the pending draft loadout when reopening the same match draft', () => {
+    const pendingDraft: Partial<Match> = {
+      id: 99,
+      hero: 'Ion',
+      ship: 'Scout',
+      loadout: {
+        hero: 'Ion',
+        ship: 'Scout',
+        weapons: ['Scout Railgun'],
+        equipment: ['Cloak'],
+        characterWeapons: ['Voltaic Pistol'],
+        characterEquipment: ['Pulse Scanner'],
+      },
+    };
+
+    const resolved = resolveOpenWizardSeed({
+      liveMatch: baseMatch,
+      pendingDraft,
+      currentLoadout: {
+        hero: 'Kae',
+        ship: 'Privateer',
+        weapons: ['Privateer Cannon'],
+        equipment: ['Med Bay'],
+        characterWeapons: ['Needler'],
+        characterEquipment: ['Stim Kit'],
+      },
+    });
+
+    expect(resolved.shouldReusePendingDraft).toBe(true);
+    expect(resolved.preferredLoadout).toMatchObject(pendingDraft.loadout as Record<string, unknown>);
+    expect(resolved.latestMatch.hero).toBe('Ion');
+    expect(resolved.latestMatch.ship).toBe('Scout');
+    expect(resolved.latestMatch.loadout).toMatchObject(pendingDraft.loadout as Record<string, unknown>);
+  });
+
+  it('falls back to the cached telemetry loadout when reopening a telemetry draft without a pending loadout', () => {
+    const telemetryLoadout = {
+      hero: 'Kae',
+      ship: 'Privateer',
+      weapons: ['Privateer Cannon'],
+      equipment: ['Med Bay'],
+      characterWeapons: ['Needler'],
+      characterEquipment: ['Stim Kit'],
+    };
+
+    const resolved = resolveOpenWizardSeed({
+      liveMatch: baseMatch,
+      pendingDraft: {
+        id: 99,
+        teammates: ['Wingman'],
+      },
+      currentLoadout: telemetryLoadout,
+    });
+
+    expect(resolved.isTelemetryDraftMatch).toBe(true);
+    expect(resolved.preferredLoadout).toMatchObject(telemetryLoadout);
+    expect(resolved.latestMatch.hero).toBe('Kae');
+    expect(resolved.latestMatch.ship).toBe('Privateer');
+    expect(resolved.latestMatch.loadout).toMatchObject(telemetryLoadout);
   });
 });
 

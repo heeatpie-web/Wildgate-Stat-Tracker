@@ -55,6 +55,12 @@ const storeState = {
   setResultOcrFlowMode: vi.fn(),
   ocrAutoOpenAfterRerun: false,
   setOcrAutoOpenAfterRerun: vi.fn(),
+  autoSequenceOnCapture: false,
+  setAutoSequenceOnCapture: vi.fn(),
+  autoCaptureSendKeypresses: true,
+  setAutoCaptureSendKeypresses: vi.fn(),
+  autoCaptureWaitMultiplier: 1,
+  setAutoCaptureWaitMultiplier: vi.fn(),
   showSmartCaptureInHeader: true,
   setShowSmartCaptureInHeader: vi.fn(),
   tipsEnabled: true,
@@ -180,6 +186,7 @@ describe('SettingsModal', () => {
     uiState.isOverlayMode = false;
     storeState.captureMode = 'auto';
     storeState.resultOcrFlowMode = 'prompt';
+    storeState.autoSequenceOnCapture = false;
   });
 
   it('renders a full-screen settings screen with per-section navigation', async () => {
@@ -221,6 +228,30 @@ describe('SettingsModal', () => {
     const grid = screen.getByTestId('settings-quick-setup-grid');
     expect(grid).toHaveStyle({ gridTemplateColumns: 'repeat(auto-fit, minmax(16rem, 1fr))' });
     expect(screen.getByText('Capture Defaults')).toBeInTheDocument();
+  });
+
+  it('lets users toggle F10 auto-sequence from the capture quick setup grid', async () => {
+    const { SettingsModal } = await import('./SettingsModal');
+    render(<SettingsModal />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^capture$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /single capture/i }));
+
+    expect(storeState.setAutoSequenceOnCapture).toHaveBeenCalledWith(true);
+  });
+
+  it('surfaces auto-capture speed and keypress controls in capture settings', async () => {
+    const { SettingsModal } = await import('./SettingsModal');
+    render(<SettingsModal />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^capture$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /send game keypresses/i }));
+    fireEvent.change(screen.getByLabelText(/capture speed/i), {
+      target: { value: '2.4' },
+    });
+
+    expect(storeState.setAutoCaptureSendKeypresses).toHaveBeenCalledWith(false);
+    expect(storeState.setAutoCaptureWaitMultiplier).toHaveBeenCalledWith(2.4);
   });
 });
 

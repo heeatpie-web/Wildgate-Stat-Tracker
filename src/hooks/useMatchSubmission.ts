@@ -11,12 +11,18 @@ import { capTeammateNames } from '../utils/teamLimits';
 import { evaluateTelemetryConsistencyChecks, formatDurationOffset } from '../utils/telemetryConsistency';
 import { sanitizeLoadout } from '../utils/loadout';
 import {
+    getRosterCandidatePruneIds,
+    getRosterCandidatePruneIdsForAcceptedName,
+} from '../utils/pendingReviewUtils';
+import { buildRosterAutoPopulateDecisions } from '../utils/rosterAutoPopulate';
+import {
     extractArtifactSourceFromReachModifiers,
     stripArtifactSourceModifiers,
 } from '../utils/artifactSource';
 
 const DEFAULT_ARTIFACT_LOOKBACK_MS = 10 * 60 * 1000;
 const IMAGE_ARTIFACT_PATTERN = /\.(png|jpe?g|webp|bmp|gif)$/i;
+const IS_LOADOUT_TRACE_ENABLED = import.meta.env.DEV || process.env.NODE_ENV === 'test';
 const canLaunchConfetti = () => {
     if (typeof window === 'undefined' || typeof document === 'undefined') return false;
     const userAgent = String(window.navigator?.userAgent || '').toLowerCase();
@@ -111,6 +117,110 @@ const resolveExistingSubmissionMatch = ({
         .sort((left, right) => Number(right.timestamp || 0) - Number(left.timestamp || 0))[0];
 };
 
+const applyRosterAutoPopulationForSavedMatch = (match: Match) => {
+    const store = useAppStore.getState();
+    if (!store.autoPopulateRosterOnSave) {
+        return { added: 0, merged: 0, reviewed: 0, refreshed: 0 };
+    }
+
+    const decisions = buildRosterAutoPopulateDecisions({
+        match,
+        pilotRegistry: store.pilotRegistry,
+        pendingReviews: store.pendingReviews,
+        dismissedCandidateKeys: store.dismissedRosterCandidateKeys,
+    });
+    if (decisions.length === 0) {
+        return { added: 0, merged: 0, reviewed: 0, refreshed: 0 };
+    }
+
+    const seenAt = Number(match.timestamp || Date.now());
+    const firstSeenMatchId = String(match.id || '');
+    const buildDetectedMeta = (confidence: number) => ({
+        origin: 'ocr' as const,
+        status: 'detected' as const,
+        firstSeenAt: seenAt,
+        lastSeenAt: seenAt,
+        lastConfidence: confidence,
+        firstSeenMatchId,
+    });
+
+    let added = 0;
+    let merged = 0;
+    let reviewed = 0;
+    let refreshed = 0;
+
+    decisions.forEach((decision) => {
+        const currentState = useAppStore.getState();
+        switch (decision.type) {
+            case 'exact': {
+                const acceptedName = decision.bestMatch || decision.name;
+                currentState.addToRegistry(acceptedName, buildDetectedMeta(decision.confidence));
+                const pruneIds = getRosterCandidatePruneIdsForAcceptedName({
+                    pendingReviews: currentState.pendingReviews,
+                    acceptedName,
+                });
+                if (pruneIds.length > 0) {
+                    currentState.removePendingReviews(pruneIds);
+                }
+                refreshed += 1;
+                break;
+            }
+            case 'add': {
+                currentState.addToRegistry(decision.name, buildDetectedMeta(decision.confidence));
+                const pruneIds = getRosterCandidatePruneIdsForAcceptedName({
+                    pendingReviews: currentState.pendingReviews,
+                    acceptedName: decision.name,
+                });
+                if (pruneIds.length > 0) {
+                    currentState.removePendingReviews(pruneIds);
+                }
+                added += 1;
+                break;
+            }
+            case 'merge': {
+                const targetName = String(decision.bestMatch || '').trim();
+                if (!targetName) break;
+                currentState.recordOcrAliasCorrection(decision.name, targetName, {
+                    context: 'matchstats',
+                    confidenceWeight: Math.min(1, Math.max(0.6, Math.max(decision.confidence, decision.bestScore) / 100)),
+                });
+                currentState.addToRegistry(targetName, buildDetectedMeta(decision.confidence));
+                const pruneIds = getRosterCandidatePruneIds({
+                    pendingReviews: currentState.pendingReviews,
+                    rawName: decision.name,
+                    canonicalTargetKey: targetName,
+                });
+                if (pruneIds.length > 0) {
+                    currentState.removePendingReviews(pruneIds);
+                }
+                merged += 1;
+                break;
+            }
+            case 'review': {
+                currentState.addPendingReview({
+                    id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
+                    type: 'roster_candidate',
+                    value: decision.name,
+                    originalConfidence: decision.confidence,
+                    context: 'Match Save',
+                    bestMatch: decision.bestMatch || undefined,
+                    bestScore: decision.bestScore || undefined,
+                    suggestions: decision.suggestions,
+                    canonicalTargetKey: decision.canonicalTargetKey || undefined,
+                    source: 'ocr',
+                });
+                reviewed += 1;
+                break;
+            }
+            case 'ignore':
+            default:
+                break;
+        }
+    });
+
+    return { added, merged, reviewed, refreshed };
+};
+
 export const useMatchSubmission = () => {
     const {
         addMatch,
@@ -156,6 +266,17 @@ export const useMatchSubmission = () => {
     }, []);
 
     const clearSubmissionState = useCallback(() => {
+        if (IS_LOADOUT_TRACE_ENABLED) {
+            const state = useAppStore.getState();
+            Logger.debug?.('MatchSubmission', 'clearSubmissionState', {
+                activeHero: state.activeHero,
+                activeShip: state.activeShip,
+                currentLoadoutHero: state.currentLoadout?.hero || null,
+                currentLoadoutShip: state.currentLoadout?.ship || null,
+                activeWeaponCount: Object.keys(state.activeWeapons || {}).length,
+                pendingMatchId: Number(state.pendingMatchData?.id || 0) || null,
+            });
+        }
         setShowWizard(null);
         setPendingMatchData(null);
         setPendingPlacement(null);
@@ -546,6 +667,7 @@ export const useMatchSubmission = () => {
             } else {
                 addMatch(newMatch);
             }
+            applyRosterAutoPopulationForSavedMatch(newMatch);
             await StorageService.flush();
             const totalDurationSecs = parseDurationSecs(finalTime);
             const totalDurationMs = totalDurationSecs > 0 ? totalDurationSecs * 1000 : 0;
@@ -813,6 +935,7 @@ export const useMatchSubmission = () => {
             } else {
                 addMatch(savedMatch);
             }
+            applyRosterAutoPopulationForSavedMatch(savedMatch);
             await StorageService.flush();
 
             clearSubmissionState();

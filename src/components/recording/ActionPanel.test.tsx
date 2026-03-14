@@ -57,6 +57,8 @@ const smartCaptureState = {
 
 const smartCaptureActions = {
   capture: vi.fn().mockResolvedValue(undefined),
+  captureOnly: vi.fn().mockResolvedValue(null),
+  processStoredImage: vi.fn().mockResolvedValue(undefined),
   processAllStored: vi.fn().mockResolvedValue(undefined),
   clearError: vi.fn(),
   dismissPendingData: vi.fn(),
@@ -65,6 +67,8 @@ const smartCaptureActions = {
 };
 
 const initiateSubmission = vi.fn();
+const sendGameUiActionMock = vi.fn().mockResolvedValue({ success: true });
+const waitForGameScreenMock = vi.fn().mockResolvedValue({ success: true });
 
 const appStoreState = {
   ocrMode: 'both',
@@ -110,6 +114,11 @@ vi.mock('../../hooks/useMatchSubmission', () => ({
   }),
 }));
 
+vi.mock('../../utils/electronBridge', () => ({
+  sendGameUiAction: (...args: unknown[]) => sendGameUiActionMock(...args),
+  waitForGameScreen: (...args: unknown[]) => waitForGameScreenMock(...args),
+}));
+
 vi.mock('../../store/useAppStore', () => ({
   useAppStore: useAppStoreMock,
 }));
@@ -120,6 +129,7 @@ vi.mock('../SessionTimer', () => ({
 
 describe('ActionPanel', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     Object.assign(gameData, {
       pendingReviews: [],
       detectedUnknowns: {},
@@ -153,10 +163,23 @@ describe('ActionPanel', () => {
     appStoreState.matches = [];
     appStoreState.resetMatchTrackingForNewMatch.mockClear();
     appStoreState.resetMatchMetricsForNewMatch.mockClear();
-    smartCaptureActions.getPendingData.mockImplementation(() => smartCaptureState.pendingData);
     uiState.smartCaptureRequest = null;
-
-    vi.clearAllMocks();
+    smartCaptureActions.capture.mockReset().mockResolvedValue(undefined);
+    smartCaptureActions.captureOnly.mockReset().mockResolvedValue({
+      filePath: 'capture-default.png',
+      filename: 'capture-default.png',
+      timestamp: Date.now(),
+      matchId: null,
+      ocrProcessed: false,
+    });
+    smartCaptureActions.processStoredImage.mockReset().mockResolvedValue(undefined);
+    smartCaptureActions.processAllStored.mockReset().mockResolvedValue(undefined);
+    smartCaptureActions.clearError.mockReset();
+    smartCaptureActions.dismissPendingData.mockReset();
+    smartCaptureActions.getPendingData.mockReset().mockImplementation(() => smartCaptureState.pendingData);
+    smartCaptureActions.reanalyzeCaptures.mockReset();
+    sendGameUiActionMock.mockReset().mockResolvedValue({ success: true });
+    waitForGameScreenMock.mockReset().mockResolvedValue({ success: true });
   });
 
   it('shows match recording header without redundant capture guidance', async () => {
@@ -296,6 +319,87 @@ describe('ActionPanel', () => {
       expect(smartCaptureActions.capture).toHaveBeenCalledWith('TestPilot', 42);
     });
     expect(uiState.clearSmartCaptureRequest).toHaveBeenCalledWith('header_1');
+  });
+
+  it('routes shared hotkey smart capture requests without a match to the active telemetry draft', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    gameData.isMatchInProgress = true;
+    gameData.matches = [{
+      id: 901,
+      subType: 'Telemetry Draft',
+      timestamp: Date.now(),
+      player: 'TestPilot',
+    }];
+    appStoreState.pendingMatchData = { id: 77 };
+    appStoreState.matches = gameData.matches;
+    uiState.smartCaptureRequest = {
+      requestId: 'hotkey_1',
+      activeUser: 'TestPilot',
+      matchId: null,
+      source: 'global-hotkey',
+      behavior: 'single',
+    };
+
+    render(<ActionPanel />);
+
+    await waitFor(() => {
+      expect(smartCaptureActions.capture).toHaveBeenCalledWith('TestPilot', 901);
+    });
+    expect(uiState.clearSmartCaptureRequest).toHaveBeenCalledWith('hotkey_1');
+  });
+
+  it('runs the F10 auto-sequence smart capture flow when requested', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    uiState.smartCaptureRequest = {
+      requestId: 'auto_1',
+      activeUser: 'TestPilot',
+      matchId: 42,
+      source: 'global-hotkey',
+      behavior: 'auto-sequence',
+    };
+    smartCaptureActions.captureOnly
+      .mockResolvedValueOnce({
+        filePath: 'map.png',
+        filename: 'map.png',
+        timestamp: Date.now(),
+        matchId: 42,
+        ocrProcessed: false,
+      })
+      .mockResolvedValueOnce({
+        filePath: 'crew.png',
+        filename: 'crew.png',
+        timestamp: Date.now(),
+        matchId: 42,
+        ocrProcessed: false,
+      });
+
+    render(<ActionPanel />);
+
+    await waitFor(() => {
+      expect(sendGameUiActionMock).toHaveBeenNthCalledWith(1, 'open-tactical-map');
+      expect(waitForGameScreenMock).toHaveBeenNthCalledWith(1, 'tactical_map', expect.objectContaining({
+        activeUser: 'TestPilot',
+        ocrMode: 'both',
+      }));
+      expect(smartCaptureActions.captureOnly).toHaveBeenNthCalledWith(1, 42);
+      expect(smartCaptureActions.processStoredImage).toHaveBeenNthCalledWith(1, 'map.png', 'TestPilot');
+      expect(sendGameUiActionMock).toHaveBeenNthCalledWith(2, 'open-crew-hub');
+      expect(waitForGameScreenMock).toHaveBeenNthCalledWith(2, 'crew_hub', expect.objectContaining({
+        activeUser: 'TestPilot',
+        ocrMode: 'both',
+      }));
+      expect(smartCaptureActions.captureOnly).toHaveBeenNthCalledWith(2, 42);
+      expect(smartCaptureActions.processStoredImage).toHaveBeenNthCalledWith(2, 'crew.png', 'TestPilot');
+    });
+
+    await waitFor(() => {
+      expect(sendGameUiActionMock).toHaveBeenNthCalledWith(3, 'close-current-ui');
+    });
+    expect(uiState.clearSmartCaptureRequest).toHaveBeenCalledWith('auto_1');
+    expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'Auto-capture complete - Map + Crew Hub captured',
+      type: 'success',
+    }));
   });
 
   it('routes new captures to the active telemetry draft instead of a stale pending review during an in-progress match', async () => {

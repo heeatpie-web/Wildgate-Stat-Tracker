@@ -387,14 +387,24 @@ async function detectTeamColorBarBelow(imageBuffer, bbox, scale = 1, sharpModule
   // roughly aligned with the player name X position, which contaminates the average color.
   // Sample AT and to the RIGHT of the player name first — that's where the bar has solid
   // fill with no text overlay. Fall back leftward only as a last resort.
+  const rightStep = Math.max(sampleWidth * 0.65, textHeight * 2.5);
+  const leftStep = Math.max(sampleWidth * 0.85, textHeight * 3.2);
+  const verticalStep = Math.max(2, sampleHeight * 0.4);
   const xPositions = [
-    Math.max(0, Math.floor(origBbox.x0)),         // at name start — bar is typically here
-    Math.max(0, Math.floor(origBbox.x0 + 60)),    // slightly right — clean solid fill
-    Math.max(0, Math.floor(origBbox.x0 + 120)),   // further right
-    Math.max(0, Math.floor(origBbox.x0 - 80)),    // left fallback
-    Math.max(0, Math.floor(origBbox.x0 - 160)),   // far left fallback
+    Math.max(0, Math.floor(origBbox.x0)),
+    Math.max(0, Math.floor(origBbox.x0 + rightStep)),
+    Math.max(0, Math.floor(origBbox.x0 + rightStep * 2)),
+    Math.max(0, Math.floor(origBbox.x0 - leftStep)),
+    Math.max(0, Math.floor(origBbox.x0 - leftStep * 2)),
   ];
-  const yOffsets = [0, 6, -6, 12, -12, 18];
+  const yOffsets = [
+    0,
+    Math.round(verticalStep),
+    -Math.round(verticalStep),
+    Math.round(verticalStep * 2),
+    -Math.round(verticalStep * 2),
+    Math.round(verticalStep * 3),
+  ];
 
   // Collect ALL samples and return the highest-confidence result.
   // Early-exit on first match would cause a dim edge pixel (e.g. pinkish s=36%)

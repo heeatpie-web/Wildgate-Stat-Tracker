@@ -10,8 +10,11 @@
 
 const { detectBadgeColorNearText, detectColorInRegion } = require('./colorUtils.cjs');
 const HAZARD_CATALOG = require('./hazardCatalog.json');
+const REFERENCE_WIDTH = 1920;
+const REFERENCE_HEIGHT = 1080;
 
 /**
+ * // LAYOUT-DEPENDENT
  * Screen layout constants (percentage-based)
  */
 const LAYOUT = {
@@ -115,6 +118,8 @@ function resolveMapLayout(layoutOverrides) {
   const anchors = (source.__anchors && typeof source.__anchors === 'object') ? source.__anchors : null;
   if (anchors?.enemyShipsHeaderY != null) {
     const headerY = Math.max(0, Math.min(1, Number(anchors.enemyShipsHeaderY)));
+    // LAYOUT-DEPENDENT: these normalized slot windows assume the tactical-map
+    // enemy ship rows stack evenly below the ENEMY SHIPS header.
     const slotH = 0.105;
     const slotGap = 0.006;
     const firstY = Math.max(0, headerY + 0.02);
@@ -132,6 +137,40 @@ function resolveMapLayout(layoutOverrides) {
     resolved.HAZARDS.yMax = Math.min(1, headerY + 0.55);
   }
   return resolved;
+}
+
+function getGeometryScale(geometry, axis = 'y', fallback = 1) {
+  const key = axis === 'x' ? 'ocrScaleX' : 'ocrScaleY';
+  const value = Number(geometry?.[key]);
+  if (Number.isFinite(value) && value > 0) return value;
+  const fallbackValue = Number(fallback);
+  if (Number.isFinite(fallbackValue) && fallbackValue > 0) return fallbackValue;
+  return 1;
+}
+
+function scaleReferencePx(referencePx, geometry, axis = 'y', fallback = 1) {
+  const value = Number(referencePx);
+  if (!Number.isFinite(value) || value <= 0) return 1;
+  return Math.max(1, Math.round(value * getGeometryScale(geometry, axis, fallback)));
+}
+
+function formatLayoutBounds(bounds, imageWidth, imageHeight) {
+  return {
+    x: [
+      Math.round(imageWidth * bounds.xMin),
+      Math.round(imageWidth * bounds.xMax),
+    ],
+    y: [
+      Math.round(imageHeight * bounds.yMin),
+      Math.round(imageHeight * bounds.yMax),
+    ],
+  };
+}
+
+function logMapLayoutDebug(enabled, label, payload) {
+  if (!enabled) return;
+  const message = typeof payload === 'string' ? payload : JSON.stringify(payload);
+  console.log(`[MapScreen][Layout] ${label}: ${message}`);
 }
 
 /**
@@ -367,6 +406,25 @@ const PLAYER_NOISE_WORDS = new Set([
 async function extractMapScreen(imageBuffer, ocrResult, imageWidth, imageHeight, layoutOverrides = null, options = null) {
   console.log('[MapScreen] Starting extraction');
   const layout = resolveMapLayout(layoutOverrides);
+  const extractorOptions = (options && typeof options === 'object') ? options : {};
+  const geometry = extractorOptions.geometry || null;
+  const debugLayout = extractorOptions.debugLayout === true;
+  logMapLayoutDebug(debugLayout, 'geometry', {
+    original: geometry ? `${geometry.originalWidth}x${geometry.originalHeight}` : null,
+    ocrInput: geometry ? `${geometry.ocrWidth}x${geometry.ocrHeight}` : `${imageWidth}x${imageHeight}`,
+    aspectProfile: geometry?.aspectProfile || 'unknown',
+    sourceScaleX: Number(geometry?.sourceScaleX || (imageWidth / REFERENCE_WIDTH)).toFixed(4),
+    sourceScaleY: Number(geometry?.sourceScaleY || (imageHeight / REFERENCE_HEIGHT)).toFixed(4),
+    ocrScaleX: Number(geometry?.ocrScaleX || 1).toFixed(4),
+    ocrScaleY: Number(geometry?.ocrScaleY || 1).toFixed(4),
+  });
+  logMapLayoutDebug(debugLayout, 'regions', {
+    yourShip: formatLayoutBounds(layout.YOUR_SHIP, imageWidth, imageHeight),
+    enemyShips: formatLayoutBounds(layout.ENEMY_SHIPS, imageWidth, imageHeight),
+    enemyShips2: formatLayoutBounds(layout.ENEMY_SHIPS2, imageWidth, imageHeight),
+    hazards: formatLayoutBounds(layout.HAZARDS, imageWidth, imageHeight),
+    players: formatLayoutBounds(layout.PLAYERS, imageWidth, imageHeight),
+  });
 
   const result = {
     screenType: 'mapScreen',
@@ -419,7 +477,8 @@ async function extractMapScreen(imageBuffer, ocrResult, imageWidth, imageHeight,
       imageWidth,
       imageHeight,
       layout,
-      options?.yourShipRegionWords
+      extractorOptions.yourShipRegionWords,
+      extractorOptions
     );
 
     // Step 2: Extract ENEMY SHIPS info
@@ -431,14 +490,15 @@ async function extractMapScreen(imageBuffer, ocrResult, imageWidth, imageHeight,
       imageWidth,
       imageHeight,
       layout,
-      result.yourShip?.shipType || ''
+      result.yourShip?.shipType || '',
+      extractorOptions
     );
 
     // Step 3: Extract HAZARDS
-    result.hazards = extractHazards(text, words, imageWidth, imageHeight, layout);
+    result.hazards = extractHazards(text, words, imageWidth, imageHeight, layout, extractorOptions);
 
     // Step 4: Extract player list (bottom-left)
-    result.players = extractPlayerList(words, imageWidth, imageHeight, layout);
+    result.players = extractPlayerList(words, imageWidth, imageHeight, layout, extractorOptions);
 
     // Calculate confidence
     let confPoints = 0;
@@ -473,7 +533,8 @@ async function extractYourShip(
   imageWidth,
   imageHeight,
   layout = LAYOUT,
-  yourShipRegionWords = null
+  yourShipRegionWords = null,
+  options = null
 ) {
   console.log('[MapScreen] Extracting YOUR SHIP');
 
@@ -596,8 +657,10 @@ async function extractYourShip(
 /**
  * Extract ENEMY SHIPS info from top-right region
  */
-async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, imageHeight, layout = LAYOUT, yourShipType = '') {
+async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, imageHeight, layout = LAYOUT, yourShipType = '', options = null) {
   console.log('[MapScreen] Extracting ENEMY SHIPS');
+  const geometry = options?.geometry || null;
+  const debugLayout = options?.debugLayout === true;
 
   let enemyShips = [];
   const enemyRegions = [
@@ -612,6 +675,11 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
     yMin: imageHeight * region.yMin,
     yMax: imageHeight * region.yMax,
   }));
+  logMapLayoutDebug(debugLayout, 'enemyShipSlots', boundsList.map((bounds, index) => ({
+    slot: index + 1,
+    x: [Math.round(bounds.xMin), Math.round(bounds.xMax)],
+    y: [Math.round(bounds.yMin), Math.round(bounds.yMax)],
+  })));
 
   const toTitle = (raw) => String(raw || '')
     .split(' ')
@@ -817,7 +885,9 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
           if (hazardsHeaderY == null || y < hazardsHeaderY) hazardsHeaderY = y;
         }
       }
-      const maxEnemyY = (hazardsHeaderY != null ? hazardsHeaderY - Math.max(6, imageHeight * 0.01) : imageHeight * 0.72);
+      const maxEnemyY = hazardsHeaderY != null
+        ? hazardsHeaderY - Math.max(scaleReferencePx(6, geometry, 'y', 1), imageHeight * 0.01)
+        : imageHeight * 0.72;
       const upperWords = rightBandWords.filter((w) => {
         const cy = (w.bbox.y0 + w.bbox.y1) / 2;
         return cy >= boundsList[0].yMin && cy <= maxEnemyY;
@@ -875,8 +945,15 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
 
       const paired = [...immediate];
       const usedShipIdx = new Set();
-      const maxPairGap = Math.max(24, imageHeight * 0.09);
-      for (const teamLine of teamOnlyLines.sort((a, b) => a.y - b.y)) {
+      const usedTeamOnlyIdx = new Set();
+      const maxPairGap = Math.max(scaleReferencePx(24, geometry, 'y', 1), imageHeight * 0.09);
+      logMapLayoutDebug(debugLayout, 'enemyShipPairing', {
+        maxPairGap: Number(maxPairGap.toFixed(2)),
+        hazardsHeaderY: hazardsHeaderY != null ? Math.round(hazardsHeaderY) : null,
+      });
+      const sortedTeamOnlyLines = [...teamOnlyLines].sort((a, b) => a.y - b.y);
+      for (let teamIdx = 0; teamIdx < sortedTeamOnlyLines.length; teamIdx += 1) {
+        const teamLine = sortedTeamOnlyLines[teamIdx];
         let bestIdx = -1;
         let bestGap = Number.POSITIVE_INFINITY;
         for (let i = 0; i < shipOnlyLines.length; i++) {
@@ -890,6 +967,7 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
         }
         if (bestIdx >= 0) {
           usedShipIdx.add(bestIdx);
+          usedTeamOnlyIdx.add(teamIdx);
           paired.push({
             teamName: teamLine.teamOnly,
             shipType: toTitle(shipOnlyLines[bestIdx].foundShip),
@@ -899,8 +977,31 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
         }
       }
 
+      const orphanMinGap = Math.max(scaleReferencePx(32, geometry, 'y', 1), imageHeight * 0.04);
+      const orphanTeamRows = [];
+      for (let teamIdx = 0; teamIdx < sortedTeamOnlyLines.length; teamIdx += 1) {
+        if (usedTeamOnlyIdx.has(teamIdx)) continue;
+        const teamLine = sortedTeamOnlyLines[teamIdx];
+        const nearestPairedDist = paired.reduce((best, item) => {
+          const dist = Math.abs(Number(item?.y || 0) - Number(teamLine?.y || 0));
+          return dist < best ? dist : best;
+        }, Number.POSITIVE_INFINITY);
+        if (nearestPairedDist <= orphanMinGap) continue;
+        orphanTeamRows.push({
+          teamName: teamLine.teamOnly,
+          shipType: 'Unknown',
+          y: teamLine.y,
+          firstWord: teamLine.firstWord,
+        });
+      }
+      logMapLayoutDebug(debugLayout, 'enemyShipOrphans', orphanTeamRows.map((item) => ({
+        teamName: item.teamName,
+        y: Math.round(item.y),
+        shipType: item.shipType,
+      })));
+
       const out = [];
-      for (const item of paired) {
+      for (const item of [...paired, ...orphanTeamRows]) {
         const teamName = sanitizeExtractedTeamName(item.teamName, item.shipType);
         if (!teamName || isNoiseTeamLabel(teamName)) continue;
         let slotColor = 'unknown';
@@ -1220,7 +1321,8 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
 /**
  * Extract hazards from text
  */
-function extractHazards(text, words = [], imageWidth = 0, imageHeight = 0, layout = LAYOUT) {
+function extractHazards(text, words = [], imageWidth = 0, imageHeight = 0, layout = LAYOUT, options = null) {
+  const geometry = options?.geometry || null;
   const hazards = new Set();
   const exactMatchedPatterns = new Set();
   const scanForHazards = (sourceText) => {
@@ -1278,6 +1380,12 @@ function extractHazards(text, words = [], imageWidth = 0, imageHeight = 0, layou
     const scanYMax = headerY != null
       ? headerY + imageHeight * 0.55
       : imageHeight * 0.90;
+    logMapLayoutDebug(options?.debugLayout === true, 'hazardWindow', {
+      headerY: headerY != null ? Math.round(headerY) : null,
+      scanYMin: Math.round(scanYMin),
+      scanYMax: Math.round(scanYMax),
+      minimumHeaderOffsetPx: scaleReferencePx(6, geometry, 'y', 1),
+    });
 
     const regionWords = rightXWords.filter(w => {
       const cy = (w.bbox.y0 + w.bbox.y1) / 2;
@@ -1299,7 +1407,8 @@ function extractHazards(text, words = [], imageWidth = 0, imageHeight = 0, layou
 /**
  * Extract player list from bottom-left region
  */
-function extractPlayerList(words, imageWidth, imageHeight, layout = LAYOUT) {
+function extractPlayerList(words, imageWidth, imageHeight, layout = LAYOUT, options = null) {
+  const geometry = options?.geometry || null;
   const playersLayout = layout.PLAYERS || layout.players || LAYOUT.PLAYERS;
   const broadBounds = {
     xMin: imageWidth * playersLayout.xMin,
@@ -1334,8 +1443,14 @@ function extractPlayerList(words, imageWidth, imageHeight, layout = LAYOUT) {
     }
   };
 
-  collectCandidates(groupWordsIntoLinesWithThreshold(focusedWords, Math.max(10, imageHeight * 0.012)));
-  collectCandidates(groupWordsIntoLinesWithThreshold(broadWords, Math.max(14, imageHeight * 0.016)));
+  const focusedThreshold = Math.max(scaleReferencePx(10, geometry, 'y', 1), imageHeight * 0.012);
+  const broadThreshold = Math.max(scaleReferencePx(14, geometry, 'y', 1), imageHeight * 0.016);
+  logMapLayoutDebug(options?.debugLayout === true, 'playerListThresholds', {
+    focusedThreshold: Number(focusedThreshold.toFixed(2)),
+    broadThreshold: Number(broadThreshold.toFixed(2)),
+  });
+  collectCandidates(groupWordsIntoLinesWithThreshold(focusedWords, focusedThreshold));
+  collectCandidates(groupWordsIntoLinesWithThreshold(broadWords, broadThreshold));
 
   return dedupePlayerNames(candidates);
 }

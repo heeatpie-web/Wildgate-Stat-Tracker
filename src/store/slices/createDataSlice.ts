@@ -103,6 +103,7 @@ const assignCanonicalMatchNumbers = (matches: Match[], nextHint: number): {
 type ProfileSnapshotMap = Record<string, Record<string, unknown>>;
 
 const normalizeNameKey = (value: string): string => normalizeOcrName(value || '').toLowerCase();
+export const normalizeRosterEntryKey = (value: string): string => normalizeNameKey(value);
 
 const dedupeAliasList = (values: string[], canonicalName?: string): string[] => {
   const seen = new Set<string>();
@@ -131,6 +132,160 @@ const cloneProfileSnapshots = (profiles?: ProfileSnapshotMap): ProfileSnapshotMa
   return Object.fromEntries(
     Object.entries(profiles).map(([key, profile]) => [key, { ...(profile || {}) }])
   );
+};
+
+export type RosterEntryOrigin = 'manual' | 'ocr';
+export type RosterEntryStatus = 'confirmed' | 'detected';
+
+export interface RosterEntryMeta {
+  origin: RosterEntryOrigin;
+  status: RosterEntryStatus;
+  firstSeenAt: number;
+  lastSeenAt: number;
+  lastConfidence: number;
+  firstSeenMatchId: string;
+}
+
+const isPositiveTimestamp = (value: unknown): value is number => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0;
+};
+
+const clampRosterConfidence = (value: unknown, fallback: number): number => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  const normalized = numeric > 0 && numeric <= 1 ? numeric * 100 : numeric;
+  return Math.max(0, Math.min(100, Math.round(normalized)));
+};
+
+const coerceRosterOrigin = (value: unknown, fallback: RosterEntryOrigin): RosterEntryOrigin => (
+  value === 'ocr' ? 'ocr' : fallback
+);
+
+const coerceRosterStatus = (
+  value: unknown,
+  origin: RosterEntryOrigin,
+  fallback: RosterEntryStatus
+): RosterEntryStatus => {
+  if (origin === 'manual') return 'confirmed';
+  if (value === 'detected' || value === 'confirmed') return value;
+  return fallback;
+};
+
+const createDefaultRosterEntryMeta = (
+  partial?: Partial<RosterEntryMeta>,
+  now = Date.now()
+): RosterEntryMeta => {
+  const origin = coerceRosterOrigin(partial?.origin, 'manual');
+  const status = coerceRosterStatus(partial?.status, origin, origin === 'manual' ? 'confirmed' : 'detected');
+  const firstSeenAt = isPositiveTimestamp(partial?.firstSeenAt)
+    ? Number(partial?.firstSeenAt)
+    : now;
+  const lastSeenAt = isPositiveTimestamp(partial?.lastSeenAt)
+    ? Number(partial?.lastSeenAt)
+    : firstSeenAt;
+  const defaultConfidence = origin === 'manual' ? 100 : 0;
+  return {
+    origin,
+    status,
+    firstSeenAt,
+    lastSeenAt: Math.max(firstSeenAt, lastSeenAt),
+    lastConfidence: clampRosterConfidence(partial?.lastConfidence, defaultConfidence),
+    firstSeenMatchId: typeof partial?.firstSeenMatchId === 'string'
+      ? partial.firstSeenMatchId
+      : '',
+  };
+};
+
+const mergeRosterEntryMeta = (
+  existing?: Partial<RosterEntryMeta> | null,
+  incoming?: Partial<RosterEntryMeta> | null,
+  now = Date.now()
+): RosterEntryMeta => {
+  const base = createDefaultRosterEntryMeta(existing || undefined, now);
+  if (!incoming) return base;
+
+  const incomingOrigin = coerceRosterOrigin(incoming.origin, base.origin);
+  const origin: RosterEntryOrigin = (
+    base.origin === 'manual' || incomingOrigin === 'manual'
+      ? 'manual'
+      : 'ocr'
+  );
+  const status = coerceRosterStatus(
+    incoming.status ?? base.status,
+    origin,
+    base.status === 'confirmed' ? 'confirmed' : 'detected'
+  );
+
+  const firstSeenCandidates = [
+    isPositiveTimestamp(base.firstSeenAt) ? Number(base.firstSeenAt) : Number.POSITIVE_INFINITY,
+    isPositiveTimestamp(incoming.firstSeenAt) ? Number(incoming.firstSeenAt) : Number.POSITIVE_INFINITY,
+  ];
+  const firstSeenAt = Math.min(...firstSeenCandidates);
+  const safeFirstSeenAt = Number.isFinite(firstSeenAt) ? firstSeenAt : now;
+  const lastSeenAt = Math.max(
+    isPositiveTimestamp(base.lastSeenAt) ? Number(base.lastSeenAt) : 0,
+    isPositiveTimestamp(incoming.lastSeenAt) ? Number(incoming.lastSeenAt) : 0,
+    safeFirstSeenAt
+  );
+  const lastConfidence = incoming.lastConfidence != null
+    ? clampRosterConfidence(incoming.lastConfidence, base.lastConfidence)
+    : base.lastConfidence;
+
+  const incomingFirstSeenAt = isPositiveTimestamp(incoming.firstSeenAt)
+    ? Number(incoming.firstSeenAt)
+    : Number.POSITIVE_INFINITY;
+  const baseFirstSeenAt = isPositiveTimestamp(base.firstSeenAt)
+    ? Number(base.firstSeenAt)
+    : Number.POSITIVE_INFINITY;
+  const firstSeenMatchId = incoming.firstSeenMatchId && incomingFirstSeenAt <= baseFirstSeenAt
+    ? String(incoming.firstSeenMatchId)
+    : (base.firstSeenMatchId || String(incoming.firstSeenMatchId || ''));
+
+  return {
+    origin,
+    status,
+    firstSeenAt: safeFirstSeenAt,
+    lastSeenAt,
+    lastConfidence,
+    firstSeenMatchId,
+  };
+};
+
+const cloneRosterEntryMetaMap = (
+  meta?: Record<string, RosterEntryMeta>
+): Record<string, RosterEntryMeta> | undefined => {
+  if (!meta || typeof meta !== 'object') return undefined;
+  return Object.fromEntries(
+    Object.entries(meta).map(([key, value]) => [key, { ...value }])
+  );
+};
+
+export const normalizeRosterEntryMetaMap = (
+  pilotRegistry: string[] = [],
+  meta?: Record<string, unknown>,
+  now = Date.now()
+): Record<string, RosterEntryMeta> => {
+  const sourceMeta = meta && typeof meta === 'object'
+    ? meta as Record<string, unknown>
+    : {};
+  const nextMeta: Record<string, RosterEntryMeta> = {};
+
+  (pilotRegistry || []).forEach((name) => {
+    const cleaned = String(name || '').trim();
+    const key = normalizeRosterEntryKey(cleaned);
+    if (!cleaned || !key || nextMeta[key]) return;
+    const rawValue = sourceMeta[key] ?? sourceMeta[cleaned];
+    nextMeta[key] = mergeRosterEntryMeta(
+      undefined,
+      rawValue && typeof rawValue === 'object'
+        ? rawValue as Partial<RosterEntryMeta>
+        : undefined,
+      now
+    );
+  });
+
+  return nextMeta;
 };
 
 const mergeProfileCountMaps = (
@@ -217,6 +372,7 @@ export interface MergeHistoryEntry {
     playerIdMap: Record<string, string>;
     pendingReviews: PendingReview[];
     playerProfiles?: ProfileSnapshotMap;
+    rosterEntryMeta?: Record<string, RosterEntryMeta>;
   };
 }
 
@@ -257,6 +413,7 @@ export interface DataSlice {
   players: string[];
   /** Authoritative roster of known pilot display names. Source of truth for OCR matching and teammate/opponent assignment. */
   pilotRegistry: string[];
+  rosterEntryMeta: Record<string, RosterEntryMeta>;
   favorites: string[];
   pilotNotes: Record<string, string>;
   playerIdMap: Record<string, string>;
@@ -305,8 +462,10 @@ export interface DataSlice {
   deletePlayer: (name: string) => void;
 
   setPilotRegistry: (registry: string[]) => void;
-  addToRegistry: (name: string) => void;
+  addToRegistry: (name: string, meta?: Partial<RosterEntryMeta>) => void;
   removeFromRegistry: (name: string) => void;
+  updateRosterEntryMeta: (name: string, meta: Partial<RosterEntryMeta>) => void;
+  confirmRosterEntry: (name: string, origin?: RosterEntryOrigin) => void;
   renamePilot: (oldName: string, newName: string) => void;
 
   setFavorites: (favorites: string[]) => void;
@@ -348,6 +507,7 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
   nextCanonicalMatchNumber: 1,
   players: [],
   pilotRegistry: [],
+  rosterEntryMeta: {},
   favorites: [],
   pilotNotes: {},
   pilotAliases: {},
@@ -534,7 +694,7 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
   })),
   deletePlayer: (name) => set((state) => ({ players: state.players.filter(p => p !== name) })),
 
-  setPilotRegistry: (pilotRegistry) => set(() => {
+  setPilotRegistry: (pilotRegistry) => set((state) => {
     const seen = new Set<string>();
     const normalized = (pilotRegistry || [])
       .map((name) => String(name || '').trim())
@@ -545,22 +705,70 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
         seen.add(key);
         return true;
       });
-    return { pilotRegistry: normalized };
+    return {
+      pilotRegistry: normalized,
+      rosterEntryMeta: normalizeRosterEntryMetaMap(normalized, state.rosterEntryMeta),
+    };
   }),
-  addToRegistry: (name) => set((state) => {
+  addToRegistry: (name, meta) => set((state) => {
     const cleaned = String(name || '').trim();
     if (!cleaned) return {};
-    const nextKey = normalizeOcrName(cleaned).toLowerCase();
+    const nextKey = normalizeRosterEntryKey(cleaned);
     if (!nextKey) return {};
-    const exists = state.pilotRegistry.some((entry) => normalizeOcrName(entry).toLowerCase() === nextKey);
-    if (exists) return {};
-    return { pilotRegistry: [...state.pilotRegistry, cleaned] };
+    const existingEntry = state.pilotRegistry.find((entry) => normalizeRosterEntryKey(entry) === nextKey);
+    const now = Date.now();
+    if (existingEntry) {
+      const existingMeta = state.rosterEntryMeta[nextKey];
+      if (!meta && existingMeta) return {};
+      return {
+        rosterEntryMeta: {
+          ...state.rosterEntryMeta,
+          [nextKey]: mergeRosterEntryMeta(existingMeta, meta, now),
+        },
+      };
+    }
+    return {
+      pilotRegistry: [...state.pilotRegistry, cleaned],
+      rosterEntryMeta: {
+        ...state.rosterEntryMeta,
+        [nextKey]: mergeRosterEntryMeta(undefined, meta, now),
+      },
+    };
   }),
   removeFromRegistry: (name) => set((state) => {
-    const targetKey = normalizeOcrName(name).toLowerCase();
+    const targetKey = normalizeRosterEntryKey(name);
     if (!targetKey) return {};
+    const nextRegistry = state.pilotRegistry.filter((entry) => normalizeRosterEntryKey(entry) !== targetKey);
     return {
-      pilotRegistry: state.pilotRegistry.filter((entry) => normalizeOcrName(entry).toLowerCase() !== targetKey),
+      pilotRegistry: nextRegistry,
+      rosterEntryMeta: normalizeRosterEntryMetaMap(nextRegistry, state.rosterEntryMeta),
+    };
+  }),
+  updateRosterEntryMeta: (name, meta) => set((state) => {
+    const targetKey = normalizeRosterEntryKey(name);
+    if (!targetKey) return {};
+    const exists = state.pilotRegistry.some((entry) => normalizeRosterEntryKey(entry) === targetKey);
+    if (!exists && !state.rosterEntryMeta[targetKey]) return {};
+    return {
+      rosterEntryMeta: {
+        ...state.rosterEntryMeta,
+        [targetKey]: mergeRosterEntryMeta(state.rosterEntryMeta[targetKey], meta, Date.now()),
+      },
+    };
+  }),
+  confirmRosterEntry: (name, origin) => set((state) => {
+    const targetKey = normalizeRosterEntryKey(name);
+    if (!targetKey) return {};
+    const exists = state.pilotRegistry.some((entry) => normalizeRosterEntryKey(entry) === targetKey);
+    if (!exists && !state.rosterEntryMeta[targetKey]) return {};
+    return {
+      rosterEntryMeta: {
+        ...state.rosterEntryMeta,
+        [targetKey]: mergeRosterEntryMeta(state.rosterEntryMeta[targetKey], {
+          ...(origin ? { origin } : {}),
+          status: 'confirmed',
+        }, Date.now()),
+      },
     };
   }),
 
@@ -601,6 +809,19 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
     Object.entries(newIdMap).forEach(([id, name]) => {
       if (normalizeNameKey(name) === oldKey) newIdMap[id] = newName;
     });
+    const nextRosterEntryMeta = normalizeRosterEntryMetaMap(
+      newRegistry,
+      (() => {
+        const draftMeta: Record<string, unknown> = { ...(state.rosterEntryMeta || {}) };
+        draftMeta[newKey] = mergeRosterEntryMeta(
+          state.rosterEntryMeta?.[newKey],
+          state.rosterEntryMeta?.[oldKey],
+          Date.now()
+        );
+        if (oldKey !== newKey) delete draftMeta[oldKey];
+        return draftMeta;
+      })()
+    );
 
     const profiles = (get() as unknown as { playerProfiles?: ProfileSnapshotMap }).playerProfiles;
     if (profiles && typeof profiles === 'object') {
@@ -617,6 +838,7 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
         pilotAliases: newAliases,
         playerIdMap: newIdMap,
         matches: newMatches,
+        rosterEntryMeta: nextRosterEntryMeta,
         playerProfiles: newProfiles,
         lastActivity: Date.now()
       };
@@ -630,6 +852,7 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
       pilotAliases: newAliases,
       playerIdMap: newIdMap,
       matches: newMatches,
+      rosterEntryMeta: nextRosterEntryMeta,
       lastActivity: Date.now()
     };
   }),
@@ -652,6 +875,7 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
         playerProfiles: cloneProfileSnapshots(
           (get() as unknown as { playerProfiles?: ProfileSnapshotMap }).playerProfiles
         ),
+        rosterEntryMeta: cloneRosterEntryMetaMap(state.rosterEntryMeta),
       },
     };
     const mergeHistory = [snapshot, ...(state.mergeHistory || [])].slice(0, 10);
@@ -673,6 +897,18 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
     // 2. Update Registry
     const newRegistry = state.pilotRegistry.filter(p => !isSource(p));
     if (!newRegistry.includes(targetName)) newRegistry.push(targetName);
+    const targetKey = normalizeRosterEntryKey(targetName);
+    const newRosterEntryMeta = normalizeRosterEntryMetaMap(
+      newRegistry,
+      {
+        ...(state.rosterEntryMeta || {}),
+        [targetKey]: mergeRosterEntryMeta(
+          state.rosterEntryMeta?.[targetKey],
+          state.rosterEntryMeta?.[srcNorm],
+          Date.now()
+        ),
+      }
+    );
 
     // 3. Update Favorites, Notes & Aliases
     const newFavorites = state.favorites.filter(f => !isSource(f));
@@ -709,7 +945,7 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
         delete newProfiles[sourceName];
         return {
           matches: newMatches, pilotRegistry: newRegistry, favorites: newFavorites,
-          pilotNotes: newNotes, pilotAliases: newAliases, playerIdMap: newIdMap, playerProfiles: newProfiles, mergeHistory, activeMergeNotificationId: snapshot.id, lastActivity: Date.now()
+          pilotNotes: newNotes, pilotAliases: newAliases, playerIdMap: newIdMap, rosterEntryMeta: newRosterEntryMeta, playerProfiles: newProfiles, mergeHistory, activeMergeNotificationId: snapshot.id, lastActivity: Date.now()
         };
       }
     }
@@ -720,7 +956,7 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
 
     return {
       matches: newMatches, pilotRegistry: newRegistry, favorites: newFavorites,
-      pilotNotes: newNotes, pilotAliases: newAliases, playerIdMap: newIdMap, pendingReviews: newPending, mergeHistory, activeMergeNotificationId: snapshot.id, lastActivity: Date.now()
+      pilotNotes: newNotes, pilotAliases: newAliases, playerIdMap: newIdMap, rosterEntryMeta: newRosterEntryMeta, pendingReviews: newPending, mergeHistory, activeMergeNotificationId: snapshot.id, lastActivity: Date.now()
     };
   }),
 
@@ -737,6 +973,10 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
       pilotAliases: latest.snapshot.pilotAliases,
       playerIdMap: latest.snapshot.playerIdMap,
       pendingReviews: latest.snapshot.pendingReviews,
+      rosterEntryMeta: normalizeRosterEntryMetaMap(
+        latest.snapshot.pilotRegistry,
+        latest.snapshot.rosterEntryMeta
+      ),
       playerProfiles: latest.snapshot.playerProfiles,
       mergeHistory: rest,
       activeMergeNotificationId: null,

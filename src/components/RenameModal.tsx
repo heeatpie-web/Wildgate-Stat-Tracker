@@ -8,7 +8,7 @@ import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 
 export const RenameModal: React.FC = () => {
     const { renameModal, setRenameModal, renameValue, setRenameValue, setToast, activeUser, setActiveUser } = useUIState();
-    const { addPlayer, renamePilot, addMatch } = useGameData();
+    const { addPlayer, addToRegistry, renamePilot, addMatch } = useGameData();
     const dialogTitleId = useId();
     const dialogDescriptionId = useId();
     const focusTrapRef = useFocusTrap<HTMLDivElement>(renameModal != null);
@@ -23,6 +23,7 @@ export const RenameModal: React.FC = () => {
         const normalizedName = name.trim();
         if (!normalizedName) return;
         addPlayer(normalizedName);
+        addToRegistry(normalizedName, { origin: 'manual', status: 'confirmed' });
         setActiveUser(normalizedName);
         setToast({ message: `Prospector "${normalizedName}" registered!`, type: 'success' });
     };

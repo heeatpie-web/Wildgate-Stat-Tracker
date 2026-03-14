@@ -1,6 +1,6 @@
 import { getElectronAPI } from './electronAPI';
 import type { Match, UidMappingsContract } from '../types';
-import type { PendingReview, TimelineEvent } from '../store/slices/createDataSlice';
+import type { PendingReview, RosterEntryMeta, TimelineEvent } from '../store/slices/createDataSlice';
 import type { OcrCorrection, PlayerProfile, TeamIdentityCorrection } from '../store/slices/createMappingSlice';
 import type { OcrAliasModel, OcrLearningEvent, OcrLearningQueueItem } from './ocrAliasEngine';
 import { normalizeSharedUidMappings } from '../services/mappingContract';
@@ -41,6 +41,7 @@ export interface StorageData {
   matches: Match[];
   players: string[];
   pilotRegistry: string[];
+  rosterEntryMeta?: Record<string, RosterEntryMeta>;
   favorites: string[];
   pilotNotes: Record<string, string>;
   pilotAliases?: Record<string, string[]>;
@@ -82,6 +83,7 @@ let pendingVersion = 0;
 let lastAutoBackupCount: number | null = null;
 let lifecycleGuardsBound = false;
 let intervalFlushHandle: ReturnType<typeof setInterval> | number | null = null;
+const IS_STORAGE_DEBUG = import.meta.env.DEV || process.env.NODE_ENV === 'test';
 
 const hasUnsavedChanges = () => pendingVersion > lastPersistedVersion;
 
@@ -217,10 +219,12 @@ const createDefaultStorageData = (): StorageData => ({
   matches: [],
   players: [],
   pilotRegistry: [],
+  rosterEntryMeta: {},
   favorites: [],
   pilotNotes: {},
   pendingReviews: [],
   dismissedRosterMergePairKeys: [],
+  dismissedRosterCandidateKeys: [],
   settings: {},
   layouts: {},
   lastActivity: Date.now(),
@@ -260,6 +264,9 @@ const coerceStorageData = (value: unknown): StorageData | null => {
     matches,
     players: toStringArray(value.players),
     pilotRegistry: toStringArray(value.pilotRegistry),
+    rosterEntryMeta: isRecord(value.rosterEntryMeta)
+      ? value.rosterEntryMeta as Record<string, RosterEntryMeta>
+      : {},
     favorites: toStringArray(value.favorites),
     pilotNotes: toStringMap(value.pilotNotes),
     playerIdMap: toStringMap(value.playerIdMap),
@@ -274,6 +281,7 @@ const coerceStorageData = (value: unknown): StorageData | null => {
       : [],
     pendingReviews: toPendingReviews(value.pendingReviews),
     dismissedRosterMergePairKeys: toStringArray(value.dismissedRosterMergePairKeys),
+    dismissedRosterCandidateKeys: toStringArray(value.dismissedRosterCandidateKeys),
     settings: isRecord(value.settings) ? { ...value.settings } : {},
     layouts: toLayouts(value.layouts),
     lastActivity: toNumberOr(value.lastActivity, Date.now()),
@@ -370,6 +378,15 @@ const maybeAutoBackup = async (data: StorageData) => {
 };
 
 const writeNow = async (data: StorageData): Promise<boolean> => {
+  const startedAt = performance.now();
+  const payloadBytes = (() => {
+    if (!IS_STORAGE_DEBUG) return 0;
+    try {
+      return new TextEncoder().encode(JSON.stringify(data)).length;
+    } catch {
+      return 0;
+    }
+  })();
   try {
     const ipc = getElectronAPI();
     if (ipc) {
@@ -381,6 +398,13 @@ const writeNow = async (data: StorageData): Promise<boolean> => {
       } catch (error) {
         Logger.warn('Storage', 'LocalStorage write failed', error);
       }
+    }
+    if (IS_STORAGE_DEBUG) {
+      Logger.debug('Storage', 'Persisted snapshot', {
+        bytes: payloadBytes,
+        durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
+        transport: ipc ? 'ipc' : 'localStorage',
+      });
     }
     return true;
   } catch (error) {

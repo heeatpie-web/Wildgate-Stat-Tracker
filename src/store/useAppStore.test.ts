@@ -48,16 +48,25 @@ describe('useAppStore OCR preference hydration', () => {
 
     expect(store.getState().captureMode).toBe('deferred');
     expect(store.getState().resultOcrFlowMode).toBe('background');
+    expect(store.getState().autoSequenceOnCapture).toBe(false);
+    expect(store.getState().autoCaptureSendKeypresses).toBe(true);
+    expect(store.getState().autoCaptureWaitMultiplier).toBe(1);
   });
 
   it('preserves explicit saved OCR preferences for existing users', async () => {
     const store = await loadStore({
       captureMode: 'auto',
       resultOcrFlowMode: 'prompt',
+      autoSequenceOnCapture: true,
+      autoCaptureSendKeypresses: false,
+      autoCaptureWaitMultiplier: 2.2,
     });
 
     expect(store.getState().captureMode).toBe('auto');
     expect(store.getState().resultOcrFlowMode).toBe('prompt');
+    expect(store.getState().autoSequenceOnCapture).toBe(true);
+    expect(store.getState().autoCaptureSendKeypresses).toBe(false);
+    expect(store.getState().autoCaptureWaitMultiplier).toBe(2.2);
   });
 
   it('hydrates persisted perk mappings from uidMappings', async () => {

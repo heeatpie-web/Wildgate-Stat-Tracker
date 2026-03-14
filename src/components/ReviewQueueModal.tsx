@@ -279,7 +279,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
 
         if (review.type === 'player_name') {
             const normalized = normalizeName(review.value);
-            if (normalized) addToRegistry(normalized);
+            if (normalized) addToRegistry(normalized, { origin: 'ocr', status: 'confirmed' });
             removePendingReview(review.id);
             notifyReviewQueue(`Added "${normalized || review.value}" to roster`, 'success');
             announce(`Added ${normalized || review.value} to roster.`, 'polite');
@@ -296,7 +296,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                     confidenceWeight: 1,
                 });
                 replaceNameInSession(review.value, autoMergeTarget);
-                addToRegistry(autoMergeTarget);
+                addToRegistry(autoMergeTarget, { origin: 'ocr', status: 'confirmed' });
                 removePendingReview(review.id);
                 pruneRelatedRosterReviews(review.value, autoMergeTarget, review.id);
                 notifyReviewQueue(`Auto-merged "${review.value}" into "${autoMergeTarget}" (${Math.round(autoMergeScore)}%)`, 'success');
@@ -304,7 +304,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                 return;
             }
             const normalized = normalizeName(review.value);
-            if (normalized) addToRegistry(normalized);
+            if (normalized) addToRegistry(normalized, { origin: 'ocr', status: 'confirmed' });
             removePendingReview(review.id);
             if (normalized) {
                 pruneRelatedRosterReviews(review.value, normalized, review.id);
@@ -380,7 +380,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
         }
 
         if (review.type === 'player_name' || review.type === 'roster_candidate') {
-            addToRegistry(normalizedEditValue);
+            addToRegistry(normalizedEditValue, { origin: 'ocr', status: 'confirmed' });
         }
 
         removePendingReview(review.id);
@@ -407,7 +407,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
             confidenceWeight: 1,
         });
         replaceNameInSession(review.value, target);
-        addToRegistry(target);
+        addToRegistry(target, { origin: 'ocr', status: 'confirmed' });
         removePendingReview(review.id);
         pruneRelatedRosterReviews(review.value, target, review.id);
         notifyReviewQueue(`Approved merge "${review.value}" -> "${target}"${score > 0 ? ` (${Math.round(score)}%)` : ''}`, 'success');
@@ -427,8 +427,13 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
             if (review.type !== 'roster_candidate') return false;
             if (autoApprovedRosterIdsRef.current.has(review.id)) return false;
             const score = Number(review.bestScore || 0);
+            const confidence = Number(review.originalConfidence || 0);
             const target = normalizeName(review.bestMatch || '');
-            return score >= AUTO_MERGE_APPROVAL_THRESHOLD && target.length > 0;
+            return (
+                score >= AUTO_MERGE_APPROVAL_THRESHOLD
+                && confidence >= AUTO_MERGE_APPROVAL_THRESHOLD
+                && target.length > 0
+            );
         });
 
         if (eligibleItems.length === 0) return;
@@ -443,7 +448,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                 confidenceWeight: 1,
             });
             replaceNameInSession(review.value, target);
-            addToRegistry(target);
+            addToRegistry(target, { origin: 'ocr', status: 'confirmed' });
             removePendingReview(review.id);
             pruneRelatedRosterReviews(review.value, target, review.id);
             notifyReviewQueue(`Auto-approved merge "${review.value}" -> "${target}" (${Math.round(score)}%)`, 'success');

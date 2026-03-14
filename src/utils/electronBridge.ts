@@ -32,6 +32,37 @@ export interface OCRProcessRuntimeOptions {
   maxReroutePasses?: number;
 }
 
+export type GameUiAction = 'open-tactical-map' | 'open-crew-hub' | 'close-current-ui';
+export type GameScreenType = 'tactical_map' | 'crew_hub';
+
+export interface SendGameUiActionResult {
+  success: boolean;
+  action: GameUiAction;
+  key?: string;
+  processName?: string;
+  processId?: number;
+  windowTitle?: string;
+  activated?: boolean;
+  error?: string;
+}
+
+export interface WaitForGameScreenOptions {
+  timeoutMs?: number;
+  pollIntervalMs?: number;
+  activeUser?: string | null;
+  ocrMode?: 'local' | 'cloud' | 'both' | 'hybrid-plus';
+  ocrRegions?: OcrRegionSettings | null;
+}
+
+export interface WaitForGameScreenResult {
+  success: boolean;
+  expectedType: GameScreenType;
+  detectedType?: GameScreenType | 'unknown' | string;
+  attempts?: number;
+  elapsedMs?: number;
+  error?: string;
+}
+
 /**
  * Check if running in Electron
  */
@@ -128,6 +159,65 @@ export async function saveOcrDebug(dataUrl: string, filename: string): Promise<s
   }
 }
 
+export async function sendGameUiAction(action: GameUiAction): Promise<SendGameUiActionResult> {
+  const ipc = getIpcRenderer();
+  if (!ipc) {
+    return { success: false, action, error: 'Not running in Electron' };
+  }
+
+  try {
+    const result = await ipc.invoke('send-game-ui-action', action);
+    if (isRecord(result) && typeof result.success === 'boolean') {
+      return {
+        success: result.success,
+        action,
+        key: typeof result.key === 'string' ? result.key : undefined,
+        processName: typeof result.processName === 'string' ? result.processName : undefined,
+        processId: typeof result.processId === 'number' ? result.processId : undefined,
+        windowTitle: typeof result.windowTitle === 'string' ? result.windowTitle : undefined,
+        activated: typeof result.activated === 'boolean' ? result.activated : undefined,
+        error: typeof result.error === 'string' ? result.error : undefined,
+      };
+    }
+
+    Logger.warn('ElectronBridge', 'send-game-ui-action returned an unexpected payload', result);
+    return { success: false, action, error: 'Unexpected response from main process' };
+  } catch (error: unknown) {
+    Logger.error('ElectronBridge', 'send-game-ui-action failed', error);
+    return { success: false, action, error: toErrorMessage(error, 'Game UI action failed') };
+  }
+}
+
+export async function waitForGameScreen(
+  expectedType: GameScreenType,
+  options?: WaitForGameScreenOptions
+): Promise<WaitForGameScreenResult> {
+  const ipc = getIpcRenderer();
+  if (!ipc) {
+    return { success: false, expectedType, error: 'Not running in Electron' };
+  }
+
+  try {
+    const result = await ipc.invoke('wait-for-game-screen', expectedType, options || {});
+    if (isRecord(result) && typeof result.success === 'boolean') {
+      return {
+        success: result.success,
+        expectedType,
+        detectedType: typeof result.detectedType === 'string' ? result.detectedType : undefined,
+        attempts: typeof result.attempts === 'number' ? result.attempts : undefined,
+        elapsedMs: typeof result.elapsedMs === 'number' ? result.elapsedMs : undefined,
+        error: typeof result.error === 'string' ? result.error : undefined,
+      };
+    }
+
+    Logger.warn('ElectronBridge', 'wait-for-game-screen returned an unexpected payload', result);
+    return { success: false, expectedType, error: 'Unexpected response from main process' };
+  } catch (error: unknown) {
+    Logger.error('ElectronBridge', 'wait-for-game-screen failed', error);
+    return { success: false, expectedType, error: toErrorMessage(error, 'Wait for game screen failed') };
+  }
+}
+
 /**
  * Electron bridge object for compatibility
  */
@@ -137,6 +227,8 @@ export const electronBridge = {
   ocrProcessCapture,
   saveScreenshot,
   saveOcrDebug,
+  sendGameUiAction,
+  waitForGameScreen,
 };
 
 export default electronBridge;

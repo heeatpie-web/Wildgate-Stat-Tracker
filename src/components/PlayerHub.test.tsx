@@ -4,6 +4,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import type { Match } from '../types';
 import PlayerHub from './PlayerHub';
+import { buildRosterMergeSuggestionGroups } from '../utils/rosterMergeSuggestions';
 
 const baseMatches: Match[] = [
     {
@@ -25,6 +26,7 @@ const baseMatches: Match[] = [
 
 const gameDataState = {
     pilotRegistry: ['PilotOne', 'Pilot0ne'],
+    rosterEntryMeta: {},
     favorites: [],
     pilotNotes: {},
     pilotAliases: {
@@ -41,8 +43,11 @@ const gameDataState = {
     dismissActiveMergeNotification: vi.fn(),
     pendingReviews: [],
     dismissedRosterMergePairKeys: [],
+    dismissedRosterCandidateKeys: [],
     dismissRosterMergeSuggestionPairs: vi.fn(),
+    dismissRosterCandidateKeys: vi.fn(),
     addToRegistry: vi.fn(),
+    confirmRosterEntry: vi.fn(),
     addPilotAlias: vi.fn(),
     removePilotAlias: vi.fn(),
     removePendingReview: vi.fn(),
@@ -107,6 +112,14 @@ const appStoreState = {
     ocrAutoApplyMinScore: 0.83,
 };
 
+vi.mock('../utils/rosterMergeSuggestions', async () => {
+    const actual = await vi.importActual<typeof import('../utils/rosterMergeSuggestions')>('../utils/rosterMergeSuggestions');
+    return {
+        ...actual,
+        buildRosterMergeSuggestionGroups: vi.fn(actual.buildRosterMergeSuggestionGroups),
+    };
+});
+
 vi.mock('../providers/GameDataProvider', () => ({
     useGameData: () => gameDataState,
 }));
@@ -116,7 +129,10 @@ vi.mock('../providers/UIStateProvider', () => ({
 }));
 
 vi.mock('../store/useAppStore', () => ({
-    useAppStore: (selector: (state: typeof appStoreState) => unknown) => selector(appStoreState),
+    useAppStore: (selector: (state: typeof gameDataState & typeof appStoreState) => unknown) => selector({
+        ...gameDataState,
+        ...appStoreState,
+    }),
 }));
 
 vi.mock('./LocalImage', () => ({
@@ -127,6 +143,7 @@ describe('PlayerHub', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         gameDataState.pilotRegistry = ['PilotOne', 'Pilot0ne'];
+        gameDataState.rosterEntryMeta = {};
         gameDataState.pilotAliases = { PilotOne: ['Pilot One Old'] };
         gameDataState.matches = [...baseMatches];
         gameDataState.playerProfiles = {
@@ -161,6 +178,7 @@ describe('PlayerHub', () => {
         gameDataState.mergeHistory = [];
         gameDataState.activeMergeNotificationId = null;
         gameDataState.dismissedRosterMergePairKeys = [];
+        gameDataState.dismissedRosterCandidateKeys = [];
         appStoreState.ocrAliasModel = {
             version: 1 as const,
             entries: {
@@ -212,7 +230,36 @@ describe('PlayerHub', () => {
 
         expect(appStoreState.recordOcrAliasCorrection).toHaveBeenCalledWith('PliotOne', 'PilotOne', expect.any(Object));
         expect(gameDataState.removePendingReview).toHaveBeenCalledWith('candidate-1');
-        expect(gameDataState.addToRegistry).toHaveBeenCalledWith('PilotOne');
+        expect(gameDataState.addToRegistry).toHaveBeenCalledWith('PilotOne', { origin: 'ocr', status: 'confirmed' });
+    });
+
+    it('shows detected roster badges and exposes confirm or dismiss actions for OCR-added entries', () => {
+        gameDataState.pilotRegistry = ['PilotOne'];
+        gameDataState.rosterEntryMeta = {
+            pilotone: {
+                origin: 'ocr',
+                status: 'detected',
+                firstSeenAt: 1_700_000_000_000,
+                lastSeenAt: 1_700_000_100_000,
+                lastConfidence: 88,
+                firstSeenMatchId: 'match-17',
+            },
+        };
+
+        render(<PlayerHub />);
+
+        expect(screen.getByRole('button', { name: /pilotone/i })).toHaveTextContent('Detected');
+
+        fireEvent.click(screen.getByRole('button', { name: /pilotone/i }));
+
+        expect(screen.getAllByText('Detected').length).toBeGreaterThan(0);
+        expect(screen.getByText(/auto-added from ocr and still awaiting confirmation/i)).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /confirm detected roster entry/i }));
+        expect(gameDataState.confirmRosterEntry).toHaveBeenCalledWith('PilotOne', 'ocr');
+
+        fireEvent.click(screen.getByRole('button', { name: /dismiss detected roster entry/i }));
+        expect(gameDataState.removeFromRegistry).toHaveBeenCalledWith('PilotOne');
     });
 
     it('lets the selected player add and remove former names and OCR variants from the players tab', () => {
@@ -334,5 +381,25 @@ describe('PlayerHub', () => {
 
         fireEvent.click(screen.getAllByRole('button', { name: /dismiss possible merge suggestions for ace pilot/i })[0]);
         expect(gameDataState.dismissRosterMergeSuggestionPairs).toHaveBeenCalledWith(['ace pilot::ace squad']);
+    });
+
+    it('keeps OCR merge suggestions lazy in details mode and supports large-roster search with virtualization', async () => {
+        const mergeSuggestionsSpy = vi.mocked(buildRosterMergeSuggestionGroups);
+        gameDataState.pilotRegistry = Array.from({ length: 450 }, (_, index) => `Pilot ${String(index).padStart(3, '0')}`);
+        gameDataState.playerProfiles = {};
+
+        render(<PlayerHub />);
+
+        expect(mergeSuggestionsSpy).not.toHaveBeenCalled();
+
+        fireEvent.change(screen.getByPlaceholderText(/search players/i), {
+            target: { value: 'Pilot 399' },
+        });
+
+        expect(await screen.findByRole('button', { name: /pilot 399/i })).toBeInTheDocument();
+
+        fireEvent.click(screen.getAllByRole('button', { name: /^ocr work$/i })[0]);
+
+        expect(mergeSuggestionsSpy).toHaveBeenCalled();
     });
 });

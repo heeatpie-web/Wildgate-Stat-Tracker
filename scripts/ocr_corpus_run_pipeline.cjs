@@ -12,11 +12,16 @@ function parseArgs(argv) {
     out: 'dataset/ocr-corpus/predictions.latest.json',
     ocrMode: 'both',
     activeUser: process.env.WG_OCR_ACTIVE_USER || process.env.ACTIVE_USER || '',
+    debugLayout: process.env.WILDGATE_OCR_DEBUG_LAYOUT === '1',
   };
 
   for (let i = 2; i < argv.length; i += 1) {
     const token = argv[i];
     const next = argv[i + 1];
+    if (token === '--debug-layout') {
+      args.debugLayout = true;
+      continue;
+    }
     if (!next) break;
     if (token === '--truth') args.truth = next;
     if (token === '--out') args.out = next;
@@ -161,6 +166,7 @@ async function main() {
           sourceImagePath: imagePath,
           skipDebugSave: true,
           forceUncached: true,
+          debugLayout: args.debugLayout,
         });
         if (!result?.success || !result?.data) {
           throw new Error(result?.error || 'OCR returned no data');

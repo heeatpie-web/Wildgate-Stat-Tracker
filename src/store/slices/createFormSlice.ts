@@ -1,8 +1,10 @@
 import { StateCreator } from 'zustand';
 import { CHARACTERS, SHIPS, KillMap, WizardResult } from '../../types';
 import { DataSource, getPriority } from './createDataSlice';
-import type { Match } from '../../types';
+import type { Loadout, Match } from '../../types';
 import { capTeammateNames } from '../../utils/teamLimits';
+import { buildActiveWeaponsFromLoadout, sanitizeLoadout } from '../../utils/loadout';
+import Logger from '../../utils/logger';
 
 const sanitizeTeammates = (teammates: string[] | null | undefined, ship: string): string[] => {
     return capTeammateNames(teammates, ship);
@@ -21,6 +23,39 @@ const sanitizeNames = (values: string[] | null | undefined): string[] => {
         unique.push(cleaned);
     }
     return unique;
+};
+
+const IS_LOADOUT_TRACE_ENABLED = import.meta.env.DEV || process.env.NODE_ENV === 'test';
+
+type FormSliceStoreState = FormSlice & {
+    currentLoadout?: Loadout | null;
+};
+
+const traceLoadoutMutation = (action: string, detail: Record<string, unknown>) => {
+    if (!IS_LOADOUT_TRACE_ENABLED) return;
+    Logger.debug('FormSlice', action, detail);
+};
+
+const resolvePreservedHeroWeapons = (
+    state: FormSlice,
+    nextHero: string,
+    currentLoadout: Loadout | null | undefined,
+): Record<string, number> | null => {
+    const normalizedNextHero = String(nextHero || '').trim().toLowerCase();
+    if (!normalizedNextHero) return null;
+
+    const pendingLoadout = sanitizeLoadout((state.pendingMatchData?.loadout as Loadout | null | undefined) ?? null);
+    const normalizedPendingHero = String(pendingLoadout?.hero || '').trim().toLowerCase();
+    if (pendingLoadout && normalizedPendingHero === normalizedNextHero) {
+        return buildActiveWeaponsFromLoadout(pendingLoadout);
+    }
+
+    const liveLoadout = sanitizeLoadout(currentLoadout ?? null);
+    const normalizedLiveHero = String(liveLoadout?.hero || '').trim().toLowerCase();
+    if (!liveLoadout || normalizedLiveHero !== normalizedNextHero) return null;
+
+    const nextWeapons = buildActiveWeaponsFromLoadout(liveLoadout);
+    return Object.keys(nextWeapons).length > 0 ? nextWeapons : null;
 };
 
 export interface FormSlice {
@@ -183,13 +218,39 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
             && state.heroSource === 'manual'
             && !state.telemetryDetectedHero;
         if (newP >= currentP || !state.heroSource || allowInitialTelemetryOverride) {
+            const sameHero = String(state.activeHero || '').trim().toLowerCase() === String(hero || '').trim().toLowerCase();
+            const currentStoreState = get() as unknown as FormSliceStoreState;
+            const preservedWeapons = sameHero
+                ? state.activeWeapons
+                : resolvePreservedHeroWeapons(state, hero, currentStoreState.currentLoadout);
+            const nextActiveWeapons = sameHero
+                ? state.activeWeapons
+                : (preservedWeapons ?? state.characterLoadouts[hero] ?? {});
+            traceLoadoutMutation('setActiveHero', {
+                hero,
+                source,
+                sameHero,
+                heroSource: state.heroSource,
+                usedPreservedLoadout: preservedWeapons !== null,
+                preservedWeaponCount: preservedWeapons ? Object.keys(preservedWeapons).length : 0,
+                fallbackLoadoutWeaponCount: Object.keys(state.characterLoadouts[hero] || {}).length,
+                nextWeaponCount: Object.keys(nextActiveWeapons || {}).length,
+            });
             return {
                 activeHero: hero,
                 heroSource: source,
-                activeWeapons: state.characterLoadouts[hero] || {},
+                activeWeapons: nextActiveWeapons,
                 ...telemetryUpdate
             };
         }
+        traceLoadoutMutation('setActiveHero:skipped', {
+            hero,
+            source,
+            heroSource: state.heroSource,
+            currentPriority: currentP,
+            nextPriority: newP,
+            allowInitialTelemetryOverride,
+        });
         return telemetryUpdate;
     }),
     setActiveShip: (ship, source = 'manual') => set((state) => {
@@ -201,19 +262,41 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
             && !state.telemetryDetectedShip;
         if (newP >= currentP || !state.shipSource || allowInitialTelemetryOverride) {
             const newTeammates = sanitizeTeammates(state.selectedTeammates, ship);
+            traceLoadoutMutation('setActiveShip', {
+                ship,
+                source,
+                shipSource: state.shipSource,
+                teammateCountBefore: state.selectedTeammates.length,
+                teammateCountAfter: newTeammates.length,
+            });
             return { activeShip: ship, shipSource: source, selectedTeammates: newTeammates, ...telemetryUpdate };
         }
+        traceLoadoutMutation('setActiveShip:skipped', {
+            ship,
+            source,
+            shipSource: state.shipSource,
+            currentPriority: currentP,
+            nextPriority: newP,
+            allowInitialTelemetryOverride,
+        });
         return telemetryUpdate;
     }),
-    setActiveWeapons: (weapons, persistToCharacterLoadout = true) => set((state) => ({
-        activeWeapons: weapons,
-        characterLoadouts: persistToCharacterLoadout
-            ? {
-                ...state.characterLoadouts,
-                [state.activeHero]: weapons
-            }
-            : state.characterLoadouts
-    })),
+    setActiveWeapons: (weapons, persistToCharacterLoadout = true) => set((state) => {
+        traceLoadoutMutation('setActiveWeapons', {
+            hero: state.activeHero,
+            persistToCharacterLoadout,
+            weaponCount: Object.keys(weapons || {}).length,
+        });
+        return {
+            activeWeapons: weapons,
+            characterLoadouts: persistToCharacterLoadout
+                ? {
+                    ...state.characterLoadouts,
+                    [state.activeHero]: weapons
+                }
+                : state.characterLoadouts
+        };
+    }),
     setMatchStartTime: (time) => set({ matchStartTime: time }),
     setIsMatchInProgress: (inProgress) => set({ isMatchInProgress: inProgress }),
     setSelectedReachModifiers: (modifiers, source = 'manual') => set((state) => {
@@ -282,46 +365,58 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
         currentNote: "",
     }),
 
-    resetForm: () => set((state) => ({
-        poiEasy: 0,
-        poiMedium: 0,
-        poiEpic: 0,
-        kills: { "AI Legion": 0 },
-        selectedReachModifiers: [],
-        modifiersSource: undefined,
-        heroSource: undefined,
-        shipSource: undefined,
-        telemetryDetectedHero: undefined,
-        telemetryDetectedShip: undefined,
-        elims: "",
-        currentNote: "",
-        activeWeapons: state.characterLoadouts[state.activeHero] || {}
-    })),
+    resetForm: () => set((state) => {
+        traceLoadoutMutation('resetForm', {
+            hero: state.activeHero,
+            restoredWeaponCount: Object.keys(state.characterLoadouts[state.activeHero] || {}).length,
+        });
+        return {
+            poiEasy: 0,
+            poiMedium: 0,
+            poiEpic: 0,
+            kills: { "AI Legion": 0 },
+            selectedReachModifiers: [],
+            modifiersSource: undefined,
+            heroSource: undefined,
+            shipSource: undefined,
+            telemetryDetectedHero: undefined,
+            telemetryDetectedShip: undefined,
+            elims: "",
+            currentNote: "",
+            activeWeapons: state.characterLoadouts[state.activeHero] || {}
+        };
+    }),
 
-    discardMatch: () => set((state) => ({
-        // Everything resetForm does
-        poiEasy: 0,
-        poiMedium: 0,
-        poiEpic: 0,
-        kills: { "AI Legion": 0 },
-        selectedReachModifiers: [],
-        modifiersSource: undefined,
-        heroSource: undefined,
-        shipSource: undefined,
-        telemetryDetectedHero: undefined,
-        telemetryDetectedShip: undefined,
-        elims: "",
-        currentNote: "",
-        activeWeapons: state.characterLoadouts[state.activeHero] || {},
-        // Full discard: clear teammates, opponents, pending data, timer
-        selectedTeammates: [],
-        selectedOpponents: [],
-        pendingMatchData: null,
-        pendingSubType: '',
-        pendingPlacement: null,
-        pendingArtifactType: '',
-        showWizard: null,
-        matchStartTime: null,
-        isMatchInProgress: false,
-    })),
+    discardMatch: () => set((state) => {
+        traceLoadoutMutation('discardMatch', {
+            hero: state.activeHero,
+            restoredWeaponCount: Object.keys(state.characterLoadouts[state.activeHero] || {}).length,
+        });
+        return {
+            // Everything resetForm does
+            poiEasy: 0,
+            poiMedium: 0,
+            poiEpic: 0,
+            kills: { "AI Legion": 0 },
+            selectedReachModifiers: [],
+            modifiersSource: undefined,
+            heroSource: undefined,
+            shipSource: undefined,
+            telemetryDetectedHero: undefined,
+            telemetryDetectedShip: undefined,
+            elims: "",
+            currentNote: "",
+            activeWeapons: state.characterLoadouts[state.activeHero] || {},
+            // Full discard: clear teammates, opponents, pending data, timer
+            selectedTeammates: [],
+            selectedOpponents: [],
+            pendingMatchData: null,
+            pendingSubType: '',
+            pendingPlacement: null,
+            pendingArtifactType: '',
+            showWizard: null,
+            matchStartTime: null,
+            isMatchInProgress: false,
+        };
+    }),
 });
