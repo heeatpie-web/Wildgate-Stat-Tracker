@@ -227,6 +227,23 @@ describe('processTelemetryEvent', () => {
       expect(actions.setOverlayPhase).toHaveBeenCalledWith('Result');
     });
 
+    it('ignores unrelated events that omit matchSessionId while in match', () => {
+      context.isMatchInProgress = true;
+      context.matchStartTime = Date.now() - 60000;
+      context.lastMatchSessionId = 'session-abc';
+
+      const event = {
+        EventName: 'SomeEvent',
+        Payload: { event: { loadedMap: 'DesolationReach' } },
+        ClientTimestamp: Date.now() / 1000,
+      };
+      processTelemetryEvent(event, actions, context);
+
+      expect(actions.setIsMatchInProgress).not.toHaveBeenCalledWith(false);
+      expect(actions.setOverlayPhase).not.toHaveBeenCalledWith('Result');
+      expect(actions.setLastMatchSessionId).not.toHaveBeenCalled();
+    });
+
     it('updates lastMatchSessionId via action', () => {
       const event = {
         EventName: 'SomeEvent',

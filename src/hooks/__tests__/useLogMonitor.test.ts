@@ -377,6 +377,102 @@ describe('useLogMonitor', () => {
     expect(gameDataState.setIsMatchInProgress).not.toHaveBeenCalledWith(true);
   });
 
+  it('does not finalize a live telemetry draft when a later event omits sessionId', async () => {
+    const baseSec = Math.floor(Date.now() / 1000);
+    const { useLogMonitor } = await import('../useLogMonitor');
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'DesolationReach' },
+          ClientTimestamp: baseSec,
+        },
+      ]);
+    });
+
+    const createdDraft = addMatch.mock.calls[0]?.[0];
+    expect(createdDraft).toBeTruthy();
+    appStoreState.matches = [createdDraft];
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: { sessionId: 'live-session-id', state: 'InProgress' },
+          ClientTimestamp: baseSec + 1,
+        },
+      ]);
+    });
+
+    const updateCountBeforePing = updateMatch.mock.calls.length;
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'TelemetryPing',
+          Payload: { event: { some: 'payload' } },
+          ClientTimestamp: baseSec + 36,
+        },
+      ]);
+    });
+
+    expect(updateMatch.mock.calls.length).toBe(updateCountBeforePing);
+    expect(dispatchSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-ready' }));
+    dispatchSpy.mockRestore();
+  });
+
+  it('finalizes a live telemetry draft when sessionId is explicitly cleared after match start', async () => {
+    const baseSec = Math.floor(Date.now() / 1000);
+    const { useLogMonitor } = await import('../useLogMonitor');
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'DesolationReach' },
+          ClientTimestamp: baseSec,
+        },
+      ]);
+    });
+
+    const createdDraft = addMatch.mock.calls[0]?.[0];
+    expect(createdDraft).toBeTruthy();
+    appStoreState.matches = [createdDraft];
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: { sessionId: 'live-session-id', state: 'InProgress' },
+          ClientTimestamp: baseSec + 1,
+        },
+      ]);
+    });
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: { sessionId: '' },
+          ClientTimestamp: baseSec + 90,
+        },
+      ]);
+    });
+
+    const finalizedDraft = updateMatch.mock.calls
+      .map(([match]) => match as { time?: string })
+      .find((match) => typeof match?.time === 'string');
+
+    expect(finalizedDraft).toBeTruthy();
+    expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-ready' }));
+    dispatchSpy.mockRestore();
+  });
+
   it('passes not-in-progress lifecycle context to telemetry processor on initial map start', async () => {
     const { useLogMonitor } = await import('../useLogMonitor');
     renderHook(() => useLogMonitor('Pilot'));

@@ -152,6 +152,37 @@ describe('autoCaptureCoordinator sequencing', () => {
     });
   });
 
+  it('fails immediately when the game window cannot be focused for the first keypress', async () => {
+    const notify = vi.fn();
+    const coordinator = createAutoCaptureCoordinator({
+      notify,
+      sendKeySequence: vi.fn().mockResolvedValue({
+        success: false,
+        error: 'Failed to confirm Wildgate focus before sending Open Tactical Map.',
+      }),
+      captureAndProcess: vi.fn(),
+      lookupMapKeybind: vi.fn().mockResolvedValue({ raw: 'Tab', sendKeys: '{TAB}' }),
+      delayFn: vi.fn(() => Promise.resolve()),
+    });
+
+    const result = await coordinator.start({ lifecycleActive: true, matchId: 44 });
+    expect(result).toEqual({
+      started: true,
+      matchId: 44,
+      tacticalMapKeybind: 'Tab',
+    });
+
+    await vi.waitFor(() => {
+      expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+        phase: 'failed',
+        message: 'Auto-Capture failed at Step 1 — Open Tactical Map',
+        stepNumber: 1,
+        stepLabel: 'Open Tactical Map',
+        detail: 'Open Tactical Map: Failed to confirm Wildgate focus before sending Open Tactical Map.',
+      }));
+    });
+  });
+
   it('silently ignores requests during cooldown', async () => {
     const notify = vi.fn();
     const clock = { now: 10_000 };

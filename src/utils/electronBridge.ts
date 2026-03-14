@@ -43,6 +43,11 @@ export interface SendGameUiActionResult {
   processId?: number;
   windowTitle?: string;
   activated?: boolean;
+  targetWindowHandle?: number;
+  foregroundWindowHandle?: number;
+  foregroundWindowTitle?: string;
+  focusConfirmed?: boolean;
+  electronFocusedWindowTitle?: string;
   error?: string;
 }
 
@@ -176,6 +181,11 @@ export async function sendGameUiAction(action: GameUiAction): Promise<SendGameUi
         processId: typeof result.processId === 'number' ? result.processId : undefined,
         windowTitle: typeof result.windowTitle === 'string' ? result.windowTitle : undefined,
         activated: typeof result.activated === 'boolean' ? result.activated : undefined,
+        targetWindowHandle: typeof result.targetWindowHandle === 'number' ? result.targetWindowHandle : undefined,
+        foregroundWindowHandle: typeof result.foregroundWindowHandle === 'number' ? result.foregroundWindowHandle : undefined,
+        foregroundWindowTitle: typeof result.foregroundWindowTitle === 'string' ? result.foregroundWindowTitle : undefined,
+        focusConfirmed: typeof result.focusConfirmed === 'boolean' ? result.focusConfirmed : undefined,
+        electronFocusedWindowTitle: typeof result.electronFocusedWindowTitle === 'string' ? result.electronFocusedWindowTitle : undefined,
         error: typeof result.error === 'string' ? result.error : undefined,
       };
     }

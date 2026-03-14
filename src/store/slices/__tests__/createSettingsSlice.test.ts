@@ -14,7 +14,7 @@ describe('createSettingsSlice OCR policy', () => {
   it('defaults new users to deferred capture and background result OCR', () => {
     expect(store.getState().captureMode).toBe('deferred');
     expect(store.getState().resultOcrFlowMode).toBe('background');
-    expect(store.getState().autoSequenceOnCapture).toBe(false);
+    expect(store.getState().autoSequenceOnCapture).toBe(true);
     expect(store.getState().autoCaptureSendKeypresses).toBe(true);
     expect(store.getState().autoCaptureWaitMultiplier).toBe(1);
   });

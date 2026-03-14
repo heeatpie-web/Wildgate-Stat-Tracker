@@ -16,6 +16,7 @@ const telemetryArchiveHelpers = require('./helpers/telemetryArchiveHelpers.cjs')
 const dbHelpers = require('./helpers/dbHelpers.cjs');
 const { registerArtifactHandlers, saveScreenshotImage } = require('./handlers/artifactHandlers.cjs');
 const { createAutoCaptureCoordinator } = require('./autoCaptureCoordinator.cjs');
+const { sendGameKeySequence, validateGameInputRuntime } = require('./gameInput.cjs');
 const {
   ok,
   fail,
@@ -752,141 +753,6 @@ function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function runPowerShellScript(script, {
-  env = {},
-  timeoutMs = 5000,
-} = {}) {
-  return new Promise((resolve) => {
-    const powershellExe = process.platform === 'win32'
-      ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
-      : 'powershell';
-    const child = spawn(powershellExe, [
-      '-NoProfile',
-      '-NonInteractive',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-Command',
-      script,
-    ], {
-      cwd: app.getAppPath(),
-      windowsHide: true,
-      env: {
-        ...process.env,
-        ...env,
-      },
-    });
-
-    let stdout = '';
-    let stderr = '';
-    let settled = false;
-    let timer = null;
-
-    const finish = (payload) => {
-      if (settled) return;
-      settled = true;
-      if (timer) clearTimeout(timer);
-      resolve(payload);
-    };
-
-    child.stdout.on('data', chunk => {
-      stdout += String(chunk || '');
-    });
-    child.stderr.on('data', chunk => {
-      stderr += String(chunk || '');
-    });
-    child.on('close', code => {
-      finish({ code, stdout, stderr });
-    });
-    child.on('error', err => {
-      finish({ code: 1, stdout, stderr: err?.message || String(err) });
-    });
-
-    if (timeoutMs > 0) {
-      timer = setTimeout(() => {
-        try {
-          child.kill();
-        } catch {
-          // ignore kill failures
-        }
-        finish({
-          code: 1,
-          stdout,
-          stderr: stderr || `PowerShell helper timed out after ${timeoutMs}ms`,
-        });
-      }, timeoutMs);
-    }
-  });
-}
-
-function parseJsonSafely(value) {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
-
-function buildGameUiPowerShellScript() {
-  return `
-$ErrorActionPreference = 'Stop'
-Add-Type @"
-using System;
-using System.Runtime.InteropServices;
-public static class CodexUser32 {
-  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
-  [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
-}
-"@
-
-$sendKeys = [string]$env:WILDGATE_GAME_SEND_KEYS
-if ([string]::IsNullOrWhiteSpace($sendKeys)) {
-  throw 'No SendKeys sequence configured.'
-}
-
-$action = [string]$env:WILDGATE_GAME_ACTION
-$titleHint = [string]$env:WILDGATE_GAME_WINDOW_TITLE_HINT
-$focusDelayMs = [Math]::Max(50, [int]($env:WILDGATE_GAME_FOCUS_DELAY_MS))
-$processNames = @(
-  [string]$env:WILDGATE_GAME_PROCESS_NAMES -split ';' |
-    ForEach-Object { $_.Trim() } |
-    Where-Object { $_ }
-)
-
-$target = Get-Process |
-  Where-Object {
-    $_.MainWindowHandle -ne 0 -and (
-      ($processNames -contains $_.ProcessName) -or
-      ($titleHint -and $_.MainWindowTitle -like "*$titleHint*")
-    )
-  } |
-  Sort-Object StartTime -Descending |
-  Select-Object -First 1
-
-if (-not $target) {
-  throw ('No matching game window found. Candidates: ' + (($processNames -join ', ') -replace '\s+', ' '))
-}
-
-[CodexUser32]::ShowWindowAsync($target.MainWindowHandle, 9) | Out-Null
-Start-Sleep -Milliseconds $focusDelayMs
-$setForeground = [CodexUser32]::SetForegroundWindow($target.MainWindowHandle)
-Start-Sleep -Milliseconds $focusDelayMs
-$shell = New-Object -ComObject WScript.Shell
-$appActivated = $shell.AppActivate($target.Id)
-Start-Sleep -Milliseconds $focusDelayMs
-$shell.SendKeys($sendKeys)
-
-[pscustomobject]@{
-  success = $true
-  action = $action
-  key = $sendKeys
-  processName = $target.ProcessName
-  processId = $target.Id
-  windowTitle = $target.MainWindowTitle
-  activated = [bool]($setForeground -or $appActivated)
-} | ConvertTo-Json -Compress
-`;
-}
-
 async function captureGameWindowForAutomation() {
   const mainWindow = win;
   const shouldHideWindow = Boolean(
@@ -932,47 +798,36 @@ async function sendGameKeySequenceInternal(sendKeys, action = 'custom-sequence')
 
   console.log(`[GameUI] action=${action} key=${key} candidates=${GAME_WINDOW_PROCESS_NAMES.join(',') || 'none'} titleHint=${GAME_WINDOW_TITLE_HINT || 'none'}`);
 
-  const result = await runPowerShellScript(buildGameUiPowerShellScript(), {
-    env: {
-      WILDGATE_GAME_ACTION: action,
-      WILDGATE_GAME_SEND_KEYS: key,
-      WILDGATE_GAME_PROCESS_NAMES: GAME_WINDOW_PROCESS_NAMES.join(';'),
-      WILDGATE_GAME_WINDOW_TITLE_HINT: GAME_WINDOW_TITLE_HINT,
-      WILDGATE_GAME_FOCUS_DELAY_MS: String(GAME_UI_FOCUS_DELAY_MS),
-    },
-    timeoutMs: Math.max(2000, (GAME_UI_FOCUS_DELAY_MS * 6) + 2000),
+  const focusedBrowserWindow = BrowserWindow.getFocusedWindow();
+  const focusedBrowserWindowTitle = focusedBrowserWindow && !focusedBrowserWindow.isDestroyed()
+    ? focusedBrowserWindow.getTitle()
+    : null;
+  const result = await sendGameKeySequence({
+    sequence: key,
+    action,
+    processNames: GAME_WINDOW_PROCESS_NAMES,
+    titleHint: GAME_WINDOW_TITLE_HINT,
+    focusDelayMs: GAME_UI_FOCUS_DELAY_MS,
   });
+  const focusConfirmed = result.focusConfirmed !== false && Boolean(result.focusConfirmed ?? result.activated);
+  console.log(
+    `[GameUI] resolved action=${action} target=${result.processName || 'unknown'}#${result.processId || 'unknown'} `
+    + `handle=${result.targetWindowHandle || 'unknown'} windowTitle=${JSON.stringify(result.windowTitle || '')} `
+    + `foregroundHandle=${result.foregroundWindowHandle || 'unknown'} foregroundTitle=${JSON.stringify(result.foregroundWindowTitle || '')} `
+    + `focusConfirmed=${focusConfirmed} electronFocusedWindow=${JSON.stringify(focusedBrowserWindowTitle || '')}`
+  );
 
-  const stdout = String(result?.stdout || '').trim();
-  const stderr = String(result?.stderr || '').trim();
-  if (result?.code !== 0) {
-    const error = stderr || stdout || `PowerShell helper exited with code ${result?.code}`;
-    console.warn(`[GameUI] action=${action} failed: ${error}`);
-    return {
-      success: false,
-      action,
-      key,
-      error,
-    };
-  }
-
-  const parsed = parseJsonSafely(stdout);
-  if (!parsed || typeof parsed !== 'object') {
-    const error = stdout || 'Game UI helper returned an unexpected response.';
-    console.warn(`[GameUI] action=${action} returned non-JSON payload: ${error}`);
-    return {
-      success: false,
-      action,
-      key,
-      error,
-    };
+  if (!result.success) {
+    console.warn(`[GameUI] action=${action} failed: ${result.error || 'unknown error'}`);
+  } else if (!focusConfirmed) {
+    console.warn(`[GameUI] action=${action} focus validation failed.`, result);
   }
 
   return {
-    success: true,
+    ...result,
     action,
     key,
-    ...parsed,
+    electronFocusedWindowTitle: focusedBrowserWindowTitle,
   };
 }
 
@@ -1377,6 +1232,62 @@ function toggleWindowVisibilitySmooth({ focusOnShow = true } = {}) {
     return;
   }
   showWindowSmooth({ focus: focusOnShow });
+}
+
+function hasLiveWindow() {
+  return Boolean(win && !win.isDestroyed());
+}
+
+function ensureMainWindow() {
+  if (hasLiveWindow()) return win;
+  console.warn('[Hotkey] No live window found. Recreating main window before handling hotkey.');
+  createWindow();
+  return win;
+}
+
+function registerGlobalHotkeys() {
+  const shortcuts = ['F9', 'F10'];
+
+  shortcuts.forEach((accelerator) => {
+    if (globalShortcut.isRegistered(accelerator)) {
+      console.log(`[Hotkey] Unregistering stale shortcut ${accelerator} before re-registering.`);
+      globalShortcut.unregister(accelerator);
+    }
+  });
+
+  const f9Registered = globalShortcut.register('F9', () => {
+    const liveWindow = ensureMainWindow();
+    const hasWindow = Boolean(liveWindow && !liveWindow.isDestroyed());
+    console.log(`[Hotkey] F9 invoked. hasLiveWindow=${hasWindow}`);
+    if (!hasWindow) {
+      console.warn('[Hotkey] F9 invoked but no renderer window was available.');
+      return;
+    }
+    toggleWindowVisibilitySmooth({ focusOnShow: true });
+  });
+  console.log(`[Hotkey] F9 registration success=${f9Registered} isRegistered=${globalShortcut.isRegistered('F9')}`);
+  if (!f9Registered) {
+    console.warn('[Hotkey] Failed to register F9 overlay toggle shortcut.');
+  }
+
+  console.log(`[Hotkey] Attempting to register F10 smart capture. alreadyRegistered=${globalShortcut.isRegistered('F10')}`);
+  const f10Registered = globalShortcut.register('F10', () => {
+    const liveWindow = ensureMainWindow();
+    const hasWindow = Boolean(liveWindow && !liveWindow.isDestroyed());
+    console.log(`[Hotkey] F10 invoked. hasLiveWindow=${hasWindow}`);
+    if (hasWindow) {
+      console.log(`[Hotkey] Dispatching hotkey-smart-capture to renderer webContentsId=${liveWindow.webContents.id}`);
+      liveWindow.webContents.send('hotkey-smart-capture');
+    } else {
+      console.warn('[Hotkey] F10 invoked but no renderer window was available.');
+    }
+  });
+  console.log(`[Hotkey] F10 registration success=${f10Registered} isRegistered=${globalShortcut.isRegistered('F10')}`);
+  if (!f10Registered) {
+    console.warn('[Hotkey] Failed to register F10 smart capture shortcut.');
+  }
+
+  return { f9Registered, f10Registered };
 }
 
 function getOverlayBoundsForStyle(style, workAreaSize) {
@@ -2824,6 +2735,18 @@ app.whenReady().then(async () => {
   }
   createWindow();
   createTray();
+  if (isDev) setSplashProgress(win, 90, 'Registering hotkeys...', 'Almost there');
+  registerGlobalHotkeys();
+  void validateGameInputRuntime()
+    .then((status) => {
+      console.log(
+        `[gameInput] nut.js loaded successfully foregroundHandle=${status.foregroundWindowHandle || 'unknown'} `
+        + `foregroundTitle=${JSON.stringify(status.foregroundWindowTitle || '')}`
+      );
+    })
+    .catch((error) => {
+      console.error('[gameInput] nut.js failed to load — F10 Auto-Capture navigation will not work:', error?.message || error);
+    });
 
   // Keep expensive artifact migration off the critical paint path.
   setTimeout(() => {
@@ -2865,32 +2788,17 @@ app.whenReady().then(async () => {
     telemetryArchiveHelpers.cleanupOldArchives(telemetryArchiveHelpers.getArchiveDir(app));
   }, 0);
   if (isDev) setSplashProgress(win, 35, 'Preparing OCR...', 'Registering OCR handlers');
-  registerOCRHandlers(win);  // Register new OCR IPC handlers (pass win for hide-during-capture)
-  if (!isDev) autoUpdater.checkForUpdates();
-
-
-  if (isDev) setSplashProgress(win, 90, 'Registering hotkeys...', 'Almost there');
-  globalShortcut.register('F9', () => {
-    if (win) {
-      toggleWindowVisibilitySmooth({ focusOnShow: true });
-      // Note: We NO LONGER send 'hotkey-toggle-overlay'. 
-      // State (Overlay vs Dashboard) is preserved.
+  try {
+    registerOCRHandlers(win);  // Register new OCR IPC handlers (pass win for hide-during-capture)
+  } catch (e) {
+    console.error('[Startup] registerOCRHandlers failed:', e?.message || e);
+  }
+  if (!isDev) {
+    try {
+      autoUpdater.checkForUpdates();
+    } catch (e) {
+      console.error('[Startup] autoUpdater.checkForUpdates failed:', e?.message || e);
     }
-  });
-  console.log(`[Hotkey] Attempting to register F10 smart capture. alreadyRegistered=${globalShortcut.isRegistered('F10')}`);
-  const f10Registered = globalShortcut.register('F10', () => {
-    const hasLiveWindow = Boolean(win && !win.isDestroyed());
-    console.log(`[Hotkey] F10 invoked. hasLiveWindow=${hasLiveWindow}`);
-    if (win && !win.isDestroyed()) {
-      console.log(`[Hotkey] Dispatching hotkey-smart-capture to renderer webContentsId=${win.webContents.id}`);
-      win.webContents.send('hotkey-smart-capture');
-    } else {
-      console.warn('[Hotkey] F10 invoked but no renderer window was available.');
-    }
-  });
-  console.log(`[Hotkey] F10 registration success=${f10Registered} isRegistered=${globalShortcut.isRegistered('F10')}`);
-  if (!f10Registered) {
-    console.warn('[Hotkey] Failed to register F10 smart capture shortcut.');
   }
 });
 
@@ -3634,6 +3542,13 @@ ipcMain.handle('start-auto-capture', async (_event, request = {}) => {
 app.on('will-quit', () => {
   console.log('[Hotkey] will-quit -> unregisterAll global shortcuts');
   globalShortcut.unregisterAll();
+});
+app.on('activate', () => {
+  if (!hasLiveWindow()) {
+    console.log('[App] activate -> recreating main window');
+    createWindow();
+  }
+  registerGlobalHotkeys();
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 
