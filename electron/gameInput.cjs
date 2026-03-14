@@ -35,6 +35,46 @@ const NAMED_KEY_MAP = Object.freeze({
 let nutApi = null;
 let nutLoadError = null;
 
+let cachedCandidate = null;
+let cachedCandidateExpiry = 0;
+const CANDIDATE_CACHE_TTL_MS = 30_000;
+
+function isProcessAlive(pid) {
+  if (!Number.isFinite(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getCachedCandidate() {
+  if (!cachedCandidate || Date.now() > cachedCandidateExpiry) {
+    cachedCandidate = null;
+    cachedCandidateExpiry = 0;
+    return null;
+  }
+  if (!isProcessAlive(cachedCandidate.processId)) {
+    cachedCandidate = null;
+    cachedCandidateExpiry = 0;
+    return null;
+  }
+  return { ...cachedCandidate };
+}
+
+function setCachedCandidate(candidate) {
+  if (candidate?.success && candidate.processId && candidate.windowHandle) {
+    cachedCandidate = { ...candidate };
+    cachedCandidateExpiry = Date.now() + CANDIDATE_CACHE_TTL_MS;
+  }
+}
+
+function clearGameWindowCache() {
+  cachedCandidate = null;
+  cachedCandidateExpiry = 0;
+}
+
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -156,7 +196,7 @@ foreach ($processName in $processNames) {
   }
 }
 
-if ($titleHints.Count -gt 0) {
+if ($candidates.Count -eq 0 -and $titleHints.Count -gt 0) {
   $candidates += @(Get-Process |
     Where-Object {
       $_.MainWindowHandle -ne 0 -and (Get-TitlePriority([string]$_.MainWindowTitle)) -lt 999
@@ -199,12 +239,91 @@ if (-not $target) {
 `;
 }
 
+function buildGameWindowFocusPowerShellScript() {
+  return `
+$ErrorActionPreference = 'Stop'
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class WGFocus {
+  [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int maxCount);
+}
+"@
+
+$windowHandleValue = [Int64]($env:WILDGATE_GAME_WINDOW_HANDLE)
+$processId = [int]($env:WILDGATE_GAME_PROCESS_ID)
+$focusDelayMs = [Math]::Max(50, [int]($env:WILDGATE_GAME_FOCUS_DELAY_MS))
+$targetWindow = [IntPtr]$windowHandleValue
+
+if ($windowHandleValue -le 0) {
+  [pscustomobject]@{
+    success = $false
+    error = 'Missing target window handle.'
+  } | ConvertTo-Json -Compress
+  exit 0
+}
+
+$shell = $null
+$altSent = $false
+$appActivated = $false
+try {
+  $shell = New-Object -ComObject WScript.Shell
+} catch {
+  $shell = $null
+}
+
+if ($shell) {
+  try {
+    $shell.SendKeys('%')
+    $altSent = $true
+  } catch {}
+  Start-Sleep -Milliseconds 60
+  if ($processId -gt 0) {
+    try {
+      $appActivated = [bool]$shell.AppActivate($processId)
+    } catch {}
+  }
+}
+
+[WGFocus]::ShowWindowAsync($targetWindow, 9) | Out-Null
+[WGFocus]::BringWindowToTop($targetWindow) | Out-Null
+$setForeground = [bool][WGFocus]::SetForegroundWindow($targetWindow)
+Start-Sleep -Milliseconds $focusDelayMs
+
+$foregroundWindow = [WGFocus]::GetForegroundWindow()
+$foregroundHandle = [Int64]$foregroundWindow
+$titleBuilder = New-Object System.Text.StringBuilder 512
+[void][WGFocus]::GetWindowText($foregroundWindow, $titleBuilder, $titleBuilder.Capacity)
+
+[pscustomobject]@{
+  success = $true
+  altSent = $altSent
+  appActivated = $appActivated
+  setForeground = $setForeground
+  focusConfirmed = ($foregroundHandle -eq $windowHandleValue)
+  foregroundWindowHandle = $foregroundHandle
+  foregroundWindowTitle = $titleBuilder.ToString()
+} | ConvertTo-Json -Compress
+`;
+}
+
 async function lookupGameWindowCandidate({
   processNames = [],
   titleHint = '',
   focusDelayMs = DEFAULT_FOCUS_DELAY_MS,
+  skipCache = false,
 } = {}) {
-  const timeoutMs = Math.max(5000, (Math.max(50, Number(focusDelayMs) || DEFAULT_FOCUS_DELAY_MS) * 6) + 2000);
+  if (!skipCache) {
+    const cached = getCachedCandidate();
+    if (cached) return cached;
+  }
+
+  const timeoutMs = Math.max(6000, (Math.max(50, Number(focusDelayMs) || DEFAULT_FOCUS_DELAY_MS) * 8) + 3000);
   const result = await runPowerShellScript(buildGameWindowLookupPowerShellScript(), {
     env: {
       WILDGATE_GAME_PROCESS_NAMES: processNames.join(';'),
@@ -238,13 +357,66 @@ async function lookupGameWindowCandidate({
     };
   }
 
-  return {
+  const lookupResult = {
     success: true,
     processName: typeof parsed.processName === 'string' ? parsed.processName : '',
     processId: Number.isFinite(Number(parsed.processId)) ? Number(parsed.processId) : null,
     windowTitle: typeof parsed.windowTitle === 'string' ? parsed.windowTitle : '',
     windowHandle: Number.isFinite(Number(parsed.windowHandle)) ? Number(parsed.windowHandle) : null,
     candidateSummary: typeof parsed.candidateSummary === 'string' ? parsed.candidateSummary : '',
+  };
+
+  setCachedCandidate(lookupResult);
+  return lookupResult;
+}
+
+async function focusWindowWithPowerShell(candidate, focusDelayMs) {
+  const timeoutMs = Math.max(3000, (Math.max(50, Number(focusDelayMs) || DEFAULT_FOCUS_DELAY_MS) * 6) + 1500);
+  const result = await runPowerShellScript(buildGameWindowFocusPowerShellScript(), {
+    env: {
+      WILDGATE_GAME_WINDOW_HANDLE: String(candidate?.windowHandle || ''),
+      WILDGATE_GAME_PROCESS_ID: String(candidate?.processId || ''),
+      WILDGATE_GAME_FOCUS_DELAY_MS: String(getFocusDelayMs(focusDelayMs)),
+    },
+    timeoutMs,
+  });
+
+  const stdout = String(result?.stdout || '').trim();
+  const stderr = String(result?.stderr || '').trim();
+  if (result?.code !== 0) {
+    return {
+      success: false,
+      error: stderr || stdout || `PowerShell focus helper exited with code ${result?.code}`,
+    };
+  }
+
+  const parsed = parseJsonSafely(stdout);
+  if (!parsed || typeof parsed !== 'object') {
+    return {
+      success: false,
+      error: stdout || 'PowerShell focus helper returned an unexpected response.',
+    };
+  }
+
+  if (parsed.success === false) {
+    return {
+      success: false,
+      error: typeof parsed.error === 'string' ? parsed.error : 'PowerShell focus helper failed.',
+    };
+  }
+
+  return {
+    success: true,
+    altSent: parsed.altSent === true,
+    appActivated: parsed.appActivated === true,
+    setForeground: parsed.setForeground === true,
+    focusConfirmed: parsed.focusConfirmed === true,
+    foregroundWindowHandle: Number.isFinite(Number(parsed.foregroundWindowHandle))
+      ? Number(parsed.foregroundWindowHandle)
+      : null,
+    foregroundWindowTitle: typeof parsed.foregroundWindowTitle === 'string'
+      ? parsed.foregroundWindowTitle
+      : '',
   };
 }
 
@@ -382,7 +554,10 @@ async function focusGameWindow(nut, candidate, focusDelayMs) {
   const targetWindow = new nut.Window(nut.providerRegistry, candidate.windowHandle);
   let restored = false;
   let focused = false;
-  let retried = false;
+  let powerShellFocused = false;
+  let powerShellSetForeground = false;
+  let powerShellAppActivated = false;
+  let powerShellAltSent = false;
 
   try {
     restored = await targetWindow.restore();
@@ -391,24 +566,45 @@ async function focusGameWindow(nut, candidate, focusDelayMs) {
   }
 
   await delay(focusDelayMs);
-  focused = await targetWindow.focus();
-  await delay(focusDelayMs);
-
   let activeWindow = await getActiveWindowInfo(nut);
   let focusConfirmed = activeWindow.foregroundWindowHandle === candidate.windowHandle;
 
   if (!focusConfirmed) {
-    retried = await targetWindow.focus();
+    try {
+      focused = await targetWindow.focus();
+    } catch {
+      focused = false;
+    }
     await delay(focusDelayMs);
     activeWindow = await getActiveWindowInfo(nut);
     focusConfirmed = activeWindow.foregroundWindowHandle === candidate.windowHandle;
   }
 
+  if (!focusConfirmed) {
+    const powerShellResult = await focusWindowWithPowerShell(candidate, focusDelayMs);
+    powerShellFocused = powerShellResult.success;
+    powerShellSetForeground = powerShellResult.setForeground === true;
+    powerShellAppActivated = powerShellResult.appActivated === true;
+    powerShellAltSent = powerShellResult.altSent === true;
+    if (powerShellResult.foregroundWindowHandle != null || powerShellResult.foregroundWindowTitle) {
+      activeWindow = {
+        foregroundWindowHandle: powerShellResult.foregroundWindowHandle ?? activeWindow.foregroundWindowHandle,
+        foregroundWindowTitle: powerShellResult.foregroundWindowTitle || activeWindow.foregroundWindowTitle,
+      };
+    } else {
+      activeWindow = await getActiveWindowInfo(nut);
+    }
+    focusConfirmed = activeWindow.foregroundWindowHandle === candidate.windowHandle;
+  }
+
   return buildWindowResult(candidate, {
-    activated: Boolean(restored || focused || retried),
+    activated: Boolean(restored || focused),
     restored,
     focused,
-    retried,
+    powerShellFocused,
+    powerShellSetForeground,
+    powerShellAppActivated,
+    powerShellAltSent,
     focusConfirmed,
     foregroundWindowHandle: activeWindow.foregroundWindowHandle ?? undefined,
     foregroundWindowTitle: activeWindow.foregroundWindowTitle || undefined,
@@ -421,6 +617,14 @@ async function sendNutKeySequence(nut, keySequence) {
     await nut.keyboard.type(key);
   }
   return translatedKeys;
+}
+
+function translateSingleSendKeyToNutKey(nut, keySequence) {
+  const translatedKeys = translateSendKeysSequenceToNutKeys(keySequence, nut.Key);
+  if (translatedKeys.length !== 1) {
+    throw new Error(`Hold actions require a single key token. Received: ${String(keySequence || '')}`);
+  }
+  return translatedKeys[0];
 }
 
 async function validateGameInputRuntime() {
@@ -480,6 +684,21 @@ async function sendGameKeySequence({
     }
 
     focusResult = await focusGameWindow(nut, candidate, safeFocusDelayMs);
+
+    if (!focusResult.focusConfirmed && cachedCandidate) {
+      clearGameWindowCache();
+      const freshCandidate = await lookupGameWindowCandidate({
+        processNames,
+        titleHint,
+        focusDelayMs: safeFocusDelayMs,
+        skipCache: true,
+      });
+      if (freshCandidate?.success && freshCandidate.windowHandle) {
+        candidate = freshCandidate;
+        focusResult = await focusGameWindow(nut, candidate, safeFocusDelayMs);
+      }
+    }
+
     if (!focusResult.focusConfirmed) {
       return {
         success: false,
@@ -512,7 +731,130 @@ async function sendGameKeySequence({
   }
 }
 
+async function holdGameKeySequence({
+  sequence,
+  action = 'custom-sequence',
+  processNames = [],
+  titleHint = '',
+  focusDelayMs = DEFAULT_FOCUS_DELAY_MS,
+  holdDelayMs = DEFAULT_KEY_DELAY_MS,
+  runWhileHeld = null,
+} = {}) {
+  if (process.platform !== 'win32') {
+    return {
+      success: false,
+      action,
+      error: 'Game UI actions are currently implemented for Windows only.',
+    };
+  }
+
+  const key = String(sequence || '').trim();
+  if (!key) {
+    return {
+      success: false,
+      action,
+      error: 'No key sequence configured.',
+    };
+  }
+
+  const safeFocusDelayMs = getFocusDelayMs(focusDelayMs);
+  const safeHoldDelayMs = Math.max(10, Number(holdDelayMs) || DEFAULT_KEY_DELAY_MS);
+  let candidate = null;
+  let focusResult = null;
+  let heldKey = null;
+
+  try {
+    const nut = loadNutApi();
+    candidate = await lookupGameWindowCandidate({
+      processNames,
+      titleHint,
+      focusDelayMs: safeFocusDelayMs,
+    });
+
+    if (!candidate?.success || !candidate.windowHandle) {
+      return {
+        success: false,
+        action,
+        key,
+        error: candidate?.error || 'No matching game window found.',
+        ...(candidate ? buildWindowResult(candidate) : {}),
+      };
+    }
+
+    focusResult = await focusGameWindow(nut, candidate, safeFocusDelayMs);
+
+    if (!focusResult.focusConfirmed && cachedCandidate) {
+      clearGameWindowCache();
+      const freshCandidate = await lookupGameWindowCandidate({
+        processNames,
+        titleHint,
+        focusDelayMs: safeFocusDelayMs,
+        skipCache: true,
+      });
+      if (freshCandidate?.success && freshCandidate.windowHandle) {
+        candidate = freshCandidate;
+        focusResult = await focusGameWindow(nut, candidate, safeFocusDelayMs);
+      }
+    }
+
+    if (!focusResult.focusConfirmed) {
+      return {
+        success: false,
+        action,
+        key,
+        error: `Failed to confirm game focus before sending ${action}.`,
+        ...focusResult,
+      };
+    }
+
+    heldKey = translateSingleSendKeyToNutKey(nut, key);
+    await nut.keyboard.pressKey(heldKey);
+    await delay(safeHoldDelayMs);
+
+    const callbackResult = typeof runWhileHeld === 'function'
+      ? await runWhileHeld({
+        action,
+        key,
+        heldKey,
+        candidate,
+        focusResult,
+      })
+      : null;
+
+    const activeWindow = await getActiveWindowInfo(nut);
+
+    return {
+      success: true,
+      action,
+      key,
+      callbackResult,
+      ...focusResult,
+      foregroundWindowHandle: activeWindow.foregroundWindowHandle ?? focusResult.foregroundWindowHandle,
+      foregroundWindowTitle: activeWindow.foregroundWindowTitle || focusResult.foregroundWindowTitle,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      action,
+      key,
+      error: normalizeError(error, `Failed to send ${action}.`),
+      ...(focusResult || (candidate ? buildWindowResult(candidate) : {})),
+    };
+  } finally {
+    if (heldKey != null) {
+      try {
+        const nut = loadNutApi();
+        await nut.keyboard.releaseKey(heldKey);
+      } catch {
+        // Best-effort cleanup.
+      }
+    }
+  }
+}
+
 module.exports = {
+  clearGameWindowCache,
+  holdGameKeySequence,
   lookupGameWindowCandidate,
   sendGameKeySequence,
   tokenizeSendKeysSequence,

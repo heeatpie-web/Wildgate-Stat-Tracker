@@ -124,6 +124,104 @@ describe('autoCaptureCoordinator sequencing', () => {
     }));
   });
 
+  it('continues when the tactical-map pre-check fails but the saved screenshot OCR is correct', async () => {
+    const notify = vi.fn();
+    const sendKeySequence = vi.fn().mockResolvedValue({ success: true });
+    const waitForScreenType = vi.fn()
+      .mockResolvedValueOnce({ success: false, detectedType: 'unknown', error: 'Timed out waiting for tactical_map.' })
+      .mockResolvedValueOnce({ success: true, detectedType: 'crew_hub' });
+    const captureAndProcess = vi.fn()
+      .mockResolvedValueOnce({ success: true, filePath: 'map.png', filename: 'map.png', ocrData: { screenshotType: 'tactical_map' } })
+      .mockResolvedValueOnce({ success: true, filePath: 'crew-a.png', filename: 'crew-a.png', ocrData: { screenshotType: 'crew_hub' } })
+      .mockResolvedValueOnce({ success: true, filePath: 'crew-b.png', filename: 'crew-b.png', ocrData: { screenshotType: 'crew_hub' } });
+
+    const coordinator = createAutoCaptureCoordinator({
+      notify,
+      sendKeySequence,
+      waitForScreenType,
+      captureAndProcess,
+      lookupMapKeybind: vi.fn().mockResolvedValue({ raw: 'Tab', sendKeys: '{TAB}' }),
+      delayFn: vi.fn(() => Promise.resolve()),
+    });
+
+    const result = await coordinator.start({
+      lifecycleActive: true,
+      matchId: 44,
+      activeUser: 'Pilot',
+      autoCaptureTacticalMapKey: 'Tab',
+    });
+
+    expect(result).toEqual({
+      started: true,
+      matchId: 44,
+      tacticalMapKeybind: 'Tab',
+    });
+
+    await vi.waitFor(() => {
+      expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+        phase: 'completed',
+        matchId: 44,
+        totalCaptures: 3,
+      }));
+    });
+
+    expect(captureAndProcess).toHaveBeenCalledTimes(3);
+    expect(waitForScreenType).toHaveBeenCalledTimes(2);
+    expect(sendKeySequence).toHaveBeenNthCalledWith(2, '{TAB}', 'Close Tactical Map');
+  });
+
+  it('retries the tactical-map step while holding the key when the tap path fails', async () => {
+    const notify = vi.fn();
+    const sendKeySequence = vi.fn().mockResolvedValue({ success: true });
+    const runWithHeldKeySequence = vi.fn(async (_sequence, _action, runWhileHeld) => {
+      await runWhileHeld();
+      return { success: true, focusConfirmed: true };
+    });
+    const waitForScreenType = vi.fn()
+      .mockResolvedValueOnce({ success: false, detectedType: 'unknown', error: 'Timed out waiting for tactical_map.' })
+      .mockResolvedValueOnce({ success: true, detectedType: 'tactical_map' })
+      .mockResolvedValueOnce({ success: true, detectedType: 'crew_hub' });
+    const captureAndProcess = vi.fn()
+      .mockResolvedValueOnce({ success: true, filePath: 'map-miss.png', filename: 'map-miss.png', ocrData: { screenshotType: 'crew_hub' } })
+      .mockResolvedValueOnce({ success: true, filePath: 'map-held.png', filename: 'map-held.png', ocrData: { screenshotType: 'tactical_map' } })
+      .mockResolvedValueOnce({ success: true, filePath: 'crew-a.png', filename: 'crew-a.png', ocrData: { screenshotType: 'crew_hub' } })
+      .mockResolvedValueOnce({ success: true, filePath: 'crew-b.png', filename: 'crew-b.png', ocrData: { screenshotType: 'crew_hub' } });
+
+    const coordinator = createAutoCaptureCoordinator({
+      notify,
+      runWithHeldKeySequence,
+      sendKeySequence,
+      waitForScreenType,
+      captureAndProcess,
+      lookupMapKeybind: vi.fn().mockResolvedValue({ raw: 'KeyM', sendKeys: 'm' }),
+      delayFn: vi.fn(() => Promise.resolve()),
+    });
+
+    const result = await coordinator.start({
+      lifecycleActive: true,
+      matchId: 44,
+      autoCaptureTacticalMapKey: 'KeyM',
+    });
+
+    expect(result).toEqual({
+      started: true,
+      matchId: 44,
+      tacticalMapKeybind: 'KeyM',
+    });
+
+    await vi.waitFor(() => {
+      expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+        phase: 'completed',
+        matchId: 44,
+        totalCaptures: 3,
+      }));
+    });
+
+    expect(runWithHeldKeySequence).toHaveBeenCalledWith('m', 'Open Tactical Map (hold)', expect.any(Function));
+    expect(sendKeySequence).not.toHaveBeenCalledWith('m', 'Close Tactical Map');
+    expect(captureAndProcess).toHaveBeenCalledTimes(4);
+  });
+
   it('fails when a saved screenshot OCR type does not match the expected screen', async () => {
     const notify = vi.fn();
     const coordinator = createAutoCaptureCoordinator({

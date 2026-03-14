@@ -215,6 +215,7 @@ function logAutoCaptureStep(step, detail) {
 
 function createAutoCaptureCoordinator({
   notify,
+  runWithHeldKeySequence = null,
   sendKeySequence,
   captureAndProcess,
   waitForScreenType = null,
@@ -306,14 +307,51 @@ function createAutoCaptureCoordinator({
       });
     };
 
-    await sendStepKeys(STEP_DEFINITIONS.openMap, tacticalMapKeybind.sendKeys);
-    await waitStep(1000);
-    await validateScreenStep(STEP_DEFINITIONS.captureMap, EXPECTED_SCREEN_TYPES[STEP_DEFINITIONS.captureMap.label]);
+    const captureTacticalMapStep = async () => {
+      const expectedType = EXPECTED_SCREEN_TYPES[STEP_DEFINITIONS.captureMap.label];
+      let validationError = null;
 
-    await captureStep(STEP_DEFINITIONS.captureMap, 1, EXPECTED_SCREEN_TYPES[STEP_DEFINITIONS.captureMap.label]);
+      await sendStepKeys(STEP_DEFINITIONS.openMap, tacticalMapKeybind.sendKeys);
+      await waitStep(1000);
 
-    await sendStepKeys(STEP_DEFINITIONS.closeMap, tacticalMapKeybind.sendKeys);
-    await waitStep(300);
+      try {
+        await validateScreenStep(STEP_DEFINITIONS.captureMap, expectedType);
+      } catch (error) {
+        validationError = error;
+        const reason = error instanceof Error ? error.message : String(error);
+        console.warn(`[AutoCapture] Tactical map pre-check failed after tap; continuing to capture attempt. reason=${reason}`);
+      }
+
+      try {
+        await captureStep(STEP_DEFINITIONS.captureMap, 1, expectedType);
+        await sendStepKeys(STEP_DEFINITIONS.closeMap, tacticalMapKeybind.sendKeys);
+        await waitStep(300);
+        return;
+      } catch (captureError) {
+        if (!sendKeypresses || typeof runWithHeldKeySequence !== 'function') {
+          throw validationError || captureError;
+        }
+
+        const captureReason = captureError instanceof Error ? captureError.message : String(captureError);
+        console.warn(`[AutoCapture] Tactical map tap path failed; retrying while holding the map key. reason=${captureReason}`);
+        const heldResult = await runWithHeldKeySequence(
+          tacticalMapKeybind.sendKeys,
+          `${STEP_DEFINITIONS.openMap.label} (hold)`,
+          async () => {
+            await waitStep(200);
+            await validateScreenStep(STEP_DEFINITIONS.captureMap, expectedType);
+            await captureStep(STEP_DEFINITIONS.captureMap, 1, expectedType);
+          }
+        );
+
+        if (!heldResult?.success) {
+          const heldReason = heldResult?.error || captureReason;
+          throw new Error(heldReason);
+        }
+      }
+    };
+
+    await captureTacticalMapStep();
 
     await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{UP}{UP}{UP}{UP} ');
     await waitStep(1200);

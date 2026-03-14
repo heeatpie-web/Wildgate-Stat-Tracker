@@ -1,9 +1,11 @@
 import { createRequire } from 'node:module';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, beforeEach } from 'vitest';
 
 const require = createRequire(import.meta.url);
 const { Key } = require('@nut-tree-fork/nut-js');
 const {
+  clearGameWindowCache,
+  lookupGameWindowCandidate,
   tokenizeSendKeysSequence,
   translateSendKeysSequenceToNutKeys,
 } = require('./gameInput.cjs');
@@ -43,5 +45,32 @@ describe('gameInput send-keys translation', () => {
   it('rejects unsupported tokens', () => {
     expect(() => translateSendKeysSequenceToNutKeys('{CTRL}', Key)).toThrow(/Unsupported named key token/i);
     expect(() => tokenizeSendKeysSequence('{UP')).toThrow(/Unterminated key token/i);
+  });
+});
+
+describe('gameInput window candidate cache', () => {
+  beforeEach(() => {
+    clearGameWindowCache();
+  });
+
+  it('clearGameWindowCache is callable and does not throw', () => {
+    expect(() => clearGameWindowCache()).not.toThrow();
+  });
+
+  it('lookupGameWindowCandidate returns failure on non-Windows without cache', async () => {
+    if (process.platform === 'win32') return;
+    const result = await lookupGameWindowCandidate({
+      processNames: ['nonexistent-test-process'],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('lookupGameWindowCandidate respects skipCache parameter', async () => {
+    if (process.platform === 'win32') return;
+    const result = await lookupGameWindowCandidate({
+      processNames: ['nonexistent-test-process'],
+      skipCache: true,
+    });
+    expect(result.success).toBe(false);
   });
 });

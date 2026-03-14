@@ -16,7 +16,7 @@ const telemetryArchiveHelpers = require('./helpers/telemetryArchiveHelpers.cjs')
 const dbHelpers = require('./helpers/dbHelpers.cjs');
 const { registerArtifactHandlers, saveScreenshotImage } = require('./handlers/artifactHandlers.cjs');
 const { createAutoCaptureCoordinator } = require('./autoCaptureCoordinator.cjs');
-const { sendGameKeySequence, validateGameInputRuntime } = require('./gameInput.cjs');
+const { clearGameWindowCache, holdGameKeySequence, sendGameKeySequence, validateGameInputRuntime } = require('./gameInput.cjs');
 const {
   ok,
   fail,
@@ -819,7 +819,67 @@ async function sendGameKeySequenceInternal(sendKeys, action = 'custom-sequence')
     `[GameUI] resolved action=${action} target=${result.processName || 'unknown'}#${result.processId || 'unknown'} `
     + `handle=${result.targetWindowHandle || 'unknown'} windowTitle=${JSON.stringify(result.windowTitle || '')} `
     + `foregroundHandle=${result.foregroundWindowHandle || 'unknown'} foregroundTitle=${JSON.stringify(result.foregroundWindowTitle || '')} `
-    + `focusConfirmed=${focusConfirmed} electronFocusedWindow=${JSON.stringify(focusedBrowserWindowTitle || '')}`
+    + `focusConfirmed=${focusConfirmed} psFocused=${result.powerShellFocused === true} `
+    + `psRetried=${result.powerShellRetried === true} psSetForeground=${result.powerShellSetForeground === true} `
+    + `psAppActivated=${result.powerShellAppActivated === true} psAltSent=${result.powerShellAltSent === true} `
+    + `electronFocusedWindow=${JSON.stringify(focusedBrowserWindowTitle || '')}`
+  );
+
+  if (!result.success) {
+    console.warn(`[GameUI] action=${action} failed: ${result.error || 'unknown error'}`);
+  } else if (!focusConfirmed) {
+    console.warn(`[GameUI] action=${action} focus validation failed.`, result);
+  }
+
+  return {
+    ...result,
+    action,
+    key,
+    electronFocusedWindowTitle: focusedBrowserWindowTitle,
+  };
+}
+
+async function runHeldGameKeySequenceInternal(sendKeys, action = 'custom-sequence', runWhileHeld = null) {
+  if (process.platform !== 'win32') {
+    return {
+      success: false,
+      action,
+      error: 'Game UI actions are currently implemented for Windows only.',
+    };
+  }
+
+  const key = String(sendKeys || '').trim();
+  if (!key) {
+    return {
+      success: false,
+      action,
+      error: 'No SendKeys sequence configured.',
+    };
+  }
+
+  console.log(`[GameUI] action=${action} key=${key} candidates=${GAME_WINDOW_PROCESS_NAMES.join(',') || 'none'} titleHint=${GAME_WINDOW_TITLE_HINT || 'none'}`);
+
+  const focusedBrowserWindow = BrowserWindow.getFocusedWindow();
+  const focusedBrowserWindowTitle = focusedBrowserWindow && !focusedBrowserWindow.isDestroyed()
+    ? focusedBrowserWindow.getTitle()
+    : null;
+  const result = await holdGameKeySequence({
+    sequence: key,
+    action,
+    processNames: GAME_WINDOW_PROCESS_NAMES,
+    titleHint: GAME_WINDOW_TITLE_HINT,
+    focusDelayMs: GAME_UI_FOCUS_DELAY_MS,
+    runWhileHeld,
+  });
+  const focusConfirmed = result.focusConfirmed !== false && Boolean(result.focusConfirmed ?? result.activated);
+  console.log(
+    `[GameUI] resolved action=${action} target=${result.processName || 'unknown'}#${result.processId || 'unknown'} `
+    + `handle=${result.targetWindowHandle || 'unknown'} windowTitle=${JSON.stringify(result.windowTitle || '')} `
+    + `foregroundHandle=${result.foregroundWindowHandle || 'unknown'} foregroundTitle=${JSON.stringify(result.foregroundWindowTitle || '')} `
+    + `focusConfirmed=${focusConfirmed} psFocused=${result.powerShellFocused === true} `
+    + `psRetried=${result.powerShellRetried === true} psSetForeground=${result.powerShellSetForeground === true} `
+    + `psAppActivated=${result.powerShellAppActivated === true} psAltSent=${result.powerShellAltSent === true} `
+    + `electronFocusedWindow=${JSON.stringify(focusedBrowserWindowTitle || '')}`
   );
 
   if (!result.success) {
@@ -854,6 +914,7 @@ const autoCaptureCoordinator = createAutoCaptureCoordinator({
       win.webContents.send('auto-capture-status', payload);
     }
   },
+  runWithHeldKeySequence: (sendKeys, action, runWhileHeld) => runHeldGameKeySequenceInternal(sendKeys, action, runWhileHeld),
   sendKeySequence: (sendKeys, action) => sendGameKeySequenceInternal(sendKeys, action),
   waitForScreenType: (expectedType, options) => waitForGameScreenInternal(expectedType, options),
   captureAndProcess: async ({ matchId, activeUser = null, ocrMode = 'local', ocrRegions = null, runtimeOptions = {} }) => {
