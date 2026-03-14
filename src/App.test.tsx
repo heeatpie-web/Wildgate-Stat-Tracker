@@ -100,7 +100,9 @@ const appStoreState = {
   recordDashboardPreloadVisit: vi.fn(),
   isAlwaysOnTop: false,
   isOverlayMode: false,
+  activeHero: 'Venture',
   activeShip: 'Hunter (4 Player)',
+  currentLoadout: null as any,
   selectedTeammates: [] as string[],
   ocrLearningEnabled: false,
   resolveOcrAlias: vi.fn(() => ({ resolvedName: null, suggestedName: null, reason: 'none' })),
@@ -112,6 +114,7 @@ const appStoreState = {
   autoSequenceOnCapture: false,
    autoCaptureSendKeypresses: true,
    autoCaptureWaitMultiplier: 1,
+   tacticalMapKeybind: 'Tab',
    ocrEnhancedNameRecoveryEnabled: true,
    ocrNameRerouteThreshold: 78,
    ocrRegions: {
@@ -123,6 +126,9 @@ const appStoreState = {
   ocrCorrections: {},
   ocrAliasModel: {},
   matches: [] as any[],
+  addMatch: vi.fn((match: any) => {
+    appStoreState.matches = [...appStoreState.matches, match];
+  }),
   pendingMatchData: {},
   setPendingArtifactType: vi.fn(),
   setPendingMatchData: vi.fn(),
@@ -237,10 +243,13 @@ describe('App', () => {
     appStoreState.selectedTeammates = [];
     appStoreState.dismissedRosterCandidateKeys = [];
     appStoreState.matches = [];
+    appStoreState.addMatch.mockClear();
     appStoreState.pendingMatchData = {};
+    appStoreState.currentLoadout = null;
     appStoreState.autoSequenceOnCapture = false;
     appStoreState.autoCaptureSendKeypresses = true;
     appStoreState.autoCaptureWaitMultiplier = 1;
+    appStoreState.tacticalMapKeybind = 'Tab';
     appStoreState.isMatchInProgress = false;
   });
 
@@ -496,11 +505,11 @@ describe('App', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(handlers['hotkey-smart-capture']).toBeTypeOf('function');
+      expect(handlers['hotkey-auto-capture']).toBeTypeOf('function');
     });
 
     act(() => {
-      handlers['hotkey-smart-capture']();
+      handlers['hotkey-auto-capture']();
     });
 
     await waitFor(() => {
@@ -508,7 +517,7 @@ describe('App', () => {
         activeUser: 'Pilot',
         lifecycleActive: true,
         matchId: 321,
-        tacticalMapKeybind: expect.any(String),
+        autoCaptureTacticalMapKey: 'Tab',
       }));
     });
     expect(uiState.requestSmartCapture).not.toHaveBeenCalled();
@@ -520,6 +529,58 @@ describe('App', () => {
       }),
     }));
     gameDataState.matches = [];
+    appStoreState.isMatchInProgress = false;
+  });
+
+  it('creates a telemetry draft for F10 when the match is active but no draft exists yet', async () => {
+    const { default: App } = await import('./App');
+    uiState.activeView = 'analytics';
+    appStoreState.isMatchInProgress = true;
+    appStoreState.matches = [];
+    gameDataState.matches = [];
+    const handlers: Record<string, (...args: unknown[]) => void> = {};
+    const api = {
+      invoke: vi.fn(() => Promise.resolve({ started: true })),
+      send: vi.fn(),
+      on: vi.fn((channel: string, cb: (...args: unknown[]) => void) => {
+        handlers[channel] = cb;
+        return vi.fn();
+      }),
+      removeAllListeners: vi.fn(),
+    };
+    getElectronAPIMock.mockReturnValue(api);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(handlers['hotkey-auto-capture']).toBeTypeOf('function');
+    });
+
+    act(() => {
+      handlers['hotkey-auto-capture']();
+    });
+
+    await waitFor(() => {
+      expect(appStoreState.addMatch).toHaveBeenCalledTimes(1);
+    });
+
+    const createdDraft = appStoreState.addMatch.mock.calls[0][0];
+    expect(createdDraft).toEqual(expect.objectContaining({
+      subType: 'Telemetry Draft',
+      player: 'Pilot',
+      result: 'Ongoing',
+      ocrState: 'queued',
+    }));
+
+    await waitFor(() => {
+      expect(api.invoke).toHaveBeenCalledWith('start-auto-capture', expect.objectContaining({
+        activeUser: 'Pilot',
+        lifecycleActive: true,
+        matchId: createdDraft.id,
+        autoCaptureTacticalMapKey: 'Tab',
+      }));
+    });
+
     appStoreState.isMatchInProgress = false;
   });
 
@@ -550,11 +611,11 @@ describe('App', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(handlers['hotkey-smart-capture']).toBeTypeOf('function');
+      expect(handlers['hotkey-auto-capture']).toBeTypeOf('function');
     });
 
     act(() => {
-      handlers['hotkey-smart-capture']();
+      handlers['hotkey-auto-capture']();
     });
 
     await waitFor(() => {

@@ -30,6 +30,11 @@ describe('createSettingsSlice OCR policy', () => {
     expect(store.getState().autoCaptureWaitMultiplier).toBe(0.5);
   });
 
+  it('allows clearing the tactical map keybind explicitly', () => {
+    store.getState().setTacticalMapKeybind('');
+    expect(store.getState().tacticalMapKeybind).toBe('');
+  });
+
   it('clamps OCR name reroute threshold to integer percent bounds', () => {
     store.getState().setOcrNameRerouteThreshold(84.6);
     expect(store.getState().ocrNameRerouteThreshold).toBe(85);

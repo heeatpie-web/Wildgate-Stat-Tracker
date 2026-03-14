@@ -353,7 +353,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   }),
   setTacticalMapKeybind: (keybind) => {
     const trimmed = String(keybind || '').trim();
-    set({ tacticalMapKeybind: trimmed || 'Tab' });
+    set({ tacticalMapKeybind: trimmed });
   },
   setAutoPopulateRosterOnSave: (enabled) => set({ autoPopulateRosterOnSave: enabled }),
   setLockOcrTeams: (enabled) => set({ lockOcrTeams: enabled }),

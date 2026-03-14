@@ -51,6 +51,16 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isMatchRecord = (value: unknown): value is Match => isRecord(value);
 
+const resolvePersistedTacticalMapKeybind = (settings: Record<string, unknown>): string => {
+  if (typeof settings.autoCaptureTacticalMapKey === 'string') {
+    return settings.autoCaptureTacticalMapKey.trim();
+  }
+  if (typeof settings.tacticalMapKeybind === 'string') {
+    return settings.tacticalMapKeybind.trim();
+  }
+  return 'Tab';
+};
+
 const mergeNumberRecord = <T extends object>(base: T, incoming: unknown): T => {
   const next = { ...base } as T;
   if (!isRecord(incoming)) return next;
@@ -253,9 +263,7 @@ const customStorage: PersistStorage<AppState> = {
           autoCaptureWaitMultiplier: Number.isFinite(settings.autoCaptureWaitMultiplier)
             ? Math.max(0.5, Math.min(3, Number(settings.autoCaptureWaitMultiplier)))
             : 1,
-          tacticalMapKeybind: typeof settings.tacticalMapKeybind === 'string' && settings.tacticalMapKeybind.trim().length > 0
-            ? settings.tacticalMapKeybind.trim()
-            : 'Tab',
+          tacticalMapKeybind: resolvePersistedTacticalMapKeybind(settings),
           autoPopulateRosterOnSave: settings.autoPopulateRosterOnSave ?? false,
           lockOcrTeams: settings.lockOcrTeams || false,
           ocrEnhancedNameRecoveryEnabled: settings.ocrEnhancedNameRecoveryEnabled ?? true,
@@ -400,6 +408,7 @@ const customStorage: PersistStorage<AppState> = {
                 autoSequenceOnCapture: state.autoSequenceOnCapture,
                 autoCaptureSendKeypresses: state.autoCaptureSendKeypresses,
                 autoCaptureWaitMultiplier: state.autoCaptureWaitMultiplier,
+                autoCaptureTacticalMapKey: state.tacticalMapKeybind,
                 tacticalMapKeybind: state.tacticalMapKeybind,
                 autoPopulateRosterOnSave: state.autoPopulateRosterOnSave,
                 lockOcrTeams: state.lockOcrTeams,

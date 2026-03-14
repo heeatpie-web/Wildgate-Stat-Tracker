@@ -229,6 +229,29 @@ const SettingsModalContent: React.FC = () => {
     const resetOcrCalibration = useAppStore(s => s.resetOcrCalibration);
     const ocrRegions = useAppStore(s => s.ocrRegions);
     const setOcrRegions = useAppStore(s => s.setOcrRegions);
+
+    const handleTacticalMapKeybindKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+        const ignoredCodes = new Set([
+            'ShiftLeft', 'ShiftRight',
+            'ControlLeft', 'ControlRight',
+            'AltLeft', 'AltRight',
+            'MetaLeft', 'MetaRight',
+            'CapsLock',
+        ]);
+
+        if (event.key === 'Backspace' || event.key === 'Delete') {
+            event.preventDefault();
+            setTacticalMapKeybind('');
+            return;
+        }
+
+        if (!event.code || ignoredCodes.has(event.code)) {
+            return;
+        }
+
+        event.preventDefault();
+        setTacticalMapKeybind(event.code);
+    }, [setTacticalMapKeybind]);
     const ocrAliasModel = useAppStore(s => s.ocrAliasModel);
     const recordOcrAliasCorrection = useAppStore(s => s.recordOcrAliasCorrection);
     const removeOcrAliasCorrection = useAppStore(s => s.removeOcrAliasCorrection);
@@ -1217,19 +1240,15 @@ const SettingsModalContent: React.FC = () => {
                         </div>
                         <div className="mt-4 rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-4 py-4">
                             <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">Tactical Map Key</div>
-                            <div className="mt-1 text-label-sm text-md-sys-on-surface/60">Used by F10 auto-capture to open and close the tactical map. Defaults to Tab.</div>
+                            <div className="mt-1 text-label-sm text-md-sys-on-surface/60">Focus this field and press the in-game tactical map key. Backspace or Delete clears it, which makes F10 fail fast until you rebind it.</div>
                             <input
                                 aria-label="Tactical Map Key"
                                 type="text"
-                                value={tacticalMapKeybind || 'Tab'}
-                                onChange={(event) => setTacticalMapKeybind(event.target.value)}
-                                onBlur={(event) => {
-                                    if (!String(event.target.value || '').trim()) {
-                                        setTacticalMapKeybind('Tab');
-                                    }
-                                }}
+                                value={tacticalMapKeybind || ''}
+                                onKeyDown={handleTacticalMapKeybindKeyDown}
+                                readOnly
                                 className="mt-3 w-full rounded-control border border-md-sys-outline/15 bg-md-sys-surface px-3 py-2 text-body text-md-sys-on-surface outline-none focus:border-md-sys-primary"
-                                placeholder="Tab"
+                                placeholder="Press a key"
                                 maxLength={24}
                             />
                         </div>

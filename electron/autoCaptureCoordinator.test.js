@@ -12,6 +12,9 @@ describe('autoCaptureCoordinator keybind parsing', () => {
   it('normalizes common send-keys tokens', () => {
     expect(normalizeKeybindToSendKeys('Tab')).toBe('{TAB}');
     expect(normalizeKeybindToSendKeys('M')).toBe('m');
+    expect(normalizeKeybindToSendKeys('KeyM')).toBe('m');
+    expect(normalizeKeybindToSendKeys('Digit7')).toBe('7');
+    expect(normalizeKeybindToSendKeys('ArrowUp')).toBe('{UP}');
     expect(normalizeKeybindToSendKeys('SpaceBar')).toBe(' ');
     expect(normalizeKeybindToSendKeys('Gamepad_FaceButton_Bottom')).toBeNull();
   });
@@ -80,6 +83,7 @@ describe('autoCaptureCoordinator sequencing', () => {
       matchId: 44,
       activeUser: 'Pilot',
       autoCaptureWaitMultiplier: 2,
+      autoCaptureTacticalMapKey: 'Tab',
     });
 
     expect(result).toEqual({
@@ -134,7 +138,7 @@ describe('autoCaptureCoordinator sequencing', () => {
       delayFn: vi.fn(() => Promise.resolve()),
     });
 
-    const result = await coordinator.start({ lifecycleActive: true, matchId: 44 });
+    const result = await coordinator.start({ lifecycleActive: true, matchId: 44, autoCaptureTacticalMapKey: 'Tab' });
     expect(result).toEqual({
       started: true,
       matchId: 44,
@@ -165,7 +169,7 @@ describe('autoCaptureCoordinator sequencing', () => {
       delayFn: vi.fn(() => Promise.resolve()),
     });
 
-    const result = await coordinator.start({ lifecycleActive: true, matchId: 44 });
+    const result = await coordinator.start({ lifecycleActive: true, matchId: 44, autoCaptureTacticalMapKey: 'Tab' });
     expect(result).toEqual({
       started: true,
       matchId: 44,
@@ -196,7 +200,7 @@ describe('autoCaptureCoordinator sequencing', () => {
       now: () => clock.now,
     });
 
-    const first = await coordinator.start({ lifecycleActive: true, matchId: 9 });
+    const first = await coordinator.start({ lifecycleActive: true, matchId: 9, autoCaptureTacticalMapKey: 'Tab' });
     expect(first.started).toBe(true);
 
     await vi.waitFor(() => {
@@ -211,5 +215,31 @@ describe('autoCaptureCoordinator sequencing', () => {
       ignored: true,
       reason: 'cooldown',
     });
+  });
+
+  it('fails before starting when the tactical map key is missing from settings', async () => {
+    const notify = vi.fn();
+    const coordinator = createAutoCaptureCoordinator({
+      notify,
+      sendKeySequence: vi.fn(),
+      captureAndProcess: vi.fn(),
+      lookupMapKeybind: vi.fn(),
+      delayFn: vi.fn(() => Promise.resolve()),
+    });
+
+    const result = await coordinator.start({
+      lifecycleActive: true,
+      matchId: 44,
+      autoCaptureTacticalMapKey: '',
+    });
+
+    expect(result).toEqual({
+      started: false,
+      reason: 'missing-tactical-map-key',
+    });
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+      phase: 'failed',
+      message: 'No tactical map key configured. Set it in Settings.',
+    }));
   });
 });

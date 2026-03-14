@@ -61,6 +61,8 @@ const storeState = {
   setAutoCaptureSendKeypresses: vi.fn(),
   autoCaptureWaitMultiplier: 1,
   setAutoCaptureWaitMultiplier: vi.fn(),
+  tacticalMapKeybind: 'Tab',
+  setTacticalMapKeybind: vi.fn(),
   showSmartCaptureInHeader: true,
   setShowSmartCaptureInHeader: vi.fn(),
   tipsEnabled: true,
@@ -187,6 +189,7 @@ describe('SettingsModal', () => {
     storeState.captureMode = 'auto';
     storeState.resultOcrFlowMode = 'prompt';
     storeState.autoSequenceOnCapture = false;
+    storeState.tacticalMapKeybind = 'Tab';
   });
 
   it('renders a full-screen settings screen with per-section navigation', async () => {
@@ -252,6 +255,20 @@ describe('SettingsModal', () => {
 
     expect(storeState.setAutoCaptureSendKeypresses).toHaveBeenCalledWith(false);
     expect(storeState.setAutoCaptureWaitMultiplier).toHaveBeenCalledWith(2.4);
+  });
+
+  it('captures the tactical map key as event.code and allows clearing it', async () => {
+    const { SettingsModal } = await import('./SettingsModal');
+    render(<SettingsModal />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^capture$/i }));
+
+    const input = screen.getByLabelText(/tactical map key/i);
+    fireEvent.keyDown(input, { key: 'm', code: 'KeyM' });
+    fireEvent.keyDown(input, { key: 'Backspace', code: 'Backspace' });
+
+    expect(storeState.setTacticalMapKeybind).toHaveBeenNthCalledWith(1, 'KeyM');
+    expect(storeState.setTacticalMapKeybind).toHaveBeenNthCalledWith(2, '');
   });
 });
 

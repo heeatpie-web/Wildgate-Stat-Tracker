@@ -338,6 +338,74 @@ const clonePendingMatchDraft = (value: Partial<Match> | null | undefined): Parti
         : undefined,
 });
 
+const buildAutoCaptureTelemetryDraft = ({
+    matchId,
+    timestamp,
+    mode,
+    player,
+    hero,
+    ship,
+    loadout,
+}: {
+    matchId: number;
+    timestamp: number;
+    mode: Match['mode'];
+    player?: string | null;
+    hero?: string | null;
+    ship?: string | null;
+    loadout?: Match['loadout'] | null;
+}): Match => {
+    const normalizedLoadout = cloneLoadout(loadout) || {
+        hero: loadout?.hero || null,
+        ship: loadout?.ship || null,
+        perks: [],
+        shipPerks: [],
+        characterPerks: [],
+        shipWeapons: [],
+        weapons: [],
+        equipment: [],
+        characterWeapons: [],
+        characterEquipment: [],
+    };
+    const normalizedPlayer = String(player || '').trim() || 'Unknown Player';
+    const normalizedHero = (
+        normalizedLoadout?.hero
+        && !String(normalizedLoadout.hero).startsWith('Unknown')
+    )
+        ? String(normalizedLoadout.hero)
+        : (String(hero || '').trim() || 'Unknown');
+    const normalizedShip = (
+        normalizedLoadout?.ship
+        && !String(normalizedLoadout.ship).startsWith('Unknown')
+    )
+        ? String(normalizedLoadout.ship)
+        : (String(ship || '').trim() || 'Unknown');
+
+    return {
+        id: matchId,
+        timestamp,
+        date: new Date(timestamp).toLocaleDateString(),
+        mode,
+        player: normalizedPlayer,
+        teammates: [],
+        opponents: [],
+        hero: normalizedHero,
+        ship: normalizedShip,
+        loadout: normalizedLoadout,
+        weapons: {},
+        reachModifiers: [],
+        kills: { 'AI Legion': 0 },
+        result: 'Ongoing',
+        subType: 'Telemetry Draft',
+        time: '00:00',
+        damageTaken: 0,
+        notes: '',
+        timelineEvents: [],
+        artifacts: [],
+        ocrState: 'queued',
+    };
+};
+
 const formatBytes = (bytes: number): string => {
     if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
     const units = ['B', 'KB', 'MB', 'GB'];
@@ -1540,32 +1608,100 @@ const App: React.FC = () => {
         if (aot) api.send('set-always-on-top', true);
     }, []);
 
-    const handleGlobalHotkeySmartCapture = useCallback(async () => {
+    const handleGlobalHotkeyAutoCapture = useCallback(async () => {
         const api = getElectronAPI();
         if (!api) {
-            setToast({ message: 'Smart Capture hotkey unavailable: desktop bridge not ready.', type: 'error' });
+            setToast({ message: 'Auto-Capture hotkey unavailable: desktop bridge not ready.', type: 'error' });
             return;
         }
         try {
-            Logger.info('Hotkeys', 'Renderer handling F10 smart capture', {
+            Logger.info('Hotkeys', 'Renderer handling F10 auto-capture', {
                 activeUser: activeUser || null,
                 activeView,
                 behavior: 'auto-sequence',
             });
             const currentState = useAppStore.getState();
-            const resolvedMatchId = resolveSmartCaptureMatchId({
-                activeUser: activeUser || null,
-                matches,
-                pendingMatchData: currentState.pendingMatchData,
-                sessionStartTime,
+            const currentStateMatches = Array.isArray(currentState.matches) ? currentState.matches : [];
+            const matchCandidates = currentStateMatches.length > 0 ? currentStateMatches : matches;
+            const resolvedActiveUser = typeof currentState.activeUser === 'string' && currentState.activeUser.trim().length > 0
+                ? currentState.activeUser.trim()
+                : (activeUser || null);
+            const resolvedSessionStartTime = typeof currentState.sessionStartTime === 'number' && currentState.sessionStartTime > 0
+                ? currentState.sessionStartTime
+                : sessionStartTime;
+            const smartCaptureScope = {
+                matches: matchCandidates,
+                pendingMatchData: currentState.pendingMatchData || null,
+                sessionStartTime: resolvedSessionStartTime,
+            };
+            const lifecycleActive = currentState.isMatchInProgress === true;
+            let resolvedMatchId = resolveSmartCaptureMatchId({
+                activeUser: resolvedActiveUser,
+                ...smartCaptureScope,
+            }) ?? resolveSmartCaptureMatchId({
+                activeUser: null,
+                ...smartCaptureScope,
+            });
+            let fallbackDraftCreated = false;
+
+            if ((typeof resolvedMatchId !== 'number' || resolvedMatchId <= 0) && lifecycleActive) {
+                const refreshedState = useAppStore.getState();
+                const refreshedMatches = Array.isArray(refreshedState.matches) ? refreshedState.matches : [];
+                const refreshedScope = {
+                    matches: refreshedMatches.length > 0 ? refreshedMatches : matchCandidates,
+                    pendingMatchData: refreshedState.pendingMatchData || null,
+                    sessionStartTime: resolvedSessionStartTime,
+                };
+                resolvedMatchId = resolveSmartCaptureMatchId({
+                    activeUser: resolvedActiveUser,
+                    ...refreshedScope,
+                }) ?? resolveSmartCaptureMatchId({
+                    activeUser: null,
+                    ...refreshedScope,
+                });
+
+                if ((typeof resolvedMatchId !== 'number' || resolvedMatchId <= 0) && typeof refreshedState.addMatch === 'function') {
+                    const fallbackTimestamp = Date.now();
+                    const fallbackMatchId = fallbackTimestamp + Math.floor(Math.random() * 1000);
+                    const fallbackDraft = buildAutoCaptureTelemetryDraft({
+                        matchId: fallbackMatchId,
+                        timestamp: fallbackTimestamp,
+                        mode: activeMode === 'Artifact Brawl' ? 'Artifact Brawl' : 'Fleet Battle',
+                        player: resolvedActiveUser,
+                        hero: typeof refreshedState.activeHero === 'string' ? refreshedState.activeHero : null,
+                        ship: typeof refreshedState.activeShip === 'string' ? refreshedState.activeShip : activeShip,
+                        loadout: refreshedState.currentLoadout || null,
+                    });
+                    refreshedState.addMatch(fallbackDraft);
+                    resolvedMatchId = fallbackDraft.id;
+                    fallbackDraftCreated = true;
+                    Logger.info('Hotkeys', 'Created fallback telemetry draft for F10', {
+                        matchId: fallbackDraft.id,
+                        activeUser: fallbackDraft.player,
+                        mode: fallbackDraft.mode,
+                    });
+                }
+            }
+
+            const requestMatchId = typeof resolvedMatchId === 'number' && resolvedMatchId > 0
+                ? resolvedMatchId
+                : null;
+
+            Logger.info('Hotkeys', 'Resolved F10 auto-capture scope', {
+                resolvedMatchId: requestMatchId,
+                lifecycleActive,
+                activeUser: resolvedActiveUser,
+                candidateMatches: matchCandidates.length,
+                fallbackDraftCreated,
+                pendingMatchId: Number((smartCaptureScope.pendingMatchData as { id?: unknown } | null)?.id || 0) || null,
             });
             const started = await api.invoke('start-auto-capture', {
-                activeUser: activeUser || null,
-                matchId: resolvedMatchId,
-                lifecycleActive: currentState.isMatchInProgress === true,
+                activeUser: resolvedActiveUser,
+                matchId: requestMatchId,
+                lifecycleActive,
                 autoCaptureSendKeypresses: currentState.autoCaptureSendKeypresses !== false,
                 autoCaptureWaitMultiplier: currentState.autoCaptureWaitMultiplier,
-                tacticalMapKeybind: tacticalMapKeybind || 'Tab',
+                autoCaptureTacticalMapKey: typeof tacticalMapKeybind === 'string' ? tacticalMapKeybind : '',
                 ocrMode: 'local',
                 ocrRegions: currentState.ocrRegions || null,
                 runtimeOptions: {
@@ -1583,17 +1719,17 @@ const App: React.FC = () => {
                 Logger.info('Hotkeys', 'Auto-capture hotkey ignored', started);
             }
         } catch (error: unknown) {
-            Logger.warn('Hotkeys', 'Global smart capture hotkey failed', error);
+            Logger.warn('Hotkeys', 'Global auto-capture hotkey failed', error);
             const message = error instanceof Error ? error.message : 'Unknown error';
-            setToast({ message: `Smart Capture hotkey failed: ${message}`, type: 'error' });
+            setToast({ message: `Auto-Capture hotkey failed: ${message}`, type: 'error' });
         }
-    }, [activeUser, activeView, matches, sessionStartTime, setToast, tacticalMapKeybind]);
+    }, [activeMode, activeShip, activeUser, activeView, matches, sessionStartTime, setToast, tacticalMapKeybind]);
 
     useEffect(() => {
         const api = getElectronAPI();
         if (!api) return;
         Logger.info('Hotkeys', 'Registering renderer hotkey listeners', {
-            channels: ['hotkey-toggle-overlay', 'hotkey-smart-capture', 'auto-capture-status'],
+            channels: ['hotkey-toggle-overlay', 'hotkey-auto-capture', 'hotkey-smart-capture', 'auto-capture-status'],
         });
         const unsubAvailable = api.on('update_available', () => setUpdateStatus('available'));
         const unsubDownloaded = api.on('update_downloaded', () => setUpdateStatus('downloaded'));
@@ -1607,9 +1743,13 @@ const App: React.FC = () => {
                 setIsOverlayMode(!useAppStore.getState().isOverlayMode);
             }
         });
+        const unsubAutoCaptureHotkey = api.on('hotkey-auto-capture', () => {
+            Logger.info('Hotkeys', 'Received hotkey-auto-capture IPC from main process');
+            void handleGlobalHotkeyAutoCapture();
+        });
         const unsubSmartCaptureHotkey = api.on('hotkey-smart-capture', () => {
             Logger.info('Hotkeys', 'Received hotkey-smart-capture IPC from main process');
-            void handleGlobalHotkeySmartCapture();
+            void handleGlobalHotkeyAutoCapture();
         });
         const unsubAutoCaptureStatus = api.on('auto-capture-status', (payload?: Record<string, unknown>) => {
             const phase = String(payload?.phase || '');
@@ -1648,10 +1788,11 @@ const App: React.FC = () => {
             unsubNotAvailable();
             unsubError();
             unsubHotkey();
+            unsubAutoCaptureHotkey();
             unsubSmartCaptureHotkey();
             unsubAutoCaptureStatus();
         };
-    }, [handleGlobalHotkeySmartCapture, playCapture, setUpdateStatus, setIsOverlayMode, setToast, syncAutoCaptureArtifactToMatch]);
+    }, [handleGlobalHotkeyAutoCapture, playCapture, setUpdateStatus, setIsOverlayMode, setToast, syncAutoCaptureArtifactToMatch]);
 
     useEffect(() => {
         const api = getElectronAPI();

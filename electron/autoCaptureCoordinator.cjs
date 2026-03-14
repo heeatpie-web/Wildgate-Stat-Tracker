@@ -82,6 +82,25 @@ function normalizeKeybindToSendKeys(rawValue) {
   if (!compact) return null;
   if (compact.includes('mouse') || compact.includes('gamepad')) return null;
 
+  const eventCodeArrowMap = {
+    arrowup: '{UP}',
+    arrowdown: '{DOWN}',
+    arrowleft: '{LEFT}',
+    arrowright: '{RIGHT}',
+  };
+  if (Object.prototype.hasOwnProperty.call(eventCodeArrowMap, compact)) {
+    return eventCodeArrowMap[compact];
+  }
+  if (/^key[a-z]$/i.test(raw)) {
+    return raw.slice(-1).toLowerCase();
+  }
+  if (/^digit\d$/i.test(raw)) {
+    return raw.slice(-1);
+  }
+  if (/^numpad\d$/i.test(raw)) {
+    return raw.slice(-1);
+  }
+
   if (/^[a-z0-9]$/i.test(raw)) {
     return raw.length === 1 ? raw.toLowerCase() : raw;
   }
@@ -175,6 +194,19 @@ function buildFailedPayload(message, step, detail) {
   };
 }
 
+function getRequestedTacticalMapKeybind(request = {}) {
+  const hasAutoCaptureKey = Object.prototype.hasOwnProperty.call(request, 'autoCaptureTacticalMapKey');
+  const hasLegacyKey = Object.prototype.hasOwnProperty.call(request, 'tacticalMapKeybind');
+  const rawValue = hasAutoCaptureKey
+    ? request.autoCaptureTacticalMapKey
+    : request.tacticalMapKeybind;
+
+  return {
+    provided: hasAutoCaptureKey || hasLegacyKey,
+    raw: typeof rawValue === 'string' ? rawValue.trim() : '',
+  };
+}
+
 function logAutoCaptureStep(step, detail) {
   if (!step) return;
   const suffix = detail ? ` ${detail}` : '';
@@ -206,7 +238,7 @@ function createAutoCaptureCoordinator({
     tacticalMapKeybind,
   }) => {
     console.log(
-      `[AutoCapture] Starting sequence matchId=${matchId} tacticalMapKeybind=${tacticalMapKeybind?.raw || 'unknown'} `
+      `[AutoCapture] Sequence starting matchId=${matchId} tacticalMapKeybind=${tacticalMapKeybind?.raw || 'unknown'} `
       + `sendKeys=${tacticalMapKeybind?.sendKeys || 'unknown'} sendKeypresses=${sendKeypresses} waitMultiplier=${waitMultiplier}`
     );
 
@@ -327,9 +359,8 @@ function createAutoCaptureCoordinator({
         return { started: false, reason: 'no-active-match' };
       }
 
-      const requestedMapKeybindRaw = typeof request.tacticalMapKeybind === 'string'
-        ? request.tacticalMapKeybind.trim()
-        : '';
+      const requestedTacticalMapKeybind = getRequestedTacticalMapKeybind(request);
+      const requestedMapKeybindRaw = requestedTacticalMapKeybind.raw;
       let tacticalMapKeybind = null;
       if (requestedMapKeybindRaw) {
         const requestedMapKeybindNormalized = normalizeKeybindToSendKeys(requestedMapKeybindRaw);
@@ -340,16 +371,22 @@ function createAutoCaptureCoordinator({
             source: 'settings',
           };
         } else {
-          console.warn(`[AutoCapture] Ignoring unsupported tacticalMapKeybind setting "${requestedMapKeybindRaw}"`);
+          const message = `Unsupported tactical map key configured: "${requestedMapKeybindRaw}"`;
+          notify(buildFailedPayload(message));
+          return { started: false, reason: 'invalid-tactical-map-key' };
         }
       }
 
       if (!tacticalMapKeybind?.sendKeys) {
+        if (requestedTacticalMapKeybind.provided) {
+          notify(buildFailedPayload('No tactical map key configured. Set it in Settings.'));
+          return { started: false, reason: 'missing-tactical-map-key' };
+        }
         tacticalMapKeybind = await lookupMapKeybind();
       }
       if (!tacticalMapKeybind?.sendKeys) {
-        tacticalMapKeybind = { raw: 'Tab', sendKeys: '{TAB}', source: 'fallback' };
-        console.warn('[AutoCapture] Tactical map keybind unavailable from settings/.ini, defaulting to Tab.');
+        notify(buildFailedPayload('No tactical map key configured. Set it in Settings.'));
+        return { started: false, reason: 'missing-tactical-map-key' };
       }
 
       const payload = {

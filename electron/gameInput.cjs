@@ -115,21 +115,60 @@ function runPowerShellScript(script, {
 function buildGameWindowLookupPowerShellScript() {
   return `
 $ErrorActionPreference = 'Stop'
-$titleHint = [string]$env:WILDGATE_GAME_WINDOW_TITLE_HINT
+$titleHints = @(
+  [string]$env:WILDGATE_GAME_WINDOW_TITLE_HINT -split '[;,]' |
+    ForEach-Object { $_.Trim() } |
+    Where-Object { $_ }
+)
 $processNames = @(
   [string]$env:WILDGATE_GAME_PROCESS_NAMES -split ';' |
     ForEach-Object { $_.Trim() } |
     Where-Object { $_ }
 )
 
-$candidates = @(Get-Process |
-  Where-Object {
-    $_.MainWindowHandle -ne 0 -and (
-      ($processNames -contains $_.ProcessName) -or
-      ($titleHint -and $_.MainWindowTitle -like "*$titleHint*")
-    )
-  } |
-  Sort-Object @{ Expression = { if ($processNames -contains $_.ProcessName) { 0 } else { 1 } } }, @{ Expression = { if ($titleHint -and $_.MainWindowTitle -like "*$titleHint*") { 0 } else { 1 } } }, @{ Expression = { $_.StartTime }; Descending = $true })
+function Get-ProcessPriority([string]$processName) {
+  for ($i = 0; $i -lt $processNames.Count; $i++) {
+    if ([string]::Equals([string]$processNames[$i], [string]$processName, [System.StringComparison]::OrdinalIgnoreCase)) {
+      return $i
+    }
+  }
+  return 999
+}
+
+function Get-TitlePriority([string]$windowTitle) {
+  for ($i = 0; $i -lt $titleHints.Count; $i++) {
+    $hint = [string]$titleHints[$i]
+    if ($hint -and $windowTitle -like "*$hint*") {
+      return $i
+    }
+  }
+  return 999
+}
+
+$candidates = @()
+foreach ($processName in $processNames) {
+  if (-not $processName) { continue }
+  try {
+    $candidates += @(Get-Process -Name $processName -ErrorAction SilentlyContinue |
+      Where-Object { $_.MainWindowHandle -ne 0 })
+  } catch {
+    # Ignore process lookup failures and continue with the next candidate.
+  }
+}
+
+if ($titleHints.Count -gt 0) {
+  $candidates += @(Get-Process |
+    Where-Object {
+      $_.MainWindowHandle -ne 0 -and (Get-TitlePriority([string]$_.MainWindowTitle)) -lt 999
+    })
+}
+
+$candidates = @(
+  $candidates |
+    Group-Object Id |
+    ForEach-Object { $_.Group | Select-Object -First 1 } |
+    Sort-Object @{ Expression = { Get-ProcessPriority([string]$_.ProcessName) } }, @{ Expression = { Get-TitlePriority([string]$_.MainWindowTitle) } }, @{ Expression = { [Int64]$_.MainWindowHandle }; Descending = $true }
+)
 
 $candidateSummary = @(
   $candidates |
@@ -165,7 +204,7 @@ async function lookupGameWindowCandidate({
   titleHint = '',
   focusDelayMs = DEFAULT_FOCUS_DELAY_MS,
 } = {}) {
-  const timeoutMs = Math.max(2000, (Math.max(50, Number(focusDelayMs) || DEFAULT_FOCUS_DELAY_MS) * 4) + 1000);
+  const timeoutMs = Math.max(5000, (Math.max(50, Number(focusDelayMs) || DEFAULT_FOCUS_DELAY_MS) * 6) + 2000);
   const result = await runPowerShellScript(buildGameWindowLookupPowerShellScript(), {
     env: {
       WILDGATE_GAME_PROCESS_NAMES: processNames.join(';'),
@@ -446,7 +485,7 @@ async function sendGameKeySequence({
         success: false,
         action,
         key,
-        error: `Failed to confirm Wildgate focus before sending ${action}.`,
+        error: `Failed to confirm game focus before sending ${action}.`,
         ...focusResult,
       };
     }

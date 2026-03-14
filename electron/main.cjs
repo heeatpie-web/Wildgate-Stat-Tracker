@@ -104,6 +104,8 @@ const VALID_GAME_UI_ACTIONS = new Set(Object.keys(GAME_UI_ACTION_KEYS));
 const VALID_GAME_SCREEN_TYPES = new Set(['tactical_map', 'crew_hub']);
 const DEFAULT_GAME_WINDOW_PROCESS_NAMES = Object.freeze([
   'NebulaClient-Win64-Shipping',
+  'NebulaClient',
+  'Nebula',
   'Wildgate-Win64-Shipping',
   'WildgateClient-Win64-Shipping',
 ]);
@@ -113,7 +115,10 @@ const GAME_WINDOW_PROCESS_NAMES = Object.freeze(
     .map(name => name.trim())
     .filter(Boolean)
 );
-const GAME_WINDOW_TITLE_HINT = String(process.env.WILDGATE_GAME_WINDOW_TITLE_HINT || 'Wildgate').trim();
+const DEFAULT_GAME_WINDOW_TITLE_HINTS = Object.freeze(['NebulaClient', 'Nebula', 'Wildgate']);
+const GAME_WINDOW_TITLE_HINT = String(
+  process.env.WILDGATE_GAME_WINDOW_TITLE_HINT || DEFAULT_GAME_WINDOW_TITLE_HINTS.join(',')
+).trim();
 const GAME_UI_FOCUS_DELAY_MS = Math.max(50, Number(process.env.WILDGATE_GAME_FOCUS_DELAY_MS || 120));
 const WAIT_FOR_GAME_SCREEN_TIMEOUT_MS = Math.max(1000, Number(process.env.WILDGATE_WAIT_FOR_GAME_SCREEN_TIMEOUT_MS || 15000));
 const WAIT_FOR_GAME_SCREEN_POLL_INTERVAL_MS = Math.max(150, Number(process.env.WILDGATE_WAIT_FOR_GAME_SCREEN_POLL_MS || 900));
@@ -1270,13 +1275,13 @@ function registerGlobalHotkeys() {
     console.warn('[Hotkey] Failed to register F9 overlay toggle shortcut.');
   }
 
-  console.log(`[Hotkey] Attempting to register F10 smart capture. alreadyRegistered=${globalShortcut.isRegistered('F10')}`);
+  console.log(`[Hotkey] Attempting to register F10 auto-capture. alreadyRegistered=${globalShortcut.isRegistered('F10')}`);
   const f10Registered = globalShortcut.register('F10', () => {
     const liveWindow = ensureMainWindow();
     const hasWindow = Boolean(liveWindow && !liveWindow.isDestroyed());
-    console.log(`[Hotkey] F10 invoked. hasLiveWindow=${hasWindow}`);
+    console.log(`[Hotkey] F10 fired — starting auto-capture sequence. hasLiveWindow=${hasWindow}`);
     if (hasWindow) {
-      console.log(`[Hotkey] Dispatching hotkey-smart-capture to renderer webContentsId=${liveWindow.webContents.id}`);
+      console.log(`[Hotkey] Dispatching hotkey-smart-capture compatibility event to renderer webContentsId=${liveWindow.webContents.id}`);
       liveWindow.webContents.send('hotkey-smart-capture');
     } else {
       console.warn('[Hotkey] F10 invoked but no renderer window was available.');
@@ -1284,7 +1289,7 @@ function registerGlobalHotkeys() {
   });
   console.log(`[Hotkey] F10 registration success=${f10Registered} isRegistered=${globalShortcut.isRegistered('F10')}`);
   if (!f10Registered) {
-    console.warn('[Hotkey] Failed to register F10 smart capture shortcut.');
+    console.warn('[Hotkey] Failed to register F10 auto-capture shortcut.');
   }
 
   return { f9Registered, f10Registered };
@@ -3519,6 +3524,15 @@ ipcMain.handle('wait-for-game-screen', async (event, expectedType, options = {})
 
 ipcMain.handle('start-auto-capture', async (_event, request = {}) => {
   try {
+    const matchId = Number(request?.matchId || 0);
+    const lifecycleActive = request?.lifecycleActive === true;
+    const tacticalMapKey = typeof request?.autoCaptureTacticalMapKey === 'string'
+      ? request.autoCaptureTacticalMapKey
+      : request?.tacticalMapKeybind;
+    console.log(
+      `[AutoCapture] start-auto-capture invoked matchId=${Number.isInteger(matchId) ? matchId : 0} `
+      + `lifecycleActive=${lifecycleActive} tacticalMapKey=${JSON.stringify(String(tacticalMapKey || ''))}`
+    );
     return await autoCaptureCoordinator.start(request);
   } catch (e) {
     const error = e?.message || String(e);
