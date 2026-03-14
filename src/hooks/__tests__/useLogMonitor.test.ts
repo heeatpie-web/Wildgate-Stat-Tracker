@@ -356,6 +356,27 @@ describe('useLogMonitor', () => {
     expect(addMatch).not.toHaveBeenCalled();
   });
 
+  it('does not create telemetry draft from a boot-time matchmaker state change alone', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: {
+            sessionId: 'boot-session-id',
+            state: 'Searching',
+          },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    expect(addMatch).not.toHaveBeenCalled();
+    expect(gameDataState.setIsMatchInProgress).not.toHaveBeenCalledWith(true);
+  });
+
   it('passes not-in-progress lifecycle context to telemetry processor on initial map start', async () => {
     const { useLogMonitor } = await import('../useLogMonitor');
     renderHook(() => useLogMonitor('Pilot'));

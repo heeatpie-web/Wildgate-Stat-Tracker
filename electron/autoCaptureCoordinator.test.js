@@ -54,16 +54,18 @@ describe('autoCaptureCoordinator sequencing', () => {
   it('runs the full nine-step sequence and emits capture progress', async () => {
     const notify = vi.fn();
     const sendKeySequence = vi.fn().mockResolvedValue({ success: true });
+    const waitForScreenType = vi.fn().mockResolvedValue({ success: true, detectedType: 'crew_hub' });
     const captureAndProcess = vi.fn()
-      .mockResolvedValueOnce({ success: true, filePath: 'map.png', filename: 'map.png' })
-      .mockResolvedValueOnce({ success: true, filePath: 'crew-a.png', filename: 'crew-a.png' })
-      .mockResolvedValueOnce({ success: true, filePath: 'crew-b.png', filename: 'crew-b.png' });
+      .mockResolvedValueOnce({ success: true, filePath: 'map.png', filename: 'map.png', ocrData: { screenshotType: 'tactical_map' } })
+      .mockResolvedValueOnce({ success: true, filePath: 'crew-a.png', filename: 'crew-a.png', ocrData: { screenshotType: 'crew_hub' } })
+      .mockResolvedValueOnce({ success: true, filePath: 'crew-b.png', filename: 'crew-b.png', ocrData: { screenshotType: 'crew_hub' } });
     const waits = [];
     const clock = { now: 1_000 };
 
     const coordinator = createAutoCaptureCoordinator({
       notify,
       sendKeySequence,
+      waitForScreenType,
       captureAndProcess,
       lookupMapKeybind: vi.fn().mockResolvedValue({ raw: 'Tab', sendKeys: '{TAB}' }),
       delayFn: vi.fn((ms) => {
@@ -101,17 +103,53 @@ describe('autoCaptureCoordinator sequencing', () => {
     expect(sendKeySequence).toHaveBeenNthCalledWith(5, '{END}', 'Navigate to Crew Hub Panel End');
     expect(sendKeySequence).toHaveBeenNthCalledWith(6, '{ESC}', 'Exit');
     expect(captureAndProcess).toHaveBeenCalledTimes(3);
+    expect(waitForScreenType).toHaveBeenNthCalledWith(1, 'tactical_map', expect.objectContaining({ activeUser: 'Pilot', ocrMode: 'local' }));
+    expect(waitForScreenType).toHaveBeenNthCalledWith(2, 'crew_hub', expect.objectContaining({ activeUser: 'Pilot', ocrMode: 'local' }));
     expect(waits).toEqual([2000, 600, 2400, 800, 800, 400]);
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({
       phase: 'capture-progress',
       captureIndex: 1,
       filePath: 'map.png',
+      screenshotType: 'tactical_map',
     }));
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({
       phase: 'capture-progress',
       captureIndex: 3,
       filePath: 'crew-b.png',
+      screenshotType: 'crew_hub',
     }));
+  });
+
+  it('fails when a saved screenshot OCR type does not match the expected screen', async () => {
+    const notify = vi.fn();
+    const coordinator = createAutoCaptureCoordinator({
+      notify,
+      sendKeySequence: vi.fn().mockResolvedValue({ success: true }),
+      waitForScreenType: vi.fn()
+        .mockResolvedValueOnce({ success: true, detectedType: 'tactical_map' })
+        .mockResolvedValueOnce({ success: true, detectedType: 'crew_hub' }),
+      captureAndProcess: vi.fn()
+        .mockResolvedValueOnce({ success: true, filePath: 'map.png', filename: 'map.png', ocrData: { screenshotType: 'crew_hub' } }),
+      lookupMapKeybind: vi.fn().mockResolvedValue({ raw: 'Tab', sendKeys: '{TAB}' }),
+      delayFn: vi.fn(() => Promise.resolve()),
+    });
+
+    const result = await coordinator.start({ lifecycleActive: true, matchId: 44 });
+    expect(result).toEqual({
+      started: true,
+      matchId: 44,
+      tacticalMapKeybind: 'Tab',
+    });
+
+    await vi.waitFor(() => {
+      expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+        phase: 'failed',
+        message: 'Auto-Capture failed at Step 2 — Tactical Map (Primary View)',
+        stepNumber: 2,
+        stepLabel: 'Tactical Map (Primary View)',
+        detail: 'Tactical Map (Primary View): expected tactical_map, detected crew_hub',
+      }));
+    });
   });
 
   it('silently ignores requests during cooldown', async () => {

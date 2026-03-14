@@ -3,6 +3,7 @@ import {
   bundleMatchArtifacts,
   getMatchArtifactsStructured,
   getArtifactsForMatch,
+  removeAllMatchArtifacts,
   removeMatchArtifact,
   addMatchArtifact,
   reassignMatchArtifact,
@@ -159,6 +160,83 @@ describe('artifactService', () => {
       mockInvoke.mockResolvedValue({ success: false, code: 'INVALID_INPUT', message: 'Invalid or expired artifactId' });
       const result = await removeMatchArtifact(2, 'forged-token');
       expect(result).toEqual({ success: false, code: 'INVALID_INPUT', error: 'Invalid or expired artifactId' });
+    });
+  });
+
+  describe('removeAllMatchArtifacts', () => {
+    it('removes every token-backed artifact returned by get-match-artifacts', async () => {
+      mockInvoke.mockImplementation((channel: string, payload: any) => {
+        if (channel === 'get-match-artifacts') {
+          expect(payload).toEqual({ matchId: 12, fallbackImages: ['D:\\old\\match_artifacts\\77\\shot_2.png'] });
+          return Promise.resolve({
+            success: true,
+            data: {
+              images: [
+                'C:\\new\\match_artifacts\\12\\shot_1.png',
+                'D:\\old\\match_artifacts\\77\\shot_2.png',
+              ],
+              imageFiles: [
+                { artifactId: 'tok_1', filename: 'shot_1.png', path: 'C:\\new\\match_artifacts\\12\\shot_1.png' },
+                { artifactId: 'tok_2', filename: 'shot_2.png', path: 'D:\\old\\match_artifacts\\77\\shot_2.png' },
+              ],
+              telemetry: [],
+            },
+          });
+        }
+        if (channel === 'remove-match-artifact') {
+          return Promise.resolve({ success: true, data: { removed: 'ok' } });
+        }
+        return Promise.resolve(null);
+      });
+
+      const result = await removeAllMatchArtifacts(12, ['D:\\old\\match_artifacts\\77\\shot_2.png']);
+
+      expect(result).toEqual({
+        removedPaths: [
+          'C:\\new\\match_artifacts\\12\\shot_1.png',
+          'D:\\old\\match_artifacts\\77\\shot_2.png',
+        ],
+        failedPaths: [],
+      });
+      expect(mockInvoke).toHaveBeenNthCalledWith(2, 'remove-match-artifact', { matchId: 12, artifactId: 'tok_1' });
+      expect(mockInvoke).toHaveBeenNthCalledWith(3, 'remove-match-artifact', { matchId: 12, artifactId: 'tok_2' });
+    });
+
+    it('reports artifacts that cannot be safely removed', async () => {
+      mockInvoke.mockImplementation((channel: string) => {
+        if (channel === 'get-match-artifacts') {
+          return Promise.resolve({
+            success: true,
+            data: {
+              images: [
+                'C:\\new\\match_artifacts\\12\\shot_1.png',
+                'C:\\new\\match_artifacts\\12\\shot_2.png',
+              ],
+              imageFiles: [
+                { artifactId: 'tok_1', filename: 'shot_1.png', path: 'C:\\new\\match_artifacts\\12\\shot_1.png' },
+                { artifactId: '', filename: 'shot_2.png', path: 'C:\\new\\match_artifacts\\12\\shot_2.png' },
+              ],
+              telemetry: [],
+            },
+          });
+        }
+        if (channel === 'remove-match-artifact') {
+          return Promise.resolve({ success: true, data: { removed: 'shot_1.png' } });
+        }
+        return Promise.resolve(null);
+      });
+
+      const result = await removeAllMatchArtifacts(12);
+
+      expect(result).toEqual({
+        removedPaths: [
+          'C:\\new\\match_artifacts\\12\\shot_1.png',
+        ],
+        failedPaths: [
+          'C:\\new\\match_artifacts\\12\\shot_2.png',
+        ],
+      });
+      expect(mockInvoke).toHaveBeenCalledTimes(2);
     });
   });
 

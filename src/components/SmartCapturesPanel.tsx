@@ -13,6 +13,7 @@ import { useUIState } from '../providers/UIStateProvider';
 import {
     getMatchArtifactsStructured,
     rerunOCRMulti,
+    removeAllMatchArtifacts,
     removeMatchArtifact,
     addMatchArtifact,
     reassignMatchArtifact,
@@ -829,22 +830,65 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
         setToast({ message: `Resolved ${visibleMatches.length} visible match${visibleMatches.length === 1 ? '' : 'es'}`, type: 'success' });
     }, [visibleMatches, resolveMatches, setToast]);
 
-    const removeMatchesByIds = useCallback((ids: number[]) => {
-        if (!ids.length) return;
-        const idSet = new Set(ids);
-        const remaining = [...matches]
-            .filter((match) => !idSet.has(match.id))
-            .sort((a, b) => b.timestamp - a.timestamp);
-        idSet.forEach((id) => deleteMatch(id));
-        setSelectedIds((prev) => {
-            const next = new Set(prev);
-            idSet.forEach((id) => next.delete(id));
-            return next;
-        });
-        if (selectedMatchId != null && idSet.has(selectedMatchId)) {
-            setSelectedMatchId(remaining[0]?.id ?? null);
+    const notifyArtifactsConsumed = useCallback((matchId: number, artifactPaths: string[]) => {
+        const normalizedPaths = artifactPaths
+            .map((entry) => String(entry || '').trim())
+            .filter(Boolean);
+        if (normalizedPaths.length === 0) return;
+        window.dispatchEvent(new CustomEvent('smart-capture:artifacts-consumed', {
+            detail: {
+                matchId,
+                artifactPaths: normalizedPaths,
+            },
+        }));
+    }, []);
+
+    const removeMatchesByIds = useCallback(async (ids: number[]) => {
+        if (!ids.length) {
+            return { deletedIds: [], blockedMatches: [] as Array<{ id: number; failedArtifactCount: number }> };
         }
-    }, [deleteMatch, matches, selectedMatchId, setSelectedMatchId]);
+
+        const deletedIds: number[] = [];
+        const blockedMatches: Array<{ id: number; failedArtifactCount: number }> = [];
+
+        for (const id of ids) {
+            const targetMatch = matches.find((match) => match.id === id);
+            if (!targetMatch) continue;
+
+            const cleanup = await removeAllMatchArtifacts(targetMatch.id, targetMatch.artifacts || []);
+            if (cleanup.failedPaths.length > 0) {
+                blockedMatches.push({
+                    id: targetMatch.id,
+                    failedArtifactCount: cleanup.failedPaths.length,
+                });
+                continue;
+            }
+
+            if (cleanup.removedPaths.length > 0) {
+                notifyArtifactsConsumed(targetMatch.id, cleanup.removedPaths);
+            }
+
+            deleteMatch(targetMatch.id);
+            deletedIds.push(targetMatch.id);
+        }
+
+        if (deletedIds.length > 0) {
+            const deletedSet = new Set(deletedIds);
+            const remaining = [...matches]
+                .filter((match) => !deletedSet.has(match.id))
+                .sort((a, b) => b.timestamp - a.timestamp);
+            setSelectedIds((prev) => {
+                const next = new Set(prev);
+                deletedIds.forEach((id) => next.delete(id));
+                return next;
+            });
+            if (selectedMatchId != null && deletedSet.has(selectedMatchId)) {
+                setSelectedMatchId(remaining[0]?.id ?? null);
+            }
+        }
+
+        return { deletedIds, blockedMatches };
+    }, [deleteMatch, matches, notifyArtifactsConsumed, selectedMatchId, setSelectedMatchId]);
 
     const bulkDeleteSelected = useCallback(() => {
         const ids = Array.from(selectedIds);
@@ -856,8 +900,24 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
             `Delete ${ids.length} selected match${ids.length === 1 ? '' : 'es'}? This cannot be undone.`
         );
         if (!confirmed) return;
-        removeMatchesByIds(ids);
-        setToast({ message: `Deleted ${ids.length} match${ids.length === 1 ? '' : 'es'}.`, type: 'success' });
+        void removeMatchesByIds(ids).then((result) => {
+            const deletedCount = result.deletedIds.length;
+            const blockedCount = result.blockedMatches.length;
+            if (deletedCount > 0 && blockedCount === 0) {
+                setToast({ message: `Deleted ${deletedCount} match${deletedCount === 1 ? '' : 'es'}.`, type: 'success' });
+                return;
+            }
+            if (deletedCount > 0 && blockedCount > 0) {
+                setToast({
+                    message: `Deleted ${deletedCount} match${deletedCount === 1 ? '' : 'es'}; kept ${blockedCount} because screenshot cleanup failed.`,
+                    type: 'warning',
+                });
+                return;
+            }
+            if (blockedCount > 0) {
+                setToast({ message: 'Selected matches were not deleted because screenshot cleanup failed.', type: 'error' });
+            }
+        });
     }, [removeMatchesByIds, selectedIds, setToast]);
 
     const bulkExportSelectedJson = useCallback(() => {
@@ -1026,8 +1086,19 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
         const matchNumber = getQueueDisplayNumber(target.id, globalOrderedMatchIds);
         const confirmed = window.confirm(`Delete match #${matchNumber}? This cannot be undone.`);
         if (!confirmed) return;
-        removeMatchesByIds([target.id]);
-        setToast({ message: `Deleted match #${matchNumber}.`, type: 'success' });
+        void removeMatchesByIds([target.id]).then((result) => {
+            if (result.deletedIds.includes(target.id)) {
+                setToast({ message: `Deleted match #${matchNumber}.`, type: 'success' });
+                return;
+            }
+            const blocked = result.blockedMatches.find((entry) => entry.id === target.id);
+            if (blocked) {
+                setToast({
+                    message: `Could not delete match #${matchNumber} because ${blocked.failedArtifactCount} screenshot${blocked.failedArtifactCount === 1 ? '' : 's'} could not be removed safely.`,
+                    type: 'error',
+                });
+            }
+        });
     }, [globalOrderedMatchIds, removeMatchesByIds, setToast]);
 
     const bulkRerunOcrSelected = useCallback(async () => {

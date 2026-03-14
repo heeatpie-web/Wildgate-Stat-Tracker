@@ -6,6 +6,7 @@ import '@testing-library/jest-dom/vitest';
 const loggerWarn = vi.fn();
 const getElectronAPIMock = vi.fn(() => null);
 const discardTelemetryDraftMock = vi.fn();
+const playCaptureMock = vi.fn();
 
 const buildRestoreSessionSnapshot = () => JSON.stringify({
   version: 1,
@@ -162,6 +163,12 @@ vi.mock('./hooks/useMatchSubmission', () => ({
   }),
 }));
 
+vi.mock('./hooks/useSoundEffects', () => ({
+  useSoundEffects: () => ({
+    playCapture: playCaptureMock,
+  }),
+}));
+
 vi.mock('./store/useAppStore', () => {
   const useAppStore = (selector: (state: typeof appStoreState) => unknown) => selector(appStoreState);
   useAppStore.getState = () => appStoreState;
@@ -215,6 +222,7 @@ describe('App', () => {
     window.sessionStorage.clear();
     getElectronAPIMock.mockReturnValue(null);
     discardTelemetryDraftMock.mockReset();
+    playCaptureMock.mockReset();
     uiState.activeUser = 'Pilot';
     uiState.activeView = 'recording';
     uiState.isOverlayMode = false;
@@ -560,6 +568,43 @@ describe('App', () => {
     expect(uiState.requestSmartCapture).not.toHaveBeenCalled();
     appStoreState.autoSequenceOnCapture = false;
     gameDataState.matches = [];
+  });
+
+  it('plays the capture sound when auto-capture progress is reported from electron', async () => {
+    const { default: App } = await import('./App');
+    const handlers: Record<string, (...args: unknown[]) => void> = {};
+    const api = {
+      invoke: vi.fn(() => Promise.resolve(null)),
+      send: vi.fn(),
+      on: vi.fn((channel: string, cb: (...args: unknown[]) => void) => {
+        handlers[channel] = cb;
+        return vi.fn();
+      }),
+      removeAllListeners: vi.fn(),
+    };
+    getElectronAPIMock.mockReturnValue(api);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(handlers['auto-capture-status']).toBeTypeOf('function');
+    });
+
+    act(() => {
+      handlers['auto-capture-status']({
+        phase: 'capture-progress',
+        captureIndex: 2,
+        totalCaptures: 3,
+        matchId: 321,
+        filePath: 'C:\\match_artifacts\\321\\capture_2.png',
+      });
+    });
+
+    expect(playCaptureMock).toHaveBeenCalledTimes(1);
+    expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({
+      message: '2/3',
+      type: 'info',
+    }));
   });
 
   it('renders changelog dialog semantics and closes on Escape', async () => {

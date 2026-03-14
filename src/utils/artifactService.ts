@@ -130,6 +130,11 @@ export interface MatchArtifactsStructured {
     resolvedFromDisk: boolean;
 }
 
+export interface RemoveAllMatchArtifactsResult {
+    removedPaths: string[];
+    failedPaths: string[];
+}
+
 export type RerunOcrResult = OCRProcessResult & {
     code?: IpcErrorCode;
     message?: string;
@@ -361,6 +366,47 @@ export const removeMatchArtifact = async (matchId: number, artifactId: string): 
     const result = unwrapIpcResult<{ removed: string }>(raw);
     if (!result.ok) return { success: false, error: result.message, code: result.code };
     return { success: true };
+};
+
+export const removeAllMatchArtifacts = async (
+    matchId: number,
+    fallbackImages: string[] = []
+): Promise<RemoveAllMatchArtifactsResult> => {
+    const structured = await getMatchArtifactsStructured(matchId, fallbackImages);
+    const pendingPaths = new Map<string, string>();
+    const removedPaths: string[] = [];
+    const removedKeys = new Set<string>();
+
+    structured.images.forEach((imagePath) => {
+        const normalized = normalizeArtifactPath(imagePath);
+        if (!normalized) return;
+        pendingPaths.set(normalized.toLowerCase(), normalized);
+    });
+
+    for (const file of structured.imageFiles) {
+        const normalizedPath = normalizeArtifactPath(file.path);
+        const normalizedKey = normalizedPath.toLowerCase();
+        if (!file.artifactId) continue;
+
+        let result;
+        try {
+            result = await removeMatchArtifact(matchId, file.artifactId);
+        } catch {
+            continue;
+        }
+        if (!result.success) continue;
+
+        pendingPaths.delete(normalizedKey);
+        if (!removedKeys.has(normalizedKey)) {
+            removedKeys.add(normalizedKey);
+            removedPaths.push(normalizedPath);
+        }
+    }
+
+    return {
+        removedPaths,
+        failedPaths: Array.from(pendingPaths.values()),
+    };
 };
 
 export const addMatchArtifact = async (matchId: number): Promise<{ success: boolean; added?: string[]; canceled?: boolean; error?: string }> => {

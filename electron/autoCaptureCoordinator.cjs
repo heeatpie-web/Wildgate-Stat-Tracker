@@ -15,6 +15,12 @@ const STEP_DEFINITIONS = Object.freeze({
   exit: { number: 9, label: 'Exit' },
 });
 
+const EXPECTED_SCREEN_TYPES = Object.freeze({
+  [STEP_DEFINITIONS.captureMap.label]: 'tactical_map',
+  [STEP_DEFINITIONS.captureCrewHubA.label]: 'crew_hub',
+  [STEP_DEFINITIONS.captureCrewHubB.label]: 'crew_hub',
+});
+
 const DEFAULT_GAME_SETTINGS_CANDIDATES = Object.freeze([
   process.env.WILDGATE_GAME_SETTINGS_PATH,
   process.env.LOCALAPPDATA
@@ -169,10 +175,17 @@ function buildFailedPayload(message, step, detail) {
   };
 }
 
+function logAutoCaptureStep(step, detail) {
+  if (!step) return;
+  const suffix = detail ? ` ${detail}` : '';
+  console.log(`[AutoCapture] Step ${step.number}/9 ${step.label}${suffix}`);
+}
+
 function createAutoCaptureCoordinator({
   notify,
   sendKeySequence,
   captureAndProcess,
+  waitForScreenType = null,
   lookupMapKeybind = lookupTacticalMapKeybind,
   delayFn = delay,
   now = () => Date.now(),
@@ -194,6 +207,7 @@ function createAutoCaptureCoordinator({
   }) => {
     const sendStepKeys = async (step, sequence) => {
       if (!sendKeypresses) return;
+      logAutoCaptureStep(step, '(keypress)');
       const result = await sendKeySequence(sequence, step.label);
       if (!result?.success) {
         const reason = result?.error || 'keypress failed';
@@ -208,7 +222,24 @@ function createAutoCaptureCoordinator({
       }
     };
 
-    const captureStep = async (step, captureIndex) => {
+    const validateScreenStep = async (step, expectedType) => {
+      if (!expectedType || typeof waitForScreenType !== 'function') return;
+      logAutoCaptureStep(step, `(validate ${expectedType})`);
+      const result = await waitForScreenType(expectedType, {
+        activeUser,
+        ocrMode,
+        ocrRegions,
+        runtimeOptions,
+      });
+      if (!result?.success) {
+        const detected = String(result?.detectedType || 'unknown');
+        const reason = result?.error || `detected ${detected}`;
+        throw new Error(`${step.label}: expected ${expectedType}, detected ${detected} (${reason})`);
+      }
+    };
+
+    const captureStep = async (step, captureIndex, expectedType = null) => {
+      logAutoCaptureStep(step, '(capture)');
       const result = await withTimeout(() => captureAndProcess({
         matchId,
         activeUser,
@@ -222,6 +253,11 @@ function createAutoCaptureCoordinator({
         throw new Error(`${step.label}: ${reason}`);
       }
 
+      const detectedType = String(result?.ocrData?.screenshotType || result?.screenshotType || '').trim();
+      if (expectedType && detectedType && detectedType !== expectedType) {
+        throw new Error(`${step.label}: expected ${expectedType}, detected ${detectedType}`);
+      }
+
       notify({
         phase: 'capture-progress',
         captureIndex,
@@ -229,13 +265,15 @@ function createAutoCaptureCoordinator({
         matchId,
         filePath: result.filePath,
         filename: result.filename || null,
+        screenshotType: detectedType || null,
       });
     };
 
     await sendStepKeys(STEP_DEFINITIONS.openMap, tacticalMapKeybind.sendKeys);
     await waitStep(1000);
+    await validateScreenStep(STEP_DEFINITIONS.captureMap, EXPECTED_SCREEN_TYPES[STEP_DEFINITIONS.captureMap.label]);
 
-    await captureStep(STEP_DEFINITIONS.captureMap, 1);
+    await captureStep(STEP_DEFINITIONS.captureMap, 1, EXPECTED_SCREEN_TYPES[STEP_DEFINITIONS.captureMap.label]);
 
     await sendStepKeys(STEP_DEFINITIONS.closeMap, tacticalMapKeybind.sendKeys);
     await waitStep(300);
@@ -245,13 +283,14 @@ function createAutoCaptureCoordinator({
 
     await sendStepKeys(STEP_DEFINITIONS.moveCrewHubRight, '{RIGHT}{RIGHT}{RIGHT}{RIGHT}');
     await waitStep(400);
+    await validateScreenStep(STEP_DEFINITIONS.captureCrewHubA, EXPECTED_SCREEN_TYPES[STEP_DEFINITIONS.captureCrewHubA.label]);
 
-    await captureStep(STEP_DEFINITIONS.captureCrewHubA, 2);
+    await captureStep(STEP_DEFINITIONS.captureCrewHubA, 2, EXPECTED_SCREEN_TYPES[STEP_DEFINITIONS.captureCrewHubA.label]);
 
     await sendStepKeys(STEP_DEFINITIONS.moveCrewHubEnd, '{END}');
     await waitStep(400);
 
-    await captureStep(STEP_DEFINITIONS.captureCrewHubB, 3);
+    await captureStep(STEP_DEFINITIONS.captureCrewHubB, 3, EXPECTED_SCREEN_TYPES[STEP_DEFINITIONS.captureCrewHubB.label]);
 
     await sendStepKeys(STEP_DEFINITIONS.exit, '{ESC}');
     await waitStep(200);

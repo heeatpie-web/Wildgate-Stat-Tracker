@@ -7,6 +7,7 @@ import { useLogMonitor } from './hooks/useLogMonitor';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useFocusTrap } from './hooks/useFocusTrap';
 import { useMatchSubmission } from './hooks/useMatchSubmission';
+import { useSoundEffects } from './hooks/useSoundEffects';
 import { Sidebar } from './components/Sidebar';
 import { RecordingView } from './components/RecordingView';
 const HistoryTable = React.lazy(() => import('./components/HistoryTable'));
@@ -540,6 +541,7 @@ const App: React.FC = () => {
 
     const { logFeed, logStatus } = useLogMonitor();
     const { discardTelemetryDraft, submitting: telemetryDraftDiscarding } = useMatchSubmission();
+    const { playCapture } = useSoundEffects();
 
     const fuzzyRosterCandidates = React.useMemo(() => (
         (pendingReviews || [])
@@ -1649,6 +1651,7 @@ const App: React.FC = () => {
                     Number(payload?.matchId || 0),
                     typeof payload?.filePath === 'string' ? payload.filePath : null
                 );
+                playCapture();
                 if (captureIndex > 0) {
                     setToast({ message: `${captureIndex}/${totalCaptures}`, type: 'info' });
                 }
@@ -1675,7 +1678,7 @@ const App: React.FC = () => {
             unsubSmartCaptureHotkey();
             unsubAutoCaptureStatus();
         };
-    }, [handleGlobalHotkeySmartCapture, setUpdateStatus, setIsOverlayMode, setToast, syncAutoCaptureArtifactToMatch]);
+    }, [handleGlobalHotkeySmartCapture, playCapture, setUpdateStatus, setIsOverlayMode, setToast, syncAutoCaptureArtifactToMatch]);
 
     useEffect(() => {
         const api = getElectronAPI();

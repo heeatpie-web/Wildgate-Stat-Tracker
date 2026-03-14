@@ -995,6 +995,7 @@ const autoCaptureCoordinator = createAutoCaptureCoordinator({
     }
   },
   sendKeySequence: (sendKeys, action) => sendGameKeySequenceInternal(sendKeys, action),
+  waitForScreenType: (expectedType, options) => waitForGameScreenInternal(expectedType, options),
   captureAndProcess: async ({ matchId, activeUser = null, ocrMode = 'local', ocrRegions = null, runtimeOptions = {} }) => {
     const captureResult = await captureGameWindowForAutomation();
     if (!captureResult?.success || !captureResult.imageBase64) {

@@ -841,11 +841,10 @@ export const useLogMonitor = (activeUser?: string) => {
                     }
                     const mapStartSignal = name === 'NebLoadingScreen' && !!loadingMapName && !loadingMapNameLower.includes('frontend');
                     const mapEndSignal = name === 'NebLoadingScreen' && loadingMapNameLower.includes('frontend');
-                    const sessionStartSignal = !!currentMatchSessionId
-                        && !previousMatchSessionId
-                        && (name === 'NebClientMatchmakerStateChange' || name === 'NebLoadingScreen');
                     const sessionEndSignal = !currentMatchSessionId && !!previousMatchSessionId && !mapStartSignal;
-                    const startLifecycleSignal = mapStartSignal || sessionStartSignal;
+                    // Only a real map load should open the lifecycle. Session IDs can
+                    // appear during boot and would otherwise create phantom drafts.
+                    const startLifecycleSignal = mapStartSignal;
                     const endLifecycleSignal = mapEndSignal || sessionEndSignal;
                     if (startLifecycleSignal && telemetryLifecycleActiveRef.current && !telemetryDraftMatchIdRef.current) {
                         telemetryLifecycleActiveRef.current = false;

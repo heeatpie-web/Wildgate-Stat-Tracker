@@ -255,6 +255,20 @@ function getValidatedMatchDir(app, artifactHelpers, matchId, options = {}) {
   });
 }
 
+function resolveArtifactTokenPath(app, resolvedArtifact, fallbackPath, allowedRoots) {
+  const explicitPath = typeof resolvedArtifact?.fullPath === 'string'
+    ? resolvedArtifact.fullPath.trim()
+    : '';
+  const candidatePath = explicitPath || String(fallbackPath || '').trim();
+  if (!candidatePath) {
+    return fail(IpcErrorCode.INVALID_INPUT, 'Artifact path missing');
+  }
+
+  const pathCheck = validatePathInRoots(candidatePath, allowedRoots, { isDev: !app.isPackaged });
+  if (!pathCheck.success) return pathCheck;
+  return ok({ filePath: pathCheck.data?.resolved || candidatePath });
+}
+
 /**
  * Register artifact-related IPC handlers.
  * @param {import('electron').IpcMain} ipcMain
@@ -439,7 +453,7 @@ function registerArtifactHandlers(ipcMain, ctx) {
         recordSecurityBlock('remove-match-artifact', validated.code, validated.message);
         return validated;
       }
-      const { matchDir, matchId: safeMatchId } = validated.data;
+      const { matchDir, matchId: safeMatchId, paths } = validated.data;
       if (typeof artifactId !== 'string' || !artifactId.trim()) {
         recordSecurityBlock('remove-match-artifact', IpcErrorCode.INVALID_INPUT, 'artifactId required');
         return fail(IpcErrorCode.INVALID_INPUT, 'artifactId required');
@@ -450,12 +464,17 @@ function registerArtifactHandlers(ipcMain, ctx) {
         recordSecurityBlock('remove-match-artifact', IpcErrorCode.INVALID_INPUT, 'Invalid or expired artifactId');
         return fail(IpcErrorCode.INVALID_INPUT, 'Invalid or expired artifactId');
       }
-      const filePath = path.join(matchDir, resolved.filename);
-      const pathCheck = validatePathInRoots(filePath, [matchDir], { isDev: !app.isPackaged });
-      if (!pathCheck.success) {
-        recordSecurityBlock('remove-match-artifact', pathCheck.code, pathCheck.message);
-        return pathCheck;
+      const resolvedPath = resolveArtifactTokenPath(
+        app,
+        resolved,
+        path.join(matchDir, resolved.filename),
+        [paths.matchArtifactsRoot]
+      );
+      if (!resolvedPath.success) {
+        recordSecurityBlock('remove-match-artifact', resolvedPath.code, resolvedPath.message);
+        return resolvedPath;
       }
+      const filePath = resolvedPath.data.filePath;
       if (fs.existsSync(filePath)) {
         await fsPromises.unlink(filePath);
         console.log(`[Artifacts] Removed ${resolved.filename} from match ${safeMatchId}`);
@@ -528,12 +547,17 @@ function registerArtifactHandlers(ipcMain, ctx) {
         recordSecurityBlock('reassign-match-artifact', IpcErrorCode.INVALID_INPUT, 'Invalid or expired artifactId');
         return fail(IpcErrorCode.INVALID_INPUT, 'Invalid or expired artifactId');
       }
-      const sourcePath = path.join(sourceValidated.data.matchDir, resolved.filename);
-      const pathCheck = validatePathInRoots(sourcePath, [sourceValidated.data.matchDir], { isDev: !app.isPackaged });
-      if (!pathCheck.success) {
-        recordSecurityBlock('reassign-match-artifact', pathCheck.code, pathCheck.message);
-        return pathCheck;
+      const resolvedPath = resolveArtifactTokenPath(
+        app,
+        resolved,
+        path.join(sourceValidated.data.matchDir, resolved.filename),
+        [sourceValidated.data.paths.matchArtifactsRoot]
+      );
+      if (!resolvedPath.success) {
+        recordSecurityBlock('reassign-match-artifact', resolvedPath.code, resolvedPath.message);
+        return resolvedPath;
       }
+      const sourcePath = resolvedPath.data.filePath;
       if (!fs.existsSync(sourcePath)) {
         return fail(IpcErrorCode.NOT_FOUND, 'File not found');
       }

@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const { __test__ } = require('./crewHubExtractor.cjs');
+const { __test__, isValidPlayerName } = require('./crewHubExtractor.cjs');
 
 describe('crewHubExtractor short-tag salvage', () => {
   it('keeps short lowercase handles that were truncated by common UI suffixes', () => {
@@ -26,5 +26,12 @@ describe('crewHubExtractor geometry thresholds', () => {
       baselineXThresholdPx: 1920 * 0.45 * 0.25,
     });
     expect(threshold).toBeCloseTo(216, 4);
+  });
+});
+
+describe('crewHubExtractor UI-noise filtering', () => {
+  it('rejects ship-bonus tooltip text as a player name candidate', () => {
+    expect(isValidPlayerName('Reducefiresonshipby50')).toBe(false);
+    expect(__test__.isValidOpponentName('Reducefiresonshipby50')).toBe(false);
   });
 });

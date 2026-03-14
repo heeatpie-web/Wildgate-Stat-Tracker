@@ -247,6 +247,7 @@ const UNDERCREW_SHIP_BONUS_PHRASES = new Set([
   'REDUCED FIRED',
   'REDUCEDFIRED',
 ]);
+const UNDERCREW_SHIP_BONUS_COMPACT_PATTERN = /(?:SMALLCREWBONUS|REDUCE(?:D)?FIRES?(?:ONSHIP)?(?:BY50)?)/;
 
 function containsUiNoisePhrase(input) {
   const normalized = String(input || '')
@@ -264,7 +265,10 @@ function containsUnderCrewBonusPhrase(input) {
     .replace(/\s+/g, ' ')
     .trim();
   if (!normalized) return false;
-  return UNDERCREW_SHIP_BONUS_PHRASES.has(normalized);
+  if (UNDERCREW_SHIP_BONUS_PHRASES.has(normalized)) return true;
+  const compact = normalized.replace(/\s+/g, '');
+  if (!compact) return false;
+  return UNDERCREW_SHIP_BONUS_COMPACT_PATTERN.test(compact);
 }
 
 function countAnchorsBetween(anchorYs, a, b) {
