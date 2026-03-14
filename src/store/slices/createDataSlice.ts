@@ -20,6 +20,20 @@ import { sanitizeLoadout } from '../../utils/loadout';
  * Used by sourced setters (setTimeMin, setTimeSec, setDamageTaken, etc.).
  */
 export type DataSource = 'manual' | 'telemetry' | 'ocr';
+export type AspectProfile = 'standard' | 'ultrawide' | 'superultrawide' | 'unknown';
+
+export interface DeviceDisplayInfo {
+  displayWidth: number;
+  displayHeight: number;
+  virtualWidth: number;
+  virtualHeight: number;
+  aspectProfile: AspectProfile;
+}
+
+export interface GameResolution {
+  resX: number;
+  resY: number;
+}
 
 /** Returns numeric priority for a DataSource. Higher = more authoritative. */
 export const getPriority = (source: DataSource = 'manual'): number => {
@@ -434,6 +448,11 @@ export interface DataSlice {
   currentLoadout: Loadout | null;
   setCurrentLoadout: (l: Loadout | null) => void;
 
+  deviceDisplayInfo: DeviceDisplayInfo | null;
+  setDeviceDisplayInfo: (info: DeviceDisplayInfo | null) => void;
+  gameResolution: GameResolution | null;
+  setGameResolution: (resolution: GameResolution | null) => void;
+
   isSimulation: boolean;
   setIsSimulation: (isSim: boolean) => void;
 
@@ -541,6 +560,10 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
   }),
   currentLoadout: null,
   setCurrentLoadout: (l) => set({ currentLoadout: sanitizeLoadout(l) }),
+  deviceDisplayInfo: null,
+  setDeviceDisplayInfo: (info) => set({ deviceDisplayInfo: info }),
+  gameResolution: null,
+  setGameResolution: (resolution) => set({ gameResolution: resolution }),
 
   isSimulation: false,
   setIsSimulation: (isSim) => set({ isSimulation: isSim }),

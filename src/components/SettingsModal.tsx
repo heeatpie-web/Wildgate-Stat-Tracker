@@ -169,6 +169,8 @@ const SettingsModalContent: React.FC = () => {
     const setAutoCaptureSendKeypresses = useAppStore(s => s.setAutoCaptureSendKeypresses);
     const autoCaptureWaitMultiplier = useAppStore(s => s.autoCaptureWaitMultiplier);
     const setAutoCaptureWaitMultiplier = useAppStore(s => s.setAutoCaptureWaitMultiplier);
+    const tacticalMapKeybind = useAppStore(s => s.tacticalMapKeybind);
+    const setTacticalMapKeybind = useAppStore(s => s.setTacticalMapKeybind);
     const autoPopulateRosterOnSave = useAppStore(s => s.autoPopulateRosterOnSave);
     const setAutoPopulateRosterOnSave = useAppStore(s => s.setAutoPopulateRosterOnSave);
     const showSmartCaptureInHeader = useAppStore(s => s.showSmartCaptureInHeader);
@@ -371,6 +373,7 @@ const SettingsModalContent: React.FC = () => {
                 autoSequenceOnCapture: (state as any).autoSequenceOnCapture,
                 autoCaptureSendKeypresses: (state as any).autoCaptureSendKeypresses,
                 autoCaptureWaitMultiplier: (state as any).autoCaptureWaitMultiplier,
+                tacticalMapKeybind: (state as any).tacticalMapKeybind,
                 autoPopulateRosterOnSave: (state as any).autoPopulateRosterOnSave,
                 lockOcrTeams: state.lockOcrTeams,
                 ocrEnhancedNameRecoveryEnabled: (state as any).ocrEnhancedNameRecoveryEnabled,
@@ -1146,9 +1149,9 @@ const SettingsModalContent: React.FC = () => {
                                 onClick={() => setAutoSequenceOnCapture(!autoSequenceOnCapture)}
                                 className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-3 text-left hover:bg-md-sys-surface-container-highest"
                             >
-                                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">F10 hotkey</div>
+                                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">Smart Capture button</div>
                                 <div className="mt-1 text-body font-bold text-md-sys-on-surface">{autoSequenceOnCapture ? 'Auto-sequence' : 'Single capture'}</div>
-                                <div className="mt-1 text-label-sm text-md-sys-on-surface/60">{autoSequenceOnCapture ? 'F10 captures Tactical Map, then Crew Hub.' : 'F10 triggers one Smart Capture on the current screen.'}</div>
+                                <div className="mt-1 text-label-sm text-md-sys-on-surface/60">{autoSequenceOnCapture ? 'UI capture buttons run Tactical Map + Crew Hub sequence.' : 'UI capture buttons run one Smart Capture on the current screen.'}</div>
                             </button>
                             <button
                                 type="button"
@@ -1211,6 +1214,24 @@ const SettingsModalContent: React.FC = () => {
                                 <span>1.0x</span>
                                 <span>3.0x</span>
                             </div>
+                        </div>
+                        <div className="mt-4 rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-4 py-4">
+                            <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">Tactical Map Key</div>
+                            <div className="mt-1 text-label-sm text-md-sys-on-surface/60">Used by F10 auto-capture to open and close the tactical map. Defaults to Tab.</div>
+                            <input
+                                aria-label="Tactical Map Key"
+                                type="text"
+                                value={tacticalMapKeybind || 'Tab'}
+                                onChange={(event) => setTacticalMapKeybind(event.target.value)}
+                                onBlur={(event) => {
+                                    if (!String(event.target.value || '').trim()) {
+                                        setTacticalMapKeybind('Tab');
+                                    }
+                                }}
+                                className="mt-3 w-full rounded-control border border-md-sys-outline/15 bg-md-sys-surface px-3 py-2 text-body text-md-sys-on-surface outline-none focus:border-md-sys-primary"
+                                placeholder="Tab"
+                                maxLength={24}
+                            />
                         </div>
                         <div className="mt-4 rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-4 py-3 text-left text-label-sm leading-relaxed text-md-sys-on-surface/60">
                             Advanced thresholds, learning policy, event rollback, and preload tuning stay below if you need finer OCR control.

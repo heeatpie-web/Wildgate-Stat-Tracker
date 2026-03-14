@@ -470,14 +470,20 @@ describe('App', () => {
     expect(screen.queryByText(/telemetry retention needs cleanup/i)).not.toBeInTheDocument();
   });
 
-  it('starts smart capture when the global hotkey event is received from electron', async () => {
+  it('routes F10 hotkey to auto-capture coordinator when IPC event is received', async () => {
     const { default: App } = await import('./App');
     uiState.activeView = 'analytics';
-    uiState.requestSmartCapture.mockReturnValue('req_hotkey');
-    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    appStoreState.isMatchInProgress = true;
+    gameDataState.matches = [{
+      id: 321,
+      subType: 'Telemetry Draft',
+      timestamp: Date.now(),
+      player: 'Pilot',
+      artifacts: [],
+    }];
     const handlers: Record<string, (...args: unknown[]) => void> = {};
     const api = {
-      invoke: vi.fn(() => Promise.resolve(null)),
+      invoke: vi.fn(() => Promise.resolve({ started: true })),
       send: vi.fn(),
       on: vi.fn((channel: string, cb: (...args: unknown[]) => void) => {
         handlers[channel] = cb;
@@ -497,29 +503,24 @@ describe('App', () => {
       handlers['hotkey-smart-capture']();
     });
 
-    expect(uiState.setActiveView).toHaveBeenCalledWith('recording');
-    expect(uiState.requestSmartCapture).toHaveBeenCalledWith(expect.objectContaining({
-      activeUser: 'Pilot',
-      source: 'global-hotkey',
-      matchId: null,
-      behavior: 'single',
-    }));
-    expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'smart-capture-request',
-      detail: expect.objectContaining({
+    await waitFor(() => {
+      expect(api.invoke).toHaveBeenCalledWith('start-auto-capture', expect.objectContaining({
         activeUser: 'Pilot',
-        source: 'global-hotkey',
-        requestId: 'req_hotkey',
-        matchId: null,
-        behavior: 'single',
+        lifecycleActive: true,
+        matchId: 321,
+        tacticalMapKeybind: expect.any(String),
+      }));
+    });
+    expect(uiState.requestSmartCapture).not.toHaveBeenCalled();
+    expect(uiState.setActiveView).not.toHaveBeenCalledWith('recording');
+    expect(api.invoke).toHaveBeenCalledWith('start-auto-capture', expect.objectContaining({
+      activeUser: 'Pilot',
+      runtimeOptions: expect.objectContaining({
+        aspectProfile: null,
       }),
     }));
-    expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({
-      message: 'Smart Capture started from F10. Opening Recording now.',
-      type: 'info',
-    }));
-
-    dispatchSpy.mockRestore();
+    gameDataState.matches = [];
+    appStoreState.isMatchInProgress = false;
   });
 
   it('queues the auto-sequence workflow when F10 capture sequencing is enabled', async () => {

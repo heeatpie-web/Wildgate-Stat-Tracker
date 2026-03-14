@@ -248,11 +248,14 @@ const customStorage: PersistStorage<AppState> = {
           captureMode: settings.captureMode || 'deferred',
           resultOcrFlowMode: settings.resultOcrFlowMode === 'prompt' ? 'prompt' : 'background',
           ocrAutoOpenAfterRerun: settings.ocrAutoOpenAfterRerun ?? false,
-          autoSequenceOnCapture: settings.autoSequenceOnCapture ?? false,
+          autoSequenceOnCapture: settings.autoSequenceOnCapture ?? true,
           autoCaptureSendKeypresses: settings.autoCaptureSendKeypresses ?? true,
           autoCaptureWaitMultiplier: Number.isFinite(settings.autoCaptureWaitMultiplier)
             ? Math.max(0.5, Math.min(3, Number(settings.autoCaptureWaitMultiplier)))
             : 1,
+          tacticalMapKeybind: typeof settings.tacticalMapKeybind === 'string' && settings.tacticalMapKeybind.trim().length > 0
+            ? settings.tacticalMapKeybind.trim()
+            : 'Tab',
           autoPopulateRosterOnSave: settings.autoPopulateRosterOnSave ?? false,
           lockOcrTeams: settings.lockOcrTeams || false,
           ocrEnhancedNameRecoveryEnabled: settings.ocrEnhancedNameRecoveryEnabled ?? true,
@@ -397,6 +400,7 @@ const customStorage: PersistStorage<AppState> = {
                 autoSequenceOnCapture: state.autoSequenceOnCapture,
                 autoCaptureSendKeypresses: state.autoCaptureSendKeypresses,
                 autoCaptureWaitMultiplier: state.autoCaptureWaitMultiplier,
+                tacticalMapKeybind: state.tacticalMapKeybind,
                 autoPopulateRosterOnSave: state.autoPopulateRosterOnSave,
                 lockOcrTeams: state.lockOcrTeams,
                 ocrEnhancedNameRecoveryEnabled: state.ocrEnhancedNameRecoveryEnabled,
@@ -508,6 +512,7 @@ export const useAppStore = create<AppState>()(
         autoSequenceOnCapture: state.autoSequenceOnCapture,
         autoCaptureSendKeypresses: state.autoCaptureSendKeypresses,
         autoCaptureWaitMultiplier: state.autoCaptureWaitMultiplier,
+        tacticalMapKeybind: state.tacticalMapKeybind,
         autoPopulateRosterOnSave: state.autoPopulateRosterOnSave,
         lockOcrTeams: state.lockOcrTeams,
         ocrEnhancedNameRecoveryEnabled: state.ocrEnhancedNameRecoveryEnabled,

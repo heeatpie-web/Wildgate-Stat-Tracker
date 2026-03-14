@@ -150,6 +150,7 @@ export interface SettingsSlice {
   autoSequenceOnCapture: boolean;
   autoCaptureSendKeypresses: boolean;
   autoCaptureWaitMultiplier: number;
+  tacticalMapKeybind: string;
   autoPopulateRosterOnSave: boolean;
   lockOcrTeams: boolean;
   ocrEnhancedNameRecoveryEnabled: boolean;
@@ -205,6 +206,7 @@ export interface SettingsSlice {
   setAutoSequenceOnCapture: (enabled: boolean) => void;
   setAutoCaptureSendKeypresses: (enabled: boolean) => void;
   setAutoCaptureWaitMultiplier: (multiplier: number) => void;
+  setTacticalMapKeybind: (keybind: string) => void;
   setAutoPopulateRosterOnSave: (enabled: boolean) => void;
   setLockOcrTeams: (enabled: boolean) => void;
   setOcrEnhancedNameRecoveryEnabled: (enabled: boolean) => void;
@@ -273,9 +275,10 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   captureMode: 'deferred',
   resultOcrFlowMode: 'background',
   ocrAutoOpenAfterRerun: false,
-  autoSequenceOnCapture: false,
+  autoSequenceOnCapture: true,
   autoCaptureSendKeypresses: true,
   autoCaptureWaitMultiplier: 1,
+  tacticalMapKeybind: 'Tab',
   autoPopulateRosterOnSave: false,
   lockOcrTeams: false,
   ocrEnhancedNameRecoveryEnabled: true,
@@ -348,6 +351,10 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   setAutoCaptureWaitMultiplier: (multiplier) => set({
     autoCaptureWaitMultiplier: Math.max(0.5, Math.min(3, Math.round((Number(multiplier) || 1) * 10) / 10))
   }),
+  setTacticalMapKeybind: (keybind) => {
+    const trimmed = String(keybind || '').trim();
+    set({ tacticalMapKeybind: trimmed || 'Tab' });
+  },
   setAutoPopulateRosterOnSave: (enabled) => set({ autoPopulateRosterOnSave: enabled }),
   setLockOcrTeams: (enabled) => set({ lockOcrTeams: enabled }),
   setOcrEnhancedNameRecoveryEnabled: (enabled) => set({ ocrEnhancedNameRecoveryEnabled: enabled }),

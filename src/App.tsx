@@ -504,7 +504,7 @@ const App: React.FC = () => {
         soundEnabled,
         performanceMode,
     } = useUserPreferences();
-    const autoSequenceOnCapture = useAppStore(s => s.autoSequenceOnCapture);
+    const tacticalMapKeybind = useAppStore(s => s.tacticalMapKeybind);
     const syncAutoCaptureArtifactToMatch = useCallback((matchId: number | null | undefined, filePath: string | null | undefined) => {
         const numericMatchId = Number(matchId || 0);
         const normalizedPath = String(filePath || '').trim();
@@ -1547,74 +1547,47 @@ const App: React.FC = () => {
             return;
         }
         try {
-            const behavior = autoSequenceOnCapture ? 'auto-sequence' : 'single';
             Logger.info('Hotkeys', 'Renderer handling F10 smart capture', {
                 activeUser: activeUser || null,
                 activeView,
-                behavior,
+                behavior: 'auto-sequence',
             });
-
-            if (behavior === 'auto-sequence') {
-                const currentState = useAppStore.getState();
-                const resolvedMatchId = resolveSmartCaptureMatchId({
-                    activeUser: activeUser || null,
-                    matches,
-                    pendingMatchData: currentState.pendingMatchData,
-                    sessionStartTime,
-                });
-                const started = await api.invoke('start-auto-capture', {
-                    activeUser: activeUser || null,
-                    matchId: resolvedMatchId,
-                    lifecycleActive: currentState.isMatchInProgress === true,
-                    autoCaptureSendKeypresses: currentState.autoCaptureSendKeypresses !== false,
-                    autoCaptureWaitMultiplier: currentState.autoCaptureWaitMultiplier,
-                    ocrMode: 'local',
-                    ocrRegions: currentState.ocrRegions || null,
-                    runtimeOptions: {
-                        routingProfile: currentState.ocrEnhancedNameRecoveryEnabled ? 'names-only' : 'default',
-                        fontProfile: currentState.ocrEnhancedNameRecoveryEnabled ? 'ealing-black-italic' : 'default',
-                        nameRerouteThreshold: currentState.ocrNameRerouteThreshold,
-                        maxReroutePasses: currentState.ocrEnhancedNameRecoveryEnabled ? 1 : 0,
-                    },
-                });
-
-                if (started?.ignored) {
-                    Logger.info('Hotkeys', 'Auto-capture hotkey ignored', started);
-                }
-                return;
-            }
-
-            if (activeView !== 'recording') {
-                React.startTransition(() => setActiveView('recording'));
-            }
-            const requestId = requestSmartCapture({
+            const currentState = useAppStore.getState();
+            const resolvedMatchId = resolveSmartCaptureMatchId({
                 activeUser: activeUser || null,
-                source: 'global-hotkey',
-                requestId: `global-hotkey-${Date.now()}`,
-                matchId: null,
-                behavior,
+                matches,
+                pendingMatchData: currentState.pendingMatchData,
+                sessionStartTime,
             });
-            window.dispatchEvent(new CustomEvent('smart-capture-request', {
-                detail: {
-                    activeUser: activeUser || null,
-                    source: 'global-hotkey',
-                    requestId,
-                    matchId: null,
-                    behavior,
+            const started = await api.invoke('start-auto-capture', {
+                activeUser: activeUser || null,
+                matchId: resolvedMatchId,
+                lifecycleActive: currentState.isMatchInProgress === true,
+                autoCaptureSendKeypresses: currentState.autoCaptureSendKeypresses !== false,
+                autoCaptureWaitMultiplier: currentState.autoCaptureWaitMultiplier,
+                tacticalMapKeybind: tacticalMapKeybind || 'Tab',
+                ocrMode: 'local',
+                ocrRegions: currentState.ocrRegions || null,
+                runtimeOptions: {
+                    routingProfile: currentState.ocrEnhancedNameRecoveryEnabled ? 'names-only' : 'default',
+                    fontProfile: currentState.ocrEnhancedNameRecoveryEnabled ? 'ealing-black-italic' : 'default',
+                    nameRerouteThreshold: currentState.ocrNameRerouteThreshold,
+                    maxReroutePasses: currentState.ocrEnhancedNameRecoveryEnabled ? 1 : 0,
+                    aspectProfile: currentState.deviceDisplayInfo?.aspectProfile || null,
+                    gameResolution: currentState.gameResolution || null,
+                    deviceDisplayInfo: currentState.deviceDisplayInfo || null,
                 },
-            }));
-            setToast({
-                message: activeView !== 'recording'
-                    ? 'Smart Capture started from F10. Opening Recording now.'
-                    : 'Smart Capture started from F10.',
-                type: 'info',
             });
+
+            if (started?.ignored) {
+                Logger.info('Hotkeys', 'Auto-capture hotkey ignored', started);
+            }
         } catch (error: unknown) {
             Logger.warn('Hotkeys', 'Global smart capture hotkey failed', error);
             const message = error instanceof Error ? error.message : 'Unknown error';
             setToast({ message: `Smart Capture hotkey failed: ${message}`, type: 'error' });
         }
-    }, [activeUser, activeView, autoSequenceOnCapture, matches, requestSmartCapture, sessionStartTime, setActiveView, setToast]);
+    }, [activeUser, activeView, matches, sessionStartTime, setToast, tacticalMapKeybind]);
 
     useEffect(() => {
         const api = getElectronAPI();

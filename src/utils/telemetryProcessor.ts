@@ -7,6 +7,7 @@
  */
 import Logger from './logger';
 import type { DataSource } from '../store/slices/createDataSlice';
+import { isNonMatchMap } from './nonMatchMaps';
 import type { WizardResult } from '../types';
 import { UNNAMED_PLAYER_PREFIX } from './constants';
 
@@ -65,6 +66,14 @@ export interface TelemetryActions {
     updatePlayerIdMapping: (id: string, name: string) => void;
     setShowWizard: (result: WizardResult | null) => void;
     setLastMatchSessionId?: (id: string) => void;
+    setDeviceDisplayInfo?: (info: {
+        displayWidth: number;
+        displayHeight: number;
+        virtualWidth: number;
+        virtualHeight: number;
+        aspectProfile: 'standard' | 'ultrawide' | 'superultrawide' | 'unknown';
+    }) => void;
+    setGameResolution?: (res: { resX: number; resY: number }) => void;
 }
 
 export interface TelemetryContext {
@@ -80,6 +89,19 @@ export const processTelemetryEvent = (
     actions: TelemetryActions,
     context: TelemetryContext
 ) => {
+    const detectAspectProfile = (width: number, height: number): 'standard' | 'ultrawide' | 'superultrawide' | 'unknown' => {
+        const safeWidth = Number(width);
+        const safeHeight = Number(height);
+        if (!Number.isFinite(safeWidth) || !Number.isFinite(safeHeight) || safeWidth <= 0 || safeHeight <= 0) {
+            return 'unknown';
+        }
+        const ratio = safeWidth / safeHeight;
+        if (ratio <= 1.8) return 'standard';
+        if (ratio <= 2.5) return 'ultrawide';
+        if (ratio <= 4.0) return 'superultrawide';
+        return 'unknown';
+    };
+
     const name = event.EventName;
     const payload = event.Payload?.event || event.Payload || {};
     const gameTime = toTelemetryTimestampMs(event); // Simulation time or live time
@@ -104,17 +126,30 @@ export const processTelemetryEvent = (
     }
 
     // --- matchSessionId lifecycle tracking ---
-    const matchSessionId = String(
-        getCaseInsensitiveValue(event.context, ['matchSessionId', 'sessionId', 'sESSIONId'])
-        || getCaseInsensitiveValue(event.Payload?.context, ['matchSessionId', 'sessionId', 'sESSIONId'])
-        || getCaseInsensitiveValue(payload, ['matchSessionId', 'sessionId', 'sESSIONId'])
-        || ''
-    ).trim();
-    if (matchSessionId && matchSessionId.length > 0 && !context.isMatchInProgress && (!context.lastMatchSessionId || context.lastMatchSessionId.length === 0)) {
+    const matchSessionIdValueCandidates = [
+        getCaseInsensitiveValue(event.context, ['matchSessionId', 'sessionId', 'sESSIONId']),
+        getCaseInsensitiveValue(event.Payload?.context, ['matchSessionId', 'sessionId', 'sESSIONId']),
+        getCaseInsensitiveValue(payload, ['matchSessionId', 'sessionId', 'sESSIONId']),
+    ];
+    const matchSessionIdValue = matchSessionIdValueCandidates.find((value) => value !== undefined);
+    const hasMatchSessionIdSignal = matchSessionIdValue !== undefined;
+    const matchSessionId = String(matchSessionIdValue || '').trim();
+    if (
+        hasMatchSessionIdSignal
+        && matchSessionId.length > 0
+        && !context.isMatchInProgress
+        && (!context.lastMatchSessionId || context.lastMatchSessionId.length === 0)
+    ) {
         // matchSessionId appeared (empty → non-empty) while not in match → match starting
         Logger.info('TelemetryProcessor', `matchSessionId appeared: ${matchSessionId} — secondary match start signal`);
     }
-    if ((!matchSessionId || matchSessionId.length === 0) && context.lastMatchSessionId && context.lastMatchSessionId.length > 0 && context.isMatchInProgress) {
+    if (
+        hasMatchSessionIdSignal
+        && (!matchSessionId || matchSessionId.length === 0)
+        && context.lastMatchSessionId
+        && context.lastMatchSessionId.length > 0
+        && context.isMatchInProgress
+    ) {
         // matchSessionId disappeared (non-empty → empty) while in match → match ending
         Logger.info('TelemetryProcessor', `matchSessionId cleared — secondary match end signal (left game?)`);
 
@@ -133,7 +168,7 @@ export const processTelemetryEvent = (
         Logger.info('TelemetryProcessor', `Match End (session clear). Duration: ${formatDuration(totalSeconds * 1000)}`);
     }
     // Update tracking ref via action
-    if (actions.setLastMatchSessionId) {
+    if (hasMatchSessionIdSignal && actions.setLastMatchSessionId) {
         actions.setLastMatchSessionId(matchSessionId);
     }
 
@@ -141,8 +176,10 @@ export const processTelemetryEvent = (
 
     // Match Start: check BOTH loadedMap and loadingMap for compatibility with different telemetry formats
     const startMapName = payload.loadedMap || payload.loadingMap;
-    const normalizedStartMapName = typeof startMapName === 'string' ? startMapName.toLowerCase() : '';
-    if (name === 'NebLoadingScreen' && startMapName && !normalizedStartMapName.includes('frontend') && !context.isMatchInProgress) {
+    if (name === 'NebLoadingScreen' && startMapName && isNonMatchMap(startMapName)) {
+        Logger.debug('TelemetryProcessor', `Skipping non-match map load: ${String(startMapName)}`);
+    }
+    if (name === 'NebLoadingScreen' && startMapName && !isNonMatchMap(startMapName) && !context.isMatchInProgress) {
         const matchId = payload.matchId || payload.match_id || payload.MatchId;
         actions.setMatchStartTime(gameTime);
         actions.setIsMatchInProgress(true);
@@ -173,6 +210,36 @@ export const processTelemetryEvent = (
         actions.setToast({ message: "Mission Accomplished - Ready for Submission", type: 'success' });
 
         Logger.info('TelemetryProcessor', `Match End Detected. Duration: ${formatDuration(totalSeconds * 1000)}`);
+    }
+
+    if (name === 'NebDeviceInfo') {
+        const displayWidth = Number(payload.primaryDisplayWidth);
+        const displayHeight = Number(payload.primaryDisplayHeight);
+        const virtualWidth = Number(payload.virtualDisplayWidth);
+        const virtualHeight = Number(payload.virtualDisplayHeight);
+        if (displayWidth > 0 && displayHeight > 0) {
+            const aspectProfile = detectAspectProfile(displayWidth, displayHeight);
+            actions.setDeviceDisplayInfo?.({
+                displayWidth,
+                displayHeight,
+                virtualWidth: Number.isFinite(virtualWidth) ? virtualWidth : 0,
+                virtualHeight: Number.isFinite(virtualHeight) ? virtualHeight : 0,
+                aspectProfile,
+            });
+            Logger.info(
+                'TelemetryProcessor',
+                `Display: ${displayWidth}x${displayHeight} (virtual: ${Number.isFinite(virtualWidth) ? virtualWidth : 0}x${Number.isFinite(virtualHeight) ? virtualHeight : 0}) ratio=${(displayWidth / displayHeight).toFixed(3)} profile=${aspectProfile}`,
+            );
+        }
+    }
+
+    if (name === 'NebUserSettings') {
+        const resX = Number(payload.resolutionSizeX);
+        const resY = Number(payload.resolutionSizeY);
+        if (resX > 0 && resY > 0) {
+            actions.setGameResolution?.({ resX, resY });
+            Logger.info('TelemetryProcessor', `Game resolution: ${resX}x${resY}`);
+        }
     }
 
     // Loadout events (for debugging)

@@ -244,9 +244,25 @@ function detectAspectProfile(width, height) {
   return 'unknown';
 }
 
-function buildOcrGeometry(processed) {
-  const originalWidth = Math.max(1, Number(processed?.originalWidth) || REFERENCE_WIDTH);
-  const originalHeight = Math.max(1, Number(processed?.originalHeight) || REFERENCE_HEIGHT);
+function normalizeAspectProfile(value) {
+  const text = String(value || '').trim().toLowerCase();
+  if (text === 'standard' || text === 'ultrawide' || text === 'superultrawide' || text === 'unknown') {
+    return text;
+  }
+  return '';
+}
+
+function toPositiveInt(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+  return Math.round(numeric);
+}
+
+function buildOcrGeometry(processed, hints = {}) {
+  const hintedDisplayWidth = toPositiveInt(hints?.displayWidth);
+  const hintedDisplayHeight = toPositiveInt(hints?.displayHeight);
+  const originalWidth = Math.max(1, hintedDisplayWidth || Number(processed?.originalWidth) || REFERENCE_WIDTH);
+  const originalHeight = Math.max(1, hintedDisplayHeight || Number(processed?.originalHeight) || REFERENCE_HEIGHT);
   const ocrWidth = Math.max(1, Number(processed?.width) || Math.round(originalWidth));
   const ocrHeight = Math.max(1, Number(processed?.height) || Math.round(originalHeight));
   const preprocessScale = Number.isFinite(Number(processed?.scale)) && Number(processed?.scale) > 0
@@ -258,6 +274,8 @@ function buildOcrGeometry(processed) {
   const ocrScaleX = sourceScaleX * preprocessScale;
   const ocrScaleY = sourceScaleY * preprocessScale;
 
+  const hintedAspectProfile = normalizeAspectProfile(hints?.aspectProfile);
+  const detectedAspectProfile = detectAspectProfile(originalWidth, originalHeight);
   return {
     referenceWidth: REFERENCE_WIDTH,
     referenceHeight: REFERENCE_HEIGHT,
@@ -268,7 +286,7 @@ function buildOcrGeometry(processed) {
     ocrHeight,
     preprocessScale,
     aspectRatio,
-    aspectProfile: detectAspectProfile(originalWidth, originalHeight),
+    aspectProfile: hintedAspectProfile || detectedAspectProfile,
     sourceScaleX,
     sourceScaleY,
     ocrScaleX,
@@ -1728,6 +1746,9 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       nameRerouteThreshold: rawNameRerouteThreshold = 78,
       maxReroutePasses: rawMaxReroutePasses = 1,
       debugLayout: rawDebugLayout = false,
+      gameResolution: rawGameResolution = null,
+      deviceDisplayInfo: rawDeviceDisplayInfo = null,
+      aspectProfile: rawAspectProfile = null,
     } = options;
     const includeBboxes = rawIncludeBboxes === true;
     const shouldArchiveOcrSample = rawArchiveOcrSample === true;
@@ -1739,6 +1760,13 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     const nameRerouteThreshold = Math.max(50, Math.min(95, Number(rawNameRerouteThreshold) || 78));
     const maxReroutePasses = Math.max(0, Math.min(2, Math.round(Number(rawMaxReroutePasses) || 1)));
     const debugLayout = rawDebugLayout === true || String(process.env.WILDGATE_OCR_DEBUG_LAYOUT || '').trim() === '1';
+    const gameResolution = (rawGameResolution && typeof rawGameResolution === 'object') ? rawGameResolution : {};
+    const deviceDisplayInfo = (rawDeviceDisplayInfo && typeof rawDeviceDisplayInfo === 'object') ? rawDeviceDisplayInfo : {};
+    const geometryHints = {
+      displayWidth: toPositiveInt(deviceDisplayInfo.displayWidth) || toPositiveInt(gameResolution.resX),
+      displayHeight: toPositiveInt(deviceDisplayInfo.displayHeight) || toPositiveInt(gameResolution.resY),
+      aspectProfile: rawAspectProfile || deviceDisplayInfo.aspectProfile || null,
+    };
     const ocrRegions = sanitizeOcrRegions(rawOcrRegions);
     const inferredScreenType =
       (typeof rawScreenTypeHint === 'string' ? rawScreenTypeHint : '');
@@ -1759,6 +1787,12 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     console.log('[OCR] ocrMode:', ocrMode);
     console.log('[OCR] routingProfile:', routingProfile);
     console.log('[OCR] fontProfile:', fontProfile);
+    if (geometryHints.displayWidth > 0 && geometryHints.displayHeight > 0) {
+      console.log(`[OCR] Geometry hint display=${geometryHints.displayWidth}x${geometryHints.displayHeight}`);
+    }
+    if (geometryHints.aspectProfile) {
+      console.log(`[OCR] Geometry hint aspectProfile=${String(geometryHints.aspectProfile)}`);
+    }
     console.log('[OCR] regionFingerprint:', ocrRegionFingerprint);
     if (sourceImagePath) console.log('[OCR] Re-analysis from:', sourceImagePath);
     if (skipDebugSave) console.log('[OCR] Skipping debug save (screenshot already saved by caller)');
@@ -1790,7 +1824,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     console.log('[OCR] Preprocessing image...');
     const processed = await preprocessImage(imageBuffer);
     const preMeta = (processed && typeof processed.preprocessMeta === 'object') ? processed.preprocessMeta : {};
-    const geometry = buildOcrGeometry(processed);
+    const geometry = buildOcrGeometry(processed, geometryHints);
     console.log(
       `[OCR] Preprocessing done: original=${processed.originalWidth}x${processed.originalHeight}, ` +
       `ocrInput=${processed.width}x${processed.height}, scale=${Number(processed.scale || 1).toFixed(4)}, ` +

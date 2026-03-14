@@ -8,6 +8,7 @@ import { SHIPS, CHARACTERS, UNNAMED_PLAYER_PREFIX, Match, Loadout, TelemetryCons
 import { EQUIPMENT_DB } from '../utils/equipmentDb';
 import { getPerkCatalog, getProspectorEquipmentCatalog, getProspectorWeaponCatalog, MAX_PERKS_PER_MATCH } from '../components/patch/patchEntityCatalog';
 import { processTelemetryEvent, TelemetryActions, TelemetryContext } from '../utils/telemetryProcessor';
+import { isNonMatchMap } from '../utils/nonMatchMaps';
 import Logger from '../utils/logger';
 import { getElectronAPI } from '../utils/electronAPI';
 import { runtimeConfig } from '../config/runtimeConfig';
@@ -279,6 +280,8 @@ export const useLogMonitor = (activeUser?: string) => {
     const telemetryPerformanceProfile = useAppStore(s => s.telemetryPerformanceProfile);
     const adaptiveTelemetryPollingEnabled = useAppStore(s => s.adaptiveTelemetryPollingEnabled);
     const lifecycleTrackingPaused = useAppStore(s => s.lifecycleTrackingPaused);
+    const setDeviceDisplayInfo = useAppStore(s => s.setDeviceDisplayInfo);
+    const setGameResolution = useAppStore(s => s.setGameResolution);
     const {
         addMatch, updateMatch,
         playerIdMap, updatePlayerIdMapping,
@@ -781,16 +784,22 @@ export const useLogMonitor = (activeUser?: string) => {
                     const eventContext = asRecord(e.context);
                     const payloadContext = asRecord(asRecord(e.Payload).context);
                     const payloadContextAlt = asRecord(asRecord(e.payload).context);
-                    const currentMatchSessionId = toStringOrEmpty(
-                        getRecordValueCaseInsensitive(eventContext, ['matchSessionId', 'sessionId', 'sESSIONId'])
-                        || getRecordValueCaseInsensitive(payloadContext, ['matchSessionId', 'sessionId', 'sESSIONId'])
-                        || getRecordValueCaseInsensitive(payloadContextAlt, ['matchSessionId', 'sessionId', 'sESSIONId'])
-                        || getRecordValueCaseInsensitive(payload, ['matchSessionId', 'sessionId', 'sESSIONId'])
-                    );
+                    const matchSessionIdValueCandidates = [
+                        getRecordValueCaseInsensitive(eventContext, ['matchSessionId', 'sessionId', 'sESSIONId']),
+                        getRecordValueCaseInsensitive(payloadContext, ['matchSessionId', 'sessionId', 'sESSIONId']),
+                        getRecordValueCaseInsensitive(payloadContextAlt, ['matchSessionId', 'sessionId', 'sESSIONId']),
+                        getRecordValueCaseInsensitive(payload, ['matchSessionId', 'sessionId', 'sESSIONId']),
+                    ];
+                    const currentMatchSessionIdValue = matchSessionIdValueCandidates.find((value) => value !== undefined);
+                    const hasExplicitMatchSessionIdSignal = currentMatchSessionIdValue !== undefined;
+                    const currentMatchSessionId = toStringOrEmpty(currentMatchSessionIdValue);
                     const previousMatchSessionId = lastMatchSessionIdRef.current || '';
                     const loadingMapRaw = getRecordValueCaseInsensitive(payload, ['loadedMap', 'loadingMap']);
                     const loadingMapName = typeof loadingMapRaw === 'string' ? loadingMapRaw : '';
                     const loadingMapNameLower = loadingMapName.toLowerCase();
+                    if (name === 'NebLoadingScreen' && !!loadingMapName && isNonMatchMap(loadingMapName) && !loadingMapNameLower.includes('frontend')) {
+                        Logger.debug('LogMonitor', `Skipping non-match map load: ${loadingMapName}`);
+                    }
                     const payloadEnvelope = asRecord(e.Payload);
                     const payloadEnvelopeEvent = asRecord(payloadEnvelope.event);
                     const payloadEnvelopeLower = asRecord(e.payload);
@@ -839,13 +848,40 @@ export const useLogMonitor = (activeUser?: string) => {
                         Logger.debug('LogMonitor', `Skipping old event: ${name} (age: ${ageSeconds}s, before session start)`);
                         return;
                     }
-                    const mapStartSignal = name === 'NebLoadingScreen' && !!loadingMapName && !loadingMapNameLower.includes('frontend');
+                    const mapStartSignal = name === 'NebLoadingScreen' && !!loadingMapName && !isNonMatchMap(loadingMapName);
                     const mapEndSignal = name === 'NebLoadingScreen' && loadingMapNameLower.includes('frontend');
-                    const sessionEndSignal = !currentMatchSessionId && !!previousMatchSessionId && !mapStartSignal;
+                    const sessionEndSignal = hasExplicitMatchSessionIdSignal
+                        && !currentMatchSessionId
+                        && !!previousMatchSessionId
+                        && !mapStartSignal
+                        && (telemetryLifecycleActiveRef.current || !!telemetryDraftMatchIdRef.current);
                     // Only a real map load should open the lifecycle. Session IDs can
                     // appear during boot and would otherwise create phantom drafts.
                     const startLifecycleSignal = mapStartSignal;
                     const endLifecycleSignal = mapEndSignal || sessionEndSignal;
+                    if (
+                        name === 'NebLoadingScreen'
+                        || name === 'NebClientMatchmakerStateChange'
+                        || hasExplicitMatchSessionIdSignal
+                        || startLifecycleSignal
+                        || endLifecycleSignal
+                    ) {
+                        Logger.info('LogMonitor', `[LIFECYCLE] ${JSON.stringify({
+                            at: new Date(gameTime).toISOString(),
+                            name,
+                            loadingMap: loadingMapName || null,
+                            currentMatchSessionId: currentMatchSessionId || null,
+                            previousMatchSessionId: previousMatchSessionId || null,
+                            hasExplicitMatchSessionIdSignal,
+                            mapStartSignal,
+                            mapEndSignal,
+                            sessionEndSignal,
+                            startLifecycleSignal,
+                            endLifecycleSignal,
+                            lifecycleActive: telemetryLifecycleActiveRef.current,
+                            hasDraft: !!telemetryDraftMatchIdRef.current,
+                        })}`);
+                    }
                     if (startLifecycleSignal && telemetryLifecycleActiveRef.current && !telemetryDraftMatchIdRef.current) {
                         telemetryLifecycleActiveRef.current = false;
                         setIsMatchInProgress(false);
@@ -1622,7 +1658,9 @@ export const useLogMonitor = (activeUser?: string) => {
                         setToast,
                         updatePlayerIdMapping,
                         setShowWizard,
-                        setLastMatchSessionId: (id: string) => { lastMatchSessionIdRef.current = id; }
+                        setLastMatchSessionId: (id: string) => { lastMatchSessionIdRef.current = id; },
+                        setDeviceDisplayInfo,
+                        setGameResolution,
                     };
 
                     const context: TelemetryContext = {
@@ -1636,7 +1674,9 @@ export const useLogMonitor = (activeUser?: string) => {
                     if (startLifecycleSignal && !telemetryLifecycleActiveRef.current) {
                         telemetryLifecycleActiveRef.current = true;
                     }
-                    lastMatchSessionIdRef.current = currentMatchSessionId;
+                    if (hasExplicitMatchSessionIdSignal) {
+                        lastMatchSessionIdRef.current = currentMatchSessionId;
+                    }
                     if (endLifecycleSignal && telemetryLifecycleActiveRef.current) {
                         telemetryLifecycleActiveRef.current = false;
                         finalizeTelemetryDraft(gameTime);
@@ -1653,7 +1693,7 @@ export const useLogMonitor = (activeUser?: string) => {
             unsubStatus();
             unsubData();
         };
-    }, [appendTelemetryLoadoutSave, createTelemetryDraftIfNeeded, finalizeTelemetryDraft, resetSelectionDefaultsForNewMatch, setActiveHero, setActiveShip, setActiveWeapons, setCurrentLoadout, setIsMatchInProgress, setLastActivity, setMatchStartTime, setOverlayPhase, setShowWizard, setTelemetryStatus, setTimeMin, setTimeSec, setToast, startupLifecycleEstablished, updatePlayerIdMapping, updateTelemetryDraftConsistency, updateTelemetryDraftFromLoadout, clearTelemetryDetected]);
+    }, [appendTelemetryLoadoutSave, clearTelemetryDetected, createTelemetryDraftIfNeeded, finalizeTelemetryDraft, resetSelectionDefaultsForNewMatch, setActiveHero, setActiveShip, setActiveWeapons, setCurrentLoadout, setDeviceDisplayInfo, setGameResolution, setIsMatchInProgress, setLastActivity, setMatchStartTime, setOverlayPhase, setShowWizard, setTelemetryStatus, setTimeMin, setTimeSec, setToast, startupLifecycleEstablished, updatePlayerIdMapping, updateTelemetryDraftConsistency, updateTelemetryDraftFromLoadout]);
 
     return { logFeed, logStatus: telemetryStatus };
 };

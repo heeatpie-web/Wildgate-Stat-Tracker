@@ -205,6 +205,11 @@ function createAutoCaptureCoordinator({
     runtimeOptions = {},
     tacticalMapKeybind,
   }) => {
+    console.log(
+      `[AutoCapture] Starting sequence matchId=${matchId} tacticalMapKeybind=${tacticalMapKeybind?.raw || 'unknown'} `
+      + `sendKeys=${tacticalMapKeybind?.sendKeys || 'unknown'} sendKeypresses=${sendKeypresses} waitMultiplier=${waitMultiplier}`
+    );
+
     const sendStepKeys = async (step, sequence) => {
       if (!sendKeypresses) return;
       logAutoCaptureStep(step, '(keypress)');
@@ -322,10 +327,29 @@ function createAutoCaptureCoordinator({
         return { started: false, reason: 'no-active-match' };
       }
 
-      const tacticalMapKeybind = await lookupMapKeybind();
+      const requestedMapKeybindRaw = typeof request.tacticalMapKeybind === 'string'
+        ? request.tacticalMapKeybind.trim()
+        : '';
+      let tacticalMapKeybind = null;
+      if (requestedMapKeybindRaw) {
+        const requestedMapKeybindNormalized = normalizeKeybindToSendKeys(requestedMapKeybindRaw);
+        if (requestedMapKeybindNormalized) {
+          tacticalMapKeybind = {
+            raw: requestedMapKeybindRaw,
+            sendKeys: requestedMapKeybindNormalized,
+            source: 'settings',
+          };
+        } else {
+          console.warn(`[AutoCapture] Ignoring unsupported tacticalMapKeybind setting "${requestedMapKeybindRaw}"`);
+        }
+      }
+
       if (!tacticalMapKeybind?.sendKeys) {
-        notify(buildFailedPayload('F10 Auto-Capture: No tactical map keybind configured — set it in Settings.'));
-        return { started: false, reason: 'missing-tactical-map-keybind' };
+        tacticalMapKeybind = await lookupMapKeybind();
+      }
+      if (!tacticalMapKeybind?.sendKeys) {
+        tacticalMapKeybind = { raw: 'Tab', sendKeys: '{TAB}', source: 'fallback' };
+        console.warn('[AutoCapture] Tactical map keybind unavailable from settings/.ini, defaulting to Tab.');
       }
 
       const payload = {
