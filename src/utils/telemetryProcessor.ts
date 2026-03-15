@@ -16,6 +16,11 @@ const MAX_TELEMETRY_MATCH_DURATION_SECONDS = 60 * 60;
 const isTrustedTelemetryDuration = (seconds: number) =>
     Number.isFinite(seconds) && seconds > 0 && seconds <= MAX_TELEMETRY_MATCH_DURATION_SECONDS;
 
+const MATCHMAKER_START_STATE_PATTERN = /(inprogress|loading|travel|starting|active|playing|ingame|in_game|matchstarted)/i;
+
+const isLiveMatchmakerState = (value: unknown): boolean =>
+    typeof value === 'string' && MATCHMAKER_START_STATE_PATTERN.test(value.trim());
+
 const applyTelemetryDuration = (
     totalSeconds: number,
     actions: Pick<TelemetryActions, 'setTimeMin' | 'setTimeSec'>,
@@ -193,6 +198,11 @@ export const processTelemetryEvent = (
     const matchSessionIdValue = matchSessionIdValueCandidates.find((value) => value !== undefined);
     const hasMatchSessionIdSignal = matchSessionIdValue !== undefined;
     const matchSessionId = String(matchSessionIdValue || '').trim();
+    const matchmakerStateRaw = pickCaseInsensitiveValue(payloadSources, ['state', 'matchState', 'status']);
+    const matchmakerStartSignal = name === 'NebClientMatchmakerStateChange'
+        && !context.isMatchInProgress
+        && matchSessionId.length > 0
+        && isLiveMatchmakerState(matchmakerStateRaw);
     if (
         hasMatchSessionIdSignal
         && matchSessionId.length > 0
@@ -246,6 +256,13 @@ export const processTelemetryEvent = (
         actions.setOverlayPhase('Setup');
         actions.setToast({ message: `Loading ${startMapName}...`, type: 'info' });
         Logger.info('TelemetryProcessor', `Match Start Detected: ${startMapName} (ID: ${matchId || 'Unknown'})`);
+    }
+    if (matchmakerStartSignal) {
+        actions.setMatchStartTime(gameTime);
+        actions.setIsMatchInProgress(true);
+        actions.setOverlayPhase('Setup');
+        actions.setToast({ message: 'Match start detected from session telemetry.', type: 'info' });
+        Logger.info('TelemetryProcessor', `Match Start Detected from matchmaker state: ${matchSessionId}`);
     }
 
     // Match End

@@ -105,13 +105,12 @@ describe('autoCaptureCoordinator sequencing', () => {
     expect(sendKeySequence).toHaveBeenNthCalledWith(1, '{TAB}', 'Open Tactical Map');
     expect(sendKeySequence).toHaveBeenNthCalledWith(2, '{TAB}', 'Close Tactical Map');
     expect(sendMenuKeySequence).toHaveBeenNthCalledWith(1, '{ESC}', 'Navigate to Crew Hub');
-    expect(sendMenuKeySequence).toHaveBeenNthCalledWith(2, '{UP}{UP}{UP}{UP}', 'Navigate to Crew Hub');
-    expect(sendMenuKeySequence).toHaveBeenNthCalledWith(3, '{SPACE}', 'Navigate to Crew Hub');
-    expect(sendMenuKeySequence).toHaveBeenNthCalledWith(4, '{RIGHT}{RIGHT}{RIGHT}{RIGHT}', 'Navigate to Crew Hub Panel (Right)');
-    expect(sendMenuKeySequence).toHaveBeenNthCalledWith(5, '{END}', 'Navigate to Crew Hub Panel End');
-    expect(sendMenuKeySequence).toHaveBeenNthCalledWith(6, '{ESC}', 'Exit');
+    expect(sendMenuKeySequence).toHaveBeenNthCalledWith(2, '{UP}{UP}{UP}{UP}{SPACE}', 'Navigate to Crew Hub');
+    expect(sendMenuKeySequence).toHaveBeenNthCalledWith(3, '{RIGHT}{RIGHT}{RIGHT}{RIGHT}', 'Navigate to Crew Hub Panel (Right)');
+    expect(sendMenuKeySequence).toHaveBeenNthCalledWith(4, '{END}', 'Navigate to Crew Hub Panel End');
+    expect(sendMenuKeySequence).toHaveBeenNthCalledWith(5, '{ESC}', 'Exit');
     expect(captureAndProcess).toHaveBeenCalledTimes(3);
-    expect(waits).toEqual([640, 160, 360, 180, 480, 120, 120, 40]);
+    expect(waits).toEqual([400, 80, 240, 280, 60, 40, 20]);
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({
       phase: 'capture-progress',
       captureIndex: 1,

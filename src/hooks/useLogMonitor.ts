@@ -197,6 +197,7 @@ const TELEMETRY_LOADOUT_SIGNAL_KEYS = new Set([
 ]);
 const TELEMETRY_LOADOUT_RECORD_KEY_PATTERN = /(loadout|shipselection|gamemodeshipselection|characterloadout)/i;
 const TELEMETRY_SHARED_SHIP_SELECTION_PATTERN = /(shipselection|gamemodeshipselection)/i;
+const MATCHMAKER_START_STATE_PATTERN = /(inprogress|loading|travel|starting|active|playing|ingame|in_game|matchstarted)/i;
 const TELEMETRY_MAP_NAME_KEYS = ['loadedMap', 'loadingMap'];
 const TELEMETRY_RECORD_KEY_KEYS = ['recordKey', 'record_key', 'key'];
 const TELEMETRY_LOADOUT_CONTAINER_KEYS = [
@@ -213,6 +214,9 @@ const toClock = (totalSeconds: number) => {
     const ss = (safe % 60).toString().padStart(2, '0');
     return `${mm}:${ss}`;
 };
+
+const isLiveMatchmakerState = (value: unknown): boolean =>
+    typeof value === 'string' && MATCHMAKER_START_STATE_PATTERN.test(value.trim());
 
 const hasTelemetrySelection = (value: unknown): value is string => {
     const text = String(value || '').trim();
@@ -427,14 +431,15 @@ export const useLogMonitor = (activeUser?: string) => {
         state.resetSelectionSourcesForNewMatch?.();
         state.resetMatchTrackingForNewMatch?.();
         state.resetMatchMetricsForNewMatch?.();
+        clearTelemetryDetected();
         const loadout = currentLoadoutRef.current;
         if (hasTelemetrySelection(loadout?.hero)) {
-            setActiveHero(loadout.hero, 'telemetry');
+            setActiveHero(loadout.hero, 'manual');
         }
         if (hasTelemetrySelection(loadout?.ship)) {
-            setActiveShip(loadout.ship, 'telemetry');
+            setActiveShip(loadout.ship, 'manual');
         }
-    }, [setActiveHero, setActiveShip]);
+    }, [clearTelemetryDetected, setActiveHero, setActiveShip]);
 
     const buildTelemetryDraft = useCallback((matchId: number, gameTime: number, loadout: Loadout | null): Match => ({
         id: matchId,
@@ -856,6 +861,13 @@ export const useLogMonitor = (activeUser?: string) => {
                     const hasExplicitMatchSessionIdSignal = currentMatchSessionIdValue !== undefined;
                     const currentMatchSessionId = toStringOrEmpty(currentMatchSessionIdValue);
                     const previousMatchSessionId = lastMatchSessionIdRef.current || '';
+                    const matchmakerStateRaw = pickTelemetryValueCaseInsensitive(
+                        payloadSources,
+                        ['state', 'matchState', 'status'],
+                    );
+                    const matchmakerState = typeof matchmakerStateRaw === 'string'
+                        ? matchmakerStateRaw.trim()
+                        : '';
                     const loadingMapRaw = pickTelemetryValueCaseInsensitive(payloadSources, TELEMETRY_MAP_NAME_KEYS);
                     const loadingMapName = typeof loadingMapRaw === 'string' ? loadingMapRaw : '';
                     const loadingMapNameLower = loadingMapName.toLowerCase();
@@ -897,9 +909,12 @@ export const useLogMonitor = (activeUser?: string) => {
                         && !!previousMatchSessionId
                         && !mapStartSignal
                         && (telemetryLifecycleActiveRef.current || !!telemetryDraftMatchIdRef.current);
-                    // Only a real map load should open the lifecycle. Session IDs can
-                    // appear during boot and would otherwise create phantom drafts.
-                    const startLifecycleSignal = mapStartSignal;
+                    const matchmakerStartSignal = name === 'NebClientMatchmakerStateChange'
+                        && !mapStartSignal
+                        && !telemetryLifecycleActiveRef.current
+                        && !!currentMatchSessionId
+                        && isLiveMatchmakerState(matchmakerState);
+                    const startLifecycleSignal = mapStartSignal || matchmakerStartSignal;
                     const endLifecycleSignal = mapEndSignal || sessionEndSignal;
                     if (
                         name === 'NebLoadingScreen'
@@ -914,8 +929,10 @@ export const useLogMonitor = (activeUser?: string) => {
                             loadingMap: loadingMapName || null,
                             currentMatchSessionId: currentMatchSessionId || null,
                             previousMatchSessionId: previousMatchSessionId || null,
+                            matchmakerState: matchmakerState || null,
                             hasExplicitMatchSessionIdSignal,
                             mapStartSignal,
+                            matchmakerStartSignal,
                             mapEndSignal,
                             sessionEndSignal,
                             startLifecycleSignal,
@@ -932,6 +949,12 @@ export const useLogMonitor = (activeUser?: string) => {
                     }
                     if (startLifecycleSignal) {
                         resetSelectionDefaultsForNewMatch();
+                    }
+                    if (matchmakerStartSignal) {
+                        telemetryLifecycleActiveRef.current = true;
+                        setIsMatchInProgress(true);
+                        setMatchStartTime(gameTime);
+                        setOverlayPhase('Setup');
                     }
                     if (startLifecycleSignal && !telemetryDraftMatchIdRef.current) {
                         createTelemetryDraftIfNeeded(gameTime);
@@ -1203,6 +1226,16 @@ export const useLogMonitor = (activeUser?: string) => {
 
                         let heroName = '';
                         let shipName = '';
+                        const exactMatchList = (raw: string, list: string[]): string | null => {
+                            if (!raw) return null;
+                            const lower = raw.toLowerCase();
+                            const normalized = lower.replace(/[^a-z0-9]+/g, ' ').trim();
+                            const exact = list.find((item) => item.toLowerCase() === lower);
+                            if (exact) return exact;
+                            return list.find((item) => (
+                                item.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() === normalized
+                            )) || null;
+                        };
                         const fuzzyMatchList = (raw: string, list: string[]): string | null => {
                             if (!raw) return null;
                             const lower = raw.toLowerCase();
@@ -1276,6 +1309,7 @@ export const useLogMonitor = (activeUser?: string) => {
                             knownDomainMappings,
                             guidDomainMappings,
                             fallbackCatalog,
+                            allowLooseNameFallback,
                         }: {
                             entityType: 'Hero' | 'Ship';
                             rawGuidValues: unknown[];
@@ -1284,11 +1318,13 @@ export const useLogMonitor = (activeUser?: string) => {
                             knownDomainMappings: Record<string, string>;
                             guidDomainMappings: Record<string, string>;
                             fallbackCatalog: string[];
+                            allowLooseNameFallback?: boolean;
                         }): string => {
                             const rawText = String(rawValue || '').trim();
                             const nameHint = rawText.includes(':')
                                 ? String(rawText.split(':').pop() || '').trim()
                                 : rawText;
+                            const allowLooseFallback = allowLooseNameFallback !== false;
                             const guidCandidates = rawGuidValues
                                 .map((candidate) => normalizeGuid(candidate))
                                 .filter((candidate) => isStableGuid(candidate));
@@ -1307,18 +1343,28 @@ export const useLogMonitor = (activeUser?: string) => {
                                     || guidDomainMappings[guidLower];
                                 if (resolvedFromGuid) return resolvedFromGuid;
 
-                                const matchedHint = nameHint ? fuzzyMatchList(nameHint, fallbackCatalog) : null;
+                                const matchedHint = nameHint
+                                    ? (
+                                        allowLooseFallback
+                                            ? fuzzyMatchList(nameHint, fallbackCatalog)
+                                            : exactMatchList(nameHint, fallbackCatalog)
+                                    )
+                                    : null;
                                 if (matchedHint) return matchedHint;
-                                if (nameHint) return nameHint;
+                                if (allowLooseFallback && nameHint) return nameHint;
 
                                 registerUnknownId(guidCandidate, entityType);
                                 const unknownLabel = `Unknown (${guidCandidate.slice(0, 4)})`;
                                 Logger.warn('LogMonitor', `Unknown ${entityType} GUID: ${guidCandidate} | raw: "${rawValue}" | resolved: "${unknownLabel}"`);
-                                return unknownLabel;
+                                return allowLooseFallback ? unknownLabel : '';
                             }
 
                             if (!nameHint) return '';
-                            return fuzzyMatchList(nameHint, fallbackCatalog) || nameHint;
+                            const matchedHint = allowLooseFallback
+                                ? fuzzyMatchList(nameHint, fallbackCatalog)
+                                : exactMatchList(nameHint, fallbackCatalog);
+                            if (matchedHint) return matchedHint;
+                            return allowLooseFallback ? nameHint : '';
                         };
 
                         if (allowHeroAndLoadoutSync) {
@@ -1358,6 +1404,7 @@ export const useLogMonitor = (activeUser?: string) => {
                             knownDomainMappings: knownMappings,
                             guidDomainMappings: SHIP_GUIDS,
                             fallbackCatalog: [...SHIPS],
+                            allowLooseNameFallback: !shouldApplySharedShipSelection,
                         });
                         if (shipName && !shipName.startsWith('Unknown')) {
                             traceTelemetryLoadout('Apply telemetry ship', {

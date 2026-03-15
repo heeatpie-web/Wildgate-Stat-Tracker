@@ -99,6 +99,23 @@ describe('processTelemetryEvent', () => {
       expect(actions.setMatchStartTime).toHaveBeenCalled();
       expect(actions.setOverlayPhase).toHaveBeenCalledWith('Setup');
     });
+
+    it('detects live matchmaker state with a session id as a fallback match start', () => {
+      const event = {
+        EventName: 'NebClientMatchmakerStateChange',
+        Payload: {
+          sessionId: 'training-session-id',
+          state: 'InProgress',
+        },
+        ClientTimestamp: Date.now() / 1000,
+      };
+
+      processTelemetryEvent(event, actions, context);
+
+      expect(actions.setIsMatchInProgress).toHaveBeenCalledWith(true);
+      expect(actions.setMatchStartTime).toHaveBeenCalled();
+      expect(actions.setOverlayPhase).toHaveBeenCalledWith('Setup');
+    });
   });
 
   // ── Match End ──

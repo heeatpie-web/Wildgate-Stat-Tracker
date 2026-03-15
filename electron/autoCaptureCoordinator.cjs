@@ -323,46 +323,44 @@ function createAutoCaptureCoordinator({
           tacticalMapKeybind.sendKeys,
           STEP_DEFINITIONS.openMap.label,
           async () => {
-            await waitStep(350);
+            await waitStep(220);
             await captureStep(STEP_DEFINITIONS.captureMap, 1);
           }
         );
         if (!heldResult?.success) {
           throw new Error(heldResult?.error || `${STEP_DEFINITIONS.captureMap.label}: hold-capture failed`);
         }
-        await waitStep(150); // Let the map close animation finish before pressing ESC
+        await waitStep(80); // Let the map close animation finish before pressing ESC
         return;
       }
 
       // Toggle mode: tap to open, capture, tap to close.
       await sendStepKeys(STEP_DEFINITIONS.openMap, tacticalMapKeybind.sendKeys);
-      await waitStep(320);
+      await waitStep(200);
       await captureStep(STEP_DEFINITIONS.captureMap, 1);
       await sendStepKeys(STEP_DEFINITIONS.closeMap, tacticalMapKeybind.sendKeys);
-      await waitStep(80);
+      await waitStep(40);
     };
 
     await captureTacticalMapStep();
 
     await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{ESC}', { useMenuSender: true });
-    await waitStep(180); // Wait for the ESC popup menu to appear before navigating
-    await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{UP}{UP}{UP}{UP}', { useMenuSender: true });
-    await waitStep(90); // Let the highlight settle on Crew Hub before pressing space
-    await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{SPACE}', { useMenuSender: true });
-    await waitStep(240);
+    await waitStep(120); // Wait for the ESC popup menu to appear before navigating
+    await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{UP}{UP}{UP}{UP}{SPACE}', { useMenuSender: true });
+    await waitStep(140);
 
     await captureStep(STEP_DEFINITIONS.captureCrewHubA, 2);
 
     await sendStepKeys(STEP_DEFINITIONS.moveCrewHubRight, '{RIGHT}{RIGHT}{RIGHT}{RIGHT}', { useMenuSender: true });
-    await waitStep(60);
+    await waitStep(30);
 
     await sendStepKeys(STEP_DEFINITIONS.moveCrewHubEnd, '{END}', { useMenuSender: true });
-    await waitStep(60);
+    await waitStep(20);
 
     await captureStep(STEP_DEFINITIONS.captureCrewHubB, 3);
 
     await sendStepKeys(STEP_DEFINITIONS.exit, '{ESC}', { useMenuSender: true });
-    await waitStep(20);
+    await waitStep(10);
   };
 
   const tryEscapeCleanup = async (sendKeypresses) => {
@@ -375,6 +373,9 @@ function createAutoCaptureCoordinator({
   };
 
   return {
+    isBusy() {
+      return inProgress;
+    },
     async start(request = {}) {
       if (inProgress) {
         return { started: false, ignored: true, reason: 'in-progress' };

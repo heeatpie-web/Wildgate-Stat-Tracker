@@ -346,25 +346,11 @@ async function fastCheckGameProcess(processNames) {
   return { running: false };
 }
 
-async function lookupGameWindowCandidate({
+async function performGameWindowLookup({
   processNames = [],
   titleHint = '',
-  focusDelayMs = DEFAULT_FOCUS_DELAY_MS,
-  skipCache = false,
+  timeoutMs,
 } = {}) {
-  if (!skipCache) {
-    const cached = getCachedCandidate();
-    if (cached) {
-      return cached;
-    }
-  }
-
-  const fastCheck = await fastCheckGameProcess(processNames);
-  if (!fastCheck.running) {
-    return { success: false, error: 'Game process not found (fast tasklist check).' };
-  }
-
-  const timeoutMs = Math.max(15000, (Math.max(50, Number(focusDelayMs) || DEFAULT_FOCUS_DELAY_MS) * 8) + 3000);
   const result = await runPowerShellScript(buildGameWindowLookupPowerShellScript(), {
     env: {
       WILDGATE_GAME_PROCESS_NAMES: processNames.join(';'),
@@ -398,7 +384,7 @@ async function lookupGameWindowCandidate({
     };
   }
 
-  const lookupResult = {
+  return {
     success: true,
     processName: typeof parsed.processName === 'string' ? parsed.processName : '',
     processId: Number.isFinite(Number(parsed.processId)) ? Number(parsed.processId) : null,
@@ -406,6 +392,44 @@ async function lookupGameWindowCandidate({
     windowHandle: Number.isFinite(Number(parsed.windowHandle)) ? Number(parsed.windowHandle) : null,
     candidateSummary: typeof parsed.candidateSummary === 'string' ? parsed.candidateSummary : '',
   };
+}
+
+async function lookupGameWindowCandidate({
+  processNames = [],
+  titleHint = '',
+  focusDelayMs = DEFAULT_FOCUS_DELAY_MS,
+  skipCache = false,
+} = {}) {
+  if (!skipCache) {
+    const cached = getCachedCandidate();
+    if (cached) {
+      return cached;
+    }
+  }
+
+  const fastCheck = await fastCheckGameProcess(processNames);
+  const timeoutMs = Math.max(5000, (Math.max(50, Number(focusDelayMs) || DEFAULT_FOCUS_DELAY_MS) * 8) + 1500);
+  if (!fastCheck.running) {
+    const recoveryLookup = await performGameWindowLookup({
+      processNames,
+      titleHint: '',
+      timeoutMs: Math.min(timeoutMs, 3500),
+    });
+    if (!recoveryLookup.success) {
+      return { success: false, error: 'Game process not found (fast tasklist check).' };
+    }
+    setCachedCandidate(recoveryLookup);
+    return recoveryLookup;
+  }
+
+  const lookupResult = await performGameWindowLookup({
+    processNames,
+    titleHint,
+    timeoutMs,
+  });
+  if (!lookupResult.success) {
+    return lookupResult;
+  }
 
   setCachedCandidate(lookupResult);
   return lookupResult;

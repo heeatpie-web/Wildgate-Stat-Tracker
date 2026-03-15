@@ -1206,6 +1206,9 @@ let latestAutoCaptureHotkeyStateAt = 0;
 let pendingAutoCaptureHotkeyAt = 0;
 let pendingAutoCaptureHotkeyTimer = null;
 const AUTO_CAPTURE_HOTKEY_SYNC_GRACE_MS = 5000;
+const AUTO_CAPTURE_HOTKEY_REPEAT_DEBOUNCE_MS = 1200;
+let lastAutoCaptureHotkeyAcceptedAt = 0;
+let autoCaptureHotkeyStartInFlight = false;
 function resolveAppIconPath() {
   const candidates = [
     path.join(process.resourcesPath || '', 'icon.ico'),
@@ -1336,20 +1339,32 @@ function sendAutoCaptureFailureStatus(message, detail = null) {
   });
 }
 
-function startAutoCaptureFromHotkey(snapshot, { source = 'hotkey', queuedMs = null } = {}) {
+async function startAutoCaptureFromHotkey(snapshot, { source = 'hotkey', queuedMs = null } = {}) {
   const liveWindow = ensureMainWindow();
   const request = buildAutoCaptureRequestFromStateSnapshot(snapshot);
-  console.log(
-    `[Hotkey] Starting auto-capture source=${source} queuedMs=${queuedMs == null ? 0 : queuedMs} `
-    + `matchId=${Number(request.matchId || 0)} lifecycleActive=${request.lifecycleActive === true}`
-  );
-  return autoCaptureCoordinator.start(request).catch((error) => {
+  try {
+    const result = await autoCaptureCoordinator.start(request);
+    if (result?.started) {
+      console.log(
+        `[Hotkey] Starting auto-capture source=${source} queuedMs=${queuedMs == null ? 0 : queuedMs} `
+        + `matchId=${Number(request.matchId || 0)} lifecycleActive=${request.lifecycleActive === true}`
+      );
+    } else if (result?.ignored) {
+      console.log(`[Hotkey] Ignored auto-capture trigger source=${source} reason=${result.reason || 'unknown'}`);
+    }
+    return result;
+  } catch (error) {
     const message = error?.message || String(error);
     console.error('[Hotkey] F10 auto-capture crashed:', message);
     if (liveWindow && !liveWindow.isDestroyed()) {
       sendAutoCaptureFailureStatus('Auto-Capture failed.', message);
     }
-  });
+    return {
+      started: false,
+      reason: 'error',
+      error: message,
+    };
+  }
 }
 
 function registerGlobalHotkeys() {
@@ -1380,12 +1395,26 @@ function registerGlobalHotkeys() {
   console.log(`[Hotkey] Attempting to register F10 auto-capture. alreadyRegistered=${globalShortcut.isRegistered('F10')}`);
   const f10Registered = globalShortcut.register('F10', () => {
     const liveWindow = ensureMainWindow();
+    const invokedAt = Date.now();
+    if (typeof autoCaptureCoordinator.isBusy === 'function' && autoCaptureCoordinator.isBusy()) {
+      return;
+    }
+    if ((invokedAt - lastAutoCaptureHotkeyAcceptedAt) < AUTO_CAPTURE_HOTKEY_REPEAT_DEBOUNCE_MS) {
+      return;
+    }
+    if (autoCaptureHotkeyStartInFlight) {
+      return;
+    }
     const stateAgeMs = latestAutoCaptureHotkeyStateAt > 0 ? (Date.now() - latestAutoCaptureHotkeyStateAt) : null;
     console.log(
       `[Hotkey] F10 fired — starting auto-capture sequence. hasLiveWindow=${Boolean(liveWindow)} `
       + `stateAgeMs=${stateAgeMs == null ? 'unknown' : stateAgeMs}`
     );
+    lastAutoCaptureHotkeyAcceptedAt = invokedAt;
     if (!latestAutoCaptureHotkeyState) {
+      if (pendingAutoCaptureHotkeyAt > 0) {
+        return;
+      }
       clearPendingAutoCaptureHotkey();
       pendingAutoCaptureHotkeyAt = Date.now();
       pendingAutoCaptureHotkeyTimer = setTimeout(() => {
@@ -1399,7 +1428,10 @@ function registerGlobalHotkeys() {
     }
 
     clearPendingAutoCaptureHotkey();
-    void startAutoCaptureFromHotkey(latestAutoCaptureHotkeyState);
+    autoCaptureHotkeyStartInFlight = true;
+    void startAutoCaptureFromHotkey(latestAutoCaptureHotkeyState).finally(() => {
+      autoCaptureHotkeyStartInFlight = false;
+    });
   });
   console.log(`[Hotkey] F10 registration success=${f10Registered} isRegistered=${globalShortcut.isRegistered('F10')}`);
   if (!f10Registered) {
@@ -2215,9 +2247,12 @@ ipcMain.on('sync-auto-capture-hotkey-state', (_event, snapshot = null) => {
       clearPendingAutoCaptureHotkey();
       if (queuedMs <= AUTO_CAPTURE_HOTKEY_SYNC_GRACE_MS) {
         console.log(`[Hotkey] Received first renderer state sync; replaying queued F10 after ${queuedMs}ms.`);
+        autoCaptureHotkeyStartInFlight = true;
         void startAutoCaptureFromHotkey(snapshot, {
           source: 'queued-hotkey',
           queuedMs,
+        }).finally(() => {
+          autoCaptureHotkeyStartInFlight = false;
         });
       }
     }

@@ -354,8 +354,8 @@ describe('useLogMonitor', () => {
     expect(appStoreState.resetSelectionSourcesForNewMatch).toHaveBeenCalledTimes(1);
     expect(appStoreState.resetMatchTrackingForNewMatch).toHaveBeenCalledTimes(1);
     expect(appStoreState.resetMatchMetricsForNewMatch).toHaveBeenCalledTimes(1);
-    expect(gameDataState.setActiveHero).toHaveBeenCalledWith('Venture', 'telemetry');
-    expect(gameDataState.setActiveShip).toHaveBeenCalledWith('Scout (3 Player)', 'telemetry');
+    expect(gameDataState.setActiveHero).toHaveBeenCalledWith('Venture', 'manual');
+    expect(gameDataState.setActiveShip).toHaveBeenCalledWith('Scout (3 Player)', 'manual');
   });
 
   it('does not create telemetry draft from session-id start without map start', async () => {
@@ -395,6 +395,29 @@ describe('useLogMonitor', () => {
 
     expect(addMatch).not.toHaveBeenCalled();
     expect(gameDataState.setIsMatchInProgress).not.toHaveBeenCalledWith(true);
+  });
+
+  it('starts lifecycle from a live matchmaker state when the map-start event is missing', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: {
+            sessionId: 'training-session-id',
+            state: 'InProgress',
+          },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    expect(addMatch).toHaveBeenCalledTimes(1);
+    expect(gameDataState.setIsMatchInProgress).toHaveBeenCalledWith(true);
+    expect(gameDataState.setMatchStartTime).toHaveBeenCalled();
+    expect(uiState.setOverlayPhase).toHaveBeenCalledWith('Setup');
   });
 
   it('does not finalize a live telemetry draft when a later event omits sessionId', async () => {
@@ -510,6 +533,33 @@ describe('useLogMonitor', () => {
     expect(processTelemetryEvent).toHaveBeenCalled();
     const context = processTelemetryEvent.mock.calls[0]?.[2] as { isMatchInProgress?: boolean } | undefined;
     expect(context?.isMatchInProgress).toBe(false);
+  });
+
+  it('clears stale telemetry ship detection when carrying the previous loadout into a new match', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    gameDataState.currentLoadout = {
+      hero: 'Adrian',
+      ship: 'Hunter',
+      weapons: [],
+      equipment: [],
+      characterWeapons: [],
+      characterEquipment: [],
+    };
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { event: { loadedMap: 'DesolationReach' } },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    expect(gameDataState.clearTelemetryDetected).toHaveBeenCalled();
+    expect(gameDataState.setActiveHero).toHaveBeenCalledWith('Adrian', 'manual');
+    expect(gameDataState.setActiveShip).toHaveBeenCalledWith('Hunter', 'manual');
   });
 
   it('reuses a recent unresolved telemetry draft instead of creating a duplicate', async () => {
@@ -1199,6 +1249,44 @@ describe('useLogMonitor', () => {
     expect(latestLoadout?.characterWeapons || []).toEqual(['Double Whammy']);
     expect(latestLoadout?.characterEquipment || []).toEqual(['Repair Drone']);
     expect(gameDataState.setActiveHero).not.toHaveBeenCalled();
+  });
+
+  it('ignores weak shared ship-selection labels that are not exact ship names', async () => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    gameDataState.currentLoadout = {
+      hero: 'Adrian',
+      ship: 'Hunter',
+      weapons: [],
+      equipment: [],
+      characterWeapons: ['Double Whammy'],
+      characterEquipment: ['Repair Drone'],
+    };
+
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+    gameDataState.setActiveShip.mockClear();
+    gameDataState.setCurrentLoadout.mockClear();
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebCloudSaveRecordSize',
+          Payload: {
+            recordKey: 'GameModeShipSelection_v2',
+            event: {
+              actorId: 'lobby-leader-id',
+              selection: {
+                shipName: 'HunterLeaderSlot',
+              },
+            },
+          },
+          ClientTimestamp: nowSec,
+        },
+      ]);
+    });
+
+    expect(gameDataState.setActiveShip).not.toHaveBeenCalled();
+    expect(gameDataState.setCurrentLoadout).not.toHaveBeenCalled();
   });
 
   it('captures matchmaker teammate and mode expectations only after match start', async () => {
