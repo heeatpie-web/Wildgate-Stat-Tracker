@@ -12,6 +12,7 @@ const gameData = {
   isMatchInProgress: false,
   setMatchStartTime: vi.fn(),
   setIsMatchInProgress: vi.fn(),
+  deleteMatch: vi.fn(),
   setPendingMatchData: vi.fn(),
   activeShip: 'Hunter',
   shipSource: 'manual',
@@ -72,11 +73,20 @@ const waitForGameScreenMock = vi.fn().mockResolvedValue({ success: true });
 
 const appStoreState = {
   ocrMode: 'both',
+  discardMatch: vi.fn(),
   resultOcrFlowMode: 'prompt',
   ocrAutoOpenAfterRerun: false,
   showSmartCaptureInHeader: false,
+  lifecycleTrackingPaused: false,
+  setLifecycleTrackingPaused: vi.fn(),
+  selectedMatchId: null as string | number | null,
   resetMatchTrackingForNewMatch: vi.fn(),
   resetMatchMetricsForNewMatch: vi.fn(),
+  addMatch: vi.fn(),
+  activeMode: 'Artifact Brawl',
+  activeShip: 'Hunter',
+  activeHero: 'Adrian',
+  currentLoadout: null as any,
   pendingMatchData: null as any,
   matches: [] as any[],
   setPendingMatchData: vi.fn(),
@@ -133,6 +143,7 @@ describe('ActionPanel', () => {
     Object.assign(gameData, {
       pendingReviews: [],
       detectedUnknowns: {},
+      matches: [],
       isMatchInProgress: false,
       matchStartTime: null,
     });
@@ -159,10 +170,32 @@ describe('ActionPanel', () => {
     appStoreState.resultOcrFlowMode = 'prompt';
     appStoreState.ocrAutoOpenAfterRerun = false;
     appStoreState.showSmartCaptureInHeader = false;
+    appStoreState.lifecycleTrackingPaused = false;
+    appStoreState.selectedMatchId = null;
+    appStoreState.activeMode = 'Artifact Brawl';
+    appStoreState.activeShip = 'Hunter';
+    appStoreState.activeHero = 'Adrian';
+    appStoreState.currentLoadout = null;
     appStoreState.pendingMatchData = null;
     appStoreState.matches = [];
+    appStoreState.addMatch.mockReset().mockImplementation((match: any) => {
+      appStoreState.matches = [...appStoreState.matches, match];
+      gameData.matches = appStoreState.matches;
+    });
     appStoreState.resetMatchTrackingForNewMatch.mockClear();
     appStoreState.resetMatchMetricsForNewMatch.mockClear();
+    appStoreState.discardMatch.mockReset();
+    appStoreState.setLifecycleTrackingPaused.mockReset();
+    gameData.setIsMatchInProgress.mockReset().mockImplementation((next: boolean) => {
+      gameData.isMatchInProgress = next;
+    });
+    gameData.setMatchStartTime.mockReset().mockImplementation((next: number | null) => {
+      gameData.matchStartTime = next;
+    });
+    gameData.deleteMatch.mockReset().mockImplementation((id: number) => {
+      gameData.matches = gameData.matches.filter((match: any) => match.id !== id);
+      appStoreState.matches = appStoreState.matches.filter((match: any) => match.id !== id);
+    });
     uiState.smartCaptureRequest = null;
     smartCaptureActions.capture.mockReset().mockResolvedValue(undefined);
     smartCaptureActions.captureOnly.mockReset().mockResolvedValue({
@@ -204,13 +237,56 @@ describe('ActionPanel', () => {
   it('resets match-scoped recording fields before starting a fresh timer', async () => {
     const { ActionPanel } = await import('./ActionPanel');
 
-    render(<ActionPanel />);
+    const { rerender } = render(<ActionPanel />);
     fireEvent.click(screen.getByRole('button', { name: /start match timer/i }));
+    rerender(<ActionPanel />);
 
     expect(appStoreState.resetMatchTrackingForNewMatch).toHaveBeenCalledTimes(1);
     expect(appStoreState.resetMatchMetricsForNewMatch).toHaveBeenCalledTimes(1);
     expect(gameData.setIsMatchInProgress).toHaveBeenCalledWith(true);
     expect(gameData.setMatchStartTime).toHaveBeenCalledWith(expect.any(Number));
+  });
+
+  it('deletes the locally created ongoing telemetry draft when stopping a manual match', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+
+    const { rerender } = render(<ActionPanel />);
+    fireEvent.click(screen.getByRole('button', { name: /start match timer/i }));
+    rerender(<ActionPanel />);
+
+    const createdDraft = appStoreState.matches[0];
+    expect(createdDraft).toMatchObject({
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /stop match timer/i }));
+
+    expect(gameData.deleteMatch).toHaveBeenCalledWith(createdDraft.id);
+    expect(appStoreState.matches).toEqual([]);
+  });
+
+  it('stops the broader active ongoing draft when the timer was not started in the current component instance', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    const ongoingDraft = {
+      id: 9001,
+      timestamp: Date.now(),
+      player: 'TestPilot',
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+    };
+    gameData.isMatchInProgress = true;
+    gameData.matchStartTime = Date.now() - 20_000;
+    gameData.matches = [ongoingDraft] as any[];
+    appStoreState.matches = [ongoingDraft] as any[];
+
+    render(<ActionPanel />);
+    fireEvent.click(screen.getByRole('button', { name: /stop match timer/i }));
+
+    expect(gameData.setMatchStartTime).toHaveBeenCalledWith(null);
+    expect(gameData.setIsMatchInProgress).toHaveBeenCalledWith(false);
+    expect(gameData.deleteMatch).toHaveBeenCalledWith(9001);
+    expect(appStoreState.matches).toEqual([]);
   });
 
   it('does not render legacy ID Mapper buttons in recording layouts', async () => {

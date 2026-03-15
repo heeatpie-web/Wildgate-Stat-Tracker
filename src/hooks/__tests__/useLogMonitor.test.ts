@@ -266,6 +266,28 @@ describe('useLogMonitor', () => {
     expect(addMatch).toHaveBeenCalledTimes(1);
   });
 
+  it('treats practice-range map loads as a telemetry lifecycle start and creates a draft', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'PracticeRange_LobbyMap' },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    expect(addMatch).toHaveBeenCalledTimes(1);
+    expect(addMatch.mock.calls[0]?.[0]).toMatchObject({
+      player: 'Pilot',
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+    });
+  });
+
   it('uses the latest active mode when creating telemetry drafts after a mode change', async () => {
     const { useLogMonitor } = await import('../useLogMonitor');
     const { rerender } = renderHook(() => useLogMonitor('Pilot'));
@@ -516,6 +538,55 @@ describe('useLogMonitor', () => {
     dispatchSpy.mockRestore();
   });
 
+  it('finalizes a practice-range telemetry draft when sessionId is explicitly cleared after queue start', async () => {
+    const baseSec = Math.floor(Date.now() / 1000);
+    const { useLogMonitor } = await import('../useLogMonitor');
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'PracticeRange_LobbyMap' },
+          ClientTimestamp: baseSec,
+        },
+      ]);
+    });
+
+    const createdDraft = addMatch.mock.calls[0]?.[0];
+    expect(createdDraft).toBeTruthy();
+    appStoreState.matches = [createdDraft];
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: { sessionId: 'practice-session-id', state: 'InProgress' },
+          ClientTimestamp: baseSec + 1,
+        },
+      ]);
+    });
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: { sessionId: '' },
+          ClientTimestamp: baseSec + 90,
+        },
+      ]);
+    });
+
+    const finalizedDraft = updateMatch.mock.calls
+      .map(([match]) => match as { time?: string })
+      .find((match) => typeof match?.time === 'string');
+
+    expect(finalizedDraft).toBeTruthy();
+    expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-ready' }));
+    dispatchSpy.mockRestore();
+  });
+
   it('passes not-in-progress lifecycle context to telemetry processor on initial map start', async () => {
     const { useLogMonitor } = await import('../useLogMonitor');
     renderHook(() => useLogMonitor('Pilot'));
@@ -674,6 +745,67 @@ describe('useLogMonitor', () => {
                 currentLoadout: {
                   hero: 'Venture',
                   ship: 'Scout',
+                  characterWeapons: ['The Doctor'],
+                  characterEquipment: ['Repair Drone'],
+                },
+              },
+            },
+          },
+          ClientTimestamp: nowSec + 1,
+        },
+      ]);
+    });
+
+    expect(gameDataState.setActiveHero).toHaveBeenCalledWith('Venture', 'telemetry');
+    expect(gameDataState.setActiveShip).toHaveBeenCalledWith('Scout', 'telemetry');
+    const latestLoadout = gameDataState.setCurrentLoadout.mock.calls.at(-1)?.[0] as {
+      hero?: string | null;
+      ship?: string | null;
+      characterWeapons?: string[];
+      characterEquipment?: string[];
+    };
+    expect(latestLoadout?.hero).toBe('Venture');
+    expect(latestLoadout?.ship).toBe('Scout');
+    expect(latestLoadout?.characterWeapons || []).toEqual(expect.arrayContaining(['The Doctor']));
+    expect(latestLoadout?.characterEquipment || []).toEqual(expect.arrayContaining(['Repair Drone']));
+  });
+
+  it('applies nested practice-range loadout payload variants to hero and ship after queue start', async () => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'PracticeRange_LobbyMap' },
+          ClientTimestamp: nowSec,
+        },
+      ]);
+    });
+
+    const createdDraft = addMatch.mock.calls[0]?.[0];
+    expect(createdDraft).toBeTruthy();
+    appStoreState.matches = [createdDraft];
+    gameDataState.setActiveHero.mockClear();
+    gameDataState.setActiveShip.mockClear();
+    gameDataState.setCurrentLoadout.mockClear();
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebCloudSaveRecordSize',
+          Payload: {
+            event: {
+              isLocalPlayer: true,
+            },
+            data: {
+              recordKey: 'CharacterLoadout_v2',
+              selection: {
+                snapshot: {
+                  prospectorName: 'Venture',
+                  selectedShipName: 'Scout',
                   characterWeapons: ['The Doctor'],
                   characterEquipment: ['Repair Drone'],
                 },
@@ -1287,6 +1419,68 @@ describe('useLogMonitor', () => {
 
     expect(gameDataState.setActiveShip).not.toHaveBeenCalled();
     expect(gameDataState.setCurrentLoadout).not.toHaveBeenCalled();
+  });
+
+  it('does not let weak practice-range placeholder labels overwrite a trusted local loadout', async () => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    gameDataState.currentLoadout = {
+      hero: 'Adrian',
+      ship: 'Hunter',
+      weapons: [],
+      equipment: [],
+      characterWeapons: ['Double Whammy'],
+      characterEquipment: ['Repair Drone'],
+    };
+
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'PracticeRange_LobbyMap' },
+          ClientTimestamp: nowSec,
+        },
+      ]);
+    });
+
+    gameDataState.setActiveHero.mockClear();
+    gameDataState.setActiveShip.mockClear();
+    gameDataState.setCurrentLoadout.mockClear();
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'CharacterLoadoutChanged',
+          Payload: {
+            isLocalPlayer: true,
+            selection: {
+              snapshot: {
+                prospectorName: 'Unknown Prospector',
+                selectedShipName: 'HunterLeaderSlot',
+                characterWeapons: ['The Doctor'],
+                characterEquipment: ['Repair Drone'],
+              },
+            },
+          },
+          ClientTimestamp: nowSec + 1,
+        },
+      ]);
+    });
+
+    expect(gameDataState.setActiveHero).not.toHaveBeenCalled();
+    expect(gameDataState.setActiveShip).not.toHaveBeenCalled();
+    const latestLoadout = gameDataState.setCurrentLoadout.mock.calls.at(-1)?.[0] as {
+      hero?: string | null;
+      ship?: string | null;
+      characterWeapons?: string[];
+      characterEquipment?: string[];
+    };
+    expect(latestLoadout?.hero).toBe('Adrian');
+    expect(latestLoadout?.ship).toBe('Hunter');
+    expect(latestLoadout?.characterWeapons || []).toEqual(expect.arrayContaining(['The Doctor']));
+    expect(latestLoadout?.characterEquipment || []).toEqual(expect.arrayContaining(['Repair Drone']));
   });
 
   it('captures matchmaker teammate and mode expectations only after match start', async () => {

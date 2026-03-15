@@ -127,6 +127,9 @@ vi.mock('./OcrCorrectionModal', () => ({
     },
 }));
 
+const getSubmitResultsButton = () => screen.getByTestId('wizard-submit-results-button');
+const getSubmitFooterHint = () => screen.getByTestId('wizard-submit-footer-hint');
+
 describe('Wizard', () => {
     beforeEach(() => {
         gameData.pendingMatchData = null;
@@ -151,11 +154,11 @@ describe('Wizard', () => {
         });
     });
 
-    it('opens in neutral state and requires win type selection before finalizing', async () => {
+    it('opens in neutral state with a sticky submit footer and requires win type selection before enabling submission', async () => {
         const { Wizard } = await import('./Wizard');
         const { rerender } = render(<Wizard />);
 
-        expect(screen.queryByText(/finalize/i)).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /submit results/i })).not.toBeInTheDocument();
 
         gameData.pendingMatchData = {
             id: 101,
@@ -169,20 +172,24 @@ describe('Wizard', () => {
         uiState.showWizard = 'Match Result';
 
         expect(() => rerender(<Wizard />)).not.toThrow();
-        expect(screen.queryByRole('button', { name: /save results only/i })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /save results only/i })).toBeDisabled();
+        expect(getSubmitResultsButton()).toBeDisabled();
+        expect(getSubmitFooterHint()).toHaveTextContent('Select Win, Loss, or Draw to submit.');
 
         fireEvent.click(screen.getByRole('button', { name: /^win$/i }));
         rerender(<Wizard />);
-        expect(screen.queryByRole('button', { name: /save results only/i })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /save results only/i })).toBeDisabled();
+        expect(getSubmitResultsButton()).toBeDisabled();
+        expect(getSubmitFooterHint()).toHaveTextContent('Choose Combat Win or Artifact Win to submit.');
         expect(screen.queryByText('Placement')).not.toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: /artifact win/i }));
-        fireEvent.click(screen.getByRole('button', { name: /continue to team review/i }));
-        fireEvent.click(screen.getByRole('button', { name: /continue to save/i }));
-        expect(screen.getByRole('button', { name: /finalize artifact win/i })).toBeEnabled();
+        expect(screen.queryByTestId('wizard-submit-footer-hint')).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /save results only/i })).toBeEnabled();
+        expect(getSubmitResultsButton()).toBeEnabled();
     });
 
-    it('renders neutral match-result state without implicit finalize readiness', async () => {
+    it('renders neutral match-result state with disabled submit actions and a reminder', async () => {
         const { Wizard } = await import('./Wizard');
         gameData.pendingMatchData = {
             id: 202,
@@ -199,7 +206,9 @@ describe('Wizard', () => {
         render(<Wizard />);
 
         expect(screen.getByText('Match Result')).toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: /save results only/i })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /save results only/i })).toBeDisabled();
+        expect(getSubmitResultsButton()).toBeDisabled();
+        expect(getSubmitFooterHint()).toHaveTextContent('Select Win, Loss, or Draw to submit.');
     });
 
     it('requires selecting combat or artifact for loss and only shows placement for combat loss', async () => {
@@ -221,25 +230,31 @@ describe('Wizard', () => {
         fireEvent.click(screen.getByRole('button', { name: /^loss$/i }));
         rerender(<Wizard />);
 
-        expect(screen.queryByRole('button', { name: /continue to team review/i })).not.toBeInTheDocument();
         expect(screen.queryByText('Placement')).not.toBeInTheDocument();
+        expect(getSubmitResultsButton()).toBeDisabled();
+        expect(getSubmitFooterHint()).toHaveTextContent('Choose Combat Defeat or Artifact Defeat to submit.');
 
         fireEvent.click(screen.getByRole('button', { name: /combat defeat/i }));
         rerender(<Wizard />);
         expect(screen.getByText('Placement')).toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: /continue to team review/i })).not.toBeInTheDocument();
+        expect(getSubmitResultsButton()).toBeDisabled();
+        expect(getSubmitFooterHint()).toHaveTextContent('Select your placement for a combat defeat to submit.');
         fireEvent.click(screen.getByRole('button', { name: /3rd/i }));
         expect(gameData.setPendingPlacement).toHaveBeenCalledWith(3);
+        rerender(<Wizard />);
+        expect(screen.getByRole('button', { name: /save results only/i })).toBeEnabled();
+        expect(getSubmitResultsButton()).toBeEnabled();
+        expect(screen.queryByTestId('wizard-submit-footer-hint')).not.toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: /artifact defeat/i }));
         rerender(<Wizard />);
         expect(screen.queryByText('Placement')).not.toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: /continue to team review/i }));
-        fireEvent.click(screen.getByRole('button', { name: /continue to save/i }));
-        expect(screen.getByRole('button', { name: /finalize artifact loss/i })).toBeEnabled();
+        expect(screen.getByRole('button', { name: /save results only/i })).toBeEnabled();
+        expect(getSubmitResultsButton()).toBeEnabled();
+        expect(screen.queryByTestId('wizard-submit-footer-hint')).not.toBeInTheDocument();
     });
 
-    it('keeps draw immediate and finalizes draw without outcome type selection', async () => {
+    it('keeps draw immediate and submits draw without outcome type selection', async () => {
         const { Wizard } = await import('./Wizard');
         gameData.pendingMatchData = {
             id: 703,
@@ -257,12 +272,12 @@ describe('Wizard', () => {
 
         fireEvent.click(screen.getByRole('button', { name: /^draw$/i }));
         rerender(<Wizard />);
-        fireEvent.click(screen.getByRole('button', { name: /continue to team review/i }));
-        fireEvent.click(screen.getByRole('button', { name: /continue to save/i }));
-        const finalizeButton = screen.getByRole('button', { name: /finalize draw/i });
-        expect(finalizeButton).toBeEnabled();
+        const submitResultsButton = getSubmitResultsButton();
+        expect(screen.getByRole('button', { name: /save results only/i })).toBeEnabled();
+        expect(submitResultsButton).toBeEnabled();
+        expect(screen.queryByTestId('wizard-submit-footer-hint')).not.toBeInTheDocument();
 
-        fireEvent.click(finalizeButton);
+        fireEvent.click(submitResultsButton);
         expect(processFinalSubmission).toHaveBeenCalledWith('Combat');
     });
 
@@ -294,11 +309,10 @@ describe('Wizard', () => {
             subType: 'Artifact',
         }));
 
-        fireEvent.click(screen.getByRole('button', { name: /continue to team review/i }));
-        fireEvent.click(screen.getByRole('button', { name: /continue to save/i }));
         expect(screen.getByRole('button', { name: /abort submission/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /save results only/i })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /finalize artifact win/i })).toBeInTheDocument();
+        expect(getSubmitResultsButton()).toBeInTheDocument();
+        expect(getSubmitResultsButton()).toBeEnabled();
         fireEvent.click(screen.getByRole('button', { name: /save results only/i }));
         expect(saveResultDraft).toHaveBeenCalledWith('Artifact');
     });
@@ -415,7 +429,8 @@ describe('Wizard', () => {
             expect(gameData.setPendingPlacement).toHaveBeenCalledWith(3);
         });
         rerender(<Wizard />);
-        expect(screen.getByRole('button', { name: /finalize combat loss/i })).toBeEnabled();
+        expect(getSubmitResultsButton()).toBeEnabled();
+        expect(screen.queryByTestId('wizard-submit-footer-hint')).not.toBeInTheDocument();
     });
 
     it('shows friendly telemetry badges and hides raw event source names', async () => {

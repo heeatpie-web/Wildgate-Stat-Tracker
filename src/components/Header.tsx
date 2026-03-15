@@ -10,7 +10,7 @@ import { useUIState } from '../providers/UIStateProvider';
 import SystemPulse from './SystemPulse';
 import { useAppStore } from '../store/useAppStore';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
-import { APP_VERSION } from '../types';
+import { APP_NAME, APP_VERSION } from '../types';
 import { resolveSmartCaptureMatchId } from '../utils/smartCaptureScope';
 import { Button } from './ui';
 import NotificationCenter from './NotificationCenter';
@@ -113,10 +113,10 @@ export const Header: React.FC<HeaderProps> = ({
                         }}
                         className="text-left"
                         style={{ WebkitAppRegion: 'no-drag' } as any}
-                        title={devMode ? 'Dev mode enabled' : 'Wildgate Stat Tracker'}
+                        title={devMode ? 'Dev mode enabled' : APP_NAME}
                     >
                         <div className="text-label-sm uppercase tracking-wide-16 font-bold text-md-sys-on-surface whitespace-nowrap">
-                            Wildgate Stat Tracker
+                            {APP_NAME}
                             <span className="ml-2 text-[10px] text-md-sys-on-surface/50 font-mono font-medium lowercase tracking-normal">
                                 {APP_VERSION}
                             </span>

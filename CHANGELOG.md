@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.2.0] - 2026-03-15
+
+### Changed
+- Settings were restructured around `SegmentedControl`, `OptionCycler`, and `SettingRow` patterns so appearance, overlay, capture, telemetry, and OCR review controls are faster to scan and adjust
+- Match-result submission now keeps a persistent sticky footer with always-visible `Submit Results` / `Save Results Only` actions plus inline completion reminders
+
+### Fixed
+- Auto-capture now defaults to the faster `0.5` pacing and trims the longest tactical-map and crew-hub delays during push-to-show and F10 auto-sequence flows
+- Telemetry now treats practice-range queue/start as a real lifecycle, resolves nested prospector/ship payload variants from `NebCloudSaveRecordSize`, `NebLoadoutSaved`, and `CharacterLoadoutChanged`, and finalizes practice drafts cleanly on explicit session end
+- Manual Stop Match now clears the active unresolved ongoing draft even when it came from telemetry or recovered state instead of the current timer button press
+- Artifact cleanup and telemetry parsing were hardened so draft deletion, screenshot cleanup, and loadout updates stay aligned during capture/review flows
+
 ## [3.1.10] - 2026-03-12
 
 ### Added

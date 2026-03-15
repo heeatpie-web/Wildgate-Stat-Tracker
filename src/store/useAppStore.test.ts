@@ -50,7 +50,7 @@ describe('useAppStore OCR preference hydration', () => {
     expect(store.getState().resultOcrFlowMode).toBe('background');
     expect(store.getState().autoSequenceOnCapture).toBe(true);
     expect(store.getState().autoCaptureSendKeypresses).toBe(true);
-    expect(store.getState().autoCaptureWaitMultiplier).toBe(1);
+    expect(store.getState().autoCaptureWaitMultiplier).toBe(0.5);
   });
 
   it('preserves explicit saved OCR preferences for existing users', async () => {

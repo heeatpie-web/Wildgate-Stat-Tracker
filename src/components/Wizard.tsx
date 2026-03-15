@@ -383,6 +383,7 @@ export const Wizard: React.FC = () => {
         || selectedWinType !== 'Combat'
         || (pendingPlacement != null && pendingPlacement >= 2 && pendingPlacement <= 5)
     );
+    const hasCompleteResultPath = hasSelectedResult && hasSelectedOutcomeType && hasValidCombatLossPlacement;
     const showGuidedDetails = hasSelectedResult && hasSelectedOutcomeType && hasValidCombatLossPlacement;
     const showTeamReviewStep = showGuidedDetails && (guidedResultStep === 'team-review' || guidedResultStep === 'save');
     const showSaveStep = showGuidedDetails && guidedResultStep === 'save';
@@ -403,16 +404,19 @@ export const Wizard: React.FC = () => {
 
     if (!showWizard || !pendingMatchData) return null;
 
-    const canFinalizeResult = hasSelectedResult && hasSelectedOutcomeType && hasValidCombatLossPlacement && guidedResultStep === 'save';
-    const finalizeButtonLabel = (() => {
-        if (!hasSelectedResult) return 'Select Match Result';
-        if (selectedResult === 'Draw') return 'Finalize Draw';
-        if (!hasSelectedOutcomeType) return selectedResult === 'Loss' ? 'Choose Loss Type' : 'Choose Win Type';
-        if (!hasValidCombatLossPlacement) return 'Select Placement';
-        if (hasPendingOcrReview) return 'Open OCR Review';
-        return selectedResult === 'Loss'
-            ? `Finalize ${selectedWinType} Loss`
-            : `Finalize ${selectedWinType} Win`;
+    const canFinalizeResult = hasCompleteResultPath;
+    const submissionSubType = selectedResult === 'Draw' ? 'Combat' : (selectedWinType || 'Combat');
+    const submitResultsHint = (() => {
+        if (!hasSelectedResult) return 'Select Win, Loss, or Draw to submit.';
+        if (!hasSelectedOutcomeType) {
+            return selectedResult === 'Loss'
+                ? 'Choose Combat Defeat or Artifact Defeat to submit.'
+                : 'Choose Combat Win or Artifact Win to submit.';
+        }
+        if (!hasValidCombatLossPlacement) {
+            return 'Select your placement for a combat defeat to submit.';
+        }
+        return '';
     })();
 
     const cardClass = `wizard-card rounded-2xl border border-md-sys-outline/14 shadow-sm bg-md-sys-surface-container ${isOverlayMode ? 'p-4' : 'p-5'}`;
@@ -1435,7 +1439,7 @@ export const Wizard: React.FC = () => {
                     </div>
                 )}
 
-                <div className="p-4 border-t border-md-sys-outline/5 bg-md-sys-surface flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="sticky bottom-0 z-10 border-t border-md-sys-outline/5 bg-md-sys-surface px-4 py-4 shadow-[0_-10px_24px_rgba(15,23,42,0.14)] flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <button
                         onClick={() => {
                             if (activeTab === 'ocr') {
@@ -1449,32 +1453,43 @@ export const Wizard: React.FC = () => {
                         <CheckCircle2 size={14} />
                         {activeTab === 'result' ? 'Abort Submission' : 'Back to Result'}
                     </button>
-                    {activeTab === 'result' && showSaveStep && (
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    if (!canFinalizeResult) return;
-                                    saveResultDraft(selectedResult === 'Draw' ? 'Combat' : (selectedWinType || 'Combat'));
-                                }}
-                                disabled={submitting || !canFinalizeResult}
-                                className={`w-full sm:w-auto min-w-[12rem] px-5 py-3 rounded-2xl font-bold uppercase tracking-wide-30 text-label-sm transition-all border border-md-sys-outline/18 ${submitting || !canFinalizeResult ? 'opacity-disabled grayscale' : 'bg-md-sys-surface-container-high text-md-sys-on-surface/82 hover:bg-md-sys-surface-container-highest hover:text-md-sys-on-surface'}`}
-                            >
-                                Save Results Only
-                            </button>
-                            <button
-                                onClick={() => {
-                                    if (hasPendingOcrReview) {
-                                        React.startTransition(() => setActiveTab('ocr'));
-                                        return;
-                                    }
-                                    processFinalSubmission(selectedResult === 'Draw' ? 'Combat' : (selectedWinType || 'Combat'));
-                                }}
-                                disabled={submitting || !canFinalizeResult}
-                                className={`w-full sm:w-auto min-w-[12rem] px-5 py-3 rounded-2xl font-bold uppercase tracking-wide-30 text-label-sm transition-all shadow-xl active:scale-95 ${submitting ? 'opacity-disabled grayscale' : (!canFinalizeResult ? 'opacity-disabled grayscale' : (selectedResult === 'Draw' ? 'bg-info text-ink-strong' : (selectedWinType === 'Artifact' ? 'bg-warning text-ink-strong' : 'bg-md-sys-primary text-md-sys-onPrimary')))}`}
-                            >
-                                {submitting ? 'Synchronizing...' : finalizeButtonLabel}
-                            </button>
+                    {activeTab === 'result' && (
+                        <div className="flex w-full flex-col gap-3 sm:w-auto sm:min-w-[24rem] sm:items-end">
+                            {submitResultsHint ? (
+                                <div
+                                    data-testid="wizard-submit-footer-hint"
+                                    className="text-label-sm font-semibold text-md-sys-on-surface/78 text-center sm:text-right"
+                                >
+                                    {submitResultsHint}
+                                </div>
+                            ) : null}
+                            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (!canFinalizeResult) return;
+                                        saveResultDraft(submissionSubType);
+                                    }}
+                                    disabled={submitting || !canFinalizeResult}
+                                    className={`w-full sm:w-auto min-w-[12rem] px-5 py-3 rounded-2xl font-bold uppercase tracking-wide-30 text-label-sm transition-all border border-md-sys-outline/18 ${submitting || !canFinalizeResult ? 'opacity-disabled grayscale' : 'bg-md-sys-surface-container-high text-md-sys-on-surface/82 hover:bg-md-sys-surface-container-highest hover:text-md-sys-on-surface'}`}
+                                >
+                                    Save Results Only
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        if (hasPendingOcrReview) {
+                                            React.startTransition(() => setActiveTab('ocr'));
+                                            return;
+                                        }
+                                        processFinalSubmission(submissionSubType);
+                                    }}
+                                    disabled={submitting || !canFinalizeResult}
+                                    data-testid="wizard-submit-results-button"
+                                    className={`w-full sm:w-auto min-w-[12rem] px-5 py-3 rounded-2xl font-bold uppercase tracking-wide-30 text-label-sm transition-all shadow-xl active:scale-95 ${submitting ? 'opacity-disabled grayscale' : (!canFinalizeResult ? 'opacity-disabled grayscale' : (selectedResult === 'Draw' ? 'bg-info text-ink-strong' : (selectedWinType === 'Artifact' ? 'bg-warning text-ink-strong' : 'bg-md-sys-primary text-md-sys-onPrimary')))}`}
+                                >
+                                    {submitting ? 'Synchronizing...' : 'Submit Results'}
+                                </button>
+                            </div>
                         </div>
                     )}
                     {activeTab === 'ocr' && embeddedOcrFooterActions && (

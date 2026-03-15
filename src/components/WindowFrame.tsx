@@ -1,6 +1,6 @@
 import React from 'react';
 import { Minus, X, Maximize2, Minimize2 } from 'lucide-react';
-import { APP_VERSION } from '../types';
+import { APP_NAME, APP_VERSION } from '../types';
 import { getElectronAPI } from '../utils/electronAPI';
 
 export const WindowFrame: React.FC = () => {
@@ -38,7 +38,7 @@ export const WindowFrame: React.FC = () => {
                 <div className="w-4 h-4 rounded-control bg-gradient-to-br from-md-sys-primary to-md-sys-tertiary flex items-center justify-center shadow-sm">
                     <span className="text-label-xs font-bold text-on-scrim">W</span>
                 </div>
-                <span className="text-label-sm font-semibold tracking-wide-08 uppercase">Wildgate Stat Tracker</span>
+                <span className="text-label-sm font-semibold tracking-wide-08 uppercase">{APP_NAME}</span>
                 <span className="text-label-xs font-mono opacity-40">{APP_VERSION}</span>
             </div>
 

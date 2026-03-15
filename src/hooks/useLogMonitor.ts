@@ -172,13 +172,26 @@ const extractTelemetryStringList = (value: unknown, depth = 0): string[] => {
     return Object.values(value).flatMap((entry) => extractTelemetryStringList(entry, depth + 1));
 };
 
+const TELEMETRY_HERO_SIGNAL_KEYS = new Set([
+    'guidhero', 'heroguid', 'guid_hero',
+    'heroid', 'hero_id',
+    'hero', 'heroname', 'hero_name',
+    'character', 'charactername', 'character_name',
+    'prospector', 'prospectorname', 'prospector_name',
+    'selectedhero', 'selected_hero',
+    'selectedcharacter', 'selected_character',
+    'selectedprospector', 'selected_prospector',
+]);
 const TELEMETRY_SHIP_SIGNAL_KEYS = new Set([
     'guidship', 'shipguid', 'guid_ship',
     'shipid', 'ship_id',
     'ship', 'shipname', 'ship_name',
+    'selectedship', 'selected_ship',
+    'selectedshipname', 'selected_ship_name',
+    'shiptype', 'ship_type',
 ]);
 const TELEMETRY_LOADOUT_SIGNAL_KEYS = new Set([
-    'guidhero', 'heroguid', 'hero', 'heroname',
+    ...TELEMETRY_HERO_SIGNAL_KEYS,
     ...TELEMETRY_SHIP_SIGNAL_KEYS,
     'guidweaponprimary', 'guidweaponsecondary', 'weaponprimary', 'weaponnameprimary',
     'guidequipmentprimary', 'guidequipmentsecondary', 'equipmentprimary', 'equipmentnameprimary',
@@ -205,6 +218,11 @@ const TELEMETRY_LOADOUT_CONTAINER_KEYS = [
     'characterLoadout', 'character_loadout',
     'playerLoadout', 'player_loadout',
     'currentLoadout', 'current_loadout',
+    'selection', 'Selection',
+    'selectedLoadout', 'selected_loadout',
+    'currentSelection', 'current_selection',
+    'snapshot', 'Snapshot',
+    'stateSnapshot', 'state_snapshot',
     'loadoutData',
 ];
 
@@ -217,6 +235,25 @@ const toClock = (totalSeconds: number) => {
 
 const isLiveMatchmakerState = (value: unknown): boolean =>
     typeof value === 'string' && MATCHMAKER_START_STATE_PATTERN.test(value.trim());
+
+const isPracticeRangeMap = (mapName: unknown): boolean => {
+    const normalized = String(mapName || '').trim().toLowerCase();
+    if (!normalized) return false;
+    return /(practice|training|range)/.test(normalized);
+};
+
+const isTelemetryLifecycleMap = (mapName: unknown): boolean => {
+    const normalized = String(mapName || '').trim();
+    if (!normalized) return false;
+    return !isNonMatchMap(normalized) || isPracticeRangeMap(normalized);
+};
+
+const isWeakTelemetrySelectionLabel = (value: unknown): boolean => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized) return true;
+    if (normalized.startsWith('unknown')) return true;
+    return /(leaderslot|empty|placeholder|default|unset|\bslot\b)/.test(normalized);
+};
 
 const hasTelemetrySelection = (value: unknown): value is string => {
     const text = String(value || '').trim();
@@ -871,7 +908,14 @@ export const useLogMonitor = (activeUser?: string) => {
                     const loadingMapRaw = pickTelemetryValueCaseInsensitive(payloadSources, TELEMETRY_MAP_NAME_KEYS);
                     const loadingMapName = typeof loadingMapRaw === 'string' ? loadingMapRaw : '';
                     const loadingMapNameLower = loadingMapName.toLowerCase();
-                    if (name === 'NebLoadingScreen' && !!loadingMapName && isNonMatchMap(loadingMapName) && !loadingMapNameLower.includes('frontend')) {
+                    const practiceRangeMapSignal = !!loadingMapName && isPracticeRangeMap(loadingMapName);
+                    if (
+                        name === 'NebLoadingScreen'
+                        && !!loadingMapName
+                        && isNonMatchMap(loadingMapName)
+                        && !practiceRangeMapSignal
+                        && !loadingMapNameLower.includes('frontend')
+                    ) {
                         Logger.debug('LogMonitor', `Skipping non-match map load: ${loadingMapName}`);
                     }
                     const recordKey = String(
@@ -902,7 +946,7 @@ export const useLogMonitor = (activeUser?: string) => {
                         Logger.debug('LogMonitor', `Skipping old event: ${name} (age: ${ageSeconds}s, before session start)`);
                         return;
                     }
-                    const mapStartSignal = name === 'NebLoadingScreen' && !!loadingMapName && !isNonMatchMap(loadingMapName);
+                    const mapStartSignal = name === 'NebLoadingScreen' && !!loadingMapName && isTelemetryLifecycleMap(loadingMapName);
                     const mapEndSignal = name === 'NebLoadingScreen' && loadingMapNameLower.includes('frontend');
                     const sessionEndSignal = hasExplicitMatchSessionIdSignal
                         && !currentMatchSessionId
@@ -930,6 +974,7 @@ export const useLogMonitor = (activeUser?: string) => {
                             currentMatchSessionId: currentMatchSessionId || null,
                             previousMatchSessionId: previousMatchSessionId || null,
                             matchmakerState: matchmakerState || null,
+                            practiceRangeMapSignal,
                             hasExplicitMatchSessionIdSignal,
                             mapStartSignal,
                             matchmakerStartSignal,
@@ -940,6 +985,9 @@ export const useLogMonitor = (activeUser?: string) => {
                             lifecycleActive: telemetryLifecycleActiveRef.current,
                             hasDraft: !!telemetryDraftMatchIdRef.current,
                         })}`);
+                    }
+                    if (mapStartSignal && practiceRangeMapSignal) {
+                        Logger.info('LogMonitor', `Treating practice-range map as telemetry lifecycle start: ${loadingMapName}`);
                     }
                     if (startLifecycleSignal && telemetryLifecycleActiveRef.current && !telemetryDraftMatchIdRef.current) {
                         telemetryLifecycleActiveRef.current = false;
@@ -1282,7 +1330,7 @@ export const useLogMonitor = (activeUser?: string) => {
                             for (const [k, v] of Object.entries(obj)) {
                                 if (normalizedKeySet.has(k.toLowerCase())) return v;
                             }
-                            return undefined;
+                            return findNestedRecordValueCaseInsensitive(obj, keys, 4);
                         };
                         const buildCanonicalGuidLookup = (source: Record<string, string>) => {
                             const lookup: Record<string, string> = {};
@@ -1325,6 +1373,7 @@ export const useLogMonitor = (activeUser?: string) => {
                                 ? String(rawText.split(':').pop() || '').trim()
                                 : rawText;
                             const allowLooseFallback = allowLooseNameFallback !== false;
+                            const weakNameHint = isWeakTelemetrySelectionLabel(nameHint);
                             const guidCandidates = rawGuidValues
                                 .map((candidate) => normalizeGuid(candidate))
                                 .filter((candidate) => isStableGuid(candidate));
@@ -1343,7 +1392,7 @@ export const useLogMonitor = (activeUser?: string) => {
                                     || guidDomainMappings[guidLower];
                                 if (resolvedFromGuid) return resolvedFromGuid;
 
-                                const matchedHint = nameHint
+                                const matchedHint = nameHint && !weakNameHint
                                     ? (
                                         allowLooseFallback
                                             ? fuzzyMatchList(nameHint, fallbackCatalog)
@@ -1351,7 +1400,7 @@ export const useLogMonitor = (activeUser?: string) => {
                                     )
                                     : null;
                                 if (matchedHint) return matchedHint;
-                                if (allowLooseFallback && nameHint) return nameHint;
+                                if (allowLooseFallback && nameHint && !weakNameHint) return nameHint;
 
                                 registerUnknownId(guidCandidate, entityType);
                                 const unknownLabel = `Unknown (${guidCandidate.slice(0, 4)})`;
@@ -1359,7 +1408,7 @@ export const useLogMonitor = (activeUser?: string) => {
                                 return allowLooseFallback ? unknownLabel : '';
                             }
 
-                            if (!nameHint) return '';
+                            if (!nameHint || weakNameHint) return '';
                             const matchedHint = allowLooseFallback
                                 ? fuzzyMatchList(nameHint, fallbackCatalog)
                                 : exactMatchList(nameHint, fallbackCatalog);
@@ -1371,9 +1420,23 @@ export const useLogMonitor = (activeUser?: string) => {
                             heroName = resolveTelemetrySelection({
                                 entityType: 'Hero',
                                 rawGuidValues: [
-                                    getLoadoutField(loadoutData, ['guidhero', 'heroguid', 'guid_hero', 'heroid', 'hero_id']),
+                                    getLoadoutField(loadoutData, [
+                                        'guidhero', 'heroguid', 'guid_hero', 'heroid', 'hero_id',
+                                        'characterguid', 'character_guid',
+                                        'prospectorguid', 'prospector_guid',
+                                        'selectedheroguid', 'selected_hero_guid',
+                                        'selectedcharacterguid', 'selected_character_guid',
+                                        'selectedprospectorguid', 'selected_prospector_guid',
+                                    ]),
                                 ],
-                                rawValue: getLoadoutField(loadoutData, ['hero', 'heroname', 'hero_name']),
+                                rawValue: getLoadoutField(loadoutData, [
+                                    'hero', 'heroname', 'hero_name',
+                                    'character', 'charactername', 'character_name',
+                                    'prospector', 'prospectorname', 'prospector_name',
+                                    'selectedhero', 'selected_hero',
+                                    'selectedcharacter', 'selected_character',
+                                    'selectedprospector', 'selected_prospector',
+                                ]),
                                 uidDomainMappings: uidMappings.players,
                                 knownDomainMappings: knownMappings,
                                 guidDomainMappings: HERO_GUIDS,
@@ -1396,10 +1459,23 @@ export const useLogMonitor = (activeUser?: string) => {
                         shipName = resolveTelemetrySelection({
                             entityType: 'Ship',
                             rawGuidValues: [
-                                getLoadoutField(loadoutData, ['guidship', 'shipguid', 'guid_ship']),
-                                getLoadoutField(loadoutData, ['shipid', 'ship_id']),
+                                getLoadoutField(loadoutData, [
+                                    'guidship', 'shipguid', 'guid_ship',
+                                    'selectedshipguid', 'selected_ship_guid',
+                                    'shiptypeguid', 'ship_type_guid',
+                                ]),
+                                getLoadoutField(loadoutData, [
+                                    'shipid', 'ship_id',
+                                    'selectedshipid', 'selected_ship_id',
+                                    'shiptypeid', 'ship_type_id',
+                                ]),
                             ],
-                            rawValue: getLoadoutField(loadoutData, ['ship', 'shipname', 'ship_name']),
+                            rawValue: getLoadoutField(loadoutData, [
+                                'ship', 'shipname', 'ship_name',
+                                'selectedship', 'selected_ship',
+                                'selectedshipname', 'selected_ship_name',
+                                'shiptype', 'ship_type',
+                            ]),
                             uidDomainMappings: uidMappings.ships,
                             knownDomainMappings: knownMappings,
                             guidDomainMappings: SHIP_GUIDS,
@@ -1642,9 +1718,11 @@ export const useLogMonitor = (activeUser?: string) => {
                             recordKey,
                             timestampMs: gameTime,
                             allowSessionEvent,
+                            practiceRangeMapSignal,
                             shouldApplyLoadout,
                             shouldApplySharedShipSelection,
                             loadoutMarkedLocal,
+                            loadoutKeys: Object.keys(loadoutData),
                             actorIds,
                             localIds,
                             actorNames,

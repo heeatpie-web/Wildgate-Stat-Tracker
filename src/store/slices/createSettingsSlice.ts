@@ -279,7 +279,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   ocrAutoOpenAfterRerun: false,
   autoSequenceOnCapture: true,
   autoCaptureSendKeypresses: true,
-  autoCaptureWaitMultiplier: 1,
+  autoCaptureWaitMultiplier: 0.5,
   tacticalMapKeybind: 'Tab',
   holdTacticalMapKey: false,
   autoPopulateRosterOnSave: false,
@@ -516,4 +516,3 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   resetOcrRegions: () => set({ ocrRegions: createDefaultOcrRegions() }),
   setTutorialCompleted: (completed) => set({ tutorialCompleted: completed }),
 });
-

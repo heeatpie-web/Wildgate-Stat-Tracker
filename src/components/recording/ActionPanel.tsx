@@ -127,6 +127,34 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         });
     }, [activeUser, matches, sessionStartTime]);
 
+    const resolveActiveOngoingDraftId = React.useCallback((): number | null => {
+        const storeMatches = Array.isArray(useAppStore.getState().matches)
+            ? useAppStore.getState().matches
+            : [];
+        const activeMatches = storeMatches.length > 0 ? storeMatches : matches;
+        const activePlayer = String(activeUser || '').trim().toLowerCase();
+        const ongoingMatches = activeMatches
+            .filter((match): match is Match => Boolean(match))
+            .filter((match) => String(match.result || '').trim() === 'Ongoing')
+            .filter((match) => {
+                const matchPlayer = String(match.player || '').trim().toLowerCase();
+                if (activePlayer && matchPlayer && matchPlayer !== activePlayer) return false;
+                return true;
+            })
+            .sort((left, right) => Number(right.timestamp || 0) - Number(left.timestamp || 0));
+
+        const manualDraftId = manualDraftIdRef.current;
+        if (manualDraftId != null) {
+            const manualDraft = ongoingMatches.find((match) => Number(match.id || 0) === manualDraftId);
+            if (manualDraft) return manualDraftId;
+        }
+
+        const latestDraft = ongoingMatches[0];
+        if (!latestDraft) return null;
+        const numericId = Number(latestDraft.id || 0);
+        return Number.isInteger(numericId) && numericId > 0 ? numericId : null;
+    }, [activeUser, matches]);
+
     const submissionMatchId = resolveSubmissionMatchId();
     const queueScopeMatchId = selectedSmartCapturesMatchId ?? submissionMatchId;
     const pendingOcrCountGlobal = savedCaptures.filter(c => !c.ocrProcessed).length;
@@ -281,19 +309,18 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         discardMatch();
         clearCaptures();
         setSessionTeams({});
-        const draftId = manualDraftIdRef.current;
+        const draftId = resolveActiveOngoingDraftId();
         if (draftId != null) {
-            const draft = matches.find(m => m.id === draftId && m.result === 'Ongoing');
-            if (draft) deleteMatch(draftId);
-            manualDraftIdRef.current = null;
+            deleteMatch(draftId);
         }
+        manualDraftIdRef.current = null;
         pushNotification({
             message: 'Match discarded. Ready for a fresh start.',
             type: 'info',
             source: 'user',
             deepLink: { type: 'openView', view: 'recording' },
         });
-    }, [discardMatch, clearCaptures, deleteMatch, matches, setSessionTeams, pushNotification]);
+    }, [clearCaptures, deleteMatch, discardMatch, pushNotification, resolveActiveOngoingDraftId, setSessionTeams]);
     const startFreshMatch = React.useCallback(() => {
         resetMatchTrackingForNewMatch();
         resetMatchMetricsForNewMatch();
@@ -318,13 +345,12 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     const stopManualMatch = React.useCallback(() => {
         setMatchStartTime(null);
         setIsMatchInProgress(false);
-        const draftId = manualDraftIdRef.current;
+        const draftId = resolveActiveOngoingDraftId();
         if (draftId != null) {
-            const draft = matches.find(m => m.id === draftId && m.result === 'Ongoing');
-            if (draft) deleteMatch(draftId);
-            manualDraftIdRef.current = null;
+            deleteMatch(draftId);
         }
-    }, [deleteMatch, matches, setIsMatchInProgress, setMatchStartTime]);
+        manualDraftIdRef.current = null;
+    }, [deleteMatch, resolveActiveOngoingDraftId, setIsMatchInProgress, setMatchStartTime]);
 
     // Dedicated mission timer display so match time remains visible at a glance.
     const [matchElapsed, setMatchElapsed] = React.useState('00:00');

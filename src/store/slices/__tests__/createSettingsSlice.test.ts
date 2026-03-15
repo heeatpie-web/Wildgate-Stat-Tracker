@@ -16,7 +16,7 @@ describe('createSettingsSlice OCR policy', () => {
     expect(store.getState().resultOcrFlowMode).toBe('background');
     expect(store.getState().autoSequenceOnCapture).toBe(true);
     expect(store.getState().autoCaptureSendKeypresses).toBe(true);
-    expect(store.getState().autoCaptureWaitMultiplier).toBe(1);
+    expect(store.getState().autoCaptureWaitMultiplier).toBe(0.5);
   });
 
   it('clamps auto-capture wait multiplier into the supported range', () => {

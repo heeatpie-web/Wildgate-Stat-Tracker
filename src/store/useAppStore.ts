@@ -262,7 +262,7 @@ const customStorage: PersistStorage<AppState> = {
           autoCaptureSendKeypresses: settings.autoCaptureSendKeypresses ?? true,
           autoCaptureWaitMultiplier: Number.isFinite(settings.autoCaptureWaitMultiplier)
             ? Math.max(0.5, Math.min(3, Number(settings.autoCaptureWaitMultiplier)))
-            : 1,
+            : 0.5,
           tacticalMapKeybind: resolvePersistedTacticalMapKeybind(settings),
           holdTacticalMapKey: settings.holdTacticalMapKey === true,
           autoPopulateRosterOnSave: settings.autoPopulateRosterOnSave ?? false,

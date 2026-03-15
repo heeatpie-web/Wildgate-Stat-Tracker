@@ -44,7 +44,7 @@ function delay(ms) {
 
 function clampWaitMultiplier(value) {
   const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return 1;
+  if (!Number.isFinite(numeric)) return 0.5;
   return Math.max(0.5, Math.min(3, numeric));
 }
 
@@ -233,7 +233,7 @@ function createAutoCaptureCoordinator({
     matchId,
     activeUser = null,
     sendKeypresses = true,
-    waitMultiplier = 1,
+    waitMultiplier = 0.5,
     ocrMode = 'local',
     ocrRegions = null,
     runtimeOptions = {},
@@ -323,31 +323,31 @@ function createAutoCaptureCoordinator({
           tacticalMapKeybind.sendKeys,
           STEP_DEFINITIONS.openMap.label,
           async () => {
-            await waitStep(220);
+            await waitStep(110);
             await captureStep(STEP_DEFINITIONS.captureMap, 1);
           }
         );
         if (!heldResult?.success) {
           throw new Error(heldResult?.error || `${STEP_DEFINITIONS.captureMap.label}: hold-capture failed`);
         }
-        await waitStep(80); // Let the map close animation finish before pressing ESC
+        await waitStep(40); // Let the map close animation finish before pressing ESC
         return;
       }
 
       // Toggle mode: tap to open, capture, tap to close.
       await sendStepKeys(STEP_DEFINITIONS.openMap, tacticalMapKeybind.sendKeys);
-      await waitStep(200);
+      await waitStep(100);
       await captureStep(STEP_DEFINITIONS.captureMap, 1);
       await sendStepKeys(STEP_DEFINITIONS.closeMap, tacticalMapKeybind.sendKeys);
-      await waitStep(40);
+      await waitStep(20);
     };
 
     await captureTacticalMapStep();
 
     await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{ESC}', { useMenuSender: true });
-    await waitStep(120); // Wait for the ESC popup menu to appear before navigating
+    await waitStep(60); // Wait for the ESC popup menu to appear before navigating
     await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{UP}{UP}{UP}{UP}{SPACE}', { useMenuSender: true });
-    await waitStep(140);
+    await waitStep(70);
 
     await captureStep(STEP_DEFINITIONS.captureCrewHubA, 2);
 
