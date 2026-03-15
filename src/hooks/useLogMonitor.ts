@@ -22,9 +22,9 @@ import {
 const ipcRenderer = getElectronAPI();
 const MAX_TELEMETRY_MATCH_DURATION_SECONDS = 60 * 60;
 const MAX_TELEMETRY_PROSPECTOR_SLOTS = 2;
+const ADAPTIVE_MATCH_TELEMETRY_PROFILE = 'low-power';
 const ADAPTIVE_LOW_TELEMETRY_PROFILE = 'adaptive-low';
-const ADAPTIVE_LOW_PROFILE_DELAY_MS = 2 * 60 * 1000;
-const ADAPTIVE_MENU_PROFILE_DELAY_MS = 15 * 1000;
+const ADAPTIVE_LOW_PROFILE_DELAY_MS = 60 * 1000;
 const IS_TELEMETRY_DEBUG = import.meta.env.DEV || process.env.NODE_ENV === 'test';
 
 const isTrustedTelemetryDuration = (seconds: number) =>
@@ -648,17 +648,12 @@ export const useLogMonitor = (activeUser?: string) => {
             return;
         }
         if (isMatchInProgress) {
-            setRuntimeTelemetryProfile('balanced');
+            setRuntimeTelemetryProfile(ADAPTIVE_MATCH_TELEMETRY_PROFILE);
             previousAdaptiveMatchStateRef.current = true;
             return;
         }
         if (previousAdaptiveMatchStateRef.current) {
             previousAdaptiveMatchStateRef.current = false;
-            setRuntimeTelemetryProfile('balanced');
-            const timeoutId = window.setTimeout(() => {
-                setRuntimeTelemetryProfile('high-accuracy');
-            }, ADAPTIVE_MENU_PROFILE_DELAY_MS);
-            return () => window.clearTimeout(timeoutId);
         }
         setRuntimeTelemetryProfile('high-accuracy');
     }, [adaptiveTelemetryPollingEnabled, isMatchInProgress, telemetryPerformanceProfile]);
@@ -667,7 +662,7 @@ export const useLogMonitor = (activeUser?: string) => {
         if (!adaptiveTelemetryPollingEnabled || !isMatchInProgress) return;
         const matchStartedAt = typeof matchStartTime === 'number' ? matchStartTime : 0;
         if (matchStartedAt <= 0) {
-            setRuntimeTelemetryProfile('balanced');
+            setRuntimeTelemetryProfile(ADAPTIVE_MATCH_TELEMETRY_PROFILE);
             return;
         }
         const elapsedMs = Date.now() - matchStartedAt;
@@ -675,7 +670,7 @@ export const useLogMonitor = (activeUser?: string) => {
             setRuntimeTelemetryProfile(ADAPTIVE_LOW_TELEMETRY_PROFILE);
             return;
         }
-        setRuntimeTelemetryProfile('balanced');
+        setRuntimeTelemetryProfile(ADAPTIVE_MATCH_TELEMETRY_PROFILE);
         const timeoutId = window.setTimeout(() => {
             setRuntimeTelemetryProfile(ADAPTIVE_LOW_TELEMETRY_PROFILE);
         }, Math.max(0, ADAPTIVE_LOW_PROFILE_DELAY_MS - elapsedMs));

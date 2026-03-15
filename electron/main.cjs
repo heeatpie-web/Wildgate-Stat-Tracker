@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const http = require('http');
 const https = require('https');
 const fsPromises = require('fs').promises;
-const { registerOCRHandlers, captureGameWindow, processCapture, runOCR, initPaddleOCR } = require('./ocrHandler.cjs');
+const { registerOCRHandlers, captureGameWindow, processCapture, runOCR } = require('./ocrHandler.cjs');
 const { mergeCaptures, isSameMatch } = require('./ocrMerger.cjs');
 const artifactHelpers = require('./helpers/artifactHelpers.cjs');
 const { runArtifactCanonicalMigration } = require('./helpers/artifactCanonicalMigration.cjs');
@@ -16,9 +16,9 @@ const telemetryArchiveHelpers = require('./helpers/telemetryArchiveHelpers.cjs')
 const dbHelpers = require('./helpers/dbHelpers.cjs');
 const { registerArtifactHandlers, saveScreenshotImage } = require('./handlers/artifactHandlers.cjs');
 const { createAutoCaptureCoordinator } = require('./autoCaptureCoordinator.cjs');
-const { clearGameWindowCache, holdGameKeySequence, lookupGameWindowCandidate, sendGameKeySequence, sendGameKeySequenceViaPowerShell, setPersistentPSRunner, validateGameInputRuntime } = require('./gameInput.cjs');
+const { buildAutoCaptureRequestFromStateSnapshot } = require('./autoCaptureHotkeyState.cjs');
+const { clearGameWindowCache, holdGameKeySequence, lookupGameWindowCandidate, sendGameKeySequence, setPersistentPSRunner, validateGameInputRuntime } = require('./gameInput.cjs');
 const { runPSWithEnv, startPersistentPS, killPersistentPS } = require('./persistentPowerShell.cjs');
-const { sendWhenRendererReady } = require('./rendererReadyDispatch.cjs');
 if (process.platform === 'win32') {
   setPersistentPSRunner(runPSWithEnv);
   startPersistentPS();
@@ -919,17 +919,7 @@ async function sendGameUiActionInternal(action) {
 }
 
 async function sendMenuKeySequenceInternal(sendKeys, action = 'menu-keypress') {
-  if (process.platform !== 'win32') return { success: false, action, error: 'Windows only.' };
-  const key = String(sendKeys || '');
-  if (!key.trim()) return { success: false, action, error: 'No key sequence.' };
-  const cached = require('./gameInput.cjs').lookupGameWindowCandidate
-    ? await lookupGameWindowCandidate({ processNames: GAME_WINDOW_PROCESS_NAMES, titleHint: GAME_WINDOW_TITLE_HINT, focusDelayMs: GAME_UI_FOCUS_DELAY_MS })
-    : null;
-  if (!cached?.success) return { success: false, action, error: 'Game window not found.' };
-  console.log(`[GameUI] action=${action} key=${key.trim()} method=ps-sendkeys`);
-  const result = await sendGameKeySequenceViaPowerShell(cached, key);
-  if (!result.success) console.warn(`[GameUI] action=${action} ps-sendkeys failed: ${result.error}`);
-  return { ...result, action, key };
+  return sendGameKeySequenceInternal(sendKeys, action);
 }
 
 const autoCaptureCoordinator = createAutoCaptureCoordinator({
@@ -1211,6 +1201,11 @@ function devMark(label) {
 
 let win;
 let tray = null;
+let latestAutoCaptureHotkeyState = null;
+let latestAutoCaptureHotkeyStateAt = 0;
+let pendingAutoCaptureHotkeyAt = 0;
+let pendingAutoCaptureHotkeyTimer = null;
+const AUTO_CAPTURE_HOTKEY_SYNC_GRACE_MS = 5000;
 function resolveAppIconPath() {
   const candidates = [
     path.join(process.resourcesPath || '', 'icon.ico'),
@@ -1324,6 +1319,39 @@ function ensureMainWindow() {
   return win;
 }
 
+function clearPendingAutoCaptureHotkey() {
+  pendingAutoCaptureHotkeyAt = 0;
+  if (pendingAutoCaptureHotkeyTimer) {
+    clearTimeout(pendingAutoCaptureHotkeyTimer);
+    pendingAutoCaptureHotkeyTimer = null;
+  }
+}
+
+function sendAutoCaptureFailureStatus(message, detail = null) {
+  if (!win || win.isDestroyed()) return;
+  win.webContents.send('auto-capture-status', {
+    phase: 'failed',
+    message,
+    detail,
+  });
+}
+
+function startAutoCaptureFromHotkey(snapshot, { source = 'hotkey', queuedMs = null } = {}) {
+  const liveWindow = ensureMainWindow();
+  const request = buildAutoCaptureRequestFromStateSnapshot(snapshot);
+  console.log(
+    `[Hotkey] Starting auto-capture source=${source} queuedMs=${queuedMs == null ? 0 : queuedMs} `
+    + `matchId=${Number(request.matchId || 0)} lifecycleActive=${request.lifecycleActive === true}`
+  );
+  return autoCaptureCoordinator.start(request).catch((error) => {
+    const message = error?.message || String(error);
+    console.error('[Hotkey] F10 auto-capture crashed:', message);
+    if (liveWindow && !liveWindow.isDestroyed()) {
+      sendAutoCaptureFailureStatus('Auto-Capture failed.', message);
+    }
+  });
+}
+
 function registerGlobalHotkeys() {
   const shortcuts = ['F9', 'F10'];
 
@@ -1352,14 +1380,26 @@ function registerGlobalHotkeys() {
   console.log(`[Hotkey] Attempting to register F10 auto-capture. alreadyRegistered=${globalShortcut.isRegistered('F10')}`);
   const f10Registered = globalShortcut.register('F10', () => {
     const liveWindow = ensureMainWindow();
-    const hasWindow = Boolean(liveWindow && !liveWindow.isDestroyed());
-    console.log(`[Hotkey] F10 fired — starting auto-capture sequence. hasLiveWindow=${hasWindow}`);
-    if (hasWindow) {
-      console.log(`[Hotkey] Dispatching hotkey-smart-capture compatibility event to renderer webContentsId=${liveWindow.webContents.id}`);
-      sendWhenRendererReady(liveWindow, 'hotkey-smart-capture');
-    } else {
-      console.warn('[Hotkey] F10 invoked but no renderer window was available.');
+    const stateAgeMs = latestAutoCaptureHotkeyStateAt > 0 ? (Date.now() - latestAutoCaptureHotkeyStateAt) : null;
+    console.log(
+      `[Hotkey] F10 fired — starting auto-capture sequence. hasLiveWindow=${Boolean(liveWindow)} `
+      + `stateAgeMs=${stateAgeMs == null ? 'unknown' : stateAgeMs}`
+    );
+    if (!latestAutoCaptureHotkeyState) {
+      clearPendingAutoCaptureHotkey();
+      pendingAutoCaptureHotkeyAt = Date.now();
+      pendingAutoCaptureHotkeyTimer = setTimeout(() => {
+        if (pendingAutoCaptureHotkeyAt <= 0 || latestAutoCaptureHotkeyState) return;
+        clearPendingAutoCaptureHotkey();
+        console.warn('[Hotkey] F10 hotkey expired while waiting for the first renderer state sync.');
+        sendAutoCaptureFailureStatus('Auto-Capture is still loading. Try F10 again in a moment.');
+      }, AUTO_CAPTURE_HOTKEY_SYNC_GRACE_MS);
+      console.warn('[Hotkey] F10 invoked before auto-capture state was synced from the renderer; queuing request.');
+      return;
     }
+
+    clearPendingAutoCaptureHotkey();
+    void startAutoCaptureFromHotkey(latestAutoCaptureHotkeyState);
   });
   console.log(`[Hotkey] F10 registration success=${f10Registered} isRegistered=${globalShortcut.isRegistered('F10')}`);
   if (!f10Registered) {
@@ -2166,6 +2206,28 @@ ipcMain.handle('db-backup', () => {
   });
 });
 
+ipcMain.on('sync-auto-capture-hotkey-state', (_event, snapshot = null) => {
+  if (snapshot && typeof snapshot === 'object') {
+    latestAutoCaptureHotkeyState = snapshot;
+    latestAutoCaptureHotkeyStateAt = Date.now();
+    if (pendingAutoCaptureHotkeyAt > 0) {
+      const queuedMs = Date.now() - pendingAutoCaptureHotkeyAt;
+      clearPendingAutoCaptureHotkey();
+      if (queuedMs <= AUTO_CAPTURE_HOTKEY_SYNC_GRACE_MS) {
+        console.log(`[Hotkey] Received first renderer state sync; replaying queued F10 after ${queuedMs}ms.`);
+        void startAutoCaptureFromHotkey(snapshot, {
+          source: 'queued-hotkey',
+          queuedMs,
+        });
+      }
+    }
+    return;
+  }
+  latestAutoCaptureHotkeyState = null;
+  latestAutoCaptureHotkeyStateAt = 0;
+  clearPendingAutoCaptureHotkey();
+});
+
 // Log Monitoring Logic
 let LOG_PATH = '';
 let logMonitorInterval = null;
@@ -2186,9 +2248,9 @@ function resolveLogMonitorProfile(input) {
 function getLogMonitorConfig(profile) {
   if (profile === 'adaptive-low') {
     return {
-      pollMs: 180000,
-      minDecodeIntervalMs: 180000,
-      snapshotWriteIntervalMs: 180000,
+      pollMs: 15000,
+      minDecodeIntervalMs: 15000,
+      snapshotWriteIntervalMs: 60000,
     };
   }
   if (profile === 'low-power') {
@@ -2842,16 +2904,6 @@ app.whenReady().then(async () => {
       console.error('[gameInput] nut.js failed to load — F10 Auto-Capture navigation will not work:', error?.message || error);
     });
 
-  // Pre-warm PaddleOCR ONNX models at startup — cold load takes ~30s, must happen before F10.
-  setTimeout(() => {
-    const _ocrWarmStart = Date.now();
-    initPaddleOCR().then(() => {
-      console.log(`[OCR] Pre-warm: models loaded in ${Date.now() - _ocrWarmStart}ms`);
-    }).catch((err) => {
-      console.warn('[OCR] Pre-warm failed:', err?.message || err);
-    });
-  }, 2000);
-
   if (process.platform === 'win32') {
     const _warmupGameWindow = () => {
       lookupGameWindowCandidate({
@@ -2864,7 +2916,7 @@ app.whenReady().then(async () => {
         }
       }).catch(() => {});
     };
-    setTimeout(_warmupGameWindow, 4000);
+    _warmupGameWindow();
     setInterval(_warmupGameWindow, 25_000); // Every 25s — keep cache warm inside the 30s TTL
   }
 

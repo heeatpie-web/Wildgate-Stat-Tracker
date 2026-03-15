@@ -36,6 +36,7 @@ const SEND_CHANNELS = [
   'update-presence',
   'set-ignore-mouse-events',
   'toggle-overlay', 'set-overlay-style', 'set-window-bounds',
+  'sync-auto-capture-hotkey-state',
 ];
 
 const RECEIVE_CHANNELS = [
@@ -44,8 +45,6 @@ const RECEIVE_CHANNELS = [
   'window-restored',
   'update_available', 'update_downloaded', 'update_not_available', 'update_error',
   'hotkey-toggle-overlay',
-  'hotkey-auto-capture',
-  'hotkey-smart-capture',
   'auto-capture-status',
   'telemetry-prune-needed',
 ];

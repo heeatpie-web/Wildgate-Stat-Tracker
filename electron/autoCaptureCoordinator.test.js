@@ -57,6 +57,7 @@ describe('autoCaptureCoordinator sequencing', () => {
   it('runs the full nine-step sequence and emits capture progress', async () => {
     const notify = vi.fn();
     const sendKeySequence = vi.fn().mockResolvedValue({ success: true });
+    const sendMenuKeySequence = vi.fn().mockResolvedValue({ success: true });
     const waitForScreenType = vi.fn().mockResolvedValue({ success: true, detectedType: 'crew_hub' });
     const captureAndProcess = vi.fn()
       .mockResolvedValueOnce({ success: true, filePath: 'map.png', filename: 'map.png', ocrData: { screenshotType: 'tactical_map' } })
@@ -68,6 +69,7 @@ describe('autoCaptureCoordinator sequencing', () => {
     const coordinator = createAutoCaptureCoordinator({
       notify,
       sendKeySequence,
+      sendMenuKeySequence,
       waitForScreenType,
       captureAndProcess,
       lookupMapKeybind: vi.fn().mockResolvedValue({ raw: 'Tab', sendKeys: '{TAB}' }),
@@ -102,14 +104,14 @@ describe('autoCaptureCoordinator sequencing', () => {
 
     expect(sendKeySequence).toHaveBeenNthCalledWith(1, '{TAB}', 'Open Tactical Map');
     expect(sendKeySequence).toHaveBeenNthCalledWith(2, '{TAB}', 'Close Tactical Map');
-    expect(sendKeySequence).toHaveBeenNthCalledWith(3, '{ESC}', 'Navigate to Crew Hub');
-    expect(sendKeySequence).toHaveBeenNthCalledWith(4, '{UP}{UP}{UP}{UP}', 'Navigate to Crew Hub');
-    expect(sendKeySequence).toHaveBeenNthCalledWith(5, '{SPACE}', 'Navigate to Crew Hub');
-    expect(sendKeySequence).toHaveBeenNthCalledWith(6, '{RIGHT}{RIGHT}{RIGHT}{RIGHT}', 'Navigate to Crew Hub Panel (Right)');
-    expect(sendKeySequence).toHaveBeenNthCalledWith(7, '{END}', 'Navigate to Crew Hub Panel End');
-    expect(sendKeySequence).toHaveBeenNthCalledWith(8, '{ESC}', 'Exit');
+    expect(sendMenuKeySequence).toHaveBeenNthCalledWith(1, '{ESC}', 'Navigate to Crew Hub');
+    expect(sendMenuKeySequence).toHaveBeenNthCalledWith(2, '{UP}{UP}{UP}{UP}', 'Navigate to Crew Hub');
+    expect(sendMenuKeySequence).toHaveBeenNthCalledWith(3, '{SPACE}', 'Navigate to Crew Hub');
+    expect(sendMenuKeySequence).toHaveBeenNthCalledWith(4, '{RIGHT}{RIGHT}{RIGHT}{RIGHT}', 'Navigate to Crew Hub Panel (Right)');
+    expect(sendMenuKeySequence).toHaveBeenNthCalledWith(5, '{END}', 'Navigate to Crew Hub Panel End');
+    expect(sendMenuKeySequence).toHaveBeenNthCalledWith(6, '{ESC}', 'Exit');
     expect(captureAndProcess).toHaveBeenCalledTimes(3);
-    expect(waits).toEqual([1400, 500, 1000, 600, 1600, 600, 600, 400]);
+    expect(waits).toEqual([640, 160, 360, 180, 480, 120, 120, 40]);
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({
       phase: 'capture-progress',
       captureIndex: 1,
@@ -127,6 +129,7 @@ describe('autoCaptureCoordinator sequencing', () => {
   it('continues when the tactical-map pre-check fails but the saved screenshot OCR is correct', async () => {
     const notify = vi.fn();
     const sendKeySequence = vi.fn().mockResolvedValue({ success: true });
+    const sendMenuKeySequence = vi.fn().mockResolvedValue({ success: true });
     const waitForScreenType = vi.fn()
       .mockResolvedValueOnce({ success: false, detectedType: 'unknown', error: 'Timed out waiting for tactical_map.' })
       .mockResolvedValueOnce({ success: true, detectedType: 'crew_hub' });
@@ -138,6 +141,7 @@ describe('autoCaptureCoordinator sequencing', () => {
     const coordinator = createAutoCaptureCoordinator({
       notify,
       sendKeySequence,
+      sendMenuKeySequence,
       waitForScreenType,
       captureAndProcess,
       lookupMapKeybind: vi.fn().mockResolvedValue({ raw: 'Tab', sendKeys: '{TAB}' }),
@@ -167,11 +171,13 @@ describe('autoCaptureCoordinator sequencing', () => {
 
     expect(captureAndProcess).toHaveBeenCalledTimes(3);
     expect(sendKeySequence).toHaveBeenNthCalledWith(2, '{TAB}', 'Close Tactical Map');
+    expect(sendMenuKeySequence).toHaveBeenNthCalledWith(1, '{ESC}', 'Navigate to Crew Hub');
   });
 
   it('uses the held-key path when holdTacticalMapKey is true', async () => {
     const notify = vi.fn();
     const sendKeySequence = vi.fn().mockResolvedValue({ success: true });
+    const sendMenuKeySequence = vi.fn().mockResolvedValue({ success: true });
     const runWithHeldKeySequence = vi.fn(async (_sequence, _action, runWhileHeld) => {
       await runWhileHeld();
       return { success: true, focusConfirmed: true };
@@ -185,6 +191,7 @@ describe('autoCaptureCoordinator sequencing', () => {
       notify,
       runWithHeldKeySequence,
       sendKeySequence,
+      sendMenuKeySequence,
       captureAndProcess,
       lookupMapKeybind: vi.fn().mockResolvedValue({ raw: 'KeyM', sendKeys: 'm' }),
       delayFn: vi.fn(() => Promise.resolve()),
@@ -213,6 +220,7 @@ describe('autoCaptureCoordinator sequencing', () => {
 
     expect(runWithHeldKeySequence).toHaveBeenCalledWith('m', 'Open Tactical Map', expect.any(Function));
     expect(sendKeySequence).not.toHaveBeenCalledWith('m', expect.anything());
+    expect(sendMenuKeySequence).toHaveBeenCalledWith('{ESC}', 'Navigate to Crew Hub');
     expect(captureAndProcess).toHaveBeenCalledTimes(3);
   });
 
