@@ -806,6 +806,19 @@ const App: React.FC = () => {
         startupHealthPromptedRef.current = true;
     }, []);
 
+    // Electron frameless-window focus fix: clicking an input/textarea should always focus it.
+    // In transparent frameless windows, the default click-focus behavior can silently fail.
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            const t = e.target;
+            if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) {
+                t.focus();
+            }
+        };
+        document.addEventListener('mousedown', handler, true);
+        return () => document.removeEventListener('mousedown', handler, true);
+    }, []);
+
     React.useLayoutEffect(() => {
         if (tutorialAutoPromptedRef.current) return;
         if (isStoreLoading) return;

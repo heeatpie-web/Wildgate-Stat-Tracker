@@ -174,8 +174,9 @@ export const processTelemetryEvent = (
 
     // --- Match Events ---
 
-    // Match Start: check BOTH loadedMap and loadingMap for compatibility with different telemetry formats
-    const startMapName = payload.loadedMap || payload.loadingMap;
+    // Case-insensitive map name extraction (game telemetry may use LoadedMap, loadingMap, etc.)
+    const rawMapName = getCaseInsensitiveValue(payload, ['loadedMap', 'loadingMap']);
+    const startMapName = typeof rawMapName === 'string' ? rawMapName : '';
     if (name === 'NebLoadingScreen' && startMapName && isNonMatchMap(startMapName)) {
         Logger.debug('TelemetryProcessor', `Skipping non-match map load: ${String(startMapName)}`);
     }
@@ -189,9 +190,8 @@ export const processTelemetryEvent = (
     }
 
     // Match End
-    // FIXED: Check both loadedMap and loadingMap for compatibility with different telemetry formats
-    const mapName = payload.loadedMap || payload.loadingMap;
-    const normalizedMapName = typeof mapName === 'string' ? mapName.toLowerCase() : '';
+    const mapName = startMapName;
+    const normalizedMapName = mapName.toLowerCase();
     if (name === 'NebLoadingScreen' && normalizedMapName.includes('frontend') && context.isMatchInProgress) {
         let totalSeconds = 0;
         const payloadDurationSeconds = Number(payload.matchDuration);
