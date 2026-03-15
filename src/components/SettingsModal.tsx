@@ -1135,81 +1135,140 @@ const SettingsModalContent: React.FC = () => {
                         </div>
                         <div
                             data-testid="settings-quick-setup-grid"
-                            className="grid gap-3"
-                            style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(16rem, 1fr))' }}
+                            className="divide-y divide-md-sys-outline/10"
                         >
-                            <button
-                                type="button"
-                                onClick={() => setCaptureMode(captureMode === 'auto' ? 'deferred' : 'auto')}
-                                className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-3 text-left hover:bg-md-sys-surface-container-highest"
+                            <SettingRow
+                                label="Capture Mode"
+                                value={captureMode}
+                                descriptions={{
+                                    deferred: 'Saves screenshot now; run OCR later from Smart Captures.',
+                                    auto: 'Runs OCR automatically right after each capture.',
+                                }}
                             >
-                                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">Capture mode</div>
-                                <div className="mt-1 text-body font-bold text-md-sys-on-surface">{captureMode === 'auto' ? 'Capture Now + Auto OCR' : 'Capture Now, OCR Later'}</div>
-                                <div className="mt-1 text-label-sm text-md-sys-on-surface/60">{captureMode === 'auto' ? 'Bundled OCR after capture pauses' : 'Saves now, review from Smart Captures later'}</div>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setResultOcrFlowMode(resultOcrFlowMode === 'prompt' ? 'background' : 'prompt')}
-                                className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-3 text-left hover:bg-md-sys-surface-container-highest"
+                                <OptionCycler
+                                    options={[
+                                        { id: 'deferred', label: 'Capture Now, OCR Later' },
+                                        { id: 'auto', label: 'Capture Now + Auto OCR' },
+                                    ]}
+                                    value={captureMode}
+                                    onChange={(id) => setCaptureMode(id as CaptureMode)}
+                                />
+                            </SettingRow>
+                            <SettingRow
+                                label="Result Button"
+                                value={resultOcrFlowMode}
+                                descriptions={{
+                                    prompt: 'Ask before processing queued captures.',
+                                    background: 'Opens wizard immediately; OCR runs in background.',
+                                }}
                             >
-                                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">Result button</div>
-                                <div className="mt-1 text-body font-bold text-md-sys-on-surface">{resultOcrFlowMode === 'prompt' ? 'Prompt Before OCR' : 'Background OCR'}</div>
-                                <div className="mt-1 text-label-sm text-md-sys-on-surface/60">{resultOcrFlowMode === 'prompt' ? 'Ask before processing queued captures' : 'Open wizard immediately and OCR in background'}</div>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setOcrAutoOpenAfterRerun(!ocrAutoOpenAfterRerun)}
-                                className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-3 text-left hover:bg-md-sys-surface-container-highest"
+                                <OptionCycler
+                                    options={[
+                                        { id: 'prompt', label: 'Prompt Before OCR' },
+                                        { id: 'background', label: 'Background OCR' },
+                                    ]}
+                                    value={resultOcrFlowMode}
+                                    onChange={(id) => setResultOcrFlowMode(id as ResultOcrFlowMode)}
+                                />
+                            </SettingRow>
+                            <SettingRow
+                                label="OCR Rerun"
+                                value={ocrAutoOpenAfterRerun ? 'auto-open' : 'notify'}
+                                descriptions={{
+                                    'notify': 'Completed reruns raise a notification and stay in place.',
+                                    'auto-open': 'Completed reruns open the review flow automatically.',
+                                }}
                             >
-                                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">OCR rerun</div>
-                                <div className="mt-1 text-body font-bold text-md-sys-on-surface">{ocrAutoOpenAfterRerun ? 'Auto-open Review' : 'Notify Only'}</div>
-                                <div className="mt-1 text-label-sm text-md-sys-on-surface/60">{ocrAutoOpenAfterRerun ? 'Completed reruns open the review flow automatically' : 'Completed reruns stay in place and raise a notification'}</div>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setAutoSequenceOnCapture(!autoSequenceOnCapture)}
-                                className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-3 text-left hover:bg-md-sys-surface-container-highest"
+                                <OptionCycler
+                                    options={[
+                                        { id: 'notify', label: 'Notify Only' },
+                                        { id: 'auto-open', label: 'Auto-open Review' },
+                                    ]}
+                                    value={ocrAutoOpenAfterRerun ? 'auto-open' : 'notify'}
+                                    onChange={(id) => setOcrAutoOpenAfterRerun(id === 'auto-open')}
+                                />
+                            </SettingRow>
+                            <SettingRow
+                                label="Smart Capture Button"
+                                value={autoSequenceOnCapture ? 'sequence' : 'single'}
+                                descriptions={{
+                                    single: 'UI capture buttons run one Smart Capture on the current screen.',
+                                    sequence: 'UI capture buttons run Tactical Map + Crew Hub sequence.',
+                                }}
                             >
-                                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">Smart Capture button</div>
-                                <div className="mt-1 text-body font-bold text-md-sys-on-surface">{autoSequenceOnCapture ? 'Auto-sequence' : 'Single capture'}</div>
-                                <div className="mt-1 text-label-sm text-md-sys-on-surface/60">{autoSequenceOnCapture ? 'UI capture buttons run Tactical Map + Crew Hub sequence.' : 'UI capture buttons run one Smart Capture on the current screen.'}</div>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setAutoCaptureSendKeypresses(!autoCaptureSendKeypresses)}
-                                className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-3 text-left hover:bg-md-sys-surface-container-highest"
+                                <OptionCycler
+                                    options={[
+                                        { id: 'single', label: 'Single Capture' },
+                                        { id: 'sequence', label: 'Auto-sequence' },
+                                    ]}
+                                    value={autoSequenceOnCapture ? 'sequence' : 'single'}
+                                    onChange={(id) => setAutoSequenceOnCapture(id === 'sequence')}
+                                />
+                            </SettingRow>
+                            <SettingRow
+                                label="Auto-capture Input"
+                                value={autoCaptureSendKeypresses ? 'keypresses' : 'manual'}
+                                descriptions={{
+                                    manual: 'Sequence waits and captures only — navigate the UI yourself.',
+                                    keypresses: 'Main process sends map and crew-hub navigation inputs to Wildgate.',
+                                }}
                             >
-                                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">Auto-capture input</div>
-                                <div className="mt-1 text-body font-bold text-md-sys-on-surface">{autoCaptureSendKeypresses ? 'Send game keypresses' : 'Manual navigation only'}</div>
-                                <div className="mt-1 text-label-sm text-md-sys-on-surface/60">{autoCaptureSendKeypresses ? 'Main process sends map and crew-hub navigation inputs to Wildgate.' : 'Sequence waits and captures only. Use this if you want to drive the UI yourself.'}</div>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setOcrLearningEnabled(!ocrLearningEnabled)}
-                                className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-3 text-left hover:bg-md-sys-surface-container-highest"
+                                <OptionCycler
+                                    options={[
+                                        { id: 'manual', label: 'Manual Navigation Only' },
+                                        { id: 'keypresses', label: 'Send Game Keypresses' },
+                                    ]}
+                                    value={autoCaptureSendKeypresses ? 'keypresses' : 'manual'}
+                                    onChange={(id) => setAutoCaptureSendKeypresses(id === 'keypresses')}
+                                />
+                            </SettingRow>
+                            <SettingRow
+                                label="OCR Learning"
+                                value={ocrLearningEnabled ? 'enabled' : 'disabled'}
+                                descriptions={{
+                                    disabled: 'Manual review only — no aliases are auto-applied.',
+                                    enabled: `Aliases are learned automatically. Review mode: ${ocrLearningReviewMode}.`,
+                                }}
                             >
-                                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">OCR learning</div>
-                                <div className="mt-1 text-body font-bold text-md-sys-on-surface">{ocrLearningEnabled ? 'Enabled' : 'Disabled'}</div>
-                                <div className="mt-1 text-label-sm text-md-sys-on-surface/60">{ocrLearningEnabled ? `Review mode: ${ocrLearningReviewMode}` : 'Manual review only'}</div>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setAutoPopulateRosterOnSave(!autoPopulateRosterOnSave)}
-                                className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-3 text-left hover:bg-md-sys-surface-container-highest"
+                                <OptionCycler
+                                    options={[
+                                        { id: 'disabled', label: 'Disabled' },
+                                        { id: 'enabled', label: 'Enabled' },
+                                    ]}
+                                    value={ocrLearningEnabled ? 'enabled' : 'disabled'}
+                                    onChange={(id) => setOcrLearningEnabled(id === 'enabled')}
+                                />
+                            </SettingRow>
+                            <SettingRow
+                                label="Roster Auto-populate"
+                                value={autoPopulateRosterOnSave ? 'enabled' : 'disabled'}
+                                descriptions={{
+                                    disabled: 'Detected players are not added to roster automatically.',
+                                    enabled: 'Auto-adds detected players after match save at 83%+ confidence.',
+                                }}
                             >
-                                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">Roster auto-populate</div>
-                                <div className="mt-1 text-body font-bold text-md-sys-on-surface">{autoPopulateRosterOnSave ? 'Enabled on match save' : 'Disabled'}</div>
-                                <div className="mt-1 text-label-sm text-md-sys-on-surface/60">Auto-add detected players after match save at 83%+ confidence. Keep disabled until large-roster lag is cleared.</div>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setShowRoiEditor(true)}
-                                className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-3 text-left hover:bg-md-sys-surface-container-highest"
+                                <OptionCycler
+                                    options={[
+                                        { id: 'disabled', label: 'Disabled' },
+                                        { id: 'enabled', label: 'Enabled on Match Save' },
+                                    ]}
+                                    value={autoPopulateRosterOnSave ? 'enabled' : 'disabled'}
+                                    onChange={(id) => setAutoPopulateRosterOnSave(id === 'enabled')}
+                                />
+                            </SettingRow>
+                            <SettingRow
+                                label="Capture Framing"
+                                value="action"
+                                descriptions={{ action: 'Only use this when your capture framing is visibly off.' }}
                             >
-                                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">Capture framing</div>
-                                <div className="mt-1 text-body font-bold text-md-sys-on-surface">Adjust OCR boxes</div>
-                                <div className="mt-1 text-label-sm text-md-sys-on-surface/60">Only use this when your capture framing is visibly off.</div>
-                            </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowRoiEditor(true)}
+                                    className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold uppercase"
+                                >
+                                    Adjust OCR Boxes
+                                </button>
+                            </SettingRow>
                         </div>
                         <div className="mt-4 rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-4 py-4">
                             <div className="flex items-center justify-between gap-3">

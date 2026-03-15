@@ -229,26 +229,34 @@ describe('SettingsModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /^capture$/i }));
 
     const grid = screen.getByTestId('settings-quick-setup-grid');
-    expect(grid).toHaveStyle({ gridTemplateColumns: 'repeat(auto-fit, minmax(16rem, 1fr))' });
+    expect(grid.className).toContain('divide-y');
     expect(screen.getByText('Capture Defaults')).toBeInTheDocument();
   });
 
   it('lets users toggle F10 auto-sequence from the capture quick setup grid', async () => {
     const { SettingsModal } = await import('./SettingsModal');
+    const { within } = await import('@testing-library/react');
     render(<SettingsModal />);
 
     fireEvent.click(screen.getByRole('button', { name: /^capture$/i }));
-    fireEvent.click(screen.getByRole('button', { name: /single capture/i }));
+
+    // autoSequenceOnCapture defaults to false (Single Capture); clicking Next option cycles to sequence
+    const smartCaptureRow = screen.getByText('Smart Capture Button').closest('div[class]')!;
+    fireEvent.click(within(smartCaptureRow).getByRole('button', { name: /next option/i }));
 
     expect(storeState.setAutoSequenceOnCapture).toHaveBeenCalledWith(true);
   });
 
   it('surfaces auto-capture speed and keypress controls in capture settings', async () => {
     const { SettingsModal } = await import('./SettingsModal');
+    const { within } = await import('@testing-library/react');
     render(<SettingsModal />);
 
     fireEvent.click(screen.getByRole('button', { name: /^capture$/i }));
-    fireEvent.click(screen.getByRole('button', { name: /send game keypresses/i }));
+
+    // autoCaptureSendKeypresses defaults to true (keypresses); clicking Previous option cycles to manual
+    const autocaptureRow = screen.getByText('Auto-capture Input').closest('div[class]')!;
+    fireEvent.click(within(autocaptureRow).getByRole('button', { name: /previous option/i }));
     fireEvent.change(screen.getByLabelText(/capture speed/i), {
       target: { value: '2.4' },
     });
