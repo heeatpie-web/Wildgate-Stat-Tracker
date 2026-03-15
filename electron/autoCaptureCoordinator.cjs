@@ -280,6 +280,9 @@ function createAutoCaptureCoordinator({
 
     const captureStep = async (step, captureIndex) => {
       logAutoCaptureStep(step, '(capture)');
+      // Fire sound immediately so the user hears it when the capture begins,
+      // not after the PNG encode + file save completes.
+      notify({ phase: 'capture-started', captureIndex, totalCaptures: 3, matchId });
       const result = await withTimeout(() => captureAndProcess({
         matchId,
         activeUser,
@@ -312,41 +315,41 @@ function createAutoCaptureCoordinator({
           tacticalMapKeybind.sendKeys,
           STEP_DEFINITIONS.openMap.label,
           async () => {
-            await waitStep(800);
+            await waitStep(500);
             await captureStep(STEP_DEFINITIONS.captureMap, 1);
           }
         );
         if (!heldResult?.success) {
           throw new Error(heldResult?.error || `${STEP_DEFINITIONS.captureMap.label}: hold-capture failed`);
         }
-        await waitStep(800); // Let the map close animation finish before pressing ESC
+        await waitStep(400); // Let the map close animation finish before pressing ESC
         return;
       }
 
       // Toggle mode: tap to open, capture, tap to close.
       await sendStepKeys(STEP_DEFINITIONS.openMap, tacticalMapKeybind.sendKeys);
-      await waitStep(1000);
+      await waitStep(700);
       await captureStep(STEP_DEFINITIONS.captureMap, 1);
       await sendStepKeys(STEP_DEFINITIONS.closeMap, tacticalMapKeybind.sendKeys);
-      await waitStep(300);
+      await waitStep(250);
     };
 
     await captureTacticalMapStep();
 
     await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{ESC}');
-    await waitStep(600); // Wait for the ESC popup menu to appear before navigating
+    await waitStep(500); // Wait for the ESC popup menu to appear before navigating
     await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{UP}{UP}{UP}{UP}');
-    await waitStep(400); // Let the highlight settle on Crew Hub before pressing space
+    await waitStep(300); // Let the highlight settle on Crew Hub before pressing space
     await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{SPACE}');
-    await waitStep(1200);
+    await waitStep(800);
 
     await captureStep(STEP_DEFINITIONS.captureCrewHubA, 2);
 
     await sendStepKeys(STEP_DEFINITIONS.moveCrewHubRight, '{RIGHT}{RIGHT}{RIGHT}{RIGHT}');
-    await waitStep(400);
+    await waitStep(300);
 
     await sendStepKeys(STEP_DEFINITIONS.moveCrewHubEnd, '{END}');
-    await waitStep(400);
+    await waitStep(300);
 
     await captureStep(STEP_DEFINITIONS.captureCrewHubB, 3);
 

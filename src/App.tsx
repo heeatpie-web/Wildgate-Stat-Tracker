@@ -1692,6 +1692,10 @@ const App: React.FC = () => {
                 setToast({ message: 'Auto-Capture running…', type: 'info' });
                 return;
             }
+            if (phase === 'capture-started') {
+                playCapture();
+                return;
+            }
             if (phase === 'capture-progress') {
                 const captureIndex = Number(payload?.captureIndex || 0);
                 const totalCaptures = Number(payload?.totalCaptures || 3);
@@ -1699,7 +1703,6 @@ const App: React.FC = () => {
                     Number(payload?.matchId || 0),
                     typeof payload?.filePath === 'string' ? payload.filePath : null
                 );
-                playCapture();
                 if (captureIndex > 0) {
                     setToast({ message: `${captureIndex}/${totalCaptures}`, type: 'info' });
                 }

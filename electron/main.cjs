@@ -769,7 +769,7 @@ async function captureGameWindowForAutomation() {
   try {
     if (shouldHideWindow) {
       mainWindow.hide();
-      await delay(250);
+      await delay(50);
     }
     return await captureGameWindow();
   } finally {
