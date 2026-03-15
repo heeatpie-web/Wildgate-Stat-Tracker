@@ -17,7 +17,7 @@ const INVOKE_CHANNELS = [
   'start-auto-capture',
   'send-game-ui-action', 'wait-for-game-screen',
   'pick-roi-image',
-  'bundle-artifacts', 'get-match-artifacts', 'rerun-ocr-on-artifact', 'rerun-ocr-multi',
+  'bundle-artifacts', 'get-match-artifacts', 'remove-all-match-artifacts', 'rerun-ocr-on-artifact', 'rerun-ocr-multi',
   'list-match-artifacts',
   'artifact-repair-preview', 'artifact-repair-apply',
   'remove-match-artifact', 'add-match-artifact', 'reassign-match-artifact',

@@ -55,6 +55,53 @@ const getCaseInsensitiveValue = (record: unknown, keys: string[]): unknown => {
     return undefined;
 };
 
+const findNestedCaseInsensitiveValue = (
+    value: unknown,
+    keys: string[],
+    maxDepth = 4,
+): unknown => {
+    if (value == null || !Array.isArray(keys) || keys.length === 0) return undefined;
+
+    let bestValue: unknown = undefined;
+    let bestDepth = Number.MAX_SAFE_INTEGER;
+
+    const visit = (candidate: unknown, depth: number) => {
+        if (candidate == null || depth > maxDepth) return;
+        if (Array.isArray(candidate)) {
+            candidate.forEach((entry) => visit(entry, depth + 1));
+            return;
+        }
+        if (!candidate || typeof candidate !== 'object') return;
+
+        const direct = getCaseInsensitiveValue(candidate, keys);
+        if (direct !== undefined && depth < bestDepth) {
+            bestValue = direct;
+            bestDepth = depth;
+        }
+
+        Object.values(candidate as Record<string, unknown>).forEach((entry) => visit(entry, depth + 1));
+    };
+
+    visit(value, 0);
+    return bestValue;
+};
+
+const pickCaseInsensitiveValue = (
+    sources: unknown[],
+    keys: string[],
+    maxDepth = 4,
+): unknown => {
+    for (const source of sources) {
+        const direct = getCaseInsensitiveValue(source, keys);
+        if (direct !== undefined) return direct;
+    }
+    for (const source of sources) {
+        const nested = findNestedCaseInsensitiveValue(source, keys, maxDepth);
+        if (nested !== undefined) return nested;
+    }
+    return undefined;
+};
+
 /** Store actions injected into the processor by useLogMonitor. */
 export interface TelemetryActions {
     setTimeMin: (v: string, source?: DataSource) => void;
@@ -104,6 +151,18 @@ export const processTelemetryEvent = (
 
     const name = event.EventName;
     const payload = event.Payload?.event || event.Payload || {};
+    const payloadEnvelope = event.Payload && typeof event.Payload === 'object' ? event.Payload : {};
+    const payloadEnvelopeEvent = payloadEnvelope && typeof payloadEnvelope.event === 'object' ? payloadEnvelope.event : {};
+    const payloadEnvelopeLower = event.payload && typeof event.payload === 'object' ? event.payload : {};
+    const payloadEnvelopeLowerEvent = payloadEnvelopeLower && typeof payloadEnvelopeLower.event === 'object' ? payloadEnvelopeLower.event : {};
+    const payloadSources = [
+        payload,
+        payloadEnvelopeEvent,
+        payloadEnvelope,
+        payloadEnvelopeLowerEvent,
+        payloadEnvelopeLower,
+        event.event,
+    ];
     const gameTime = toTelemetryTimestampMs(event); // Simulation time or live time
 
     // --- ID Discovery ---
@@ -175,7 +234,7 @@ export const processTelemetryEvent = (
     // --- Match Events ---
 
     // Case-insensitive map name extraction (game telemetry may use LoadedMap, loadingMap, etc.)
-    const rawMapName = getCaseInsensitiveValue(payload, ['loadedMap', 'loadingMap']);
+    const rawMapName = pickCaseInsensitiveValue(payloadSources, ['loadedMap', 'loadingMap']);
     const startMapName = typeof rawMapName === 'string' ? rawMapName : '';
     if (name === 'NebLoadingScreen' && startMapName && isNonMatchMap(startMapName)) {
         Logger.debug('TelemetryProcessor', `Skipping non-match map load: ${String(startMapName)}`);

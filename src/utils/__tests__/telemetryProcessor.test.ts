@@ -83,6 +83,22 @@ describe('processTelemetryEvent', () => {
       processTelemetryEvent(event, actions, context);
       expect(actions.setIsMatchInProgress).toHaveBeenCalledWith(true);
     });
+
+    it('detects match start when loadingMap is only present on the payload envelope', () => {
+      const event = {
+        EventName: 'NebLoadingScreen',
+        Payload: {
+          event: { traceId: 'payload-envelope-map' },
+          loadingMap: 'Arctic_Reach_01',
+        },
+        ClientTimestamp: Date.now() / 1000,
+      };
+      processTelemetryEvent(event, actions, context);
+
+      expect(actions.setIsMatchInProgress).toHaveBeenCalledWith(true);
+      expect(actions.setMatchStartTime).toHaveBeenCalled();
+      expect(actions.setOverlayPhase).toHaveBeenCalledWith('Setup');
+    });
   });
 
   // ── Match End ──

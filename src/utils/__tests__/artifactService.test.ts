@@ -164,10 +164,41 @@ describe('artifactService', () => {
   });
 
   describe('removeAllMatchArtifacts', () => {
-    it('removes every token-backed artifact returned by get-match-artifacts', async () => {
+    it('prefers the bulk removal IPC when available', async () => {
+      mockInvoke.mockResolvedValue({
+        success: true,
+        data: {
+          removedPaths: [
+            'C:\\new\\match_artifacts\\12\\shot_1.png',
+            'D:\\old\\match_artifacts\\77\\shot_2.png',
+          ],
+          failedPaths: [],
+        },
+      });
+
+      const result = await removeAllMatchArtifacts(12, ['D:\\old\\match_artifacts\\77\\shot_2.png']);
+
+      expect(result).toEqual({
+        removedPaths: [
+          'C:\\new\\match_artifacts\\12\\shot_1.png',
+          'D:\\old\\match_artifacts\\77\\shot_2.png',
+        ],
+        failedPaths: [],
+      });
+      expect(mockInvoke).toHaveBeenCalledTimes(1);
+      expect(mockInvoke).toHaveBeenCalledWith('remove-all-match-artifacts', {
+        matchId: 12,
+        fallbackImages: ['D:\\old\\match_artifacts\\77\\shot_2.png'],
+      });
+    });
+
+    it('falls back to token-backed removal when the bulk IPC fails', async () => {
       mockInvoke.mockImplementation((channel: string, payload: any) => {
-        if (channel === 'get-match-artifacts') {
+        if (channel === 'remove-all-match-artifacts') {
           expect(payload).toEqual({ matchId: 12, fallbackImages: ['D:\\old\\match_artifacts\\77\\shot_2.png'] });
+          return Promise.reject(new Error('channel unavailable'));
+        }
+        if (channel === 'get-match-artifacts') {
           return Promise.resolve({
             success: true,
             data: {
@@ -184,7 +215,7 @@ describe('artifactService', () => {
           });
         }
         if (channel === 'remove-match-artifact') {
-          return Promise.resolve({ success: true, data: { removed: 'ok' } });
+          return Promise.resolve({ success: true, data: { removed: 'shot_1.png' } });
         }
         return Promise.resolve(null);
       });
@@ -198,45 +229,34 @@ describe('artifactService', () => {
         ],
         failedPaths: [],
       });
-      expect(mockInvoke).toHaveBeenNthCalledWith(2, 'remove-match-artifact', { matchId: 12, artifactId: 'tok_1' });
-      expect(mockInvoke).toHaveBeenNthCalledWith(3, 'remove-match-artifact', { matchId: 12, artifactId: 'tok_2' });
+      expect(mockInvoke).toHaveBeenNthCalledWith(1, 'remove-all-match-artifacts', {
+        matchId: 12,
+        fallbackImages: ['D:\\old\\match_artifacts\\77\\shot_2.png'],
+      });
+      expect(mockInvoke).toHaveBeenNthCalledWith(2, 'get-match-artifacts', {
+        matchId: 12,
+        fallbackImages: ['D:\\old\\match_artifacts\\77\\shot_2.png'],
+      });
+      expect(mockInvoke).toHaveBeenNthCalledWith(3, 'remove-match-artifact', { matchId: 12, artifactId: 'tok_1' });
+      expect(mockInvoke).toHaveBeenNthCalledWith(4, 'remove-match-artifact', { matchId: 12, artifactId: 'tok_2' });
     });
 
-    it('reports artifacts that cannot be safely removed', async () => {
-      mockInvoke.mockImplementation((channel: string) => {
-        if (channel === 'get-match-artifacts') {
-          return Promise.resolve({
-            success: true,
-            data: {
-              images: [
-                'C:\\new\\match_artifacts\\12\\shot_1.png',
-                'C:\\new\\match_artifacts\\12\\shot_2.png',
-              ],
-              imageFiles: [
-                { artifactId: 'tok_1', filename: 'shot_1.png', path: 'C:\\new\\match_artifacts\\12\\shot_1.png' },
-                { artifactId: '', filename: 'shot_2.png', path: 'C:\\new\\match_artifacts\\12\\shot_2.png' },
-              ],
-              telemetry: [],
-            },
-          });
-        }
-        if (channel === 'remove-match-artifact') {
-          return Promise.resolve({ success: true, data: { removed: 'shot_1.png' } });
-        }
-        return Promise.resolve(null);
+    it('surfaces failed paths returned by the bulk removal IPC', async () => {
+      mockInvoke.mockResolvedValue({
+        success: true,
+        data: {
+          removedPaths: ['C:\\new\\match_artifacts\\12\\shot_1.png'],
+          failedPaths: ['C:\\new\\match_artifacts\\12\\shot_2.png'],
+        },
       });
 
       const result = await removeAllMatchArtifacts(12);
 
       expect(result).toEqual({
-        removedPaths: [
-          'C:\\new\\match_artifacts\\12\\shot_1.png',
-        ],
-        failedPaths: [
-          'C:\\new\\match_artifacts\\12\\shot_2.png',
-        ],
+        removedPaths: ['C:\\new\\match_artifacts\\12\\shot_1.png'],
+        failedPaths: ['C:\\new\\match_artifacts\\12\\shot_2.png'],
       });
-      expect(mockInvoke).toHaveBeenCalledTimes(2);
+      expect(mockInvoke).toHaveBeenCalledTimes(1);
     });
   });
 

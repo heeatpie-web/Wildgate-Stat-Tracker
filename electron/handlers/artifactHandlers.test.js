@@ -119,4 +119,34 @@ describe('artifactHandlers token-backed fallback artifacts', () => {
     expect(fs.existsSync(fallbackPath)).toBe(false);
     expect(fs.existsSync(path.join(targetMatchDir, 'shot_2.png'))).toBe(true);
   });
+
+  it('removes canonical-folder artifacts in one bulk operation', async () => {
+    const rootDir = makeTempDir();
+    tempDirs.push(rootDir);
+    const matchId = 1773289658010;
+    const canonicalNumber = 193;
+    const canonicalDir = path.join(rootDir, 'match_artifacts', String(canonicalNumber));
+    const artifactPath = path.join(canonicalDir, 'shot.png');
+    fs.writeFileSync(path.join(rootDir, 'wildgate_db.json'), JSON.stringify({
+      matches: [{ id: matchId, canonicalMatchNumber: canonicalNumber }],
+      storageMeta: { nextCanonicalMatchNumber: canonicalNumber + 1 },
+    }));
+    writeImage(artifactPath, 'canonical-image');
+
+    const ipcMain = createIpcMainHarness();
+    registerArtifactHandlers(ipcMain, createArtifactContext(rootDir));
+    const removeAllArtifacts = ipcMain.handlers.get('remove-all-match-artifacts');
+
+    const result = await removeAllArtifacts({ sender: { id: 503 } }, { matchId });
+
+    expect(result).toEqual(expect.objectContaining({
+      success: true,
+      data: {
+        removedPaths: [artifactPath],
+        failedPaths: [],
+      },
+    }));
+    expect(fs.existsSync(artifactPath)).toBe(false);
+    expect(fs.existsSync(canonicalDir)).toBe(false);
+  });
 });

@@ -175,6 +175,15 @@ const mergeArtifactPaths = (primary: string[], fallback: string[] = []): string[
     return merged;
 };
 
+const normalizeArtifactPathList = (value: unknown): string[] => (
+    Array.isArray(value)
+        ? mergeArtifactPaths(
+            value.filter((entry): entry is string => typeof entry === 'string'),
+            []
+        )
+        : []
+);
+
 export const getMatchArtifactsStructured = async (
     matchId: number,
     fallbackImages: string[] = []
@@ -372,6 +381,27 @@ export const removeAllMatchArtifacts = async (
     matchId: number,
     fallbackImages: string[] = []
 ): Promise<RemoveAllMatchArtifactsResult> => {
+    const api = getElectronAPI();
+    if (!api) {
+        return {
+            removedPaths: [],
+            failedPaths: mergeArtifactPaths([], fallbackImages),
+        };
+    }
+
+    try {
+        const raw = await api.invoke('remove-all-match-artifacts', { matchId, fallbackImages });
+        const result = unwrapIpcResult<RemoveAllMatchArtifactsResult>(raw);
+        if (result.ok && isRecord(result.data)) {
+            return {
+                removedPaths: normalizeArtifactPathList(result.data.removedPaths),
+                failedPaths: normalizeArtifactPathList(result.data.failedPaths),
+            };
+        }
+    } catch {
+        // Fall back to legacy token-based removal for older builds or IPC failures.
+    }
+
     const structured = await getMatchArtifactsStructured(matchId, fallbackImages);
     const pendingPaths = new Map<string, string>();
     const removedPaths: string[] = [];

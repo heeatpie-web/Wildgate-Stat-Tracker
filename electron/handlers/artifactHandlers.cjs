@@ -255,6 +255,63 @@ function getValidatedMatchDir(app, artifactHelpers, matchId, options = {}) {
   });
 }
 
+async function collectMatchArtifacts(app, artifactHelpers, parsedPayload) {
+  const validated = getValidatedMatchDir(app, artifactHelpers, parsedPayload.matchId, { mode: 'read' });
+  if (!validated.success) return validated;
+
+  const {
+    matchDir,
+    matchId: safeMatchId,
+    canonicalMatchNumber,
+    paths,
+  } = validated.data;
+  const fallbackCandidates = buildFallbackArtifactCandidates({
+    fallbackImages: parsedPayload.fallbackImages,
+    matchArtifactsRoot: paths.matchArtifactsRoot,
+    matchId: safeMatchId,
+    canonicalMatchNumber,
+  });
+
+  const files = fs.existsSync(matchDir)
+    ? await fsPromises.readdir(matchDir)
+    : [];
+  const images = [];
+  const telemetry = [];
+  const imageByFilename = new Map();
+
+  for (const f of files) {
+    const fullPath = path.join(matchDir, f);
+    const ext = path.extname(f).toLowerCase();
+    if (ext === '.json') {
+      try {
+        const content = JSON.parse(await fsPromises.readFile(fullPath, 'utf-8'));
+        telemetry.push(content);
+      } catch (e) { /* skip unparseable */ }
+    } else if (IMAGE_EXTENSIONS.has(ext)) {
+      images.push(fullPath);
+      imageByFilename.set(toArtifactFilenameKey(fullPath), fullPath);
+    }
+  }
+
+  for (const fallbackPath of fallbackCandidates) {
+    const filenameKey = toArtifactFilenameKey(fallbackPath);
+    if (!filenameKey) continue;
+    if (imageByFilename.has(filenameKey)) continue;
+    if (!fs.existsSync(fallbackPath)) continue;
+    images.push(fallbackPath);
+    imageByFilename.set(filenameKey, fallbackPath);
+  }
+
+  return ok({
+    matchDir,
+    matchId: safeMatchId,
+    canonicalMatchNumber,
+    paths,
+    images,
+    telemetry,
+  });
+}
+
 function resolveArtifactTokenPath(app, resolvedArtifact, fallbackPath, allowedRoots) {
   const explicitPath = typeof resolvedArtifact?.fullPath === 'string'
     ? resolvedArtifact.fullPath.trim()
@@ -314,65 +371,87 @@ function registerArtifactHandlers(ipcMain, ctx) {
   ipcMain.handle('get-match-artifacts', async (event, payload) => {
     try {
       const parsed = parseGetMatchArtifactsPayload(payload);
-      const validated = getValidatedMatchDir(app, artifactHelpers, parsed.matchId, { mode: 'read' });
-      if (!validated.success) {
-        recordSecurityBlock('get-match-artifacts', validated.code, validated.message);
+      const collected = await collectMatchArtifacts(app, artifactHelpers, parsed);
+      if (!collected.success) {
+        recordSecurityBlock('get-match-artifacts', collected.code, collected.message);
         return ok({ images: [], imageFiles: [], telemetry: [] });
       }
       const {
-        matchDir,
         matchId: safeMatchId,
-        canonicalMatchNumber,
-        paths,
-      } = validated.data;
-      const fallbackCandidates = buildFallbackArtifactCandidates({
-        fallbackImages: parsed.fallbackImages,
-        matchArtifactsRoot: paths.matchArtifactsRoot,
-        matchId: safeMatchId,
-        canonicalMatchNumber,
-      });
-      if (!fs.existsSync(matchDir)) {
-        return ok({ images: fallbackCandidates, imageFiles: [], telemetry: [] });
-      }
-
-      const files = await fsPromises.readdir(matchDir);
-      const images = [];
-      const imageFiles = [];
-      const telemetry = [];
+        images,
+        telemetry,
+      } = collected.data;
       const scope = getArtifactScope(event.sender.id, safeMatchId);
-      const imageByFilename = new Map();
-
-      for (const f of files) {
-        const fullPath = path.join(matchDir, f);
-        const ext = path.extname(f).toLowerCase();
-        if (ext === '.json') {
-          try {
-            const content = JSON.parse(await fsPromises.readFile(fullPath, 'utf-8'));
-            telemetry.push(content);
-          } catch (e) { /* skip unparseable */ }
-        } else if (IMAGE_EXTENSIONS.has(ext)) {
-          images.push(fullPath);
-          imageByFilename.set(toArtifactFilenameKey(fullPath), fullPath);
-          const artifactId = artifactTokenRegistry.issue(scope, { filename: f, fullPath });
-          imageFiles.push({ artifactId, filename: f, path: fullPath });
-        }
-      }
-      for (const fallbackPath of fallbackCandidates) {
-        const filenameKey = toArtifactFilenameKey(fallbackPath);
-        if (!filenameKey) continue;
-        if (imageByFilename.has(filenameKey)) continue;
-        if (!fs.existsSync(fallbackPath)) continue; // Skip stale references to deleted files
-        images.push(fallbackPath);
-        imageByFilename.set(filenameKey, fallbackPath);
+      const imageFiles = images.map((imagePath) => {
+        const filename = path.basename(imagePath);
         const artifactId = artifactTokenRegistry.issue(scope, {
-          filename: path.basename(fallbackPath),
-          fullPath: fallbackPath,
+          filename,
+          fullPath: imagePath,
         });
-        imageFiles.push({ artifactId, filename: path.basename(fallbackPath), path: fallbackPath });
-      }
+        return { artifactId, filename, path: imagePath };
+      });
       return ok({ images, imageFiles, telemetry });
     } catch (e) {
       return internal('Failed to load artifacts');
+    }
+  });
+
+  ipcMain.handle('remove-all-match-artifacts', async (_event, payload) => {
+    try {
+      const parsed = parseGetMatchArtifactsPayload(payload);
+      const collected = await collectMatchArtifacts(app, artifactHelpers, parsed);
+      if (!collected.success) {
+        recordSecurityBlock('remove-all-match-artifacts', collected.code, collected.message);
+        return collected;
+      }
+      const {
+        matchDir,
+        paths,
+        images,
+      } = collected.data;
+      const removedPaths = [];
+      const failedPaths = [];
+      const seen = new Set();
+
+      for (const imagePath of images) {
+        const normalized = normalizeArtifactPath(imagePath);
+        if (!normalized) continue;
+        const normalizedKey = normalized.toLowerCase();
+        if (seen.has(normalizedKey)) continue;
+        seen.add(normalizedKey);
+
+        const pathCheck = validatePathInRoots(normalized, [paths.matchArtifactsRoot], { isDev: !app.isPackaged });
+        if (!pathCheck.success) {
+          failedPaths.push(normalized);
+          continue;
+        }
+
+        const filePath = pathCheck.data?.resolved || normalized;
+        if (!fs.existsSync(filePath)) continue;
+
+        try {
+          await fsPromises.unlink(filePath);
+          removedPaths.push(filePath);
+        } catch {
+          failedPaths.push(filePath);
+        }
+      }
+
+      if (fs.existsSync(matchDir)) {
+        try {
+          const remaining = await fsPromises.readdir(matchDir);
+          if (remaining.length === 0) {
+            await fsPromises.rmdir(matchDir);
+          }
+        } catch {
+          // Ignore directory cleanup failures; file deletion result is what matters.
+        }
+      }
+
+      return ok({ removedPaths, failedPaths });
+    } catch (e) {
+      console.error('[Artifacts] Remove-all error:', e.message || e);
+      return internal('Failed to remove all artifacts');
     }
   });
 

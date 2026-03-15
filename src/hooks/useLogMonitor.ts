@@ -112,6 +112,53 @@ const getRecordValueCaseInsensitive = (
     return undefined;
 };
 
+const findNestedRecordValueCaseInsensitive = (
+    value: unknown,
+    keys: string[],
+    maxDepth = 4,
+): unknown => {
+    if (value == null || !Array.isArray(keys) || keys.length === 0) return undefined;
+
+    let bestValue: unknown = undefined;
+    let bestDepth = Number.MAX_SAFE_INTEGER;
+
+    const visit = (candidate: unknown, depth: number) => {
+        if (candidate == null || depth > maxDepth) return;
+        if (Array.isArray(candidate)) {
+            candidate.forEach((entry) => visit(entry, depth + 1));
+            return;
+        }
+        if (!isRecord(candidate)) return;
+
+        const direct = getRecordValueCaseInsensitive(candidate, keys);
+        if (direct !== undefined && depth < bestDepth) {
+            bestValue = direct;
+            bestDepth = depth;
+        }
+
+        Object.values(candidate).forEach((entry) => visit(entry, depth + 1));
+    };
+
+    visit(value, 0);
+    return bestValue;
+};
+
+const pickTelemetryValueCaseInsensitive = (
+    sources: unknown[],
+    keys: string[],
+    maxDepth = 4,
+): unknown => {
+    for (const source of sources) {
+        const direct = getRecordValueCaseInsensitive(source, keys);
+        if (direct !== undefined) return direct;
+    }
+    for (const source of sources) {
+        const nested = findNestedRecordValueCaseInsensitive(source, keys, maxDepth);
+        if (nested !== undefined) return nested;
+    }
+    return undefined;
+};
+
 const extractTelemetryStringList = (value: unknown, depth = 0): string[] => {
     if (value == null || depth > 3) return [];
     if (typeof value === 'string' || typeof value === 'number') {
@@ -150,6 +197,15 @@ const TELEMETRY_LOADOUT_SIGNAL_KEYS = new Set([
 ]);
 const TELEMETRY_LOADOUT_RECORD_KEY_PATTERN = /(loadout|shipselection|gamemodeshipselection|characterloadout)/i;
 const TELEMETRY_SHARED_SHIP_SELECTION_PATTERN = /(shipselection|gamemodeshipselection)/i;
+const TELEMETRY_MAP_NAME_KEYS = ['loadedMap', 'loadingMap'];
+const TELEMETRY_RECORD_KEY_KEYS = ['recordKey', 'record_key', 'key'];
+const TELEMETRY_LOADOUT_CONTAINER_KEYS = [
+    'loadout', 'Loadout', 'loadOut', 'LoadOut',
+    'characterLoadout', 'character_loadout',
+    'playerLoadout', 'player_loadout',
+    'currentLoadout', 'current_loadout',
+    'loadoutData',
+];
 
 const toClock = (totalSeconds: number) => {
     const safe = Math.max(0, Math.floor(totalSeconds));
@@ -779,45 +835,36 @@ export const useLogMonitor = (activeUser?: string) => {
                     const eventContext = asRecord(e.context);
                     const payloadContext = asRecord(asRecord(e.Payload).context);
                     const payloadContextAlt = asRecord(asRecord(e.payload).context);
+                    const payloadEnvelope = asRecord(e.Payload);
+                    const payloadEnvelopeEvent = asRecord(payloadEnvelope.event);
+                    const payloadEnvelopeLower = asRecord(e.payload);
+                    const payloadEnvelopeLowerEvent = asRecord(payloadEnvelopeLower.event);
+                    const payloadSources: unknown[] = [
+                        payload,
+                        payloadEnvelopeEvent,
+                        payloadEnvelope,
+                        payloadEnvelopeLowerEvent,
+                        payloadEnvelopeLower,
+                    ];
                     const matchSessionIdValueCandidates = [
-                        getRecordValueCaseInsensitive(eventContext, ['matchSessionId', 'sessionId', 'sESSIONId']),
-                        getRecordValueCaseInsensitive(payloadContext, ['matchSessionId', 'sessionId', 'sESSIONId']),
-                        getRecordValueCaseInsensitive(payloadContextAlt, ['matchSessionId', 'sessionId', 'sESSIONId']),
-                        getRecordValueCaseInsensitive(payload, ['matchSessionId', 'sessionId', 'sESSIONId']),
+                        pickTelemetryValueCaseInsensitive([eventContext], ['matchSessionId', 'sessionId', 'sESSIONId']),
+                        pickTelemetryValueCaseInsensitive([payloadContext], ['matchSessionId', 'sessionId', 'sESSIONId']),
+                        pickTelemetryValueCaseInsensitive([payloadContextAlt], ['matchSessionId', 'sessionId', 'sESSIONId']),
+                        pickTelemetryValueCaseInsensitive(payloadSources, ['matchSessionId', 'sessionId', 'sESSIONId']),
                     ];
                     const currentMatchSessionIdValue = matchSessionIdValueCandidates.find((value) => value !== undefined);
                     const hasExplicitMatchSessionIdSignal = currentMatchSessionIdValue !== undefined;
                     const currentMatchSessionId = toStringOrEmpty(currentMatchSessionIdValue);
                     const previousMatchSessionId = lastMatchSessionIdRef.current || '';
-                    const loadingMapRaw = getRecordValueCaseInsensitive(payload, ['loadedMap', 'loadingMap']);
+                    const loadingMapRaw = pickTelemetryValueCaseInsensitive(payloadSources, TELEMETRY_MAP_NAME_KEYS);
                     const loadingMapName = typeof loadingMapRaw === 'string' ? loadingMapRaw : '';
                     const loadingMapNameLower = loadingMapName.toLowerCase();
                     if (name === 'NebLoadingScreen' && !!loadingMapName && isNonMatchMap(loadingMapName) && !loadingMapNameLower.includes('frontend')) {
                         Logger.debug('LogMonitor', `Skipping non-match map load: ${loadingMapName}`);
                     }
-                    const payloadEnvelope = asRecord(e.Payload);
-                    const payloadEnvelopeEvent = asRecord(payloadEnvelope.event);
-                    const payloadEnvelopeLower = asRecord(e.payload);
-                    const payloadEnvelopeLowerEvent = asRecord(payloadEnvelopeLower.event);
-                    const recordKey = [
-                        payload.recordKey,
-                        payload.record_key,
-                        payload.key,
-                        payloadEnvelopeEvent.recordKey,
-                        payloadEnvelopeEvent.record_key,
-                        payloadEnvelopeEvent.key,
-                        payloadEnvelope.recordKey,
-                        payloadEnvelope.record_key,
-                        payloadEnvelope.key,
-                        payloadEnvelopeLowerEvent.recordKey,
-                        payloadEnvelopeLowerEvent.record_key,
-                        payloadEnvelopeLowerEvent.key,
-                        payloadEnvelopeLower.recordKey,
-                        payloadEnvelopeLower.record_key,
-                        payloadEnvelopeLower.key,
-                    ]
-                        .map((value) => String(value || '').trim())
-                        .find(Boolean) || '';
+                    const recordKey = String(
+                        pickTelemetryValueCaseInsensitive(payloadSources, TELEMETRY_RECORD_KEY_KEYS) || ''
+                    ).trim();
                     const isRelevantToSession = gameTime >= (sessionStartTimeRef.current - 60000);
                     const allowSessionEvent = isRelevantToSession || devModeRef.current;
                     const ageSeconds = Math.floor((Date.now() - gameTime) / 1000);
@@ -929,7 +976,10 @@ export const useLogMonitor = (activeUser?: string) => {
                     }
 
                     const isNebLoadoutSavedEvent = name === 'NebLoadoutSaved';
-                    const nebLoadoutSavedPayloadRaw = payloadEnvelopeEvent.loadout;
+                    const nebLoadoutSavedPayloadRaw = pickTelemetryValueCaseInsensitive(
+                        payloadSources,
+                        TELEMETRY_LOADOUT_CONTAINER_KEYS,
+                    );
                     let isStaleNebLoadoutSaved = false;
                     if (isNebLoadoutSavedEvent) {
                         const latestSavedTimestamp = latestNebLoadoutSavedTimestampRef.current;
@@ -1122,9 +1172,7 @@ export const useLogMonitor = (activeUser?: string) => {
                         isNebLoadoutSavedEvent && isRecord(nebLoadoutSavedPayloadRaw)
                             ? nebLoadoutSavedPayloadRaw
                             : undefined
-                    ) || payload.loadout || payload.Loadout || payload.loadOut || payload.LoadOut ||
-                        payload.characterLoadout || payload.character_loadout || payload.playerLoadout || payload.player_loadout ||
-                        payload.currentLoadout || payload.current_loadout || payload.loadoutData;
+                    ) || pickTelemetryValueCaseInsensitive(payloadSources, TELEMETRY_LOADOUT_CONTAINER_KEYS);
                     if (Array.isArray(loadout)) loadout = loadout[0];
                     if (isRecord(loadout) && loadout.loadout) loadout = loadout.loadout;
                     if (isRecord(loadout) && loadout.Loadout) loadout = loadout.Loadout;

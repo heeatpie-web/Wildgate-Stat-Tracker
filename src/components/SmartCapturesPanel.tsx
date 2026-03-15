@@ -852,7 +852,9 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
         const blockedMatches: Array<{ id: number; failedArtifactCount: number }> = [];
 
         for (const id of ids) {
-            const targetMatch = matches.find((match) => match.id === id);
+            const liveMatches = useAppStore.getState().matches || [];
+            const targetMatch = matches.find((match) => match.id === id)
+                || liveMatches.find((match) => match.id === id);
             if (!targetMatch) continue;
 
             const cleanup = await removeAllMatchArtifacts(targetMatch.id, targetMatch.artifacts || []);
@@ -874,7 +876,7 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
 
         if (deletedIds.length > 0) {
             const deletedSet = new Set(deletedIds);
-            const remaining = [...matches]
+            const remaining = [...(useAppStore.getState().matches || matches)]
                 .filter((match) => !deletedSet.has(match.id))
                 .sort((a, b) => b.timestamp - a.timestamp);
             setSelectedIds((prev) => {
@@ -916,7 +918,9 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
             }
             if (blockedCount > 0) {
                 setToast({ message: 'Selected matches were not deleted because screenshot cleanup failed.', type: 'error' });
+                return;
             }
+            setToast({ message: 'Selected matches could not be deleted.', type: 'error' });
         });
     }, [removeMatchesByIds, selectedIds, setToast]);
 
@@ -1097,7 +1101,9 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
                     message: `Could not delete match #${matchNumber} because ${blocked.failedArtifactCount} screenshot${blocked.failedArtifactCount === 1 ? '' : 's'} could not be removed safely.`,
                     type: 'error',
                 });
+                return;
             }
+            setToast({ message: `Could not delete match #${matchNumber}.`, type: 'error' });
         });
     }, [globalOrderedMatchIds, removeMatchesByIds, setToast]);
 

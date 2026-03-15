@@ -246,6 +246,26 @@ describe('useLogMonitor', () => {
     dispatchSpy.mockRestore();
   });
 
+  it('creates a telemetry draft when loadingMap is only present on the payload envelope', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: {
+            event: { traceId: 'map-start-envelope' },
+            loadingMap: 'DesolationReach',
+          },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    expect(addMatch).toHaveBeenCalledTimes(1);
+  });
+
   it('uses the latest active mode when creating telemetry drafts after a mode change', async () => {
     const { useLogMonitor } = await import('../useLogMonitor');
     const { rerender } = renderHook(() => useLogMonitor('Pilot'));
@@ -1109,6 +1129,54 @@ describe('useLogMonitor', () => {
             recordKey: 'GameModeShipSelection_v2',
             event: {
               actorId: 'lobby-leader-id',
+              selection: {
+                shipName: 'Scout',
+              },
+            },
+          },
+          ClientTimestamp: nowSec,
+        },
+      ]);
+    });
+
+    expect(gameDataState.setActiveShip).toHaveBeenCalledWith('Scout', 'telemetry');
+    const latestLoadout = gameDataState.setCurrentLoadout.mock.calls.at(-1)?.[0] as {
+      hero?: string | null;
+      ship?: string | null;
+      characterWeapons?: string[];
+      characterEquipment?: string[];
+    };
+    expect(latestLoadout?.hero).toBe('Adrian');
+    expect(latestLoadout?.ship).toBe('Scout');
+    expect(latestLoadout?.characterWeapons || []).toEqual(['Double Whammy']);
+    expect(latestLoadout?.characterEquipment || []).toEqual(['Repair Drone']);
+    expect(gameDataState.setActiveHero).not.toHaveBeenCalled();
+  });
+
+  it('applies shared ship-selection telemetry when recordKey is nested below the payload envelope', async () => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    gameDataState.currentLoadout = {
+      hero: 'Adrian',
+      ship: 'Hunter',
+      weapons: [],
+      equipment: [],
+      characterWeapons: ['Double Whammy'],
+      characterEquipment: ['Repair Drone'],
+    };
+
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebCloudSaveRecordSize',
+          Payload: {
+            event: {
+              actorId: 'lobby-leader-id',
+            },
+            data: {
+              recordKey: 'GameModeShipSelection_v2',
               selection: {
                 shipName: 'Scout',
               },
