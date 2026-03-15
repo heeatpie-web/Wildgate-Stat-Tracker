@@ -3005,6 +3005,7 @@ module.exports = {
   processCapture,
   preprocessImage,
   runOCR,
+  initPaddleOCR,
   extractModifiers,
   __test__: {
     buildOcrGeometry,

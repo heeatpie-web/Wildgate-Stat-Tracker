@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const http = require('http');
 const https = require('https');
 const fsPromises = require('fs').promises;
-const { registerOCRHandlers, processCapture, runOCR } = require('./ocrHandler.cjs');
+const { registerOCRHandlers, captureGameWindow, processCapture, runOCR, initPaddleOCR } = require('./ocrHandler.cjs');
 const { mergeCaptures, isSameMatch } = require('./ocrMerger.cjs');
 const artifactHelpers = require('./helpers/artifactHelpers.cjs');
 const { runArtifactCanonicalMigration } = require('./helpers/artifactCanonicalMigration.cjs');
@@ -16,7 +16,7 @@ const telemetryArchiveHelpers = require('./helpers/telemetryArchiveHelpers.cjs')
 const dbHelpers = require('./helpers/dbHelpers.cjs');
 const { registerArtifactHandlers, saveScreenshotImage } = require('./handlers/artifactHandlers.cjs');
 const { createAutoCaptureCoordinator } = require('./autoCaptureCoordinator.cjs');
-const { clearGameWindowCache, holdGameKeySequence, sendGameKeySequence, validateGameInputRuntime } = require('./gameInput.cjs');
+const { clearGameWindowCache, holdGameKeySequence, lookupGameWindowCandidate, sendGameKeySequence, sendGameKeySequenceViaPowerShell, validateGameInputRuntime } = require('./gameInput.cjs');
 const {
   ok,
   fail,
@@ -908,6 +908,20 @@ async function sendGameUiActionInternal(action) {
   return sendGameKeySequenceInternal(GAME_UI_ACTION_KEYS[action], action);
 }
 
+async function sendMenuKeySequenceInternal(sendKeys, action = 'menu-keypress') {
+  if (process.platform !== 'win32') return { success: false, action, error: 'Windows only.' };
+  const key = String(sendKeys || '');
+  if (!key.trim()) return { success: false, action, error: 'No key sequence.' };
+  const cached = require('./gameInput.cjs').lookupGameWindowCandidate
+    ? await lookupGameWindowCandidate({ processNames: GAME_WINDOW_PROCESS_NAMES, titleHint: GAME_WINDOW_TITLE_HINT, focusDelayMs: GAME_UI_FOCUS_DELAY_MS })
+    : null;
+  if (!cached?.success) return { success: false, action, error: 'Game window not found.' };
+  console.log(`[GameUI] action=${action} key=${key.trim()} method=ps-sendkeys`);
+  const result = await sendGameKeySequenceViaPowerShell(cached, key);
+  if (!result.success) console.warn(`[GameUI] action=${action} ps-sendkeys failed: ${result.error}`);
+  return { ...result, action, key };
+}
+
 const autoCaptureCoordinator = createAutoCaptureCoordinator({
   notify: (payload) => {
     if (win && !win.isDestroyed()) {
@@ -916,6 +930,7 @@ const autoCaptureCoordinator = createAutoCaptureCoordinator({
   },
   runWithHeldKeySequence: (sendKeys, action, runWhileHeld) => runHeldGameKeySequenceInternal(sendKeys, action, runWhileHeld),
   sendKeySequence: (sendKeys, action) => sendGameKeySequenceInternal(sendKeys, action),
+  sendMenuKeySequence: (sendKeys, action) => sendMenuKeySequenceInternal(sendKeys, action),
   waitForScreenType: (expectedType, options) => waitForGameScreenInternal(expectedType, options),
   captureAndProcess: async ({ matchId, activeUser = null, ocrMode = 'local', ocrRegions = null, runtimeOptions = {} }) => {
     const captureResult = await captureGameWindowForAutomation();
@@ -937,24 +952,12 @@ const autoCaptureCoordinator = createAutoCaptureCoordinator({
       };
     }
 
-    const ocrResult = await processCapture(captureResult.imageBase64, activeUser, null, ocrMode, {
-      ...(runtimeOptions && typeof runtimeOptions === 'object' ? runtimeOptions : {}),
-      skipDebugSave: true,
-      ocrRegions: ocrRegions && typeof ocrRegions === 'object' ? ocrRegions : null,
-    });
-
-    if (!ocrResult?.success || !ocrResult?.data) {
-      return {
-        success: false,
-        error: ocrResult?.error || 'OCR processing failed',
-      };
-    }
-
+    // Skip OCR during auto-capture — screenshots are processed by the user later via the normal flow.
     return {
       success: true,
       filePath: saved.data.filePath,
       filename: saved.data.filename,
-      ocrData: ocrResult.data,
+      ocrData: null,
     };
   },
 });
@@ -2813,6 +2816,32 @@ app.whenReady().then(async () => {
     .catch((error) => {
       console.error('[gameInput] nut.js failed to load — F10 Auto-Capture navigation will not work:', error?.message || error);
     });
+
+  // Pre-warm PaddleOCR ONNX models at startup — cold load takes ~30s, must happen before F10.
+  setTimeout(() => {
+    const _ocrWarmStart = Date.now();
+    initPaddleOCR().then(() => {
+      console.log(`[OCR] Pre-warm: models loaded in ${Date.now() - _ocrWarmStart}ms`);
+    }).catch((err) => {
+      console.warn('[OCR] Pre-warm failed:', err?.message || err);
+    });
+  }, 2000);
+
+  if (process.platform === 'win32') {
+    const _warmupGameWindow = () => {
+      lookupGameWindowCandidate({
+        processNames: GAME_WINDOW_PROCESS_NAMES,
+        titleHint: GAME_WINDOW_TITLE_HINT,
+        focusDelayMs: GAME_UI_FOCUS_DELAY_MS,
+      }).then((result) => {
+        if (result.success) {
+          console.log(`[GameUI] Pre-warm: game window cached processName=${result.processName} processId=${result.processId}`);
+        }
+      }).catch(() => {});
+    };
+    setTimeout(_warmupGameWindow, 4000);
+    setInterval(_warmupGameWindow, 25000);
+  }
 
   // Keep expensive artifact migration off the critical paint path.
   setTimeout(() => {

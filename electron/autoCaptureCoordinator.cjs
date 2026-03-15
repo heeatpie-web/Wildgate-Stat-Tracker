@@ -1,7 +1,7 @@
 const fs = require('fs');
 
 const AUTO_CAPTURE_COOLDOWN_MS = 5000;
-const AUTO_CAPTURE_CAPTURE_TIMEOUT_MS = 8000;
+const AUTO_CAPTURE_CAPTURE_TIMEOUT_MS = 20000;
 
 const STEP_DEFINITIONS = Object.freeze({
   openMap: { number: 1, label: 'Open Tactical Map' },
@@ -217,6 +217,7 @@ function createAutoCaptureCoordinator({
   notify,
   runWithHeldKeySequence = null,
   sendKeySequence,
+  sendMenuKeySequence = null,
   captureAndProcess,
   waitForScreenType = null,
   lookupMapKeybind = lookupTacticalMapKeybind,
@@ -237,6 +238,7 @@ function createAutoCaptureCoordinator({
     ocrRegions = null,
     runtimeOptions = {},
     tacticalMapKeybind,
+    holdTacticalMapKey = false,
   }) => {
     console.log(
       `[AutoCapture] Sequence starting matchId=${matchId} tacticalMapKeybind=${tacticalMapKeybind?.raw || 'unknown'} `
@@ -276,7 +278,7 @@ function createAutoCaptureCoordinator({
       }
     };
 
-    const captureStep = async (step, captureIndex, expectedType = null) => {
+    const captureStep = async (step, captureIndex) => {
       logAutoCaptureStep(step, '(capture)');
       const result = await withTimeout(() => captureAndProcess({
         matchId,
@@ -292,10 +294,6 @@ function createAutoCaptureCoordinator({
       }
 
       const detectedType = String(result?.ocrData?.screenshotType || result?.screenshotType || '').trim();
-      if (expectedType && detectedType && detectedType !== expectedType) {
-        throw new Error(`${step.label}: expected ${expectedType}, detected ${detectedType}`);
-      }
-
       notify({
         phase: 'capture-progress',
         captureIndex,
@@ -308,64 +306,49 @@ function createAutoCaptureCoordinator({
     };
 
     const captureTacticalMapStep = async () => {
-      const expectedType = EXPECTED_SCREEN_TYPES[STEP_DEFINITIONS.captureMap.label];
-      let validationError = null;
-
-      await sendStepKeys(STEP_DEFINITIONS.openMap, tacticalMapKeybind.sendKeys);
-      await waitStep(1000);
-
-      try {
-        await validateScreenStep(STEP_DEFINITIONS.captureMap, expectedType);
-      } catch (error) {
-        validationError = error;
-        const reason = error instanceof Error ? error.message : String(error);
-        console.warn(`[AutoCapture] Tactical map pre-check failed after tap; continuing to capture attempt. reason=${reason}`);
-      }
-
-      try {
-        await captureStep(STEP_DEFINITIONS.captureMap, 1, expectedType);
-        await sendStepKeys(STEP_DEFINITIONS.closeMap, tacticalMapKeybind.sendKeys);
-        await waitStep(300);
-        return;
-      } catch (captureError) {
-        if (!sendKeypresses || typeof runWithHeldKeySequence !== 'function') {
-          throw validationError || captureError;
-        }
-
-        const captureReason = captureError instanceof Error ? captureError.message : String(captureError);
-        console.warn(`[AutoCapture] Tactical map tap path failed; retrying while holding the map key. reason=${captureReason}`);
+      if (holdTacticalMapKey && typeof runWithHeldKeySequence === 'function') {
+        logAutoCaptureStep(STEP_DEFINITIONS.openMap, '(hold)');
         const heldResult = await runWithHeldKeySequence(
           tacticalMapKeybind.sendKeys,
-          `${STEP_DEFINITIONS.openMap.label} (hold)`,
+          STEP_DEFINITIONS.openMap.label,
           async () => {
-            await waitStep(200);
-            await validateScreenStep(STEP_DEFINITIONS.captureMap, expectedType);
-            await captureStep(STEP_DEFINITIONS.captureMap, 1, expectedType);
+            await waitStep(800);
+            await captureStep(STEP_DEFINITIONS.captureMap, 1);
           }
         );
-
         if (!heldResult?.success) {
-          const heldReason = heldResult?.error || captureReason;
-          throw new Error(heldReason);
+          throw new Error(heldResult?.error || `${STEP_DEFINITIONS.captureMap.label}: hold-capture failed`);
         }
+        await waitStep(800); // Let the map close animation finish before pressing ESC
+        return;
       }
+
+      // Toggle mode: tap to open, capture, tap to close.
+      await sendStepKeys(STEP_DEFINITIONS.openMap, tacticalMapKeybind.sendKeys);
+      await waitStep(1000);
+      await captureStep(STEP_DEFINITIONS.captureMap, 1);
+      await sendStepKeys(STEP_DEFINITIONS.closeMap, tacticalMapKeybind.sendKeys);
+      await waitStep(300);
     };
 
     await captureTacticalMapStep();
 
-    await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{UP}{UP}{UP}{UP} ');
+    await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{ESC}');
+    await waitStep(600); // Wait for the ESC popup menu to appear before navigating
+    await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{UP}{UP}{UP}{UP}');
+    await waitStep(400); // Let the highlight settle on Crew Hub before pressing space
+    await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{SPACE}');
     await waitStep(1200);
+
+    await captureStep(STEP_DEFINITIONS.captureCrewHubA, 2);
 
     await sendStepKeys(STEP_DEFINITIONS.moveCrewHubRight, '{RIGHT}{RIGHT}{RIGHT}{RIGHT}');
     await waitStep(400);
-    await validateScreenStep(STEP_DEFINITIONS.captureCrewHubA, EXPECTED_SCREEN_TYPES[STEP_DEFINITIONS.captureCrewHubA.label]);
-
-    await captureStep(STEP_DEFINITIONS.captureCrewHubA, 2, EXPECTED_SCREEN_TYPES[STEP_DEFINITIONS.captureCrewHubA.label]);
 
     await sendStepKeys(STEP_DEFINITIONS.moveCrewHubEnd, '{END}');
     await waitStep(400);
 
-    await captureStep(STEP_DEFINITIONS.captureCrewHubB, 3, EXPECTED_SCREEN_TYPES[STEP_DEFINITIONS.captureCrewHubB.label]);
+    await captureStep(STEP_DEFINITIONS.captureCrewHubB, 3);
 
     await sendStepKeys(STEP_DEFINITIONS.exit, '{ESC}');
     await waitStep(200);
@@ -444,6 +427,7 @@ function createAutoCaptureCoordinator({
           ? request.runtimeOptions
           : {},
         tacticalMapKeybind,
+        holdTacticalMapKey: request.holdTacticalMapKey === true,
       };
 
       inProgress = true;

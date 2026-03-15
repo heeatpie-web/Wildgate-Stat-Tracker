@@ -131,6 +131,7 @@ import { backfillOpponentTeamShipTypes } from './utils/ocr/opponentTeamShipTypes
 import { sanitizeOpponentTeamsAgainstFriendlyRoster } from './utils/ocr/friendlyTeamDeduper';
 import { capTeammatePlayers, getMaxTeammatesForShip } from './utils/teamLimits';
 import { buildActiveWeaponsFromLoadout, cloneLoadout, sanitizeUnknownLoadout } from './utils/loadout';
+import { buildAutoCaptureTelemetryDraft } from './utils/telemetryDraft';
 import { extractArtifactSourceFromOcrData } from './utils/artifactSource';
 import { buildOcrNameConfidenceMapFromExtractedData } from './utils/ocr/nameSourceHints';
 import { resolveSmartCaptureMatchId } from './utils/smartCaptureScope';
@@ -338,73 +339,6 @@ const clonePendingMatchDraft = (value: Partial<Match> | null | undefined): Parti
         : undefined,
 });
 
-const buildAutoCaptureTelemetryDraft = ({
-    matchId,
-    timestamp,
-    mode,
-    player,
-    hero,
-    ship,
-    loadout,
-}: {
-    matchId: number;
-    timestamp: number;
-    mode: Match['mode'];
-    player?: string | null;
-    hero?: string | null;
-    ship?: string | null;
-    loadout?: Match['loadout'] | null;
-}): Match => {
-    const normalizedLoadout = cloneLoadout(loadout) || {
-        hero: loadout?.hero || null,
-        ship: loadout?.ship || null,
-        perks: [],
-        shipPerks: [],
-        characterPerks: [],
-        shipWeapons: [],
-        weapons: [],
-        equipment: [],
-        characterWeapons: [],
-        characterEquipment: [],
-    };
-    const normalizedPlayer = String(player || '').trim() || 'Unknown Player';
-    const normalizedHero = (
-        normalizedLoadout?.hero
-        && !String(normalizedLoadout.hero).startsWith('Unknown')
-    )
-        ? String(normalizedLoadout.hero)
-        : (String(hero || '').trim() || 'Unknown');
-    const normalizedShip = (
-        normalizedLoadout?.ship
-        && !String(normalizedLoadout.ship).startsWith('Unknown')
-    )
-        ? String(normalizedLoadout.ship)
-        : (String(ship || '').trim() || 'Unknown');
-
-    return {
-        id: matchId,
-        timestamp,
-        date: new Date(timestamp).toLocaleDateString(),
-        mode,
-        player: normalizedPlayer,
-        teammates: [],
-        opponents: [],
-        hero: normalizedHero,
-        ship: normalizedShip,
-        loadout: normalizedLoadout,
-        weapons: {},
-        reachModifiers: [],
-        kills: { 'AI Legion': 0 },
-        result: 'Ongoing',
-        subType: 'Telemetry Draft',
-        time: '00:00',
-        damageTaken: 0,
-        notes: '',
-        timelineEvents: [],
-        artifacts: [],
-        ocrState: 'queued',
-    };
-};
 
 const formatBytes = (bytes: number): string => {
     if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
@@ -1702,6 +1636,7 @@ const App: React.FC = () => {
                 autoCaptureSendKeypresses: currentState.autoCaptureSendKeypresses !== false,
                 autoCaptureWaitMultiplier: currentState.autoCaptureWaitMultiplier,
                 autoCaptureTacticalMapKey: typeof tacticalMapKeybind === 'string' ? tacticalMapKeybind : '',
+                holdTacticalMapKey: currentState.holdTacticalMapKey === true,
                 ocrMode: 'local',
                 ocrRegions: currentState.ocrRegions || null,
                 runtimeOptions: {

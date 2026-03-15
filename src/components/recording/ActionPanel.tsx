@@ -23,6 +23,7 @@ import { useAppStore } from '../../store/useAppStore';
 import type { OCRExtractedData } from '../../utils/ocr/ocrTypes';
 import type { Match } from '../../types';
 import { runtimeConfig } from '../../config/runtimeConfig';
+import { buildAutoCaptureTelemetryDraft } from '../../utils/telemetryDraft';
 import { resolveSmartCaptureMatchId } from '../../utils/smartCaptureScope';
 import { sendGameUiAction, waitForGameScreen } from '../../utils/electronBridge';
 
@@ -75,6 +76,11 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     const selectedSmartCapturesMatchId = useAppStore(s => s.selectedMatchId);
     const resetMatchTrackingForNewMatch = useAppStore(s => s.resetMatchTrackingForNewMatch);
     const resetMatchMetricsForNewMatch = useAppStore(s => s.resetMatchMetricsForNewMatch);
+    const addMatch = useAppStore(s => s.addMatch);
+    const activeMode = useAppStore(s => s.activeMode);
+    const activeShip = useAppStore(s => s.activeShip);
+    const activeHero = useAppStore(s => s.activeHero);
+    const currentLoadout = useAppStore(s => s.currentLoadout);
     const ocrModeLabel = 'Local';
 
     const [smartCaptureState, smartCaptureActions] = useSmartCapture();
@@ -281,9 +287,22 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     const startFreshMatch = React.useCallback(() => {
         resetMatchTrackingForNewMatch();
         resetMatchMetricsForNewMatch();
+        const now = Date.now();
         setIsMatchInProgress(true);
-        setMatchStartTime(Date.now());
-    }, [resetMatchMetricsForNewMatch, resetMatchTrackingForNewMatch, setIsMatchInProgress, setMatchStartTime]);
+        setMatchStartTime(now);
+        // Create a Telemetry Draft so Smart Captures immediately shows an active match
+        const draftId = now + Math.floor(Math.random() * 1000);
+        const draft = buildAutoCaptureTelemetryDraft({
+            matchId: draftId,
+            timestamp: now,
+            mode: activeMode === 'Artifact Brawl' ? 'Artifact Brawl' : 'Fleet Battle',
+            player: activeUser || null,
+            hero: typeof activeHero === 'string' ? activeHero : null,
+            ship: typeof activeShip === 'string' ? activeShip : null,
+            loadout: currentLoadout || null,
+        });
+        addMatch(draft);
+    }, [activeHero, activeMode, activeShip, activeUser, addMatch, currentLoadout, resetMatchMetricsForNewMatch, resetMatchTrackingForNewMatch, setIsMatchInProgress, setMatchStartTime]);
 
     // Dedicated mission timer display so match time remains visible at a glance.
     const [matchElapsed, setMatchElapsed] = React.useState('00:00');

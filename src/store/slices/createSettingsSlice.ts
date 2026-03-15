@@ -151,6 +151,7 @@ export interface SettingsSlice {
   autoCaptureSendKeypresses: boolean;
   autoCaptureWaitMultiplier: number;
   tacticalMapKeybind: string;
+  holdTacticalMapKey: boolean;
   autoPopulateRosterOnSave: boolean;
   lockOcrTeams: boolean;
   ocrEnhancedNameRecoveryEnabled: boolean;
@@ -207,6 +208,7 @@ export interface SettingsSlice {
   setAutoCaptureSendKeypresses: (enabled: boolean) => void;
   setAutoCaptureWaitMultiplier: (multiplier: number) => void;
   setTacticalMapKeybind: (keybind: string) => void;
+  setHoldTacticalMapKey: (hold: boolean) => void;
   setAutoPopulateRosterOnSave: (enabled: boolean) => void;
   setLockOcrTeams: (enabled: boolean) => void;
   setOcrEnhancedNameRecoveryEnabled: (enabled: boolean) => void;
@@ -279,6 +281,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   autoCaptureSendKeypresses: true,
   autoCaptureWaitMultiplier: 1,
   tacticalMapKeybind: 'Tab',
+  holdTacticalMapKey: false,
   autoPopulateRosterOnSave: false,
   lockOcrTeams: false,
   ocrEnhancedNameRecoveryEnabled: true,
@@ -355,6 +358,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
     const trimmed = String(keybind || '').trim();
     set({ tacticalMapKeybind: trimmed });
   },
+  setHoldTacticalMapKey: (hold) => set({ holdTacticalMapKey: Boolean(hold) }),
   setAutoPopulateRosterOnSave: (enabled) => set({ autoPopulateRosterOnSave: enabled }),
   setLockOcrTeams: (enabled) => set({ lockOcrTeams: enabled }),
   setOcrEnhancedNameRecoveryEnabled: (enabled) => set({ ocrEnhancedNameRecoveryEnabled: enabled }),

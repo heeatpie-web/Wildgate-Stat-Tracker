@@ -264,6 +264,7 @@ const customStorage: PersistStorage<AppState> = {
             ? Math.max(0.5, Math.min(3, Number(settings.autoCaptureWaitMultiplier)))
             : 1,
           tacticalMapKeybind: resolvePersistedTacticalMapKeybind(settings),
+          holdTacticalMapKey: settings.holdTacticalMapKey === true,
           autoPopulateRosterOnSave: settings.autoPopulateRosterOnSave ?? false,
           lockOcrTeams: settings.lockOcrTeams || false,
           ocrEnhancedNameRecoveryEnabled: settings.ocrEnhancedNameRecoveryEnabled ?? true,
@@ -410,6 +411,7 @@ const customStorage: PersistStorage<AppState> = {
                 autoCaptureWaitMultiplier: state.autoCaptureWaitMultiplier,
                 autoCaptureTacticalMapKey: state.tacticalMapKeybind,
                 tacticalMapKeybind: state.tacticalMapKeybind,
+                holdTacticalMapKey: state.holdTacticalMapKey,
                 autoPopulateRosterOnSave: state.autoPopulateRosterOnSave,
                 lockOcrTeams: state.lockOcrTeams,
                 ocrEnhancedNameRecoveryEnabled: state.ocrEnhancedNameRecoveryEnabled,
@@ -522,6 +524,7 @@ export const useAppStore = create<AppState>()(
         autoCaptureSendKeypresses: state.autoCaptureSendKeypresses,
         autoCaptureWaitMultiplier: state.autoCaptureWaitMultiplier,
         tacticalMapKeybind: state.tacticalMapKeybind,
+        holdTacticalMapKey: state.holdTacticalMapKey,
         autoPopulateRosterOnSave: state.autoPopulateRosterOnSave,
         lockOcrTeams: state.lockOcrTeams,
         ocrEnhancedNameRecoveryEnabled: state.ocrEnhancedNameRecoveryEnabled,

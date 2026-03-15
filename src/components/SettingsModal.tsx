@@ -171,6 +171,8 @@ const SettingsModalContent: React.FC = () => {
     const setAutoCaptureWaitMultiplier = useAppStore(s => s.setAutoCaptureWaitMultiplier);
     const tacticalMapKeybind = useAppStore(s => s.tacticalMapKeybind);
     const setTacticalMapKeybind = useAppStore(s => s.setTacticalMapKeybind);
+    const holdTacticalMapKey = useAppStore(s => s.holdTacticalMapKey);
+    const setHoldTacticalMapKey = useAppStore(s => s.setHoldTacticalMapKey);
     const autoPopulateRosterOnSave = useAppStore(s => s.autoPopulateRosterOnSave);
     const setAutoPopulateRosterOnSave = useAppStore(s => s.setAutoPopulateRosterOnSave);
     const showSmartCaptureInHeader = useAppStore(s => s.showSmartCaptureInHeader);
@@ -397,6 +399,7 @@ const SettingsModalContent: React.FC = () => {
                 autoCaptureSendKeypresses: (state as any).autoCaptureSendKeypresses,
                 autoCaptureWaitMultiplier: (state as any).autoCaptureWaitMultiplier,
                 tacticalMapKeybind: (state as any).tacticalMapKeybind,
+                holdTacticalMapKey: (state as any).holdTacticalMapKey,
                 autoPopulateRosterOnSave: (state as any).autoPopulateRosterOnSave,
                 lockOcrTeams: state.lockOcrTeams,
                 ocrEnhancedNameRecoveryEnabled: (state as any).ocrEnhancedNameRecoveryEnabled,
@@ -1251,6 +1254,15 @@ const SettingsModalContent: React.FC = () => {
                                 placeholder="Press a key"
                                 maxLength={24}
                             />
+                            <label className="mt-3 flex cursor-pointer items-center gap-2 text-label-sm text-md-sys-on-surface/70">
+                                <input
+                                    type="checkbox"
+                                    checked={holdTacticalMapKey}
+                                    onChange={e => setHoldTacticalMapKey(e.target.checked)}
+                                    className="h-4 w-4 accent-md-sys-primary"
+                                />
+                                Hold mode — map stays open while key is held (uncheck for tap-to-toggle)
+                            </label>
                         </div>
                         <div className="mt-4 rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-4 py-3 text-left text-label-sm leading-relaxed text-md-sys-on-surface/60">
                             Advanced thresholds, learning policy, event rollback, and preload tuning stay below if you need finer OCR control.

@@ -1,6 +1,6 @@
 const { spawn } = require('child_process');
 
-const DEFAULT_FOCUS_DELAY_MS = 120;
+const DEFAULT_FOCUS_DELAY_MS = 60;
 const DEFAULT_KEY_DELAY_MS = 35;
 
 const NAMED_KEY_MAP = Object.freeze({
@@ -51,11 +51,6 @@ function isProcessAlive(pid) {
 
 function getCachedCandidate() {
   if (!cachedCandidate || Date.now() > cachedCandidateExpiry) {
-    cachedCandidate = null;
-    cachedCandidateExpiry = 0;
-    return null;
-  }
-  if (!isProcessAlive(cachedCandidate.processId)) {
     cachedCandidate = null;
     cachedCandidateExpiry = 0;
     return null;
@@ -312,6 +307,33 @@ $titleBuilder = New-Object System.Text.StringBuilder 512
 `;
 }
 
+async function fastCheckGameProcess(processNames) {
+  if (process.platform !== 'win32') return { running: false };
+  if (!Array.isArray(processNames) || processNames.length === 0) return { running: false };
+  for (const name of processNames) {
+    if (!name) continue;
+    try {
+      const result = await new Promise((resolve) => {
+        let stdout = '';
+        let settled = false;
+        const done = (val) => { if (!settled) { settled = true; clearTimeout(timer); resolve(val); } };
+        const child = spawn('tasklist.exe', ['/FI', `IMAGENAME eq ${name}.exe`, '/FO', 'CSV', '/NH'], { windowsHide: true });
+        const timer = setTimeout(() => { try { child.kill(); } catch {} done({ running: false }); }, 2500);
+        child.stdout.on('data', (d) => { stdout += String(d); });
+        child.on('close', () => {
+          const match = stdout.match(/"([^"]+)","(\d+)"/);
+          done(match ? { running: true, pid: parseInt(match[2], 10), processName: name } : { running: false });
+        });
+        child.on('error', () => done({ running: false }));
+      });
+      if (result.running) return result;
+    } catch {
+      // continue to next name
+    }
+  }
+  return { running: false };
+}
+
 async function lookupGameWindowCandidate({
   processNames = [],
   titleHint = '',
@@ -320,10 +342,17 @@ async function lookupGameWindowCandidate({
 } = {}) {
   if (!skipCache) {
     const cached = getCachedCandidate();
-    if (cached) return cached;
+    if (cached) {
+      return cached;
+    }
   }
 
-  const timeoutMs = Math.max(6000, (Math.max(50, Number(focusDelayMs) || DEFAULT_FOCUS_DELAY_MS) * 8) + 3000);
+  const fastCheck = await fastCheckGameProcess(processNames);
+  if (!fastCheck.running) {
+    return { success: false, error: 'Game process not found (fast tasklist check).' };
+  }
+
+  const timeoutMs = Math.max(15000, (Math.max(50, Number(focusDelayMs) || DEFAULT_FOCUS_DELAY_MS) * 8) + 3000);
   const result = await runPowerShellScript(buildGameWindowLookupPowerShellScript(), {
     env: {
       WILDGATE_GAME_PROCESS_NAMES: processNames.join(';'),
@@ -371,7 +400,7 @@ async function lookupGameWindowCandidate({
 }
 
 async function focusWindowWithPowerShell(candidate, focusDelayMs) {
-  const timeoutMs = Math.max(3000, (Math.max(50, Number(focusDelayMs) || DEFAULT_FOCUS_DELAY_MS) * 6) + 1500);
+  const timeoutMs = Math.max(6000, (Math.max(50, Number(focusDelayMs) || DEFAULT_FOCUS_DELAY_MS) * 6) + 1500);
   const result = await runPowerShellScript(buildGameWindowFocusPowerShellScript(), {
     env: {
       WILDGATE_GAME_WINDOW_HANDLE: String(candidate?.windowHandle || ''),
@@ -614,7 +643,8 @@ async function focusGameWindow(nut, candidate, focusDelayMs) {
 async function sendNutKeySequence(nut, keySequence) {
   const translatedKeys = translateSendKeysSequenceToNutKeys(keySequence, nut.Key);
   for (const key of translatedKeys) {
-    await nut.keyboard.type(key);
+    await nut.keyboard.pressKey(key);
+    await nut.keyboard.releaseKey(key);
   }
   return translatedKeys;
 }
@@ -685,28 +715,8 @@ async function sendGameKeySequence({
 
     focusResult = await focusGameWindow(nut, candidate, safeFocusDelayMs);
 
-    if (!focusResult.focusConfirmed && cachedCandidate) {
-      clearGameWindowCache();
-      const freshCandidate = await lookupGameWindowCandidate({
-        processNames,
-        titleHint,
-        focusDelayMs: safeFocusDelayMs,
-        skipCache: true,
-      });
-      if (freshCandidate?.success && freshCandidate.windowHandle) {
-        candidate = freshCandidate;
-        focusResult = await focusGameWindow(nut, candidate, safeFocusDelayMs);
-      }
-    }
-
     if (!focusResult.focusConfirmed) {
-      return {
-        success: false,
-        action,
-        key,
-        error: `Failed to confirm game focus before sending ${action}.`,
-        ...focusResult,
-      };
+      console.warn(`[gameInput] Focus not confirmed for "${action}", attempting key send anyway`);
     }
 
     await sendNutKeySequence(nut, key);
@@ -783,28 +793,8 @@ async function holdGameKeySequence({
 
     focusResult = await focusGameWindow(nut, candidate, safeFocusDelayMs);
 
-    if (!focusResult.focusConfirmed && cachedCandidate) {
-      clearGameWindowCache();
-      const freshCandidate = await lookupGameWindowCandidate({
-        processNames,
-        titleHint,
-        focusDelayMs: safeFocusDelayMs,
-        skipCache: true,
-      });
-      if (freshCandidate?.success && freshCandidate.windowHandle) {
-        candidate = freshCandidate;
-        focusResult = await focusGameWindow(nut, candidate, safeFocusDelayMs);
-      }
-    }
-
     if (!focusResult.focusConfirmed) {
-      return {
-        success: false,
-        action,
-        key,
-        error: `Failed to confirm game focus before sending ${action}.`,
-        ...focusResult,
-      };
+      console.warn(`[gameInput] Focus not confirmed for "${action}", attempting key hold anyway`);
     }
 
     heldKey = translateSingleSendKeyToNutKey(nut, key);
@@ -852,11 +842,52 @@ async function holdGameKeySequence({
   }
 }
 
+function buildSendKeysPowerShellScript() {
+  return `
+$ErrorActionPreference = 'Stop'
+$processId = [int]($env:WILDGATE_GAME_PROCESS_ID)
+$keys = $env:WILDGATE_SEND_KEYS
+$shell = $null
+try {
+  $shell = New-Object -ComObject WScript.Shell
+} catch {
+  [pscustomobject]@{ success = $false; error = 'WScript.Shell not available' } | ConvertTo-Json -Compress
+  exit 0
+}
+if ($processId -gt 0) {
+  try { $shell.AppActivate($processId) | Out-Null } catch {}
+  Start-Sleep -Milliseconds 150
+}
+try {
+  $shell.SendKeys($keys)
+  [pscustomobject]@{ success = $true } | ConvertTo-Json -Compress
+} catch {
+  [pscustomobject]@{ success = $false; error = $_.Exception.Message } | ConvertTo-Json -Compress
+}
+`;
+}
+
+async function sendGameKeySequenceViaPowerShell(candidate, keySequence) {
+  if (!candidate?.processId) {
+    return { success: false, error: 'No process ID for PowerShell SendKeys' };
+  }
+  const result = await runPowerShellScript(buildSendKeysPowerShellScript(), {
+    env: { WILDGATE_GAME_PROCESS_ID: String(candidate.processId), WILDGATE_SEND_KEYS: keySequence },
+    timeoutMs: 5000,
+  });
+  const parsed = parseJsonSafely(result.stdout?.trim());
+  return {
+    success: parsed?.success === true,
+    error: parsed?.error || (result.code !== 0 ? result.stderr : null),
+  };
+}
+
 module.exports = {
   clearGameWindowCache,
   holdGameKeySequence,
   lookupGameWindowCandidate,
   sendGameKeySequence,
+  sendGameKeySequenceViaPowerShell,
   tokenizeSendKeysSequence,
   translateSendKeysSequenceToNutKeys,
   validateGameInputRuntime,

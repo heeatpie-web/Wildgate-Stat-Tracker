@@ -361,6 +361,7 @@ function registerArtifactHandlers(ipcMain, ctx) {
         const filenameKey = toArtifactFilenameKey(fallbackPath);
         if (!filenameKey) continue;
         if (imageByFilename.has(filenameKey)) continue;
+        if (!fs.existsSync(fallbackPath)) continue; // Skip stale references to deleted files
         images.push(fallbackPath);
         imageByFilename.set(filenameKey, fallbackPath);
         const artifactId = artifactTokenRegistry.issue(scope, {
