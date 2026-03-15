@@ -1073,22 +1073,23 @@ const SettingsModalContent: React.FC = () => {
                     {activeSection === 'overlay' && (
                         <section className="space-y-6">
                             <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
-                                <div className="grid grid-cols-2 gap-3">
-                                    <button
-                                        onClick={() => setOverlayStyle('transparent')}
-                                        className={`p-4 rounded-control text-center transition-all ${overlayStyle === 'transparent' ? 'md3-btn-filled ring-2 ring-md-sys-primary/50' : 'md3-btn-outlined'}`}
-                                    >
-                                        <div className="text-body font-bold">Compact</div>
-                                        <div className="text-label-sm opacity-60">Small opaque popup</div>
-                                    </button>
-                                    <button
-                                        onClick={() => setOverlayStyle('compact')}
-                                        className={`p-4 rounded-control text-center transition-all ${overlayStyle === 'compact' ? 'md3-btn-filled ring-2 ring-md-sys-primary/50' : 'md3-btn-outlined'}`}
-                                    >
-                                        <div className="text-body font-bold">Full Panel</div>
-                                        <div className="text-label-sm opacity-60">Full-height side panel</div>
-                                    </button>
-                                </div>
+                                <SettingRow
+                                    label="Overlay Style"
+                                    value={overlayStyle}
+                                    descriptions={{
+                                        transparent: 'Small opaque popup shown while in game.',
+                                        compact: 'Full-height side panel shown while in game.',
+                                    }}
+                                >
+                                    <SegmentedControl
+                                        options={[
+                                            { id: 'transparent', label: 'Compact' },
+                                            { id: 'compact', label: 'Full Panel' },
+                                        ]}
+                                        value={overlayStyle}
+                                        onChange={(id) => setOverlayStyle(id as 'compact' | 'transparent')}
+                                    />
+                                </SettingRow>
                             </div>
                         </section>
                     )}
