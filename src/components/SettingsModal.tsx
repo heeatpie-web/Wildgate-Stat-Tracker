@@ -1733,39 +1733,26 @@ const SettingsModalContent: React.FC = () => {
                                         <span className="text-label-sm font-medium opacity-60 block">Telemetry Performance</span>
                                         <span className="text-label-sm text-md-sys-on-surface/55 block mt-1">Choose the monitoring load profile when adaptive polling is off.</span>
                                     </div>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {[
-                                            {
-                                                id: 'low-power' as TelemetryPerformanceProfile,
-                                                label: 'Low Power',
-                                                desc: 'Cooler, slower updates'
-                                            },
-                                            {
-                                                id: 'balanced' as TelemetryPerformanceProfile,
-                                                label: 'Balanced',
-                                                desc: 'Recommended default'
-                                            },
-                                            {
-                                                id: 'high-accuracy' as TelemetryPerformanceProfile,
-                                                label: 'High Accuracy',
-                                                desc: 'Faster, heavier polling'
-                                            },
-                                        ].map(opt => (
-                                            <button
-                                                key={opt.id}
-                                                onClick={() => setTelemetryPerformanceProfile(opt.id)}
-                                                disabled={adaptiveTelemetryPollingEnabled}
-                                                className={`p-2.5 rounded-control text-center transition-all ${telemetryPerformanceProfile === opt.id
-                                                    ? 'md3-btn-filled ring-2 ring-md-sys-primary/40'
-                                                    : 'md3-btn-outlined'
-                                                    } disabled:opacity-disabled`}
-                                                title={opt.desc}
-                                            >
-                                                <div className="text-label-sm font-bold">{opt.label}</div>
-                                                <div className="text-label-sm opacity-60">{opt.desc}</div>
-                                            </button>
-                                        ))}
-                                    </div>
+                                    <SettingRow
+                                        label="Performance Profile"
+                                        value={telemetryPerformanceProfile}
+                                        descriptions={{
+                                            'low-power': 'Cooler, slower updates.',
+                                            'balanced': 'Recommended default.',
+                                            'high-accuracy': 'Faster, heavier polling.',
+                                        }}
+                                    >
+                                        <SegmentedControl
+                                            options={[
+                                                { id: 'low-power', label: 'Low Power' },
+                                                { id: 'balanced', label: 'Balanced' },
+                                                { id: 'high-accuracy', label: 'High Accuracy' },
+                                            ]}
+                                            value={telemetryPerformanceProfile}
+                                            onChange={(id) => setTelemetryPerformanceProfile(id as TelemetryPerformanceProfile)}
+                                            disabled={adaptiveTelemetryPollingEnabled}
+                                        />
+                                    </SettingRow>
                                     {!enableAutoLogRecording && (
                                         <div className="text-label-sm text-md-sys-on-surface/55">
                                             Telemetry monitoring is currently off. The selected profile will apply when it is enabled again.
