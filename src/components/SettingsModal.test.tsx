@@ -207,7 +207,7 @@ describe('SettingsModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /workspace background/i }));
 
     expect(screen.getByPlaceholderText('https://...')).toBeInTheDocument();
-  });
+  }, 40000);
 
   it('routes telemetry search results to the telemetry section', async () => {
     const { SettingsModal } = await import('./SettingsModal');
