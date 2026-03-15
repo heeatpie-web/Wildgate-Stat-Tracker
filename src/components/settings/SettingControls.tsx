@@ -22,7 +22,7 @@ export const SegmentedControl: React.FC<SegmentedControlProps> = ({
         key={opt.id}
         type="button"
         disabled={disabled}
-        onClick={() => onChange(opt.id)}
+        onClick={() => { if (opt.id !== value) onChange(opt.id); }}
         className={`px-3 py-1.5 rounded-control text-label-sm font-bold transition-all disabled:opacity-disabled ${
           value === opt.id
             ? 'bg-md-sys-primary text-md-sys-on-primary'
@@ -45,7 +45,11 @@ interface OptionCyclerProps {
 export const OptionCycler: React.FC<OptionCyclerProps> = ({
   options, value, onChange, disabled,
 }) => {
-  const idx = Math.max(0, options.findIndex(o => o.id === value));
+  const rawIdx = options.findIndex(o => o.id === value);
+  if (rawIdx === -1) {
+    console.warn(`OptionCycler: value "${value}" not found in options`);
+  }
+  const idx = Math.max(0, rawIdx);
   const prev = () => onChange(options[(idx - 1 + options.length) % options.length].id);
   const next = () => onChange(options[(idx + 1) % options.length].id);
 

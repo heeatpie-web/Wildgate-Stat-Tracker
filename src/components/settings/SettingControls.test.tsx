@@ -31,6 +31,13 @@ describe('SegmentedControl', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Option B' }));
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it('does not call onChange when clicking the already-active option', () => {
+    const onChange = vi.fn();
+    render(<SegmentedControl options={OPTIONS} value="b" onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Option B' }));
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });
 
 describe('OptionCycler', () => {
