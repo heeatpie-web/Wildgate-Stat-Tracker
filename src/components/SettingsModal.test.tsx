@@ -1,6 +1,6 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 const userPrefs = {
@@ -235,13 +235,13 @@ describe('SettingsModal', () => {
 
   it('lets users toggle F10 auto-sequence from the capture quick setup grid', async () => {
     const { SettingsModal } = await import('./SettingsModal');
-    const { within } = await import('@testing-library/react');
     render(<SettingsModal />);
 
     fireEvent.click(screen.getByRole('button', { name: /^capture$/i }));
 
+    const grid = screen.getByTestId('settings-quick-setup-grid');
     // autoSequenceOnCapture defaults to false (Single Capture); clicking Next option cycles to sequence
-    const smartCaptureRow = screen.getByText('Smart Capture Button').closest('div[class]')!;
+    const smartCaptureRow = within(grid).getByText('Smart Capture Button').closest('div.py-3')!;
     fireEvent.click(within(smartCaptureRow).getByRole('button', { name: /next option/i }));
 
     expect(storeState.setAutoSequenceOnCapture).toHaveBeenCalledWith(true);
@@ -249,13 +249,13 @@ describe('SettingsModal', () => {
 
   it('surfaces auto-capture speed and keypress controls in capture settings', async () => {
     const { SettingsModal } = await import('./SettingsModal');
-    const { within } = await import('@testing-library/react');
     render(<SettingsModal />);
 
     fireEvent.click(screen.getByRole('button', { name: /^capture$/i }));
 
+    const grid = screen.getByTestId('settings-quick-setup-grid');
     // autoCaptureSendKeypresses defaults to true (keypresses); clicking Previous option cycles to manual
-    const autocaptureRow = screen.getByText('Auto-capture Input').closest('div[class]')!;
+    const autocaptureRow = within(grid).getByText('Auto-capture Input').closest('div.py-3')!;
     fireEvent.click(within(autocaptureRow).getByRole('button', { name: /previous option/i }));
     fireEvent.change(screen.getByLabelText(/capture speed/i), {
       target: { value: '2.4' },
