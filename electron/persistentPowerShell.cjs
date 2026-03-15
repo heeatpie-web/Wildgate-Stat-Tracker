@@ -126,6 +126,12 @@ function startPersistentPS() {
     _psProc = null;
   });
 
+  setTimeout(() => {
+    if (_psProc) {
+      runInPersistentPS("Write-Output 'ping'", { timeoutMs: 8000 }).catch(() => {});
+    }
+  }, 100);
+
   console.log('[PersistentPS] Started persistent PowerShell controller.');
 }
 

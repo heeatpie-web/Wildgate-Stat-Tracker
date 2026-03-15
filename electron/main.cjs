@@ -18,6 +18,7 @@ const { registerArtifactHandlers, saveScreenshotImage } = require('./handlers/ar
 const { createAutoCaptureCoordinator } = require('./autoCaptureCoordinator.cjs');
 const { clearGameWindowCache, holdGameKeySequence, lookupGameWindowCandidate, sendGameKeySequence, sendGameKeySequenceViaPowerShell, setPersistentPSRunner, validateGameInputRuntime } = require('./gameInput.cjs');
 const { runPSWithEnv, startPersistentPS, killPersistentPS } = require('./persistentPowerShell.cjs');
+const { sendWhenRendererReady } = require('./rendererReadyDispatch.cjs');
 if (process.platform === 'win32') {
   setPersistentPSRunner(runPSWithEnv);
   startPersistentPS();
@@ -1355,7 +1356,7 @@ function registerGlobalHotkeys() {
     console.log(`[Hotkey] F10 fired — starting auto-capture sequence. hasLiveWindow=${hasWindow}`);
     if (hasWindow) {
       console.log(`[Hotkey] Dispatching hotkey-smart-capture compatibility event to renderer webContentsId=${liveWindow.webContents.id}`);
-      liveWindow.webContents.send('hotkey-smart-capture');
+      sendWhenRendererReady(liveWindow, 'hotkey-smart-capture');
     } else {
       console.warn('[Hotkey] F10 invoked but no renderer window was available.');
     }
@@ -2864,7 +2865,7 @@ app.whenReady().then(async () => {
       }).catch(() => {});
     };
     setTimeout(_warmupGameWindow, 4000);
-    setInterval(_warmupGameWindow, 120_000); // Every 2 min — PS stays alive, no spawn cost
+    setInterval(_warmupGameWindow, 25_000); // Every 25s — keep cache warm inside the 30s TTL
   }
 
   // Keep expensive artifact migration off the critical paint path.
