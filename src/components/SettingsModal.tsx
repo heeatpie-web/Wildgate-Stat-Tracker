@@ -24,6 +24,7 @@ import { Button, Input } from './ui';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import OcrRegionEditorModal from './OcrRegionEditorModal';
+import { SegmentedControl, OptionCycler, SettingRow } from './settings/SettingControls';
 
 
 type SettingsTabId = 'identity' | 'interface' | 'ocr-capture' | 'data';
@@ -938,23 +939,16 @@ const SettingsModalContent: React.FC = () => {
 
                                 <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
                                     <label className="text-label-sm font-semibold opacity-60 block mb-3">Appearance Mode</label>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        {([
+                                    <SegmentedControl
+                                        options={[
                                             { id: 'light', label: 'Light' },
                                             { id: 'dark', label: 'Dark' },
                                             { id: 'twilight', label: 'Twilight' },
                                             { id: 'system', label: 'System' },
-                                        ] as const).map(opt => (
-                                            <Button
-                                                key={opt.id}
-                                                onClick={() => setAppearanceMode(opt.id)}
-                                                variant={appearanceMode === opt.id ? 'primary' : 'secondary'}
-                                                className={`h-12 text-label-sm font-bold uppercase tracking-wide ${appearanceMode === opt.id ? '' : 'opacity-60 hover:opacity-100'}`}
-                                            >
-                                                {opt.label}
-                                            </Button>
-                                        ))}
-                                    </div>
+                                        ]}
+                                        value={appearanceMode}
+                                        onChange={(id) => setAppearanceMode(id as typeof appearanceMode)}
+                                    />
                                 </div>
                             </div>
                         </section>
