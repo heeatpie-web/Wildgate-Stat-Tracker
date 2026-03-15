@@ -135,6 +135,10 @@ let telemetryHistoryMigrated = false;
 const recentTelemetrySignatures = new Set();
 const recentTelemetrySignatureQueue = [];
 const MAX_RECENT_TELEMETRY_SIGNATURES = Number(process.env.WILDGATE_RECENT_TELEMETRY_SIGNATURES || 50000);
+// Tracks events already sent to the renderer so we only IPC-send new events each tick.
+// Bounded to avoid unbounded memory growth across long sessions.
+const sentToRendererSignatures = new Set();
+const MAX_SENT_TO_RENDERER_SIGNATURES = 10000;
 const blockedSecurityCounters = new Map();
 const PLAYER_ID_KEYS = new Set(['accountid', 'platformaccountid', 'userid', 'playerid', 'platform_account_id', 'puid']);
 const HERO_ID_KEYS = new Set(['guidhero', 'heroguid', 'guid_hero', 'heroid', 'hero_id']);
@@ -2297,6 +2301,7 @@ ipcMain.on('start-log-monitoring', (_event, options = {}) => {
   logMonitorFingerprint = nextFingerprint;
   logMonitorLastDecodeAt = 0;
   logMonitorLastSnapshotWriteAt = 0;
+  sentToRendererSignatures.clear();
 
   console.log(`Starting log monitoring... ${LOG_PATH} (profile=${logMonitorProfile}, poll=${monitorCfg.pollMs}ms)`);
 
@@ -2349,8 +2354,22 @@ ipcMain.on('start-log-monitoring', (_event, options = {}) => {
 
           if (data && !hasError) {
             const usableTelemetryEvents = extractUsableTelemetryEvents(data);
-            // Also Send Data
-            win.webContents.send('log-data', data);
+            // Only send events the renderer hasn't seen yet (avoids re-sending the full file every tick)
+            const allEvents = extractTelemetryEvents(data);
+            const newEvents = allEvents.filter(evt => {
+              const sig = telemetryEventSignature(evt);
+              if (!sig) return true; // no signature = always pass through
+              if (sentToRendererSignatures.has(sig)) return false;
+              sentToRendererSignatures.add(sig);
+              // Evict oldest entries if set grows too large
+              if (sentToRendererSignatures.size > MAX_SENT_TO_RENDERER_SIGNATURES) {
+                sentToRendererSignatures.delete(sentToRendererSignatures.values().next().value);
+              }
+              return true;
+            });
+            if (newEvents.length > 0) {
+              win.webContents.send('log-data', { telemetry: newEvents });
+            }
             const hasUsableTelemetry = usableTelemetryEvents.length > 0;
             if (hasUsableTelemetry) {
               await telemetryArchiveHelpers.archiveTelemetry(telemetryArchiveHelpers.getArchiveDir(app), data);
