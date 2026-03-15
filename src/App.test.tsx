@@ -654,6 +654,17 @@ describe('App', () => {
 
     act(() => {
       handlers['auto-capture-status']({
+        phase: 'capture-started',
+        captureIndex: 2,
+        totalCaptures: 3,
+        matchId: 321,
+      });
+    });
+
+    expect(playCaptureMock).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      handlers['auto-capture-status']({
         phase: 'capture-progress',
         captureIndex: 2,
         totalCaptures: 3,
@@ -662,7 +673,6 @@ describe('App', () => {
       });
     });
 
-    expect(playCaptureMock).toHaveBeenCalledTimes(1);
     expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({
       message: '2/3',
       type: 'info',

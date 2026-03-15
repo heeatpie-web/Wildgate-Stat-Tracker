@@ -26,6 +26,7 @@ const loadStorageModule = async (mockElectronApi: MockElectronApi | null) => {
   }));
   vi.doMock('../logger', () => ({
     default: {
+      debug: vi.fn(),
       info: vi.fn(),
       warn: vi.fn(),
       error: vi.fn(),

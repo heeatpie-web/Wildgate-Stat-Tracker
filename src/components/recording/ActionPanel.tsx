@@ -51,8 +51,12 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         lastActivity, setLastActivity,
         matchStartTime, isMatchInProgress,
         setMatchStartTime, setIsMatchInProgress,
-        setSessionTeams
+        setSessionTeams,
+        deleteMatch,
     } = useGameData();
+
+    // Tracks the draft match created by startFreshMatch so stop/reset can clean it up.
+    const manualDraftIdRef = React.useRef<number | null>(null);
 
     const {
         activeUser,
@@ -277,13 +281,19 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         discardMatch();
         clearCaptures();
         setSessionTeams({});
+        const draftId = manualDraftIdRef.current;
+        if (draftId != null) {
+            const draft = matches.find(m => m.id === draftId && m.result === 'Ongoing');
+            if (draft) deleteMatch(draftId);
+            manualDraftIdRef.current = null;
+        }
         pushNotification({
             message: 'Match discarded. Ready for a fresh start.',
             type: 'info',
             source: 'user',
             deepLink: { type: 'openView', view: 'recording' },
         });
-    }, [discardMatch, clearCaptures, setSessionTeams, pushNotification]);
+    }, [discardMatch, clearCaptures, deleteMatch, matches, setSessionTeams, pushNotification]);
     const startFreshMatch = React.useCallback(() => {
         resetMatchTrackingForNewMatch();
         resetMatchMetricsForNewMatch();
@@ -302,7 +312,19 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
             loadout: currentLoadout || null,
         });
         addMatch(draft);
+        manualDraftIdRef.current = draftId;
     }, [activeHero, activeMode, activeShip, activeUser, addMatch, currentLoadout, resetMatchMetricsForNewMatch, resetMatchTrackingForNewMatch, setIsMatchInProgress, setMatchStartTime]);
+
+    const stopManualMatch = React.useCallback(() => {
+        setMatchStartTime(null);
+        setIsMatchInProgress(false);
+        const draftId = manualDraftIdRef.current;
+        if (draftId != null) {
+            const draft = matches.find(m => m.id === draftId && m.result === 'Ongoing');
+            if (draft) deleteMatch(draftId);
+            manualDraftIdRef.current = null;
+        }
+    }, [deleteMatch, matches, setIsMatchInProgress, setMatchStartTime]);
 
     // Dedicated mission timer display so match time remains visible at a glance.
     const [matchElapsed, setMatchElapsed] = React.useState('00:00');
@@ -1041,7 +1063,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                                 <span>Discard</span>
                             </button>
                             <button
-                                onClick={() => { setIsMatchInProgress(false); setMatchStartTime(null); }}
+                                onClick={stopManualMatch}
                                 className="inline-flex items-center gap-1 text-label-xs px-2 py-1 bg-md-sys-errorContainer/40 text-md-sys-error rounded hover:bg-md-sys-error/20 font-bold uppercase"
                                 title="Stop match timer"
                                 aria-label="Stop match timer"
@@ -1069,7 +1091,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     matchStartTime={matchStartTime}
                     isMatchInProgress={isMatchInProgress}
                     onStartMatch={startFreshMatch}
-                    onResetMatch={() => { setMatchStartTime(null); setIsMatchInProgress(false); }}
+                    onResetMatch={stopManualMatch}
                     variant="compact"
                 />
                 <button
@@ -1130,7 +1152,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     matchStartTime={matchStartTime}
                     isMatchInProgress={isMatchInProgress}
                     onStartMatch={startFreshMatch}
-                    onResetMatch={() => { setMatchStartTime(null); setIsMatchInProgress(false); }}
+                    onResetMatch={stopManualMatch}
                     variant={isCompact ? 'compact' : 'default'}
                 />
                 <button
@@ -1185,7 +1207,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                                 <span>Discard</span>
                             </button>
                             <button
-                                onClick={() => { setIsMatchInProgress(false); setMatchStartTime(null); }}
+                                onClick={stopManualMatch}
                                 className="inline-flex items-center gap-1 text-label-xs px-2 py-1 bg-md-sys-errorContainer/40 text-md-sys-error rounded hover:bg-md-sys-error/20 font-bold uppercase"
                                 title="Stop match timer"
                                 aria-label="Stop match timer"

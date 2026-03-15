@@ -306,6 +306,11 @@ function createAutoCaptureCoordinator({
         filename: result.filename || null,
         screenshotType: detectedType || null,
       });
+
+      const expectedType = EXPECTED_SCREEN_TYPES[step.label];
+      if (expectedType && detectedType && detectedType !== expectedType) {
+        throw new Error(`${step.label}: expected ${expectedType}, detected ${detectedType}`);
+      }
     };
 
     const captureTacticalMapStep = async () => {

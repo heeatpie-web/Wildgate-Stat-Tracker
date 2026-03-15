@@ -70,7 +70,7 @@ describe('ReviewQueueModal', () => {
     render(<ReviewQueueModal onClose={vi.fn()} />);
     fireEvent.click(screen.getByTitle('Confirm/Identify'));
 
-    expect(gameData.addToRegistry).toHaveBeenCalledWith('PilotOne');
+    expect(gameData.addToRegistry).toHaveBeenCalledWith('PilotOne', expect.objectContaining({ origin: 'ocr' }));
     expect(gameData.removePendingReview).toHaveBeenCalledWith('p1');
   });
 
@@ -124,7 +124,7 @@ describe('ReviewQueueModal', () => {
     });
     expect(gameData.setSelectedTeammates).toHaveBeenCalledWith(['Corrected', 'Ally']);
     expect(gameData.setSelectedOpponents).toHaveBeenCalledWith(['Corrected']);
-    expect(gameData.addToRegistry).toHaveBeenCalledWith('Corrected');
+    expect(gameData.addToRegistry).toHaveBeenCalledWith('Corrected', expect.objectContaining({ origin: 'ocr' }));
     expect(gameData.removePendingReview).toHaveBeenCalledWith('p2');
   });
 
@@ -192,7 +192,7 @@ describe('ReviewQueueModal', () => {
     render(<ReviewQueueModal onClose={vi.fn()} />);
     fireEvent.click(screen.getByTitle('Confirm/Identify'));
 
-    expect(gameData.addToRegistry).toHaveBeenCalledWith('NewPilot');
+    expect(gameData.addToRegistry).toHaveBeenCalledWith('NewPilot', expect.objectContaining({ origin: 'ocr' }));
     expect(gameData.removePendingReview).toHaveBeenCalledWith('r1');
   });
 
@@ -220,7 +220,7 @@ describe('ReviewQueueModal', () => {
     expect(gameData.setSessionTeams).toHaveBeenCalledWith({ red: ['chrismario', 'Wingman'] });
     expect(gameData.setSelectedTeammates).toHaveBeenCalledWith(['chrismario']);
     expect(gameData.setSelectedOpponents).toHaveBeenCalledWith(['Enemy', 'chrismario']);
-    expect(gameData.addToRegistry).toHaveBeenCalledWith('chrismario');
+    expect(gameData.addToRegistry).toHaveBeenCalledWith('chrismario', expect.objectContaining({ origin: 'ocr' }));
   });
 
   it('shows a fuzzy-ready indicator and CTA for roster candidates scored up to the 82% boundary', async () => {
@@ -240,7 +240,7 @@ describe('ReviewQueueModal', () => {
     expect(screen.getByText('Fuzzy-ready (70-82%)')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /approve fuzzy match/i }));
 
-    expect(gameData.addToRegistry).toHaveBeenCalledWith('chrismario');
+    expect(gameData.addToRegistry).toHaveBeenCalledWith('chrismario', expect.objectContaining({ origin: 'ocr' }));
     expect(gameData.removePendingReview).toHaveBeenCalledWith('r3');
   });
 
@@ -262,7 +262,7 @@ describe('ReviewQueueModal', () => {
     expect(gameData.removePendingReview).not.toHaveBeenCalledWith('r3b');
     fireEvent.click(screen.getByRole('button', { name: /approve fuzzy match/i }));
 
-    expect(gameData.addToRegistry).toHaveBeenCalledWith('chrismario');
+    expect(gameData.addToRegistry).toHaveBeenCalledWith('chrismario', expect.objectContaining({ origin: 'ocr' }));
     expect(gameData.removePendingReview).toHaveBeenCalledWith('r3b');
   });
 
@@ -284,7 +284,7 @@ describe('ReviewQueueModal', () => {
     expect(gameData.removePendingReview).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: /approve chrismario/i }));
 
-    expect(gameData.addToRegistry).toHaveBeenCalledWith('chrismario');
+    expect(gameData.addToRegistry).toHaveBeenCalledWith('chrismario', expect.objectContaining({ origin: 'ocr' }));
     expect(gameData.removePendingReview).toHaveBeenCalledWith('r4');
   });
 

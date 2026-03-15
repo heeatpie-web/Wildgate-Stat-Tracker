@@ -21,6 +21,7 @@ const gameData = {
   addPlayer: vi.fn(),
   renamePilot: vi.fn(),
   addMatch: vi.fn(),
+  addToRegistry: vi.fn(),
 };
 
 vi.mock('../providers/UIStateProvider', () => ({

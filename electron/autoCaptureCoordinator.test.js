@@ -102,14 +102,14 @@ describe('autoCaptureCoordinator sequencing', () => {
 
     expect(sendKeySequence).toHaveBeenNthCalledWith(1, '{TAB}', 'Open Tactical Map');
     expect(sendKeySequence).toHaveBeenNthCalledWith(2, '{TAB}', 'Close Tactical Map');
-    expect(sendKeySequence).toHaveBeenNthCalledWith(3, '{UP}{UP}{UP}{UP} ', 'Navigate to Crew Hub');
-    expect(sendKeySequence).toHaveBeenNthCalledWith(4, '{RIGHT}{RIGHT}{RIGHT}{RIGHT}', 'Navigate to Crew Hub Panel (Right)');
-    expect(sendKeySequence).toHaveBeenNthCalledWith(5, '{END}', 'Navigate to Crew Hub Panel End');
-    expect(sendKeySequence).toHaveBeenNthCalledWith(6, '{ESC}', 'Exit');
+    expect(sendKeySequence).toHaveBeenNthCalledWith(3, '{ESC}', 'Navigate to Crew Hub');
+    expect(sendKeySequence).toHaveBeenNthCalledWith(4, '{UP}{UP}{UP}{UP}', 'Navigate to Crew Hub');
+    expect(sendKeySequence).toHaveBeenNthCalledWith(5, '{SPACE}', 'Navigate to Crew Hub');
+    expect(sendKeySequence).toHaveBeenNthCalledWith(6, '{RIGHT}{RIGHT}{RIGHT}{RIGHT}', 'Navigate to Crew Hub Panel (Right)');
+    expect(sendKeySequence).toHaveBeenNthCalledWith(7, '{END}', 'Navigate to Crew Hub Panel End');
+    expect(sendKeySequence).toHaveBeenNthCalledWith(8, '{ESC}', 'Exit');
     expect(captureAndProcess).toHaveBeenCalledTimes(3);
-    expect(waitForScreenType).toHaveBeenNthCalledWith(1, 'tactical_map', expect.objectContaining({ activeUser: 'Pilot', ocrMode: 'local' }));
-    expect(waitForScreenType).toHaveBeenNthCalledWith(2, 'crew_hub', expect.objectContaining({ activeUser: 'Pilot', ocrMode: 'local' }));
-    expect(waits).toEqual([2000, 600, 2400, 800, 800, 400]);
+    expect(waits).toEqual([1400, 500, 1000, 600, 1600, 600, 600, 400]);
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({
       phase: 'capture-progress',
       captureIndex: 1,
@@ -166,23 +166,17 @@ describe('autoCaptureCoordinator sequencing', () => {
     });
 
     expect(captureAndProcess).toHaveBeenCalledTimes(3);
-    expect(waitForScreenType).toHaveBeenCalledTimes(2);
     expect(sendKeySequence).toHaveBeenNthCalledWith(2, '{TAB}', 'Close Tactical Map');
   });
 
-  it('retries the tactical-map step while holding the key when the tap path fails', async () => {
+  it('uses the held-key path when holdTacticalMapKey is true', async () => {
     const notify = vi.fn();
     const sendKeySequence = vi.fn().mockResolvedValue({ success: true });
     const runWithHeldKeySequence = vi.fn(async (_sequence, _action, runWhileHeld) => {
       await runWhileHeld();
       return { success: true, focusConfirmed: true };
     });
-    const waitForScreenType = vi.fn()
-      .mockResolvedValueOnce({ success: false, detectedType: 'unknown', error: 'Timed out waiting for tactical_map.' })
-      .mockResolvedValueOnce({ success: true, detectedType: 'tactical_map' })
-      .mockResolvedValueOnce({ success: true, detectedType: 'crew_hub' });
     const captureAndProcess = vi.fn()
-      .mockResolvedValueOnce({ success: true, filePath: 'map-miss.png', filename: 'map-miss.png', ocrData: { screenshotType: 'crew_hub' } })
       .mockResolvedValueOnce({ success: true, filePath: 'map-held.png', filename: 'map-held.png', ocrData: { screenshotType: 'tactical_map' } })
       .mockResolvedValueOnce({ success: true, filePath: 'crew-a.png', filename: 'crew-a.png', ocrData: { screenshotType: 'crew_hub' } })
       .mockResolvedValueOnce({ success: true, filePath: 'crew-b.png', filename: 'crew-b.png', ocrData: { screenshotType: 'crew_hub' } });
@@ -191,7 +185,6 @@ describe('autoCaptureCoordinator sequencing', () => {
       notify,
       runWithHeldKeySequence,
       sendKeySequence,
-      waitForScreenType,
       captureAndProcess,
       lookupMapKeybind: vi.fn().mockResolvedValue({ raw: 'KeyM', sendKeys: 'm' }),
       delayFn: vi.fn(() => Promise.resolve()),
@@ -201,6 +194,7 @@ describe('autoCaptureCoordinator sequencing', () => {
       lifecycleActive: true,
       matchId: 44,
       autoCaptureTacticalMapKey: 'KeyM',
+      holdTacticalMapKey: true,
     });
 
     expect(result).toEqual({
@@ -217,9 +211,9 @@ describe('autoCaptureCoordinator sequencing', () => {
       }));
     });
 
-    expect(runWithHeldKeySequence).toHaveBeenCalledWith('m', 'Open Tactical Map (hold)', expect.any(Function));
-    expect(sendKeySequence).not.toHaveBeenCalledWith('m', 'Close Tactical Map');
-    expect(captureAndProcess).toHaveBeenCalledTimes(4);
+    expect(runWithHeldKeySequence).toHaveBeenCalledWith('m', 'Open Tactical Map', expect.any(Function));
+    expect(sendKeySequence).not.toHaveBeenCalledWith('m', expect.anything());
+    expect(captureAndProcess).toHaveBeenCalledTimes(3);
   });
 
   it('fails when a saved screenshot OCR type does not match the expected screen', async () => {

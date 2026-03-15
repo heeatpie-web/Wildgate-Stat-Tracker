@@ -35,6 +35,15 @@ const NAMED_KEY_MAP = Object.freeze({
 let nutApi = null;
 let nutLoadError = null;
 
+// Optional persistent PS runner injected from main process.
+// When set, runPowerShellScript routes through the long-lived PS process
+// instead of spawning a new one for each call.
+let _persistentPSRunner = null;
+
+function setPersistentPSRunner(runner) {
+  _persistentPSRunner = typeof runner === 'function' ? runner : null;
+}
+
 let cachedCandidate = null;
 let cachedCandidateExpiry = 0;
 const CANDIDATE_CACHE_TTL_MS = 30_000;
@@ -86,6 +95,9 @@ function runPowerShellScript(script, {
   env = {},
   timeoutMs = 5000,
 } = {}) {
+  if (_persistentPSRunner) {
+    return _persistentPSRunner(script, env, { timeoutMs });
+  }
   return new Promise((resolve) => {
     const powershellExe = process.platform === 'win32'
       ? `${process.env.SystemRoot || 'C:\\Windows'}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`
@@ -888,6 +900,7 @@ module.exports = {
   lookupGameWindowCandidate,
   sendGameKeySequence,
   sendGameKeySequenceViaPowerShell,
+  setPersistentPSRunner,
   tokenizeSendKeysSequence,
   translateSendKeysSequenceToNutKeys,
   validateGameInputRuntime,

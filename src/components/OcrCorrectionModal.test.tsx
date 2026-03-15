@@ -293,7 +293,7 @@ describe('OcrCorrectionModal', () => {
 
         fireEvent.click(screen.getByRole('button', { name: /add bigtower to roster/i }));
 
-        expect(gameData.addToRegistry).toHaveBeenCalledWith('Bigtower');
+        expect(gameData.addToRegistry).toHaveBeenCalledWith('Bigtower', expect.objectContaining({ origin: 'ocr' }));
         expect(gameData.removePendingReviews).toHaveBeenCalledWith(['review-1']);
     });
 
@@ -416,9 +416,9 @@ describe('OcrCorrectionModal', () => {
 
         render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
 
-        const friendlyChip = screen.getByText(/^friendly$/i);
+        const friendlyChip = screen.getByLabelText('Friendly team');
         expect(friendlyChip).toHaveClass('ocr-teammate-chip');
-        expect(screen.getAllByText(/teammate/i).length).toBeGreaterThan(0);
+        expect(screen.getAllByLabelText('Friendly team').length).toBeGreaterThan(0);
     });
 
     it('renders inline team color control with adjacent team name and ship selector', async () => {
@@ -546,7 +546,7 @@ describe('OcrCorrectionModal', () => {
         fireEvent.keyDown(searchInput, { key: 'Enter' });
         fireEvent.click(screen.getByRole('button', { name: /save and close/i }));
 
-        expect(gameData.addToRegistry).toHaveBeenCalledWith('chrismario');
+        expect(gameData.addToRegistry).toHaveBeenCalledWith('chrismario', expect.objectContaining({ origin: 'ocr' }));
         expect(appStoreState.setPendingMatchData).toHaveBeenCalledWith(expect.objectContaining({
             teammates: ['chrismario'],
             opponentTeams: [],

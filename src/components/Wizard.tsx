@@ -921,37 +921,6 @@ export const Wizard: React.FC = () => {
                                     </button>
                                 ))}
                             </div>
-                            {selectedResult === 'Loss' && selectedWinType === 'Combat' && (
-                                <div className="mt-2">
-                                    <span className="text-label-sm font-bold uppercase text-md-sys-on-surface/80 block mb-1">Placement</span>
-                                    <div className="grid grid-cols-4 gap-2">
-                                        {[2, 3, 4, 5].map((place) => {
-                                            const isSelected = pendingPlacement === place;
-                                            const label = place === 2 ? '2nd' : place === 3 ? '3rd' : `${place}th`;
-                                            return (
-                                                <button
-                                                    key={place}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setPendingPlacement(place);
-                                                        setPendingDraftData({
-                                                            ...pendingMatchData,
-                                                            placement: place,
-                                                        });
-                                                    }}
-                                                    className={`rounded-2xl py-3 text-label-sm font-bold uppercase tracking-wide transition-all ${isSelected
-                                                        ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg'
-                                                        : 'bg-md-sys-surface-container-high text-md-sys-on-surface/80 hover:bg-md-sys-surface-container-highest hover:text-md-sys-on-surface'
-                                                        }`}
-                                                    aria-label={label}
-                                                >
-                                                    {label}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            )}
                         </div>
 
                         {(selectedResult === 'Win' || selectedResult === 'Loss') && (
@@ -962,6 +931,37 @@ export const Wizard: React.FC = () => {
                                 <button onClick={() => syncSubTypeDraft('Artifact')} className={`flex-1 ${isOverlayMode ? 'py-3.5 text-label-sm' : 'py-4 text-body'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Artifact' ? 'bg-warning text-ink-strong shadow-lg scale-102' : 'bg-md-sys-surface-container-high text-md-sys-on-surface/80 hover:bg-md-sys-surface-container-highest hover:text-md-sys-on-surface'}`}>
                                     <Gem size={16} /> {selectedResult === 'Loss' ? 'Artifact Defeat' : 'Artifact Win'}
                                 </button>
+                            </div>
+                        )}
+                        {selectedResult === 'Loss' && selectedWinType === 'Combat' && (
+                            <div className="mt-2">
+                                <span className="text-label-sm font-bold uppercase text-md-sys-on-surface/80 block mb-1">Placement</span>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {[2, 3, 4, 5].map((place) => {
+                                        const isSelected = pendingPlacement === place;
+                                        const label = place === 2 ? '2nd' : place === 3 ? '3rd' : `${place}th`;
+                                        return (
+                                            <button
+                                                key={place}
+                                                type="button"
+                                                onClick={() => {
+                                                    setPendingPlacement(place);
+                                                    setPendingDraftData({
+                                                        ...pendingMatchData,
+                                                        placement: place,
+                                                    });
+                                                }}
+                                                className={`rounded-2xl py-3 text-label-sm font-bold uppercase tracking-wide transition-all ${isSelected
+                                                    ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg'
+                                                    : 'bg-md-sys-surface-container-high text-md-sys-on-surface/80 hover:bg-md-sys-surface-container-highest hover:text-md-sys-on-surface'
+                                                    }`}
+                                                aria-label={label}
+                                            >
+                                                {label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         )}
                         {(selectedResult === 'Win' || selectedResult === 'Loss') && !selectedWinType && (

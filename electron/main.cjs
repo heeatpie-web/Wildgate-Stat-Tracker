@@ -16,7 +16,12 @@ const telemetryArchiveHelpers = require('./helpers/telemetryArchiveHelpers.cjs')
 const dbHelpers = require('./helpers/dbHelpers.cjs');
 const { registerArtifactHandlers, saveScreenshotImage } = require('./handlers/artifactHandlers.cjs');
 const { createAutoCaptureCoordinator } = require('./autoCaptureCoordinator.cjs');
-const { clearGameWindowCache, holdGameKeySequence, lookupGameWindowCandidate, sendGameKeySequence, sendGameKeySequenceViaPowerShell, validateGameInputRuntime } = require('./gameInput.cjs');
+const { clearGameWindowCache, holdGameKeySequence, lookupGameWindowCandidate, sendGameKeySequence, sendGameKeySequenceViaPowerShell, setPersistentPSRunner, validateGameInputRuntime } = require('./gameInput.cjs');
+const { runPSWithEnv, startPersistentPS, killPersistentPS } = require('./persistentPowerShell.cjs');
+if (process.platform === 'win32') {
+  setPersistentPSRunner(runPSWithEnv);
+  startPersistentPS();
+}
 const {
   ok,
   fail,
@@ -2859,7 +2864,7 @@ app.whenReady().then(async () => {
       }).catch(() => {});
     };
     setTimeout(_warmupGameWindow, 4000);
-    setInterval(_warmupGameWindow, 25000);
+    setInterval(_warmupGameWindow, 120_000); // Every 2 min — PS stays alive, no spawn cost
   }
 
   // Keep expensive artifact migration off the critical paint path.
@@ -3665,6 +3670,7 @@ ipcMain.handle('start-auto-capture', async (_event, request = {}) => {
 app.on('will-quit', () => {
   console.log('[Hotkey] will-quit -> unregisterAll global shortcuts');
   globalShortcut.unregisterAll();
+  killPersistentPS();
 });
 app.on('activate', () => {
   if (!hasLiveWindow()) {

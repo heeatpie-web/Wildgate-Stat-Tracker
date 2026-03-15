@@ -1399,7 +1399,9 @@ const App: React.FC = () => {
     }, [mobileNavOpen, isCompactNav]);
 
     useEffect(() => {
-        if (isOverlayMode || isStoreLoading || performanceMode || !startupSmartPreloadEnabled || !startupInteractionReady) return;
+        // startupInteractionReady is intentionally excluded: preloading uses requestIdleCallback so
+        // it is safe to begin as soon as the store is ready without waiting for the 3.5s grace period.
+        if (isOverlayMode || isStoreLoading || performanceMode || !startupSmartPreloadEnabled) return;
         if (preloadStartedRef.current) return;
         preloadStartedRef.current = true;
 
@@ -1446,6 +1448,9 @@ const App: React.FC = () => {
 
         const markReady = (view: LazyDashboardView) => {
             setPreloadedViews(prev => prev[view] ? prev : { ...prev, [view]: true });
+            // Pre-mount the view hidden in the DOM so its expensive useMemos warm during idle
+            // time rather than synchronously blocking when the user first navigates to it.
+            setMountedViews(prev => prev[view] ? prev : { ...prev, [view]: true });
         };
 
         const runNext = () => {
@@ -1499,7 +1504,7 @@ const App: React.FC = () => {
         isStoreLoading,
         performanceMode,
         startupSmartPreloadEnabled,
-        startupInteractionReady,
+        // startupInteractionReady intentionally omitted — see comment above
         adaptivePreloadEnabled,
         adaptivePreloadBudgetMs,
         dashboardPreloadStats,

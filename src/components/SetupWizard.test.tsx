@@ -13,6 +13,7 @@ const uiState = {
 
 const gameData = {
     addPlayer: vi.fn(),
+    addToRegistry: vi.fn(),
 };
 
 const userPrefs = {
