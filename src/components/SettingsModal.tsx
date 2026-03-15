@@ -1433,26 +1433,26 @@ const SettingsModalContent: React.FC = () => {
                             </div>
                         </div>
                         <div className="mt-3 p-3 md3-surface rounded-card border border-md-sys-outline/10 space-y-3">
-                            <div>
-                                <div className="text-label-sm font-semibold">Learning Review Policy</div>
-                                <div className="text-label-sm opacity-60">Control how often learned aliases are queued for confirmation</div>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2">
-                                {([
-                                    { id: 'conservative' as OcrLearningReviewMode, label: 'Conservative' },
-                                    { id: 'balanced' as OcrLearningReviewMode, label: 'Balanced' },
-                                    { id: 'aggressive' as OcrLearningReviewMode, label: 'Aggressive' },
-                                ] as const).map((mode) => (
-                                    <button
-                                        key={mode.id}
-                                        onClick={() => setOcrLearningReviewMode(mode.id)}
-                                        disabled={!ocrLearningEnabled}
-                                        className={`p-2 rounded-control text-label-sm font-bold transition-all ${ocrLearningReviewMode === mode.id ? 'md3-btn-filled ring-2 ring-md-sys-primary/40' : 'md3-btn-outlined'} disabled:opacity-disabled`}
-                                    >
-                                        {mode.label}
-                                    </button>
-                                ))}
-                            </div>
+                            <SettingRow
+                                label="Learning Review Policy"
+                                value={ocrLearningReviewMode}
+                                descriptions={{
+                                    conservative: 'Queue aliases frequently — confirm most changes manually.',
+                                    balanced: 'Queue aliases only when uncertain about the mapping.',
+                                    aggressive: 'Auto-apply aliases with minimal review.',
+                                }}
+                            >
+                                <SegmentedControl
+                                    options={[
+                                        { id: 'conservative', label: 'Conservative' },
+                                        { id: 'balanced', label: 'Balanced' },
+                                        { id: 'aggressive', label: 'Aggressive' },
+                                    ]}
+                                    value={ocrLearningReviewMode}
+                                    onChange={(id) => setOcrLearningReviewMode(id as OcrLearningReviewMode)}
+                                    disabled={!ocrLearningEnabled}
+                                />
+                            </SettingRow>
                             <div className="flex items-center justify-between">
                                 <div>
                                     <div className="text-label-sm font-semibold opacity-60">Queue Learning Suggestions</div>
