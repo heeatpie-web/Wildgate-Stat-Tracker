@@ -30,6 +30,8 @@ export type Language = 'en' | 'es' | 'mx' | 'pt' | 'br' | 'zh';
  * - `error`      — OCR processing failed.
  */
 export type OcrState = 'queued' | 'processing' | 'reviewing' | 'ready' | 'saved' | 'error';
+/** Explicit lifecycle state for telemetry drafts. */
+export type TelemetryDraftState = 'active' | 'ready';
 
 /** Maps ship type names to kill counts for a single match. */
 export interface KillMap {
@@ -234,6 +236,8 @@ export interface Match {
   ocrReviewedAt?: number;
   /** Optional telemetry-derived consistency metadata/checks. */
   telemetryConsistency?: TelemetryConsistency;
+  /** Explicit lifecycle state for telemetry drafts. */
+  telemetryDraftState?: TelemetryDraftState;
 }
 
 /** Returns crew capacity (1-4) based on the ship display name. */

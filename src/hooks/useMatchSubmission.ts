@@ -43,6 +43,12 @@ const parseDurationSecs = (value: string | undefined): number => {
     return Math.max(0, (parts[0] * 60) + parts[1]);
 };
 
+const isReadyTelemetryDraft = (match: Match | null | undefined): match is Match => (
+    Boolean(match)
+    && match?.subType === 'Telemetry Draft'
+    && (match.telemetryDraftState === 'ready' || match.telemetryDraftState == null)
+);
+
 const toArtifactKey = (value: string) => value.replace(/[\\/]+/g, '\\').toLowerCase();
 
 const normalizeNameKey = (value: string | null | undefined): string =>
@@ -93,7 +99,10 @@ const resolveExistingSubmissionMatch = ({
 }): Match | undefined => {
     const pendingMatchId = Number(pendingMatchData.id || 0);
     if (Number.isInteger(pendingMatchId) && pendingMatchId > 0) {
-        return Array.isArray(matches) ? matches.find((match) => match.id === pendingMatchId) : undefined;
+        const existingMatch = Array.isArray(matches) ? matches.find((match) => match.id === pendingMatchId) : undefined;
+        if (!existingMatch) return undefined;
+        if (existingMatch.subType !== 'Telemetry Draft') return existingMatch;
+        return isReadyTelemetryDraft(existingMatch) ? existingMatch : undefined;
     }
     if (!Array.isArray(matches)) return undefined;
 
@@ -104,7 +113,7 @@ const resolveExistingSubmissionMatch = ({
         : (Date.now() - (6 * 60 * 60 * 1000));
 
     const telemetryDrafts = matches.filter((match) => {
-        if (!match || match.subType !== 'Telemetry Draft') return false;
+        if (!isReadyTelemetryDraft(match)) return false;
         if (!match.timestamp || Number(match.timestamp) < recentCutoff) return false;
         if (expectedPlayer && match.player && match.player !== expectedPlayer) return false;
         return true;
@@ -378,14 +387,16 @@ export const useMatchSubmission = () => {
         const dmg = Math.max(0, Math.min(15000, parseInt(damageTaken) || 0));
         const pendingMatchId = Number(pendingMatchData?.id || 0);
         const pendingDraft = Number.isInteger(pendingMatchId) && pendingMatchId > 0
-            ? (Array.isArray(matches) ? matches.find((m: Match) => m.id === pendingMatchId && m.subType === 'Telemetry Draft') : undefined)
+            ? (Array.isArray(matches)
+                ? matches.find((m: Match) => m.id === pendingMatchId && isReadyTelemetryDraft(m))
+                : undefined)
             : undefined;
         const recentCutoff = (typeof sessionStartTime === 'number' && sessionStartTime > 0)
             ? (sessionStartTime - 60_000)
             : (Date.now() - (6 * 60 * 60 * 1000));
         const unresolvedDraft = pendingDraft || (Array.isArray(matches)
             ? matches.find((m: Match) => {
-                if (m.subType !== 'Telemetry Draft') return false;
+                if (!isReadyTelemetryDraft(m)) return false;
                 if (!m.timestamp || m.timestamp < recentCutoff) return false;
                 if (activeUser && m.player && m.player !== activeUser) return false;
                 return true;

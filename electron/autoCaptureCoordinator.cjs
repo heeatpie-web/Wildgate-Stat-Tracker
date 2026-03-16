@@ -21,6 +21,31 @@ const EXPECTED_SCREEN_TYPES = Object.freeze({
   [STEP_DEFINITIONS.captureCrewHubB.label]: 'crew_hub',
 });
 
+const AUTO_CAPTURE_WAIT_PROFILES = Object.freeze({
+  fast: Object.freeze({
+    tacticalMapOpenMs: 100,
+    tacticalMapCloseMs: 20,
+    heldMapOpenMs: 110,
+    heldMapCloseMs: 40,
+    escMenuOpenMs: 25,
+    crewHubOpenMs: 35,
+    crewHubPanelStepMs: 10,
+    crewHubPanelEndMs: 8,
+    exitMs: 10,
+  }),
+  fallback: Object.freeze({
+    tacticalMapOpenMs: 100,
+    tacticalMapCloseMs: 20,
+    heldMapOpenMs: 110,
+    heldMapCloseMs: 40,
+    escMenuOpenMs: 60,
+    crewHubOpenMs: 70,
+    crewHubPanelStepMs: 30,
+    crewHubPanelEndMs: 20,
+    exitMs: 10,
+  }),
+});
+
 const DEFAULT_GAME_SETTINGS_CANDIDATES = Object.freeze([
   process.env.WILDGATE_GAME_SETTINGS_PATH,
   process.env.LOCALAPPDATA
@@ -40,6 +65,12 @@ const TACTICAL_MAP_BIND_PATTERNS = Object.freeze([
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function createScreenValidationError(message) {
+  const error = new Error(message);
+  error.code = 'AUTO_CAPTURE_SCREEN_VALIDATION';
+  return error;
 }
 
 function clampWaitMultiplier(value) {
@@ -277,11 +308,39 @@ function createAutoCaptureCoordinator({
       if (!result?.success) {
         const detected = String(result?.detectedType || 'unknown');
         const reason = result?.error || `detected ${detected}`;
-        throw new Error(`${step.label}: expected ${expectedType}, detected ${detected} (${reason})`);
+        throw createScreenValidationError(`${step.label}: expected ${expectedType}, detected ${detected} (${reason})`);
       }
     };
 
-    const captureStep = async (step, captureIndex) => {
+    const emitCommittedCaptureProgress = (captures = []) => {
+      captures.forEach((capture) => {
+        notify({
+          phase: 'capture-progress',
+          captureIndex: capture.captureIndex,
+          totalCaptures: 3,
+          matchId,
+          filePath: capture.filePath,
+          filename: capture.filename,
+          screenshotType: capture.screenshotType,
+        });
+      });
+    };
+
+    const cleanupAttemptCaptures = async (captures = []) => {
+      await Promise.all((captures || []).map(async (capture) => {
+        const filePath = typeof capture?.filePath === 'string' ? capture.filePath.trim() : '';
+        if (!filePath) return;
+        try {
+          await fs.promises.unlink(filePath);
+        } catch (error) {
+          if (error?.code !== 'ENOENT') {
+            console.warn(`[AutoCapture] Failed to clean up uncommitted artifact ${filePath}: ${error?.message || error}`);
+          }
+        }
+      }));
+    };
+
+    const captureStep = async (step, captureIndex, attemptCaptures) => {
       logAutoCaptureStep(step, '(capture)');
       // Fire sound immediately so the user hears it when the capture begins,
       // not after the PNG encode + file save completes.
@@ -300,67 +359,112 @@ function createAutoCaptureCoordinator({
       }
 
       const detectedType = String(result?.ocrData?.screenshotType || result?.screenshotType || '').trim();
-      notify({
-        phase: 'capture-progress',
+      const captureMeta = {
         captureIndex,
-        totalCaptures: 3,
-        matchId,
         filePath: result.filePath,
         filename: result.filename || null,
         screenshotType: detectedType || null,
-      });
+      };
+      attemptCaptures.push(captureMeta);
 
       const expectedType = EXPECTED_SCREEN_TYPES[step.label];
       if (expectedType && detectedType && detectedType !== expectedType) {
-        throw new Error(`${step.label}: expected ${expectedType}, detected ${detectedType}`);
+        throw createScreenValidationError(`${step.label}: expected ${expectedType}, detected ${detectedType}`);
       }
+
+      return captureMeta;
     };
 
-    const captureTacticalMapStep = async () => {
-      if (holdTacticalMapKey && typeof runWithHeldKeySequence === 'function') {
-        logAutoCaptureStep(STEP_DEFINITIONS.openMap, '(hold)');
-        const heldResult = await runWithHeldKeySequence(
-          tacticalMapKeybind.sendKeys,
-          STEP_DEFINITIONS.openMap.label,
-          async () => {
-            await waitStep(110);
-            await captureStep(STEP_DEFINITIONS.captureMap, 1);
+    const runAttempt = async (waitProfile) => {
+      const attemptCaptures = [];
+      try {
+        const captureTacticalMapStep = async () => {
+          if (holdTacticalMapKey && typeof runWithHeldKeySequence === 'function') {
+            logAutoCaptureStep(STEP_DEFINITIONS.openMap, '(hold)');
+            const heldResult = await runWithHeldKeySequence(
+              tacticalMapKeybind.sendKeys,
+              STEP_DEFINITIONS.openMap.label,
+              async () => {
+                await waitStep(waitProfile.heldMapOpenMs);
+                await captureStep(STEP_DEFINITIONS.captureMap, 1, attemptCaptures);
+              }
+            );
+            if (!heldResult?.success) {
+              throw new Error(heldResult?.error || `${STEP_DEFINITIONS.captureMap.label}: hold-capture failed`);
+            }
+            await waitStep(waitProfile.heldMapCloseMs);
+            return;
           }
-        );
-        if (!heldResult?.success) {
-          throw new Error(heldResult?.error || `${STEP_DEFINITIONS.captureMap.label}: hold-capture failed`);
-        }
-        await waitStep(40); // Let the map close animation finish before pressing ESC
-        return;
-      }
 
-      // Toggle mode: tap to open, capture, tap to close.
-      await sendStepKeys(STEP_DEFINITIONS.openMap, tacticalMapKeybind.sendKeys);
-      await waitStep(100);
-      await captureStep(STEP_DEFINITIONS.captureMap, 1);
-      await sendStepKeys(STEP_DEFINITIONS.closeMap, tacticalMapKeybind.sendKeys);
-      await waitStep(20);
+          // Toggle mode: tap to open, capture, tap to close.
+          await sendStepKeys(STEP_DEFINITIONS.openMap, tacticalMapKeybind.sendKeys);
+          await waitStep(waitProfile.tacticalMapOpenMs);
+          await captureStep(STEP_DEFINITIONS.captureMap, 1, attemptCaptures);
+          await sendStepKeys(STEP_DEFINITIONS.closeMap, tacticalMapKeybind.sendKeys);
+          await waitStep(waitProfile.tacticalMapCloseMs);
+        };
+
+        await captureTacticalMapStep();
+
+        await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{ESC}', { useMenuSender: true });
+        await waitStep(waitProfile.escMenuOpenMs);
+        await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{UP}{UP}{UP}{UP}{SPACE}', { useMenuSender: true });
+        await waitStep(waitProfile.crewHubOpenMs);
+        await validateScreenStep(STEP_DEFINITIONS.captureCrewHubA, 'crew_hub');
+
+        await captureStep(STEP_DEFINITIONS.captureCrewHubA, 2, attemptCaptures);
+
+        await sendStepKeys(STEP_DEFINITIONS.moveCrewHubRight, '{RIGHT}{RIGHT}{RIGHT}{RIGHT}', { useMenuSender: true });
+        await waitStep(waitProfile.crewHubPanelStepMs);
+
+        await sendStepKeys(STEP_DEFINITIONS.moveCrewHubEnd, '{END}', { useMenuSender: true });
+        await waitStep(waitProfile.crewHubPanelEndMs);
+
+        await captureStep(STEP_DEFINITIONS.captureCrewHubB, 3, attemptCaptures);
+
+        await sendStepKeys(STEP_DEFINITIONS.exit, '{ESC}', { useMenuSender: true });
+        await waitStep(waitProfile.exitMs);
+
+        return attemptCaptures;
+      } catch (error) {
+        if (error && typeof error === 'object') {
+          error.attemptCaptures = attemptCaptures;
+        }
+        throw error;
+      }
     };
 
-    await captureTacticalMapStep();
+    const getAttemptCapturesFromError = (error) => (
+      Array.isArray(error?.attemptCaptures)
+        ? error.attemptCaptures
+        : []
+    );
 
-    await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{ESC}', { useMenuSender: true });
-    await waitStep(60); // Wait for the ESC popup menu to appear before navigating
-    await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{UP}{UP}{UP}{UP}{SPACE}', { useMenuSender: true });
-    await waitStep(70);
+    try {
+      let acceptedCaptures;
+      try {
+        acceptedCaptures = await runAttempt(AUTO_CAPTURE_WAIT_PROFILES.fast);
+      } catch (error) {
+        await cleanupAttemptCaptures(getAttemptCapturesFromError(error));
+        if (error?.code !== 'AUTO_CAPTURE_SCREEN_VALIDATION') {
+          throw error;
+        }
+        console.log(`[AutoCapture] Fast-path validation failed, retrying with slower waits: ${error.message}`);
+        if (sendKeypresses) {
+          try {
+            await sendKeySequence('{ESC}', 'Auto-Capture fast-path recovery');
+          } catch {
+            // Recovery is best-effort.
+          }
+        }
+        acceptedCaptures = await runAttempt(AUTO_CAPTURE_WAIT_PROFILES.fallback);
+      }
 
-    await captureStep(STEP_DEFINITIONS.captureCrewHubA, 2);
-
-    await sendStepKeys(STEP_DEFINITIONS.moveCrewHubRight, '{RIGHT}{RIGHT}{RIGHT}{RIGHT}', { useMenuSender: true });
-    await waitStep(30);
-
-    await sendStepKeys(STEP_DEFINITIONS.moveCrewHubEnd, '{END}', { useMenuSender: true });
-    await waitStep(20);
-
-    await captureStep(STEP_DEFINITIONS.captureCrewHubB, 3);
-
-    await sendStepKeys(STEP_DEFINITIONS.exit, '{ESC}', { useMenuSender: true });
-    await waitStep(10);
+      emitCommittedCaptureProgress(acceptedCaptures);
+    } catch (error) {
+      await cleanupAttemptCaptures(getAttemptCapturesFromError(error));
+      throw error;
+    }
   };
 
   const tryEscapeCleanup = async (sendKeypresses) => {

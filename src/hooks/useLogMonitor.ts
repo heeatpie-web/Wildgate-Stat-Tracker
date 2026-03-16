@@ -511,6 +511,7 @@ export const useLogMonitor = (activeUser?: string) => {
         timelineEvents: [],
         artifacts: [],
         ocrState: 'queued',
+        telemetryDraftState: 'active',
         telemetryConsistency: {
             durationToleranceSeconds: DEFAULT_DURATION_TOLERANCE_SECONDS,
             ...(pendingTelemetryConsistencyRef.current || {}),
@@ -563,6 +564,7 @@ export const useLogMonitor = (activeUser?: string) => {
         const existingDraft = useAppStore.getState().matches
             .filter((m: Match) => {
                 if (!m || m.subType !== 'Telemetry Draft') return false;
+                if (m.telemetryDraftState !== 'active') return false;
                 const ts = Number(m.timestamp || 0);
                 if (!Number.isFinite(ts) || ts < recentCutoff) return false;
                 const draftPlayer = String(m.player || '').trim().toLowerCase();
@@ -706,6 +708,7 @@ export const useLogMonitor = (activeUser?: string) => {
                 timestamp: startedAt,
                 time: duration,
                 notes: match.notes || '',
+                telemetryDraftState: 'ready',
                 telemetryConsistency: nextConsistency,
             });
             window.dispatchEvent(new CustomEvent('telemetry:draft-ready', {

@@ -13,9 +13,9 @@ describe('autoCaptureHotkeyState', () => {
       activeUser: 'Pilot',
       sessionStartTime: 50_000,
       matches: [
-        { id: 11, subType: 'Telemetry Draft', timestamp: 80_000, player: 'Other' },
-        { id: 17, subType: 'Telemetry Draft', timestamp: 90_000, player: 'Pilot' },
-        { id: 19, subType: 'Telemetry Draft', timestamp: 95_000, player: 'Pilot' },
+        { id: 11, subType: 'Telemetry Draft', telemetryDraftState: 'active', timestamp: 80_000, player: 'Other' },
+        { id: 17, subType: 'Telemetry Draft', telemetryDraftState: 'active', timestamp: 90_000, player: 'Pilot' },
+        { id: 19, subType: 'Telemetry Draft', telemetryDraftState: 'active', timestamp: 95_000, player: 'Pilot' },
       ],
       pendingMatchData: { id: 999 },
       now: 100_000,
@@ -28,7 +28,7 @@ describe('autoCaptureHotkeyState', () => {
     const request = buildAutoCaptureRequestFromStateSnapshot({
       activeUser: 'Pilot',
       matches: [
-        { id: 11, subType: 'Telemetry Draft', timestamp: 10_000, player: 'Pilot' },
+        { id: 11, subType: 'Telemetry Draft', telemetryDraftState: 'active', timestamp: 10_000, player: 'Pilot' },
       ],
       pendingMatchData: { id: 222 },
       isMatchInProgress: true,
@@ -47,7 +47,7 @@ describe('autoCaptureHotkeyState', () => {
       activeUser: 'Pilot',
       sessionStartTime: 50_000,
       matches: [
-        { id: 44, subType: 'Telemetry Draft', timestamp: 95_000, player: 'Pilot' },
+        { id: 44, subType: 'Telemetry Draft', telemetryDraftState: 'active', timestamp: 95_000, player: 'Pilot' },
       ],
       pendingMatchData: null,
       isMatchInProgress: true,
