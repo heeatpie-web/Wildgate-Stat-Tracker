@@ -1206,7 +1206,7 @@ let latestAutoCaptureHotkeyStateAt = 0;
 let pendingAutoCaptureHotkeyAt = 0;
 let pendingAutoCaptureHotkeyTimer = null;
 const AUTO_CAPTURE_HOTKEY_SYNC_GRACE_MS = 5000;
-const AUTO_CAPTURE_HOTKEY_REPEAT_DEBOUNCE_MS = 1200;
+const AUTO_CAPTURE_HOTKEY_REPEAT_DEBOUNCE_MS = 350;
 let lastAutoCaptureHotkeyAcceptedAt = 0;
 let autoCaptureHotkeyStartInFlight = false;
 function resolveAppIconPath() {
@@ -1397,12 +1397,15 @@ function registerGlobalHotkeys() {
     const liveWindow = ensureMainWindow();
     const invokedAt = Date.now();
     if (typeof autoCaptureCoordinator.isBusy === 'function' && autoCaptureCoordinator.isBusy()) {
+      console.log('[Hotkey] F10 ignored because auto-capture is already running.');
       return;
     }
     if ((invokedAt - lastAutoCaptureHotkeyAcceptedAt) < AUTO_CAPTURE_HOTKEY_REPEAT_DEBOUNCE_MS) {
+      console.log('[Hotkey] F10 ignored by repeat debounce.');
       return;
     }
     if (autoCaptureHotkeyStartInFlight) {
+      console.log('[Hotkey] F10 ignored because an auto-capture start request is already in flight.');
       return;
     }
     const stateAgeMs = latestAutoCaptureHotkeyStateAt > 0 ? (Date.now() - latestAutoCaptureHotkeyStateAt) : null;
@@ -1410,7 +1413,6 @@ function registerGlobalHotkeys() {
       `[Hotkey] F10 fired — starting auto-capture sequence. hasLiveWindow=${Boolean(liveWindow)} `
       + `stateAgeMs=${stateAgeMs == null ? 'unknown' : stateAgeMs}`
     );
-    lastAutoCaptureHotkeyAcceptedAt = invokedAt;
     if (!latestAutoCaptureHotkeyState) {
       if (pendingAutoCaptureHotkeyAt > 0) {
         return;
@@ -1428,6 +1430,7 @@ function registerGlobalHotkeys() {
     }
 
     clearPendingAutoCaptureHotkey();
+    lastAutoCaptureHotkeyAcceptedAt = invokedAt;
     autoCaptureHotkeyStartInFlight = true;
     void startAutoCaptureFromHotkey(latestAutoCaptureHotkeyState).finally(() => {
       autoCaptureHotkeyStartInFlight = false;

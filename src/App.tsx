@@ -396,7 +396,6 @@ const App: React.FC = () => {
     const dismissedTelemetryDraftMidmatchPromptIdsRef = React.useRef<Set<number>>(new Set());
     const handledTelemetryDraftPostmatchPromptIdsRef = React.useRef<Set<number>>(new Set());
     const telemetryDraftCaptureClicksRef = React.useRef<Map<number, number>>(new Map());
-    const telemetryDraftAutoCaptureHandledIdsRef = React.useRef<Set<number>>(new Set());
     const telemetryPruneNotificationKeyRef = React.useRef<string | null>(null);
     const fuzzyPromptNotificationCountRef = React.useRef(0);
     const idPromptNotificationCountRef = React.useRef(0);
@@ -1804,37 +1803,6 @@ const App: React.FC = () => {
         setToast({ message: 'Smart Capture started. You can submit result when ready.', type: 'info' });
     }, [activeUser, activeView, requestSmartCapture, setActiveView, setToast, telemetryDraftPrompt]);
 
-    const handleTelemetryDraftInGameAutoCapture = useCallback((matchId: number) => {
-        if (!Number.isInteger(matchId) || matchId <= 0) return;
-        if (telemetryDraftAutoCaptureHandledIdsRef.current.has(matchId)) return;
-        telemetryDraftAutoCaptureHandledIdsRef.current.add(matchId);
-        if (activeView !== 'recording') {
-            React.startTransition(() => setActiveView('recording'));
-        }
-        const requestId = requestSmartCapture({
-            activeUser: activeUser || null,
-            source: 'telemetry-ingame-auto-capture',
-            requestId: `telemetry-ingame-${matchId}-${Date.now()}`,
-            matchId,
-            behavior: 'auto-sequence',
-        });
-        window.dispatchEvent(new CustomEvent('smart-capture-request', {
-            detail: {
-                activeUser: activeUser || null,
-                source: 'telemetry-ingame-auto-capture',
-                requestId,
-                matchId,
-                behavior: 'auto-sequence',
-            },
-        }));
-        setToast({
-            message: activeView !== 'recording'
-                ? 'Telemetry marked the match as in-game. Starting Auto-Capture and opening Recording.'
-                : 'Telemetry marked the match as in-game. Starting Auto-Capture.',
-            type: 'info',
-        });
-    }, [activeUser, activeView, requestSmartCapture, setActiveView, setToast]);
-
     const handleTelemetryDraftResult = useCallback((result: FinalMatchResult) => {
         if (!telemetryDraftPrompt || telemetryDraftPrompt.phase !== 'postmatch') return;
         const draft = matches.find(m => m.id === telemetryDraftPrompt.matchId);
@@ -1931,7 +1899,6 @@ const App: React.FC = () => {
             handledTelemetryDraftPostmatchPromptIdsRef.current.add(matchId);
             dismissedTelemetryDraftMidmatchPromptIdsRef.current.add(matchId);
             telemetryDraftCaptureClicksRef.current.delete(matchId);
-            telemetryDraftAutoCaptureHandledIdsRef.current.delete(matchId);
             setTelemetryDraftPrompt((current) => (
                 current?.matchId === matchId ? null : current
             ));
@@ -1989,23 +1956,15 @@ const App: React.FC = () => {
             });
         };
 
-        const onTelemetryDraftInGameAutoCapture = (evt: Event) => {
-            const customEvt = evt as CustomEvent<{ matchId?: number }>;
-            const matchId = Number(customEvt?.detail?.matchId || 0);
-            handleTelemetryDraftInGameAutoCapture(matchId);
-        };
-
         window.addEventListener('telemetry:draft-started', onTelemetryDraftStarted as EventListener);
         window.addEventListener('telemetry:draft-ready', onTelemetryDraftReady as EventListener);
         window.addEventListener('telemetry:draft-capture-prompt', onTelemetryDraftCapturePrompt as EventListener);
-        window.addEventListener('telemetry:draft-ingame-auto-capture', onTelemetryDraftInGameAutoCapture as EventListener);
         return () => {
             window.removeEventListener('telemetry:draft-started', onTelemetryDraftStarted as EventListener);
             window.removeEventListener('telemetry:draft-ready', onTelemetryDraftReady as EventListener);
             window.removeEventListener('telemetry:draft-capture-prompt', onTelemetryDraftCapturePrompt as EventListener);
-            window.removeEventListener('telemetry:draft-ingame-auto-capture', onTelemetryDraftInGameAutoCapture as EventListener);
         };
-    }, [handleTelemetryDraftInGameAutoCapture]);
+    }, []);
 
     useEffect(() => {
         const onTelemetryPruneOpen = () => {

@@ -1,6 +1,5 @@
 const fs = require('fs');
 
-const AUTO_CAPTURE_COOLDOWN_MS = 5000;
 const AUTO_CAPTURE_CAPTURE_TIMEOUT_MS = 20000;
 
 const STEP_DEFINITIONS = Object.freeze({
@@ -236,10 +235,8 @@ function createAutoCaptureCoordinator({
   waitForScreenType = null,
   lookupMapKeybind = lookupTacticalMapKeybind,
   delayFn = delay,
-  now = () => Date.now(),
 }) {
   let inProgress = false;
-  let lastCompletedAt = 0;
 
   const scaleWait = (baseMs, multiplier) => Math.max(0, Math.round(baseMs * clampWaitMultiplier(multiplier)));
 
@@ -433,10 +430,6 @@ function createAutoCaptureCoordinator({
         return { started: false, ignored: true, reason: 'in-progress' };
       }
 
-      if (lastCompletedAt > 0 && (now() - lastCompletedAt) < AUTO_CAPTURE_COOLDOWN_MS) {
-        return { started: false, ignored: true, reason: 'cooldown' };
-      }
-
       const lifecycleActive = request.lifecycleActive === true;
       const matchId = Number(request.matchId || 0);
       if (!lifecycleActive || !Number.isInteger(matchId) || matchId <= 0) {
@@ -504,7 +497,6 @@ function createAutoCaptureCoordinator({
       void (async () => {
         try {
           await runSequence(payload);
-          lastCompletedAt = now();
           notify({
             phase: 'completed',
             matchId,
@@ -537,16 +529,12 @@ function createAutoCaptureCoordinator({
       get inProgress() {
         return inProgress;
       },
-      get lastCompletedAt() {
-        return lastCompletedAt;
-      },
     },
   };
 }
 
 module.exports = {
   AUTO_CAPTURE_CAPTURE_TIMEOUT_MS,
-  AUTO_CAPTURE_COOLDOWN_MS,
   STEP_DEFINITIONS,
   createAutoCaptureCoordinator,
   extractTacticalMapKeybindFromText,

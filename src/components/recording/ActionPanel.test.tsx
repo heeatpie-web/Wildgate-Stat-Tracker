@@ -497,30 +497,6 @@ describe('ActionPanel', () => {
     expect(smartCaptureActions.processStoredImage).not.toHaveBeenCalled();
   });
 
-  it('forces lifecycle active for telemetry in-game auto-sequence starts even before store state catches up', async () => {
-    const { ActionPanel } = await import('./ActionPanel');
-    appStoreState.isMatchInProgress = false;
-    uiState.smartCaptureRequest = {
-      requestId: 'auto_ingame',
-      activeUser: 'TestPilot',
-      matchId: 42,
-      source: 'telemetry-ingame-auto-capture',
-      behavior: 'auto-sequence',
-    };
-
-    render(<ActionPanel />);
-
-    await waitFor(() => {
-      expect(startAutoCaptureMock).toHaveBeenCalledWith(expect.objectContaining({
-        activeUser: 'TestPilot',
-        matchId: 42,
-        isMatchInProgress: true,
-      }));
-    });
-
-    expect(uiState.clearSmartCaptureRequest).toHaveBeenCalledWith('auto_ingame');
-  });
-
   it('clears failed auto-sequence requests and surfaces the start error', async () => {
     const { ActionPanel } = await import('./ActionPanel');
     appStoreState.isMatchInProgress = true;
@@ -533,7 +509,7 @@ describe('ActionPanel', () => {
       requestId: 'auto_fail',
       activeUser: 'TestPilot',
       matchId: 42,
-      source: 'telemetry-ingame-auto-capture',
+      source: 'global-hotkey',
       behavior: 'auto-sequence',
     };
 

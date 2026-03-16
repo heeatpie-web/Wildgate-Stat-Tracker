@@ -473,7 +473,6 @@ export const useLogMonitor = (activeUser?: string) => {
     const telemetryDraftStartedAtRef = useRef<number | null>(null);
     const telemetryDraftLoadoutSignatureRef = useRef<string>('');
     const telemetryDraftCapturePromptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const telemetryDraftAutoCaptureTriggeredRef = useRef<number | null>(null);
     const telemetryLifecycleActiveRef = useRef(isMatchInProgress);
     const telemetryLifecycleStartedAtRef = useRef<number | null>(matchStartTime);
     const latestNebLoadoutSavedTimestampRef = useRef<number>(0);
@@ -507,17 +506,6 @@ export const useLogMonitor = (activeUser?: string) => {
             Logger.info('LogMonitor', `Telemetry draft smart-capture prompt fired (matchId=${matchId})`);
         }, 10_000);
     }, [clearTelemetryDraftCapturePromptTimer]);
-
-    const dispatchTelemetryDraftAutoCapture = useCallback((matchId: number) => {
-        if (!devModeRef.current) return;
-        if (!Number.isInteger(matchId) || matchId <= 0) return;
-        if (telemetryDraftAutoCaptureTriggeredRef.current === matchId) return;
-        telemetryDraftAutoCaptureTriggeredRef.current = matchId;
-        window.dispatchEvent(new CustomEvent('telemetry:draft-ingame-auto-capture', {
-            detail: { matchId },
-        }));
-        Logger.info('LogMonitor', `Telemetry draft auto-capture requested from in-game telemetry (matchId=${matchId})`);
-    }, []);
 
     const resetSelectionDefaultsForNewMatch = useCallback(() => {
         const state = useAppStore.getState();
@@ -794,7 +782,6 @@ export const useLogMonitor = (activeUser?: string) => {
         latestNebLoadoutSavedTimestampRef.current = 0;
         latestNebLoadoutSavedSignatureRef.current = '';
         localTelemetryShipSelectionRef.current = '';
-        telemetryDraftAutoCaptureTriggeredRef.current = null;
         pendingTelemetryConsistencyRef.current = {
             durationToleranceSeconds: DEFAULT_DURATION_TOLERANCE_SECONDS,
         };
@@ -818,7 +805,6 @@ export const useLogMonitor = (activeUser?: string) => {
         latestNebLoadoutSavedTimestampRef.current = 0;
         latestNebLoadoutSavedSignatureRef.current = '';
         localTelemetryShipSelectionRef.current = '';
-        telemetryDraftAutoCaptureTriggeredRef.current = null;
         telemetryLifecycleActiveRef.current = true;
         telemetryLifecycleStartedAtRef.current = gameTime;
         applyTelemetryTimerValue('00:00');
@@ -1235,9 +1221,6 @@ export const useLogMonitor = (activeUser?: string) => {
                                     createTelemetryDraftIfNeeded(gameTime, currentLoadoutRef.current || null);
                                 }
                                 appendTelemetryLoadoutSave('NebLoadoutSaved', gameTime, wasSavedInGame);
-                                if (wasSavedInGame && telemetryLifecycleActiveRef.current) {
-                                    dispatchTelemetryDraftAutoCapture(telemetryDraftMatchIdRef.current || 0);
-                                }
                             }
                         }
                     }
@@ -2032,7 +2015,7 @@ export const useLogMonitor = (activeUser?: string) => {
             unsubStatus();
             unsubData();
         };
-    }, [appendTelemetryLoadoutSave, createTelemetryDraftIfNeeded, dispatchTelemetryDraftAutoCapture, endTelemetryLifecycle, setCurrentLoadout, setDeviceDisplayInfo, setGameResolution, setLastActivity, setTelemetryStatus, setToast, startTelemetryLifecycle, startupLifecycleEstablished, updatePlayerIdMapping, updateTelemetryDraftConsistency, updateTelemetryDraftFromLoadout]);
+    }, [appendTelemetryLoadoutSave, createTelemetryDraftIfNeeded, endTelemetryLifecycle, setCurrentLoadout, setDeviceDisplayInfo, setGameResolution, setLastActivity, setTelemetryStatus, setToast, startTelemetryLifecycle, startupLifecycleEstablished, updatePlayerIdMapping, updateTelemetryDraftConsistency, updateTelemetryDraftFromLoadout]);
 
     return { logFeed, logStatus: telemetryStatus };
 };

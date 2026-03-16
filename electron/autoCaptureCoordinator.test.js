@@ -331,9 +331,8 @@ describe('autoCaptureCoordinator sequencing', () => {
     });
   });
 
-  it('silently ignores requests during cooldown', async () => {
+  it('allows immediate retry after a completed run', async () => {
     const notify = vi.fn();
-    const clock = { now: 10_000 };
     const coordinator = createAutoCaptureCoordinator({
       notify,
       sendKeySequence: vi.fn().mockResolvedValue({ success: true }),
@@ -341,7 +340,6 @@ describe('autoCaptureCoordinator sequencing', () => {
         .mockResolvedValue({ success: true, filePath: 'capture.png', filename: 'capture.png' }),
       lookupMapKeybind: vi.fn().mockResolvedValue({ raw: 'Tab', sendKeys: '{TAB}' }),
       delayFn: vi.fn(() => Promise.resolve()),
-      now: () => clock.now,
     });
 
     const first = await coordinator.start({ lifecycleActive: true, matchId: 9, autoCaptureTacticalMapKey: 'Tab' });
@@ -351,13 +349,12 @@ describe('autoCaptureCoordinator sequencing', () => {
       expect(notify).toHaveBeenCalledWith(expect.objectContaining({ phase: 'completed' }));
     });
 
-    clock.now += 2_000;
     const second = await coordinator.start({ lifecycleActive: true, matchId: 9 });
 
     expect(second).toEqual({
-      started: false,
-      ignored: true,
-      reason: 'cooldown',
+      started: true,
+      matchId: 9,
+      tacticalMapKeybind: 'Tab',
     });
   });
 

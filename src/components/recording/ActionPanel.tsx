@@ -25,7 +25,7 @@ import type { Match } from '../../types';
 import { runtimeConfig } from '../../config/runtimeConfig';
 import { buildAutoCaptureTelemetryDraft } from '../../utils/telemetryDraft';
 import { resolveSmartCaptureMatchId } from '../../utils/smartCaptureScope';
-import { buildAutoCaptureStateSnapshot, type AutoCaptureStateSnapshot } from '../../utils/autoCaptureState';
+import { buildAutoCaptureStateSnapshot } from '../../utils/autoCaptureState';
 import { startAutoCapture } from '../../utils/electronBridge';
 
 interface ActionPanelProps {
@@ -422,11 +422,10 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     const runAutoSequenceCapture = React.useCallback(async (
         requestedUser?: string | null,
         requestedMatchId?: string | number | null,
-        options?: { forceMatchInProgress?: boolean; source?: string }
+        options?: { source?: string }
     ) => {
         const captureUser = requestedUser ?? activeUser ?? null;
         const captureMatchId = resolveRequestedCaptureMatchId(requestedMatchId);
-        const forceMatchInProgress = options?.forceMatchInProgress === true;
         if (autoSequenceInFlightRef.current) {
             Logger.info('ActionPanel', 'Ignoring auto-sequence request because one is already running', {
                 activeUser: captureUser,
@@ -442,18 +441,13 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
             activeUser: captureUser,
             matchId: captureMatchId ?? null,
             source: options?.source ?? null,
-            forceMatchInProgress,
         });
 
         try {
-            const snapshotOverrides: Partial<AutoCaptureStateSnapshot> = {
+            const result = await startAutoCapture(buildAutoCaptureStateSnapshot({
                 activeUser: captureUser ?? '',
                 matchId: captureMatchId,
-            };
-            if (forceMatchInProgress) {
-                snapshotOverrides.isMatchInProgress = true;
-            }
-            const result = await startAutoCapture(buildAutoCaptureStateSnapshot(snapshotOverrides));
+            }));
 
             if (result.started) {
                 return;
@@ -503,7 +497,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         const requestedUser = request.activeUser;
         const requestedMatchId = request.matchId;
         const requestSource = typeof request.source === 'string' ? request.source : null;
-        const forceMatchInProgress = requestSource === 'telemetry-ingame-auto-capture';
 
         Logger.info('ActionPanel', 'Handling smart capture request', {
             requestId: request.requestId || null,
@@ -513,7 +506,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
             requestedMatchId: requestedMatchId ?? null,
             forceOcr: request.forceOcr === true,
             isActive,
-            forceMatchInProgress,
         });
 
         try {
@@ -525,7 +517,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
             const resolvedMatchId = resolveRequestedCaptureMatchId(requestedMatchId);
             if (requestBehavior === 'auto-sequence') {
                 await runAutoSequenceCapture(requestedUser, resolvedMatchId, {
-                    forceMatchInProgress,
                     source: requestSource ?? undefined,
                 });
                 return;
