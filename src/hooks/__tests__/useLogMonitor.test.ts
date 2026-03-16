@@ -448,6 +448,39 @@ describe('useLogMonitor', () => {
     expect(uiState.setOverlayPhase).toHaveBeenCalledWith('Setup');
   });
 
+  it('starts lifecycle when matchmaker state only exposes newStatus and event session id while context session id is blank', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: {
+            context: {
+              client: {
+                matchSessionId: '',
+              },
+            },
+            event: {
+              oldStatus: 'MM_WAITING_4_SERVER',
+              newStatus: 'MM_GAME_FOUND',
+              sESSIONId: 'live-artifact-session-id',
+              ticketMatchPool: 'artifactsandgates',
+              playerIds: ['pilot-self', 'pilot-wing-1', 'pilot-wing-2'],
+            },
+          },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    expect(addMatch).toHaveBeenCalledTimes(1);
+    expect(gameDataState.setIsMatchInProgress).toHaveBeenCalledWith(true);
+    expect(gameDataState.setMatchStartTime).toHaveBeenCalled();
+    expect(uiState.setOverlayPhase).toHaveBeenCalledWith('Setup');
+  });
+
   it('does not restart lifecycle when a map-start event arrives after a live matchmaker start', async () => {
     const baseSec = Math.floor(Date.now() / 1000);
     const { useLogMonitor } = await import('../useLogMonitor');

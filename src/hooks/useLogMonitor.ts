@@ -90,6 +90,24 @@ const toStringOrEmpty = (value: unknown): string => {
     return '';
 };
 
+const getPreferredTelemetryStringCandidate = (candidates: unknown[]): {
+    hasSignal: boolean;
+    value: string;
+} => {
+    const definedCandidates = candidates.filter((value) => value !== undefined);
+    if (definedCandidates.length === 0) {
+        return {
+            hasSignal: false,
+            value: '',
+        };
+    }
+    const preferredCandidate = definedCandidates.find((value) => toStringOrEmpty(value).trim().length > 0);
+    return {
+        hasSignal: true,
+        value: toStringOrEmpty(preferredCandidate !== undefined ? preferredCandidate : definedCandidates[0]).trim(),
+    };
+};
+
 const toTelemetryTimestampMs = (event: TelemetryEventEnvelope): number | null => {
     const raw = event.ClientTimestamp ?? (event as TelemetryRecord).timestamp ?? (event as TelemetryRecord).ts;
     const numeric = Number(raw);
@@ -210,8 +228,14 @@ const TELEMETRY_LOADOUT_SIGNAL_KEYS = new Set([
 ]);
 const TELEMETRY_LOADOUT_RECORD_KEY_PATTERN = /(loadout|shipselection|gamemodeshipselection|characterloadout)/i;
 const TELEMETRY_SHARED_SHIP_SELECTION_PATTERN = /(shipselection|gamemodeshipselection)/i;
-const MATCHMAKER_START_STATE_PATTERN = /(inprogress|loading|travel|starting|active|playing|ingame|in_game|matchstarted)/i;
+const MATCHMAKER_START_STATE_PATTERN = /(inprogress|loading|travel|starting|active|playing|ingame|in_game|matchstarted|(?:mm_)?game_found|(?:mm_)?server_found)/i;
 const TELEMETRY_MAP_NAME_KEYS = ['loadedMap', 'loadingMap'];
+const TELEMETRY_MATCHMAKER_STATE_KEYS = [
+    'newStatus', 'new_status',
+    'newState', 'new_state',
+    'newMatchState', 'new_match_state',
+    'state', 'matchState', 'match_state', 'status',
+];
 const TELEMETRY_RECORD_KEY_KEYS = ['recordKey', 'record_key', 'key'];
 const TELEMETRY_LOADOUT_CONTAINER_KEYS = [
     'loadout', 'Loadout', 'loadOut', 'LoadOut',
@@ -1003,17 +1027,18 @@ export const useLogMonitor = (activeUser?: string) => {
                         pickTelemetryValueCaseInsensitive([payloadContextAlt], ['matchSessionId', 'sessionId', 'sESSIONId']),
                         pickTelemetryValueCaseInsensitive(payloadSources, ['matchSessionId', 'sessionId', 'sESSIONId']),
                     ];
-                    const currentMatchSessionIdValue = matchSessionIdValueCandidates.find((value) => value !== undefined);
-                    const hasExplicitMatchSessionIdSignal = currentMatchSessionIdValue !== undefined;
-                    const currentMatchSessionId = toStringOrEmpty(currentMatchSessionIdValue);
+                    const {
+                        hasSignal: hasExplicitMatchSessionIdSignal,
+                        value: currentMatchSessionId,
+                    } = getPreferredTelemetryStringCandidate(matchSessionIdValueCandidates);
                     const previousMatchSessionId = lastMatchSessionIdRef.current || '';
                     const matchmakerStateRaw = pickTelemetryValueCaseInsensitive(
                         payloadSources,
-                        ['state', 'matchState', 'status'],
+                        TELEMETRY_MATCHMAKER_STATE_KEYS,
                     );
                     const matchmakerState = typeof matchmakerStateRaw === 'string'
                         ? matchmakerStateRaw.trim()
-                        : '';
+                        : toStringOrEmpty(matchmakerStateRaw).trim();
                     const loadingMapRaw = pickTelemetryValueCaseInsensitive(payloadSources, TELEMETRY_MAP_NAME_KEYS);
                     const loadingMapName = typeof loadingMapRaw === 'string' ? loadingMapRaw : '';
                     const loadingMapNameLower = loadingMapName.toLowerCase();
