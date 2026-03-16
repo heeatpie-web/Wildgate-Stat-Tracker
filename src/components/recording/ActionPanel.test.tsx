@@ -68,11 +68,9 @@ const smartCaptureActions = {
 };
 
 const initiateSubmission = vi.fn();
-const sendGameUiActionMock = vi.fn().mockResolvedValue({ success: true });
-const waitForGameScreenMock = vi.fn().mockResolvedValue({ success: true });
+const startAutoCaptureMock = vi.fn().mockResolvedValue({ started: true });
 
 const appStoreState = {
-  ocrMode: 'both',
   discardMatch: vi.fn(),
   resultOcrFlowMode: 'prompt',
   ocrAutoOpenAfterRerun: false,
@@ -89,6 +87,21 @@ const appStoreState = {
   currentLoadout: null as any,
   pendingMatchData: null as any,
   matches: [] as any[],
+  activeUser: 'TestPilot',
+  sessionStartTime: Date.now() - 1_000,
+  autoCaptureSendKeypresses: true,
+  autoCaptureWaitMultiplier: 1,
+  tacticalMapKeybind: 'Tab',
+  holdTacticalMapKey: false,
+  ocrEnhancedNameRecoveryEnabled: true,
+  ocrNameRerouteThreshold: 78,
+  ocrRegions: {
+    crewHub: {},
+    mapScreen: {},
+  } as any,
+  deviceDisplayInfo: null as any,
+  gameResolution: null as any,
+  isMatchInProgress: false,
   setPendingMatchData: vi.fn(),
   updateMatch: vi.fn(),
 };
@@ -125,8 +138,7 @@ vi.mock('../../hooks/useMatchSubmission', () => ({
 }));
 
 vi.mock('../../utils/electronBridge', () => ({
-  sendGameUiAction: (...args: unknown[]) => sendGameUiActionMock(...args),
-  waitForGameScreen: (...args: unknown[]) => waitForGameScreenMock(...args),
+  startAutoCapture: (...args: unknown[]) => startAutoCaptureMock(...args),
 }));
 
 vi.mock('../../store/useAppStore', () => ({
@@ -211,8 +223,22 @@ describe('ActionPanel', () => {
     smartCaptureActions.dismissPendingData.mockReset();
     smartCaptureActions.getPendingData.mockReset().mockImplementation(() => smartCaptureState.pendingData);
     smartCaptureActions.reanalyzeCaptures.mockReset();
-    sendGameUiActionMock.mockReset().mockResolvedValue({ success: true });
-    waitForGameScreenMock.mockReset().mockResolvedValue({ success: true });
+    appStoreState.activeUser = 'TestPilot';
+    appStoreState.sessionStartTime = Date.now() - 1_000;
+    appStoreState.autoCaptureSendKeypresses = true;
+    appStoreState.autoCaptureWaitMultiplier = 1;
+    appStoreState.tacticalMapKeybind = 'Tab';
+    appStoreState.holdTacticalMapKey = false;
+    appStoreState.ocrEnhancedNameRecoveryEnabled = true;
+    appStoreState.ocrNameRerouteThreshold = 78;
+    appStoreState.ocrRegions = {
+      crewHub: {},
+      mapScreen: {},
+    };
+    appStoreState.deviceDisplayInfo = null;
+    appStoreState.gameResolution = null;
+    appStoreState.isMatchInProgress = false;
+    startAutoCaptureMock.mockReset().mockResolvedValue({ started: true });
   });
 
   it('shows match recording header without redundant capture guidance', async () => {
@@ -424,8 +450,22 @@ describe('ActionPanel', () => {
     expect(uiState.clearSmartCaptureRequest).toHaveBeenCalledWith('hotkey_1');
   });
 
-  it('runs the F10 auto-sequence smart capture flow when requested', async () => {
+  it('starts the main-process auto-sequence coordinator when requested', async () => {
     const { ActionPanel } = await import('./ActionPanel');
+    appStoreState.isMatchInProgress = true;
+    appStoreState.autoCaptureSendKeypresses = false;
+    appStoreState.autoCaptureWaitMultiplier = 1.7;
+    appStoreState.tacticalMapKeybind = 'KeyM';
+    appStoreState.holdTacticalMapKey = true;
+    appStoreState.deviceDisplayInfo = { aspectProfile: '21:9', width: 3440 };
+    appStoreState.gameResolution = { width: 3440, height: 1440 };
+    appStoreState.matches = [{
+      id: 42,
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      timestamp: Date.now(),
+      player: 'TestPilot',
+    }];
     uiState.smartCaptureRequest = {
       requestId: 'auto_1',
       activeUser: 'TestPilot',
@@ -433,48 +473,56 @@ describe('ActionPanel', () => {
       source: 'global-hotkey',
       behavior: 'auto-sequence',
     };
-    smartCaptureActions.captureOnly
-      .mockResolvedValueOnce({
-        filePath: 'map.png',
-        filename: 'map.png',
-        timestamp: Date.now(),
-        matchId: 42,
-        ocrProcessed: false,
-      })
-      .mockResolvedValueOnce({
-        filePath: 'crew.png',
-        filename: 'crew.png',
-        timestamp: Date.now(),
-        matchId: 42,
-        ocrProcessed: false,
-      });
 
     render(<ActionPanel />);
 
     await waitFor(() => {
-      expect(sendGameUiActionMock).toHaveBeenNthCalledWith(1, 'open-tactical-map');
-      expect(waitForGameScreenMock).toHaveBeenNthCalledWith(1, 'tactical_map', expect.objectContaining({
+      expect(startAutoCaptureMock).toHaveBeenCalledWith(expect.objectContaining({
         activeUser: 'TestPilot',
-        ocrMode: 'both',
+        matchId: 42,
+        isMatchInProgress: true,
+        autoCaptureSendKeypresses: false,
+        autoCaptureWaitMultiplier: 1.7,
+        tacticalMapKeybind: 'KeyM',
+        holdTacticalMapKey: true,
+        ocrEnhancedNameRecoveryEnabled: true,
+        ocrNameRerouteThreshold: 78,
+        deviceDisplayInfo: { aspectProfile: '21:9', width: 3440 },
+        gameResolution: { width: 3440, height: 1440 },
       }));
-      expect(smartCaptureActions.captureOnly).toHaveBeenNthCalledWith(1, 42);
-      expect(smartCaptureActions.processStoredImage).toHaveBeenNthCalledWith(1, 'map.png', 'TestPilot');
-      expect(sendGameUiActionMock).toHaveBeenNthCalledWith(2, 'open-crew-hub');
-      expect(waitForGameScreenMock).toHaveBeenNthCalledWith(2, 'crew_hub', expect.objectContaining({
-        activeUser: 'TestPilot',
-        ocrMode: 'both',
-      }));
-      expect(smartCaptureActions.captureOnly).toHaveBeenNthCalledWith(2, 42);
-      expect(smartCaptureActions.processStoredImage).toHaveBeenNthCalledWith(2, 'crew.png', 'TestPilot');
     });
 
-    await waitFor(() => {
-      expect(sendGameUiActionMock).toHaveBeenNthCalledWith(3, 'close-current-ui');
-    });
     expect(uiState.clearSmartCaptureRequest).toHaveBeenCalledWith('auto_1');
+    expect(smartCaptureActions.captureOnly).not.toHaveBeenCalled();
+    expect(smartCaptureActions.processStoredImage).not.toHaveBeenCalled();
+  });
+
+  it('clears failed auto-sequence requests and surfaces the start error', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    appStoreState.isMatchInProgress = true;
+    startAutoCaptureMock.mockResolvedValueOnce({
+      started: false,
+      reason: 'invalid-tactical-map-key',
+      error: 'Unsupported tactical map key configured: "Mouse4"',
+    });
+    uiState.smartCaptureRequest = {
+      requestId: 'auto_fail',
+      activeUser: 'TestPilot',
+      matchId: 42,
+      source: 'telemetry-ingame-auto-capture',
+      behavior: 'auto-sequence',
+    };
+
+    render(<ActionPanel />);
+
+    await waitFor(() => {
+      expect(startAutoCaptureMock).toHaveBeenCalled();
+    });
+
+    expect(uiState.clearSmartCaptureRequest).toHaveBeenCalledWith('auto_fail');
     expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({
-      message: 'Auto-capture complete - Map + Crew Hub captured',
-      type: 'success',
+      message: 'Auto-capture failed: Unsupported tactical map key configured: "Mouse4"',
+      type: 'error',
     }));
   });
 

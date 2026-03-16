@@ -417,6 +417,46 @@ describe('App', () => {
     dispatchSpy.mockRestore();
   });
 
+  it('starts auto-sequence capture directly from the telemetry in-game event', async () => {
+    const { default: App } = await import('./App');
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    uiState.activeView = 'analytics';
+    render(<App />);
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('telemetry:draft-ingame-auto-capture', {
+        detail: { matchId: 321 },
+      }));
+    });
+
+    expect(uiState.requestSmartCapture).toHaveBeenCalledWith(expect.objectContaining({
+      activeUser: 'Pilot',
+      source: 'telemetry-ingame-auto-capture',
+      matchId: 321,
+      behavior: 'auto-sequence',
+      requestId: expect.stringMatching(/^telemetry-ingame-321-/),
+    }));
+
+    const captureEvent = dispatchSpy.mock.calls
+      .map(([evt]) => evt as Event)
+      .find((evt) => evt.type === 'smart-capture-request') as CustomEvent | undefined;
+    expect(captureEvent).toBeDefined();
+    expect(captureEvent?.detail).toEqual(expect.objectContaining({
+      activeUser: 'Pilot',
+      source: 'telemetry-ingame-auto-capture',
+      matchId: 321,
+      behavior: 'auto-sequence',
+      requestId: 'req_1',
+    }));
+    expect(uiState.setActiveView).toHaveBeenCalledWith('recording');
+    expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'Telemetry marked the match as in-game. Starting Auto-Capture and opening Recording.',
+      type: 'info',
+    }));
+
+    dispatchSpy.mockRestore();
+  });
+
   it('renders recording view in default dashboard mode', async () => {
     const { default: App } = await import('./App');
     render(<App />);

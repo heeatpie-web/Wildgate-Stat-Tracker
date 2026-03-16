@@ -3726,16 +3726,19 @@ ipcMain.handle('wait-for-game-screen', async (event, expectedType, options = {})
 
 ipcMain.handle('start-auto-capture', async (_event, request = {}) => {
   try {
-    const matchId = Number(request?.matchId || 0);
-    const lifecycleActive = request?.lifecycleActive === true;
-    const tacticalMapKey = typeof request?.autoCaptureTacticalMapKey === 'string'
-      ? request.autoCaptureTacticalMapKey
-      : request?.tacticalMapKeybind;
+    const normalizedRequest = buildAutoCaptureRequestFromStateSnapshot(
+      request && typeof request === 'object' ? request : {}
+    );
+    const matchId = Number(normalizedRequest?.matchId || 0);
+    const lifecycleActive = normalizedRequest?.lifecycleActive === true;
+    const tacticalMapKey = typeof normalizedRequest?.autoCaptureTacticalMapKey === 'string'
+      ? normalizedRequest.autoCaptureTacticalMapKey
+      : '';
     console.log(
       `[AutoCapture] start-auto-capture invoked matchId=${Number.isInteger(matchId) ? matchId : 0} `
       + `lifecycleActive=${lifecycleActive} tacticalMapKey=${JSON.stringify(String(tacticalMapKey || ''))}`
     );
-    return await autoCaptureCoordinator.start(request);
+    return await autoCaptureCoordinator.start(normalizedRequest);
   } catch (e) {
     const error = e?.message || String(e);
     console.error('[AutoCapture] start-auto-capture crashed:', error);

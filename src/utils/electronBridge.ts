@@ -5,6 +5,7 @@
 
 import type { CaptureResult, OCRExtractedData, OCRProcessResult } from './ocr/ocrTypes';
 import type { OcrRegionSettings } from './scan/types';
+import type { AutoCaptureStateSnapshot } from './autoCaptureState';
 import { getElectronAPI, isElectron as _isElectron } from './electronAPI';
 import Logger from './logger';
 
@@ -66,6 +67,17 @@ export interface WaitForGameScreenResult {
   attempts?: number;
   elapsedMs?: number;
   error?: string;
+}
+
+export type StartAutoCaptureRequest = AutoCaptureStateSnapshot;
+
+export interface StartAutoCaptureResult {
+  started: boolean;
+  ignored?: boolean;
+  reason?: string;
+  error?: string;
+  matchId?: number;
+  tacticalMapKeybind?: string;
 }
 
 /**
@@ -228,6 +240,35 @@ export async function waitForGameScreen(
   }
 }
 
+export async function startAutoCapture(
+  request: StartAutoCaptureRequest
+): Promise<StartAutoCaptureResult> {
+  const ipc = getIpcRenderer();
+  if (!ipc) {
+    return { started: false, error: 'Not running in Electron', reason: 'not-electron' };
+  }
+
+  try {
+    const result = await ipc.invoke('start-auto-capture', request || {});
+    if (isRecord(result) && typeof result.started === 'boolean') {
+      return {
+        started: result.started,
+        ignored: typeof result.ignored === 'boolean' ? result.ignored : undefined,
+        reason: typeof result.reason === 'string' ? result.reason : undefined,
+        error: typeof result.error === 'string' ? result.error : undefined,
+        matchId: typeof result.matchId === 'number' ? result.matchId : undefined,
+        tacticalMapKeybind: typeof result.tacticalMapKeybind === 'string' ? result.tacticalMapKeybind : undefined,
+      };
+    }
+
+    Logger.warn('ElectronBridge', 'start-auto-capture returned an unexpected payload', result);
+    return { started: false, error: 'Unexpected response from main process', reason: 'unexpected-response' };
+  } catch (error: unknown) {
+    Logger.error('ElectronBridge', 'start-auto-capture failed', error);
+    return { started: false, error: toErrorMessage(error, 'Auto-capture failed'), reason: 'ipc-error' };
+  }
+}
+
 /**
  * Electron bridge object for compatibility
  */
@@ -239,6 +280,7 @@ export const electronBridge = {
   saveOcrDebug,
   sendGameUiAction,
   waitForGameScreen,
+  startAutoCapture,
 };
 
 export default electronBridge;

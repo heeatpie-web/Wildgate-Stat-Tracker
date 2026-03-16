@@ -133,6 +133,7 @@ import { capTeammatePlayers, getMaxTeammatesForShip } from './utils/teamLimits';
 import { buildActiveWeaponsFromLoadout, cloneLoadout, sanitizeUnknownLoadout } from './utils/loadout';
 import { extractArtifactSourceFromOcrData } from './utils/artifactSource';
 import { buildOcrNameConfidenceMapFromExtractedData } from './utils/ocr/nameSourceHints';
+import { buildAutoCaptureStateSnapshot } from './utils/autoCaptureState';
 import {
     deriveCanonicalRosterCandidateTargetKey,
     getRosterCandidatePruneIds,
@@ -155,49 +156,6 @@ interface TelemetryRetentionStatus {
         remainingBytes: number;
     };
 }
-
-const AUTO_CAPTURE_DRAFT_LOOKBACK_MS = 6 * 60 * 60 * 1000;
-const AUTO_CAPTURE_DRAFT_SESSION_BUFFER_MS = 60_000;
-const MAX_SYNCED_AUTO_CAPTURE_DRAFTS = 12;
-
-const buildAutoCaptureHotkeyStateSnapshot = () => {
-    const state = useAppStore.getState();
-    const sessionStartTime = typeof state.sessionStartTime === 'number' && state.sessionStartTime > 0
-        ? state.sessionStartTime
-        : null;
-    const recentCutoff = sessionStartTime != null
-        ? (sessionStartTime - AUTO_CAPTURE_DRAFT_SESSION_BUFFER_MS)
-        : (Date.now() - AUTO_CAPTURE_DRAFT_LOOKBACK_MS);
-    const recentTelemetryDrafts = (Array.isArray(state.matches) ? state.matches : [])
-        .filter((match): match is Match => Boolean(match) && match.subType === 'Telemetry Draft')
-        .filter((match) => Number(match.timestamp || 0) >= recentCutoff)
-        .sort((left, right) => {
-            const rightTimestamp = Number(right.timestamp || 0);
-            const leftTimestamp = Number(left.timestamp || 0);
-            if (rightTimestamp !== leftTimestamp) {
-                return rightTimestamp - leftTimestamp;
-            }
-            return Number(right.id || 0) - Number(left.id || 0);
-        })
-        .slice(0, MAX_SYNCED_AUTO_CAPTURE_DRAFTS);
-
-    return {
-        activeUser: typeof state.activeUser === 'string' ? state.activeUser.trim() : '',
-        matches: recentTelemetryDrafts,
-        pendingMatchData: state.pendingMatchData || null,
-        sessionStartTime,
-        isMatchInProgress: state.isMatchInProgress === true,
-        autoCaptureSendKeypresses: state.autoCaptureSendKeypresses !== false,
-        autoCaptureWaitMultiplier: state.autoCaptureWaitMultiplier,
-        tacticalMapKeybind: typeof state.tacticalMapKeybind === 'string' ? state.tacticalMapKeybind : '',
-        holdTacticalMapKey: state.holdTacticalMapKey === true,
-        ocrRegions: state.ocrRegions || null,
-        ocrEnhancedNameRecoveryEnabled: state.ocrEnhancedNameRecoveryEnabled === true,
-        ocrNameRerouteThreshold: state.ocrNameRerouteThreshold,
-        deviceDisplayInfo: state.deviceDisplayInfo || null,
-        gameResolution: state.gameResolution || null,
-    };
-};
 
 interface TelemetryDraftPromptState {
     matchId: number;
@@ -438,6 +396,7 @@ const App: React.FC = () => {
     const dismissedTelemetryDraftMidmatchPromptIdsRef = React.useRef<Set<number>>(new Set());
     const handledTelemetryDraftPostmatchPromptIdsRef = React.useRef<Set<number>>(new Set());
     const telemetryDraftCaptureClicksRef = React.useRef<Map<number, number>>(new Map());
+    const telemetryDraftAutoCaptureHandledIdsRef = React.useRef<Set<number>>(new Set());
     const telemetryPruneNotificationKeyRef = React.useRef<string | null>(null);
     const fuzzyPromptNotificationCountRef = React.useRef(0);
     const idPromptNotificationCountRef = React.useRef(0);
@@ -587,7 +546,7 @@ const App: React.FC = () => {
 
         let lastSerializedSnapshot = '';
         const syncHotkeyState = () => {
-            const snapshot = buildAutoCaptureHotkeyStateSnapshot();
+            const snapshot = buildAutoCaptureStateSnapshot();
             const serializedSnapshot = JSON.stringify(snapshot);
             if (serializedSnapshot === lastSerializedSnapshot) return;
             lastSerializedSnapshot = serializedSnapshot;
@@ -1845,6 +1804,37 @@ const App: React.FC = () => {
         setToast({ message: 'Smart Capture started. You can submit result when ready.', type: 'info' });
     }, [activeUser, activeView, requestSmartCapture, setActiveView, setToast, telemetryDraftPrompt]);
 
+    const handleTelemetryDraftInGameAutoCapture = useCallback((matchId: number) => {
+        if (!Number.isInteger(matchId) || matchId <= 0) return;
+        if (telemetryDraftAutoCaptureHandledIdsRef.current.has(matchId)) return;
+        telemetryDraftAutoCaptureHandledIdsRef.current.add(matchId);
+        if (activeView !== 'recording') {
+            React.startTransition(() => setActiveView('recording'));
+        }
+        const requestId = requestSmartCapture({
+            activeUser: activeUser || null,
+            source: 'telemetry-ingame-auto-capture',
+            requestId: `telemetry-ingame-${matchId}-${Date.now()}`,
+            matchId,
+            behavior: 'auto-sequence',
+        });
+        window.dispatchEvent(new CustomEvent('smart-capture-request', {
+            detail: {
+                activeUser: activeUser || null,
+                source: 'telemetry-ingame-auto-capture',
+                requestId,
+                matchId,
+                behavior: 'auto-sequence',
+            },
+        }));
+        setToast({
+            message: activeView !== 'recording'
+                ? 'Telemetry marked the match as in-game. Starting Auto-Capture and opening Recording.'
+                : 'Telemetry marked the match as in-game. Starting Auto-Capture.',
+            type: 'info',
+        });
+    }, [activeUser, activeView, requestSmartCapture, setActiveView, setToast]);
+
     const handleTelemetryDraftResult = useCallback((result: FinalMatchResult) => {
         if (!telemetryDraftPrompt || telemetryDraftPrompt.phase !== 'postmatch') return;
         const draft = matches.find(m => m.id === telemetryDraftPrompt.matchId);
@@ -1941,6 +1931,7 @@ const App: React.FC = () => {
             handledTelemetryDraftPostmatchPromptIdsRef.current.add(matchId);
             dismissedTelemetryDraftMidmatchPromptIdsRef.current.add(matchId);
             telemetryDraftCaptureClicksRef.current.delete(matchId);
+            telemetryDraftAutoCaptureHandledIdsRef.current.delete(matchId);
             setTelemetryDraftPrompt((current) => (
                 current?.matchId === matchId ? null : current
             ));
@@ -1998,15 +1989,23 @@ const App: React.FC = () => {
             });
         };
 
+        const onTelemetryDraftInGameAutoCapture = (evt: Event) => {
+            const customEvt = evt as CustomEvent<{ matchId?: number }>;
+            const matchId = Number(customEvt?.detail?.matchId || 0);
+            handleTelemetryDraftInGameAutoCapture(matchId);
+        };
+
         window.addEventListener('telemetry:draft-started', onTelemetryDraftStarted as EventListener);
         window.addEventListener('telemetry:draft-ready', onTelemetryDraftReady as EventListener);
         window.addEventListener('telemetry:draft-capture-prompt', onTelemetryDraftCapturePrompt as EventListener);
+        window.addEventListener('telemetry:draft-ingame-auto-capture', onTelemetryDraftInGameAutoCapture as EventListener);
         return () => {
             window.removeEventListener('telemetry:draft-started', onTelemetryDraftStarted as EventListener);
             window.removeEventListener('telemetry:draft-ready', onTelemetryDraftReady as EventListener);
             window.removeEventListener('telemetry:draft-capture-prompt', onTelemetryDraftCapturePrompt as EventListener);
+            window.removeEventListener('telemetry:draft-ingame-auto-capture', onTelemetryDraftInGameAutoCapture as EventListener);
         };
-    }, []);
+    }, [handleTelemetryDraftInGameAutoCapture]);
 
     useEffect(() => {
         const onTelemetryPruneOpen = () => {

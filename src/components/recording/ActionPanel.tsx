@@ -25,7 +25,8 @@ import type { Match } from '../../types';
 import { runtimeConfig } from '../../config/runtimeConfig';
 import { buildAutoCaptureTelemetryDraft } from '../../utils/telemetryDraft';
 import { resolveSmartCaptureMatchId } from '../../utils/smartCaptureScope';
-import { sendGameUiAction, waitForGameScreen } from '../../utils/electronBridge';
+import { buildAutoCaptureStateSnapshot } from '../../utils/autoCaptureState';
+import { startAutoCapture } from '../../utils/electronBridge';
 
 interface ActionPanelProps {
     variant?: 'default' | 'transparent';
@@ -70,7 +71,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     const isCompact = density === 'compact';
 
     const { handleSmartScan, isScanning, scanProgress, scanLogs } = useSmartScan();
-    const ocrMode = useAppStore(s => s.ocrMode);
     const discardMatch = useAppStore(s => s.discardMatch);
     const resultOcrFlowMode = useAppStore(s => s.resultOcrFlowMode);
     const ocrAutoOpenAfterRerun = useAppStore(s => s.ocrAutoOpenAfterRerun);
@@ -102,8 +102,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     } = smartCaptureState;
     const {
         capture: triggerSmartCapture,
-        captureOnly,
-        processStoredImage,
         processAllStored,
         clearError: clearCaptureError,
         clearCaptures,
@@ -435,33 +433,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
             return;
         }
 
-        const ensureStep = async (
-            stepLabel: string,
-            action: 'open-tactical-map' | 'open-crew-hub',
-            expectedScreen: 'tactical_map' | 'crew_hub'
-        ) => {
-            const actionResult = await sendGameUiAction(action);
-            if (!actionResult.success) {
-                throw new Error(`${stepLabel}: ${actionResult.error || 'game UI action failed'}`);
-            }
-
-            const waitResult = await waitForGameScreen(expectedScreen, {
-                activeUser: captureUser,
-                ocrMode,
-            });
-            if (!waitResult.success) {
-                throw new Error(`${stepLabel}: ${waitResult.error || `timed out waiting for ${expectedScreen}`}`);
-            }
-        };
-
-        const captureAndProcessStep = async (stepLabel: string) => {
-            const savedCapture = await captureOnly(captureMatchId);
-            if (!savedCapture?.filePath) {
-                throw new Error(`${stepLabel}: capture did not produce a saved screenshot`);
-            }
-            await processStoredImage(savedCapture.filePath, captureUser);
-        };
-
         autoSequenceInFlightRef.current = true;
         Logger.info('ActionPanel', 'Starting auto-sequence smart capture', {
             activeUser: captureUser,
@@ -469,17 +440,39 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         });
 
         try {
-            await ensureStep('Open Tactical Map', 'open-tactical-map', 'tactical_map');
-            await captureAndProcessStep('Smart Capture: Map');
-            await ensureStep('Open Crew Hub', 'open-crew-hub', 'crew_hub');
-            await captureAndProcessStep('Smart Capture: Crew Hub');
+            const result = await startAutoCapture(buildAutoCaptureStateSnapshot({
+                activeUser: captureUser ?? '',
+                matchId: captureMatchId,
+            }));
 
-            const closeResult = await sendGameUiAction('close-current-ui');
-            if (!closeResult.success) {
-                Logger.warn('ActionPanel', 'Auto-sequence close-current-ui action failed', closeResult);
+            if (result.started) {
+                return;
             }
 
-            setToast({ message: 'Auto-capture complete - Map + Crew Hub captured', type: 'success' });
+            Logger.warn('ActionPanel', 'Auto-sequence start request was not accepted', {
+                activeUser: captureUser,
+                matchId: captureMatchId ?? null,
+                ignored: result.ignored === true,
+                reason: result.reason || null,
+                error: result.error || null,
+            });
+            if (result.ignored) {
+                const message = result.reason === 'cooldown'
+                    ? 'Auto-capture is cooling down. Try again in a moment.'
+                    : 'Auto-capture already in progress.';
+                setToast({ message, type: 'warning' });
+                return;
+            }
+
+            const message = result.error
+                || (result.reason === 'no-active-match'
+                    ? 'No active match in progress.'
+                    : (result.reason === 'missing-tactical-map-key'
+                        ? 'No tactical map key configured. Set it in Settings.'
+                        : (result.reason === 'invalid-tactical-map-key'
+                            ? 'Unsupported tactical map key configured. Check Settings.'
+                            : 'Auto-capture could not start.')));
+            setToast({ message: `Auto-capture failed: ${message}`, type: 'error' });
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : 'Unknown error';
             Logger.warn('ActionPanel', 'Auto-sequence smart capture failed', {
@@ -491,7 +484,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         } finally {
             autoSequenceInFlightRef.current = false;
         }
-    }, [activeUser, captureOnly, ocrMode, processStoredImage, resolveRequestedCaptureMatchId, setToast]);
+    }, [activeUser, resolveRequestedCaptureMatchId, setToast]);
 
     const handleSmartCaptureRequest = React.useCallback(async (request: SmartCaptureRequestPayload) => {
         const requestBehavior = request.behavior === 'auto-sequence' ? 'auto-sequence' : 'single';

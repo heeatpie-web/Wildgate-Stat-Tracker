@@ -83,4 +83,40 @@ describe('autoCaptureHotkeyState', () => {
       },
     });
   });
+
+  it('prefers an explicit matchId and accepts legacy request fields', () => {
+    const request = buildAutoCaptureRequestFromStateSnapshot({
+      activeUser: 'Pilot',
+      matchId: 555,
+      lifecycleActive: true,
+      autoCaptureSendKeypresses: false,
+      autoCaptureWaitMultiplier: 1.6,
+      autoCaptureTacticalMapKey: 'KeyM',
+      holdTacticalMapKey: true,
+      ocrMode: 'both',
+      ocrRegions: { crewHub: { roster: { xMin: 0.2, xMax: 0.8 } } },
+      runtimeOptions: { customFlag: true },
+      matches: [
+        { id: 44, subType: 'Telemetry Draft', telemetryDraftState: 'active', timestamp: 95_000, player: 'Pilot' },
+      ],
+      pendingMatchData: { id: 222 },
+    }, { now: 100_000 });
+
+    expect(request).toEqual(expect.objectContaining({
+      activeUser: 'Pilot',
+      matchId: 555,
+      lifecycleActive: true,
+      autoCaptureSendKeypresses: false,
+      autoCaptureWaitMultiplier: 1.6,
+      autoCaptureTacticalMapKey: 'KeyM',
+      holdTacticalMapKey: true,
+      ocrMode: 'both',
+      ocrRegions: { crewHub: { roster: { xMin: 0.2, xMax: 0.8 } } },
+      runtimeOptions: expect.objectContaining({
+        routingProfile: 'default',
+        fontProfile: 'default',
+        customFlag: true,
+      }),
+    }));
+  });
 });

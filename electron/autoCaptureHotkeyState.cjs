@@ -61,6 +61,7 @@ function buildAutoCaptureRequestFromStateSnapshot(snapshot = {}, { now = Date.no
   const activeUser = typeof snapshot.activeUser === 'string' && snapshot.activeUser.trim()
     ? snapshot.activeUser.trim()
     : null;
+  const explicitMatchId = Number(snapshot.matchId || 0);
   const sessionStartTime = Number(snapshot.sessionStartTime || 0);
   const matches = Array.isArray(snapshot.matches) ? snapshot.matches : [];
   const pendingMatchData = snapshot.pendingMatchData && typeof snapshot.pendingMatchData === 'object'
@@ -70,45 +71,55 @@ function buildAutoCaptureRequestFromStateSnapshot(snapshot = {}, { now = Date.no
   const deviceDisplayInfo = snapshot.deviceDisplayInfo && typeof snapshot.deviceDisplayInfo === 'object'
     ? snapshot.deviceDisplayInfo
     : null;
-  const resolvedMatchId = resolveSmartCaptureMatchId({
-    activeUser,
-    matches,
-    pendingMatchData,
-    sessionStartTime,
-    now,
-  }) ?? resolveSmartCaptureMatchId({
-    activeUser: null,
-    matches,
-    pendingMatchData,
-    sessionStartTime,
-    now,
-  });
+  const derivedRuntimeOptions = {
+    routingProfile: ocrEnhancedNameRecoveryEnabled ? 'names-only' : 'default',
+    fontProfile: ocrEnhancedNameRecoveryEnabled ? 'ealing-black-italic' : 'default',
+    nameRerouteThreshold: snapshot.ocrNameRerouteThreshold,
+    maxReroutePasses: ocrEnhancedNameRecoveryEnabled ? 1 : 0,
+    aspectProfile: typeof deviceDisplayInfo?.aspectProfile === 'string'
+      ? deviceDisplayInfo.aspectProfile
+      : null,
+    gameResolution: snapshot.gameResolution || null,
+    deviceDisplayInfo,
+  };
+  const runtimeOptions = snapshot.runtimeOptions && typeof snapshot.runtimeOptions === 'object'
+    ? { ...derivedRuntimeOptions, ...snapshot.runtimeOptions }
+    : derivedRuntimeOptions;
+  const resolvedMatchId = Number.isInteger(explicitMatchId) && explicitMatchId > 0
+    ? explicitMatchId
+    : (
+      resolveSmartCaptureMatchId({
+        activeUser,
+        matches,
+        pendingMatchData,
+        sessionStartTime,
+        now,
+      }) ?? resolveSmartCaptureMatchId({
+        activeUser: null,
+        matches,
+        pendingMatchData,
+        sessionStartTime,
+        now,
+      })
+    );
 
   return {
     activeUser,
     matchId: Number.isInteger(resolvedMatchId) && resolvedMatchId > 0 ? resolvedMatchId : null,
-    lifecycleActive: snapshot.isMatchInProgress === true,
+    lifecycleActive: snapshot.lifecycleActive === true || snapshot.isMatchInProgress === true,
     autoCaptureSendKeypresses: snapshot.autoCaptureSendKeypresses !== false,
     autoCaptureWaitMultiplier: snapshot.autoCaptureWaitMultiplier,
-    autoCaptureTacticalMapKey: typeof snapshot.tacticalMapKeybind === 'string'
-      ? snapshot.tacticalMapKeybind
-      : '',
+    autoCaptureTacticalMapKey: typeof snapshot.autoCaptureTacticalMapKey === 'string'
+      ? snapshot.autoCaptureTacticalMapKey
+      : (typeof snapshot.tacticalMapKeybind === 'string' ? snapshot.tacticalMapKeybind : ''),
     holdTacticalMapKey: snapshot.holdTacticalMapKey === true,
-    ocrMode: 'local',
+    ocrMode: typeof snapshot.ocrMode === 'string' && snapshot.ocrMode.trim()
+      ? snapshot.ocrMode.trim()
+      : 'local',
     ocrRegions: snapshot.ocrRegions && typeof snapshot.ocrRegions === 'object'
       ? snapshot.ocrRegions
       : null,
-    runtimeOptions: {
-      routingProfile: ocrEnhancedNameRecoveryEnabled ? 'names-only' : 'default',
-      fontProfile: ocrEnhancedNameRecoveryEnabled ? 'ealing-black-italic' : 'default',
-      nameRerouteThreshold: snapshot.ocrNameRerouteThreshold,
-      maxReroutePasses: ocrEnhancedNameRecoveryEnabled ? 1 : 0,
-      aspectProfile: typeof deviceDisplayInfo?.aspectProfile === 'string'
-        ? deviceDisplayInfo.aspectProfile
-        : null,
-      gameResolution: snapshot.gameResolution || null,
-      deviceDisplayInfo,
-    },
+    runtimeOptions,
   };
 }
 
