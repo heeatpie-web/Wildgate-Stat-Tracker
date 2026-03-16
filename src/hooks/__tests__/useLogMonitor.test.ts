@@ -1,8 +1,14 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const addMatch = vi.fn();
-const updateMatch = vi.fn();
+const addMatch = vi.fn((match: Record<string, unknown>) => {
+  appStoreState.matches = [...appStoreState.matches, match];
+});
+const updateMatch = vi.fn((match: Record<string, unknown>) => {
+  appStoreState.matches = appStoreState.matches.map((existing) => (
+    existing?.id === match?.id ? { ...existing, ...match } : existing
+  ));
+});
 const setLastActivity = vi.fn();
 const setTelemetryStatus = vi.fn();
 const processTelemetryEvent = vi.fn();
@@ -417,7 +423,6 @@ describe('useLogMonitor', () => {
     });
 
     expect(addMatch).not.toHaveBeenCalled();
-    expect(gameDataState.setIsMatchInProgress).not.toHaveBeenCalledWith(true);
   });
 
   it('starts lifecycle from a live matchmaker state when the map-start event is missing', async () => {
@@ -441,6 +446,60 @@ describe('useLogMonitor', () => {
     expect(gameDataState.setIsMatchInProgress).toHaveBeenCalledWith(true);
     expect(gameDataState.setMatchStartTime).toHaveBeenCalled();
     expect(uiState.setOverlayPhase).toHaveBeenCalledWith('Setup');
+  });
+
+  it('does not restart lifecycle when a map-start event arrives after a live matchmaker start', async () => {
+    const baseSec = Math.floor(Date.now() / 1000);
+    const { useLogMonitor } = await import('../useLogMonitor');
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: {
+            sessionId: 'live-session-id',
+            state: 'InProgress',
+          },
+          ClientTimestamp: baseSec,
+        },
+      ]);
+    });
+
+    expect(addMatch).toHaveBeenCalledTimes(1);
+    expect(appStoreState.resetSelectionSourcesForNewMatch).toHaveBeenCalledTimes(1);
+    expect(appStoreState.resetMatchTrackingForNewMatch).toHaveBeenCalledTimes(1);
+    expect(appStoreState.resetMatchMetricsForNewMatch).toHaveBeenCalledTimes(1);
+    expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-started' }));
+
+    appStoreState.resetSelectionSourcesForNewMatch.mockClear();
+    appStoreState.resetMatchTrackingForNewMatch.mockClear();
+    appStoreState.resetMatchMetricsForNewMatch.mockClear();
+    gameDataState.setIsMatchInProgress.mockClear();
+    gameDataState.setMatchStartTime.mockClear();
+    uiState.setOverlayPhase.mockClear();
+    dispatchSpy.mockClear();
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'DesolationReach' },
+          ClientTimestamp: baseSec + 1,
+        },
+      ]);
+    });
+
+    expect(addMatch).toHaveBeenCalledTimes(1);
+    expect(appStoreState.resetSelectionSourcesForNewMatch).not.toHaveBeenCalled();
+    expect(appStoreState.resetMatchTrackingForNewMatch).not.toHaveBeenCalled();
+    expect(appStoreState.resetMatchMetricsForNewMatch).not.toHaveBeenCalled();
+    expect(gameDataState.setIsMatchInProgress).not.toHaveBeenCalled();
+    expect(gameDataState.setMatchStartTime).not.toHaveBeenCalled();
+    expect(uiState.setOverlayPhase).not.toHaveBeenCalled();
+    expect(dispatchSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-started' }));
+    dispatchSpy.mockRestore();
   });
 
   it('does not finalize a live telemetry draft when a later event omits sessionId', async () => {
@@ -588,7 +647,132 @@ describe('useLogMonitor', () => {
     dispatchSpy.mockRestore();
   });
 
-  it('passes not-in-progress lifecycle context to telemetry processor on initial map start', async () => {
+  it('creates and finalizes a minimal telemetry draft when the match ends without an existing draft', async () => {
+    const baseSec = Math.floor(Date.now() / 1000);
+    gameDataState.isMatchInProgress = true;
+    gameDataState.matchStartTime = baseSec * 1000;
+    gameDataState.currentLoadout = {
+      hero: 'Adrian',
+      ship: 'Hunter',
+      weapons: [],
+      equipment: [],
+      characterWeapons: ['Double Whammy'],
+      characterEquipment: ['Repair Drone'],
+    };
+
+    const { useLogMonitor } = await import('../useLogMonitor');
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'Frontend_MainMenu' },
+          ClientTimestamp: baseSec + 120,
+        },
+      ]);
+    });
+
+    expect(addMatch).toHaveBeenCalledTimes(1);
+    const createdDraft = addMatch.mock.calls[0]?.[0] as {
+      id?: number;
+      hero?: string;
+      ship?: string;
+      loadout?: {
+        hero?: string | null;
+        ship?: string | null;
+        characterWeapons?: string[];
+        characterEquipment?: string[];
+      };
+    } | undefined;
+    expect(createdDraft?.hero).toBe('Adrian');
+    expect(createdDraft?.ship).toBe('Hunter');
+    expect(createdDraft?.loadout?.characterWeapons).toEqual(['Double Whammy']);
+    expect(createdDraft?.loadout?.characterEquipment).toEqual(['Repair Drone']);
+
+    const finalizedDraft = updateMatch.mock.calls
+      .map(([match]) => match as {
+        id?: number;
+        time?: string;
+        result?: string;
+      })
+      .find((match) => match.id === createdDraft?.id && typeof match.time === 'string');
+
+    expect(finalizedDraft).toBeTruthy();
+    expect(finalizedDraft?.time).toBe('02:00');
+    expect(finalizedDraft?.result).toBe('Ongoing');
+    expect(gameDataState.setIsMatchInProgress).toHaveBeenCalledWith(false);
+    expect(gameDataState.setMatchStartTime).toHaveBeenCalledWith(null);
+    expect(uiState.setOverlayPhase).toHaveBeenCalledWith('Result');
+    expect(dispatchSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-started' }));
+    expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-ready' }));
+    dispatchSpy.mockRestore();
+  });
+
+  it('does not reuse a finalized telemetry draft when the next match starts', async () => {
+    const baseSec = Math.floor(Date.now() / 1000);
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'DesolationReach' },
+          ClientTimestamp: baseSec,
+        },
+      ]);
+    });
+
+    const firstDraft = addMatch.mock.calls[0]?.[0] as { id?: number; telemetryDraftState?: string } | undefined;
+    expect(firstDraft?.telemetryDraftState).toBe('active');
+    appStoreState.matches = firstDraft ? [firstDraft] : [];
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: { sessionId: 'live-session-id', state: 'InProgress' },
+          ClientTimestamp: baseSec + 1,
+        },
+      ]);
+    });
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: { sessionId: '' },
+          ClientTimestamp: baseSec + 90,
+        },
+      ]);
+    });
+
+    const finalizedDraft = appStoreState.matches.find((match) => match?.id === firstDraft?.id) as { telemetryDraftState?: string } | undefined;
+    expect(finalizedDraft?.telemetryDraftState).toBe('ready');
+
+    addMatch.mockClear();
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'MinesOfMatar' },
+          ClientTimestamp: baseSec + 180,
+        },
+      ]);
+    });
+
+    expect(addMatch).toHaveBeenCalledTimes(1);
+    expect(addMatch.mock.calls[0]?.[0]).toMatchObject({
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+    });
+    expect(addMatch.mock.calls[0]?.[0]?.id).not.toBe(firstDraft?.id);
+  });
+
+  it('passes reduced non-lifecycle context to telemetry processor on initial map start', async () => {
     const { useLogMonitor } = await import('../useLogMonitor');
     renderHook(() => useLogMonitor('Pilot'));
 
@@ -603,8 +787,9 @@ describe('useLogMonitor', () => {
     });
 
     expect(processTelemetryEvent).toHaveBeenCalled();
-    const context = processTelemetryEvent.mock.calls[0]?.[2] as { isMatchInProgress?: boolean } | undefined;
-    expect(context?.isMatchInProgress).toBe(false);
+    const context = processTelemetryEvent.mock.calls[0]?.[2] as { playerIdMap?: Record<string, string>; pilotRegistry?: string[] } | undefined;
+    expect(context?.playerIdMap).toEqual({});
+    expect(context?.pilotRegistry).toEqual([]);
   });
 
   it('clears stale telemetry ship detection when carrying the previous loadout into a new match', async () => {
@@ -659,13 +844,13 @@ describe('useLogMonitor', () => {
       kills: { 'AI Legion': 0 },
       result: 'Ongoing',
       subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
       time: '00:00',
       damageTaken: 0,
       notes: '',
       timelineEvents: [],
       artifacts: [],
       ocrState: 'queued',
-      telemetryDraftState: 'active',
     }];
     const { useLogMonitor } = await import('../useLogMonitor');
     renderHook(() => useLogMonitor('Pilot'));
@@ -683,66 +868,6 @@ describe('useLogMonitor', () => {
     expect(addMatch).not.toHaveBeenCalled();
   });
 
-  it('does not reuse a finalized telemetry draft when the next match starts', async () => {
-    const baseSec = Math.floor(Date.now() / 1000);
-    const { useLogMonitor } = await import('../useLogMonitor');
-    renderHook(() => useLogMonitor('Pilot'));
-
-    act(() => {
-      ipcCallbacks['log-data']?.([
-        {
-          EventName: 'NebLoadingScreen',
-          Payload: { loadingMap: 'DesolationReach' },
-          ClientTimestamp: baseSec,
-        },
-      ]);
-    });
-
-    const firstDraft = addMatch.mock.calls[0]?.[0] as { id?: number; telemetryDraftState?: string } | undefined;
-    expect(firstDraft?.telemetryDraftState).toBe('active');
-    appStoreState.matches = firstDraft ? [firstDraft] : [];
-
-    act(() => {
-      ipcCallbacks['log-data']?.([
-        {
-          EventName: 'NebClientMatchmakerStateChange',
-          Payload: { sessionId: 'live-session-id', state: 'InProgress' },
-          ClientTimestamp: baseSec + 1,
-        },
-      ]);
-    });
-
-    act(() => {
-      ipcCallbacks['log-data']?.([
-        {
-          EventName: 'NebClientMatchmakerStateChange',
-          Payload: { sessionId: '' },
-          ClientTimestamp: baseSec + 90,
-        },
-      ]);
-    });
-
-    const finalizedDraft = updateMatch.mock.calls
-      .map(([match]) => match as { id?: number; telemetryDraftState?: string })
-      .find((match) => match.id === firstDraft?.id && match.telemetryDraftState === 'ready');
-    expect(finalizedDraft).toBeTruthy();
-    appStoreState.matches = finalizedDraft ? [{ ...firstDraft, ...finalizedDraft }] : [];
-
-    addMatch.mockClear();
-
-    act(() => {
-      ipcCallbacks['log-data']?.([
-        {
-          EventName: 'NebLoadingScreen',
-          Payload: { loadingMap: 'MinesOfMatar' },
-          ClientTimestamp: baseSec + 180,
-        },
-      ]);
-    });
-
-    expect(addMatch).toHaveBeenCalledTimes(1);
-    expect(addMatch.mock.calls[0]?.[0]?.id).not.toBe(firstDraft?.id);
-  });
   it('resolves nested telemetry weapon/equipment payloads into current loadout', async () => {
     const { useLogMonitor } = await import('../useLogMonitor');
     renderHook(() => useLogMonitor('Pilot'));

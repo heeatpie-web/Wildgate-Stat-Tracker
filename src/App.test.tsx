@@ -93,6 +93,8 @@ const gameDataState = {
 const appStoreState = {
   setTutorialCompleted: vi.fn(),
   isLoading: false,
+  activeUser: 'Pilot',
+  sessionStartTime: Date.now() - 1_000,
   startupSmartPreloadEnabled: false,
   adaptivePreloadEnabled: true,
   adaptivePreloadBudgetMs: 900,
@@ -115,12 +117,15 @@ const appStoreState = {
    autoCaptureSendKeypresses: true,
    autoCaptureWaitMultiplier: 1,
    tacticalMapKeybind: 'Tab',
+   holdTacticalMapKey: false,
    ocrEnhancedNameRecoveryEnabled: true,
    ocrNameRerouteThreshold: 78,
    ocrRegions: {
      crewHub: {},
      mapScreen: {},
    },
+   deviceDisplayInfo: null,
+   gameResolution: null,
    isMatchInProgress: false,
   dismissedRosterCandidateKeys: [] as string[],
   ocrCorrections: {},
@@ -129,7 +134,7 @@ const appStoreState = {
   addMatch: vi.fn((match: any) => {
     appStoreState.matches = [...appStoreState.matches, match];
   }),
-  pendingMatchData: {},
+  pendingMatchData: null as any,
   setPendingArtifactType: vi.fn(),
   setPendingMatchData: vi.fn(),
   updateMatch: vi.fn(),
@@ -178,6 +183,7 @@ vi.mock('./hooks/useSoundEffects', () => ({
 vi.mock('./store/useAppStore', () => {
   const useAppStore = (selector: (state: typeof appStoreState) => unknown) => selector(appStoreState);
   useAppStore.getState = () => appStoreState;
+  useAppStore.subscribe = vi.fn(() => () => {});
   return { useAppStore };
 });
 
@@ -244,12 +250,17 @@ describe('App', () => {
     appStoreState.dismissedRosterCandidateKeys = [];
     appStoreState.matches = [];
     appStoreState.addMatch.mockClear();
-    appStoreState.pendingMatchData = {};
+    appStoreState.activeUser = 'Pilot';
+    appStoreState.sessionStartTime = Date.now() - 1_000;
+    appStoreState.pendingMatchData = null;
     appStoreState.currentLoadout = null;
     appStoreState.autoSequenceOnCapture = false;
     appStoreState.autoCaptureSendKeypresses = true;
     appStoreState.autoCaptureWaitMultiplier = 1;
     appStoreState.tacticalMapKeybind = 'Tab';
+    appStoreState.holdTacticalMapKey = false;
+    appStoreState.deviceDisplayInfo = null;
+    appStoreState.gameResolution = null;
     appStoreState.isMatchInProgress = false;
   });
 
@@ -479,25 +490,20 @@ describe('App', () => {
     expect(screen.queryByText(/telemetry retention needs cleanup/i)).not.toBeInTheDocument();
   });
 
-  it('routes F10 hotkey to auto-capture coordinator when IPC event is received', async () => {
+  it('syncs auto-capture hotkey state to electron on mount', async () => {
     const { default: App } = await import('./App');
-    uiState.activeView = 'analytics';
     appStoreState.isMatchInProgress = true;
-    gameDataState.matches = [{
+    appStoreState.matches = [{
       id: 321,
       subType: 'Telemetry Draft',
       timestamp: Date.now(),
       player: 'Pilot',
       artifacts: [],
     }];
-    const handlers: Record<string, (...args: unknown[]) => void> = {};
     const api = {
-      invoke: vi.fn(() => Promise.resolve({ started: true })),
       send: vi.fn(),
-      on: vi.fn((channel: string, cb: (...args: unknown[]) => void) => {
-        handlers[channel] = cb;
-        return vi.fn();
-      }),
+      invoke: vi.fn(() => Promise.resolve(null)),
+      on: vi.fn(() => vi.fn()),
       removeAllListeners: vi.fn(),
     };
     getElectronAPIMock.mockReturnValue(api);
@@ -505,131 +511,89 @@ describe('App', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(handlers['hotkey-auto-capture']).toBeTypeOf('function');
-    });
-
-    act(() => {
-      handlers['hotkey-auto-capture']();
-    });
-
-    await waitFor(() => {
-      expect(api.invoke).toHaveBeenCalledWith('start-auto-capture', expect.objectContaining({
+      expect(api.send).toHaveBeenCalledWith('sync-auto-capture-hotkey-state', expect.objectContaining({
         activeUser: 'Pilot',
-        lifecycleActive: true,
-        matchId: 321,
-        autoCaptureTacticalMapKey: 'Tab',
-      }));
-    });
-    expect(uiState.requestSmartCapture).not.toHaveBeenCalled();
-    expect(uiState.setActiveView).not.toHaveBeenCalledWith('recording');
-    expect(api.invoke).toHaveBeenCalledWith('start-auto-capture', expect.objectContaining({
-      activeUser: 'Pilot',
-      runtimeOptions: expect.objectContaining({
-        aspectProfile: null,
-      }),
-    }));
-    gameDataState.matches = [];
-    appStoreState.isMatchInProgress = false;
-  });
-
-  it('creates a telemetry draft for F10 when the match is active but no draft exists yet', async () => {
-    const { default: App } = await import('./App');
-    uiState.activeView = 'analytics';
-    appStoreState.isMatchInProgress = true;
-    appStoreState.matches = [];
-    gameDataState.matches = [];
-    const handlers: Record<string, (...args: unknown[]) => void> = {};
-    const api = {
-      invoke: vi.fn(() => Promise.resolve({ started: true })),
-      send: vi.fn(),
-      on: vi.fn((channel: string, cb: (...args: unknown[]) => void) => {
-        handlers[channel] = cb;
-        return vi.fn();
-      }),
-      removeAllListeners: vi.fn(),
-    };
-    getElectronAPIMock.mockReturnValue(api);
-
-    render(<App />);
-
-    await waitFor(() => {
-      expect(handlers['hotkey-auto-capture']).toBeTypeOf('function');
-    });
-
-    act(() => {
-      handlers['hotkey-auto-capture']();
-    });
-
-    await waitFor(() => {
-      expect(appStoreState.addMatch).toHaveBeenCalledTimes(1);
-    });
-
-    const createdDraft = appStoreState.addMatch.mock.calls[0][0];
-    expect(createdDraft).toEqual(expect.objectContaining({
-      subType: 'Telemetry Draft',
-      player: 'Pilot',
-      result: 'Ongoing',
-      ocrState: 'queued',
-    }));
-
-    await waitFor(() => {
-      expect(api.invoke).toHaveBeenCalledWith('start-auto-capture', expect.objectContaining({
-        activeUser: 'Pilot',
-        lifecycleActive: true,
-        matchId: createdDraft.id,
-        autoCaptureTacticalMapKey: 'Tab',
-      }));
-    });
-
-    appStoreState.isMatchInProgress = false;
-  });
-
-  it('queues the auto-sequence workflow when F10 capture sequencing is enabled', async () => {
-    const { default: App } = await import('./App');
-    appStoreState.autoSequenceOnCapture = true;
-    appStoreState.isMatchInProgress = true;
-    uiState.activeView = 'recording';
-    gameDataState.matches = [{
-      id: 321,
-      subType: 'Telemetry Draft',
-      timestamp: Date.now(),
-      player: 'Pilot',
-      artifacts: [],
-    }];
-    const handlers: Record<string, (...args: unknown[]) => void> = {};
-    const api = {
-      invoke: vi.fn(() => Promise.resolve({ started: true })),
-      send: vi.fn(),
-      on: vi.fn((channel: string, cb: (...args: unknown[]) => void) => {
-        handlers[channel] = cb;
-        return vi.fn();
-      }),
-      removeAllListeners: vi.fn(),
-    };
-    getElectronAPIMock.mockReturnValue(api);
-
-    render(<App />);
-
-    await waitFor(() => {
-      expect(handlers['hotkey-auto-capture']).toBeTypeOf('function');
-    });
-
-    act(() => {
-      handlers['hotkey-auto-capture']();
-    });
-
-    await waitFor(() => {
-      expect(api.invoke).toHaveBeenCalledWith('start-auto-capture', expect.objectContaining({
-        activeUser: 'Pilot',
-        matchId: 321,
-        lifecycleActive: true,
+        isMatchInProgress: true,
         autoCaptureSendKeypresses: true,
         autoCaptureWaitMultiplier: 1,
+        tacticalMapKeybind: 'Tab',
+        matches: [
+          expect.objectContaining({
+            id: 321,
+            subType: 'Telemetry Draft',
+          }),
+        ],
       }));
     });
-    expect(uiState.requestSmartCapture).not.toHaveBeenCalled();
-    appStoreState.autoSequenceOnCapture = false;
-    gameDataState.matches = [];
+    appStoreState.matches = [];
+    appStoreState.isMatchInProgress = false;
+  });
+
+  it('syncs only recent telemetry drafts into the hotkey snapshot', async () => {
+    const { default: App } = await import('./App');
+    const now = Date.now();
+    appStoreState.sessionStartTime = now;
+    appStoreState.matches = [
+      {
+        id: 101,
+        subType: 'Telemetry Draft',
+        timestamp: now - 10_000,
+        player: 'Pilot',
+        artifacts: [],
+      },
+      {
+        id: 102,
+        subType: 'Telemetry Draft',
+        timestamp: now - (7 * 60 * 60 * 1000),
+        player: 'Pilot',
+        artifacts: [],
+      },
+      {
+        id: 103,
+        subType: 'Manual Match',
+        timestamp: now - 5_000,
+        player: 'Pilot',
+        artifacts: [],
+      },
+    ];
+    const api = {
+      send: vi.fn(),
+      invoke: vi.fn(() => Promise.resolve(null)),
+      on: vi.fn(() => vi.fn()),
+      removeAllListeners: vi.fn(),
+    };
+    getElectronAPIMock.mockReturnValue(api);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(api.send).toHaveBeenCalledWith('sync-auto-capture-hotkey-state', expect.objectContaining({
+        matches: [
+          expect.objectContaining({ id: 101, subType: 'Telemetry Draft' }),
+        ],
+      }));
+    });
+  });
+
+  it('clears auto-capture hotkey state on unmount', async () => {
+    const { default: App } = await import('./App');
+    const api = {
+      send: vi.fn(),
+      invoke: vi.fn(() => Promise.resolve(null)),
+      on: vi.fn(() => vi.fn()),
+      removeAllListeners: vi.fn(),
+    };
+    getElectronAPIMock.mockReturnValue(api);
+
+    const { unmount } = render(<App />);
+
+    await waitFor(() => {
+      expect(api.send).toHaveBeenCalledWith('sync-auto-capture-hotkey-state', expect.any(Object));
+    });
+
+    unmount();
+
+    expect(api.send).toHaveBeenCalledWith('sync-auto-capture-hotkey-state', null);
   });
 
   it('plays the capture sound when auto-capture progress is reported from electron', async () => {
@@ -933,4 +897,3 @@ describe('App', () => {
     });
   });
 });
-
