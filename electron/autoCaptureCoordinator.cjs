@@ -33,17 +33,6 @@ const AUTO_CAPTURE_WAIT_PROFILES = Object.freeze({
     crewHubPanelEndMs: 8,
     exitMs: 10,
   }),
-  fallback: Object.freeze({
-    tacticalMapOpenMs: 100,
-    tacticalMapCloseMs: 20,
-    heldMapOpenMs: 110,
-    heldMapCloseMs: 40,
-    escMenuOpenMs: 60,
-    crewHubOpenMs: 70,
-    crewHubPanelStepMs: 30,
-    crewHubPanelEndMs: 20,
-    exitMs: 10,
-  }),
 });
 
 const DEFAULT_GAME_SETTINGS_CANDIDATES = Object.freeze([
@@ -65,12 +54,6 @@ const TACTICAL_MAP_BIND_PATTERNS = Object.freeze([
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function createScreenValidationError(message) {
-  const error = new Error(message);
-  error.code = 'AUTO_CAPTURE_SCREEN_VALIDATION';
-  return error;
 }
 
 function clampWaitMultiplier(value) {
@@ -296,22 +279,6 @@ function createAutoCaptureCoordinator({
       }
     };
 
-    const validateScreenStep = async (step, expectedType) => {
-      if (!expectedType || typeof waitForScreenType !== 'function') return;
-      logAutoCaptureStep(step, `(validate ${expectedType})`);
-      const result = await waitForScreenType(expectedType, {
-        activeUser,
-        ocrMode,
-        ocrRegions,
-        runtimeOptions,
-      });
-      if (!result?.success) {
-        const detected = String(result?.detectedType || 'unknown');
-        const reason = result?.error || `detected ${detected}`;
-        throw createScreenValidationError(`${step.label}: expected ${expectedType}, detected ${detected} (${reason})`);
-      }
-    };
-
     const emitCommittedCaptureProgress = (captures = []) => {
       captures.forEach((capture) => {
         notify({
@@ -369,7 +336,7 @@ function createAutoCaptureCoordinator({
 
       const expectedType = EXPECTED_SCREEN_TYPES[step.label];
       if (expectedType && detectedType && detectedType !== expectedType) {
-        throw createScreenValidationError(`${step.label}: expected ${expectedType}, detected ${detectedType}`);
+        throw new Error(`${step.label}: expected ${expectedType}, detected ${detectedType}`);
       }
 
       return captureMeta;
@@ -410,7 +377,6 @@ function createAutoCaptureCoordinator({
         await waitStep(waitProfile.escMenuOpenMs);
         await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{UP}{UP}{UP}{UP}{SPACE}', { useMenuSender: true });
         await waitStep(waitProfile.crewHubOpenMs);
-        await validateScreenStep(STEP_DEFINITIONS.captureCrewHubA, 'crew_hub');
 
         await captureStep(STEP_DEFINITIONS.captureCrewHubA, 2, attemptCaptures);
 
@@ -441,25 +407,7 @@ function createAutoCaptureCoordinator({
     );
 
     try {
-      let acceptedCaptures;
-      try {
-        acceptedCaptures = await runAttempt(AUTO_CAPTURE_WAIT_PROFILES.fast);
-      } catch (error) {
-        await cleanupAttemptCaptures(getAttemptCapturesFromError(error));
-        if (error?.code !== 'AUTO_CAPTURE_SCREEN_VALIDATION') {
-          throw error;
-        }
-        console.log(`[AutoCapture] Fast-path validation failed, retrying with slower waits: ${error.message}`);
-        if (sendKeypresses) {
-          try {
-            await sendKeySequence('{ESC}', 'Auto-Capture fast-path recovery');
-          } catch {
-            // Recovery is best-effort.
-          }
-        }
-        acceptedCaptures = await runAttempt(AUTO_CAPTURE_WAIT_PROFILES.fallback);
-      }
-
+      const acceptedCaptures = await runAttempt(AUTO_CAPTURE_WAIT_PROFILES.fast);
       emitCommittedCaptureProgress(acceptedCaptures);
     } catch (error) {
       await cleanupAttemptCaptures(getAttemptCapturesFromError(error));
