@@ -237,7 +237,7 @@ describe('useMatchSubmission', () => {
     expect(setShowWizard).toHaveBeenCalledWith('Win');
   });
 
-  it('initiateSubmission reuses unresolved telemetry draft for pending match data', () => {
+  it('initiateSubmission reopens a ready telemetry draft for pending match data', () => {
     const now = 1_700_000_100_000;
     const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
     mockStoreState.activeUser = 'Tester';
@@ -261,6 +261,7 @@ describe('useMatchSubmission', () => {
       kills: { 'AI Legion': 2 },
       result: 'Draw',
       subType: 'Telemetry Draft',
+      telemetryDraftState: 'ready',
       time: '09:12',
       notes: 'draft',
       artifacts: ['draft.png'],

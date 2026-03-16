@@ -26,6 +26,7 @@ function findActiveTelemetryDraftMatch({
     .filter(Boolean)
     .filter((match) => {
       if (match?.subType !== 'Telemetry Draft') return false;
+      if (match?.telemetryDraftState !== 'active') return false;
       const timestamp = Number(match.timestamp || 0);
       if (!Number.isFinite(timestamp) || timestamp < recentCutoff) return false;
       const draftPlayer = normalizePlayerKey(match.player);
