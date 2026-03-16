@@ -1,6 +1,6 @@
 # Changelog
 
-## [3.2.0] - 2026-03-15
+## [3.2.1] - 2026-03-15
 
 ### Changed
 - Settings were restructured around `SegmentedControl`, `OptionCycler`, and `SettingRow` patterns so appearance, overlay, capture, telemetry, and OCR review controls are faster to scan and adjust
