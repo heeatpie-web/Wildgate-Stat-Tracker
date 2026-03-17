@@ -133,6 +133,7 @@ describe('Header', () => {
       timestamp: now - 10_000,
       player: 'TestPilot',
       subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
     }];
     window.addEventListener('smart-capture-request', eventSpy as EventListener);
 
@@ -169,6 +170,7 @@ describe('Header', () => {
         timestamp: now - 10_000,
         player: 'TestPilot',
         subType: 'Telemetry Draft',
+        telemetryDraftState: 'active',
       },
     ];
     window.addEventListener('smart-capture-request', eventSpy as EventListener);
