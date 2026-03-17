@@ -116,5 +116,30 @@ describe('QueueItemRichPreview', () => {
     expect(screen.getByLabelText('Status Ready to save')).toBeInTheDocument();
     expect(screen.queryByText(/\b\d+\s+warnings?\b/i)).toBeNull();
   });
+
+  it('shows awaiting result for telemetry drafts that already reached postmatch', () => {
+    const telemetryReadyMatch: Match = {
+      ...baseMatch,
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'ready',
+      artifacts: [],
+      ocrDebug: undefined,
+      ocrState: 'queued',
+    };
+
+    render(
+      <QueueItemRichPreview
+        match={telemetryReadyMatch}
+        displayNumber={24}
+        rawMatchId={telemetryReadyMatch.id}
+        isSelected={false}
+        onClick={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Awaiting Result')).toBeInTheDocument();
+    expect(screen.queryByText(/^Ongoing$/)).toBeNull();
+  });
 });
 

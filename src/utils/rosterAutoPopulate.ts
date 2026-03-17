@@ -4,7 +4,7 @@ import { deriveCanonicalRosterCandidateTargetKey, shouldQueueCanonicalRosterCand
 import { combinedNameSimilarityScore, normalizeOcrName } from './stringUtils';
 
 export const ROSTER_AUTO_POPULATE_REVIEW_MIN = 70;
-export const ROSTER_AUTO_POPULATE_DETECT_MIN = 83;
+export const ROSTER_AUTO_POPULATE_DETECT_MIN = 78;
 
 export type RosterAutoPopulateDecisionType = 'exact' | 'add' | 'merge' | 'review' | 'ignore';
 

@@ -292,6 +292,27 @@ const idsEquivalent = (left: unknown, right: unknown): boolean => {
     return leftAliases.some((alias) => rightAliases.has(alias));
 };
 
+export const resolvePlayerProfileDisplayName = (
+    profileId: string,
+    profile: Pick<PlayerProfile, 'id' | 'name'> | undefined,
+    knownMappings?: Record<string, string>
+): string | null => {
+    const explicitName = String(profile?.name || '').trim();
+    if (explicitName) return explicitName;
+
+    const candidateIds = buildIdAliases(profile?.id || profileId);
+    for (const candidateId of candidateIds) {
+        const mappedName = String(knownMappings?.[candidateId] || '').trim();
+        if (mappedName) return mappedName;
+    }
+
+    const fallbackId = String(profile?.id || profileId || '').trim();
+    if (!fallbackId) return null;
+    const normalizedGuidLikeId = normalizeGuidLikeId(fallbackId);
+    if (GUID_HEX_PATTERN.test(normalizedGuidLikeId)) return null;
+    return fallbackId;
+};
+
 const emptyTeamIdentityContexts = (): Record<OcrAliasContext, number> => ({
     lobby: 0,
     tactical: 0,

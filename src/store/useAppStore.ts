@@ -58,7 +58,7 @@ const resolvePersistedTacticalMapKeybind = (settings: Record<string, unknown>): 
   if (typeof settings.tacticalMapKeybind === 'string') {
     return settings.tacticalMapKeybind.trim();
   }
-  return 'Tab';
+  return '';
 };
 
 const mergeNumberRecord = <T extends object>(base: T, incoming: unknown): T => {
@@ -265,7 +265,7 @@ const customStorage: PersistStorage<AppState> = {
             : 0.5,
           tacticalMapKeybind: resolvePersistedTacticalMapKeybind(settings),
           holdTacticalMapKey: settings.holdTacticalMapKey === true,
-          autoPopulateRosterOnSave: settings.autoPopulateRosterOnSave ?? false,
+          autoPopulateRosterOnSave: settings.autoPopulateRosterOnSave ?? true,
           lockOcrTeams: settings.lockOcrTeams || false,
           ocrEnhancedNameRecoveryEnabled: settings.ocrEnhancedNameRecoveryEnabled ?? true,
           ocrNameRerouteThreshold: normalizeOcrNameRerouteThreshold(settings.ocrNameRerouteThreshold),

@@ -1,6 +1,6 @@
 export const CHANGELOG: Record<string, string[]> = {
-  "v3.2.1": [
-    "Release: Version 3.2.1 restructures Settings around SegmentedControl, OptionCycler, and SettingRow controls so appearance, overlay, capture, telemetry, and OCR review options are faster to scan and change.",
+  "v3.3.1": [
+    "Release: Version 3.3.1 restructures Settings around SegmentedControl, OptionCycler, and SettingRow controls so appearance, overlay, capture, telemetry, and OCR review options are faster to scan and change.",
     "Fix: Auto-capture now defaults to the faster 0.5 pacing and trims the longest tactical-map and crew-hub waits during push-to-show and F10 auto-sequence flows.",
     "Reliability: Telemetry now treats practice-range queue/start as a real lifecycle, resolves nested prospector and ship loadout payloads more reliably, and finalizes practice drafts cleanly on explicit session end.",
     "Fix: Manual Stop Match now clears the active unresolved ongoing draft even when the draft came from telemetry or recovered state instead of the current timer button press.",

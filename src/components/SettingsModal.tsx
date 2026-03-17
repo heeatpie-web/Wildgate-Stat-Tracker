@@ -31,14 +31,11 @@ type SettingsTabId = 'identity' | 'interface' | 'ocr-capture' | 'data';
 type SettingsSectionId =
     | 'appearance'
     | 'interface'
-    | 'interface-tools'
-    | 'workspace-background'
     | 'overlay'
     | 'advanced-interface'
     | 'ocr-alias-learning'
     | 'capture'
     | 'advanced-ocr-tuning'
-    | 'capture-defaults'
     | 'telemetry-monitoring'
     | 'data-updates';
 type DashboardStatView = 'analytics' | 'history' | 'smart-captures' | 'players' | 'dev-ocr';
@@ -65,10 +62,8 @@ const SETTINGS_SECTION_GROUPS: Array<{
         id: 'interface',
         label: 'Interface',
         items: [
-            { id: 'appearance', label: 'Appearance', description: 'Theme accent, mode, and visual tone.' },
-            { id: 'interface', label: 'Interface', description: 'Everyday desktop toggles and high-traffic controls.' },
-            { id: 'interface-tools', label: 'Interface Tools', description: 'Header capture access, tips, and tutorial controls.' },
-            { id: 'workspace-background', label: 'Workspace Background', description: 'Optional background media for the desktop workspace.' },
+            { id: 'appearance', label: 'Appearance', description: 'Theme accent, mode, visual tone, and workspace background.' },
+            { id: 'interface', label: 'Interface', description: 'Everyday desktop toggles, header capture access, tips, and tutorial controls.' },
             { id: 'overlay', label: 'Overlay', description: 'Compact overlay presentation while in game.' },
             { id: 'advanced-interface', label: 'Advanced Interface', description: 'Startup preload and developer-facing interface options.' },
         ],
@@ -84,9 +79,8 @@ const SETTINGS_SECTION_GROUPS: Array<{
         id: 'ocr-capture',
         label: 'OCR / Capture',
         items: [
-            { id: 'capture', label: 'Capture', description: 'Recommended smart-capture and OCR setup controls.' },
-            { id: 'advanced-ocr-tuning', label: 'Advanced OCR Tuning', description: 'Thresholds, learning policy, preload tuning, and history.' },
-            { id: 'capture-defaults', label: 'Capture Defaults', description: 'Default behavior for screenshots and result-button OCR.' },
+            { id: 'capture', label: 'Capture', description: 'Recommended smart-capture defaults, tactical map key, and OCR setup controls.' },
+            { id: 'advanced-ocr-tuning', label: 'Advanced OCR Tuning', description: 'ROI editing, thresholds, learning policy, preload tuning, and history.' },
         ],
     },
     {
@@ -578,14 +572,15 @@ const SettingsModalContent: React.FC = () => {
     const settingsSearchEntries: Array<{ id: string; section: SettingsSectionId; label: string; keywords: string[] }> = [
         { id: 'theme-accent', section: 'appearance', label: 'Theme Accent', keywords: ['theme', 'accent', 'color', 'appearance', 'hue'] },
         { id: 'appearance-mode', section: 'appearance', label: 'Appearance Mode', keywords: ['dark', 'light', 'twilight', 'system'] },
+        { id: 'workspace-background', section: 'appearance', label: 'Workspace Background', keywords: ['background', 'workspace', 'image', 'url'] },
         { id: 'sound-effects', section: 'interface', label: 'Sound Effects', keywords: ['sound', 'audio', 'toggle', 'cue'] },
         { id: 'telemetry-performance', section: 'telemetry-monitoring', label: 'Telemetry Performance', keywords: ['telemetry', 'performance', 'polling', 'load', 'high accuracy', 'low power'] },
-        { id: 'header-smart-capture', section: 'interface-tools', label: 'Header Smart Capture', keywords: ['header', 'capture', 'quick capture'] },
+        { id: 'header-smart-capture', section: 'interface', label: 'Header Smart Capture', keywords: ['header', 'capture', 'quick capture'] },
         { id: 'alias-authority', section: 'ocr-alias-learning', label: 'OCR Alias Learning', keywords: ['alias', 'ocr', 'name', 'canonical', 'duplicate', 'former name'] },
         { id: 'ocr-engine', section: 'advanced-ocr-tuning', label: 'Advanced OCR Tuning', keywords: ['ocr', 'cloud', 'local', 'gemini', 'hybrid'] },
-        { id: 'capture-flow', section: 'capture-defaults', label: 'Capture Mode', keywords: ['capture', 'deferred', 'auto', 'workflow'] },
-        { id: 'roster-auto-populate', section: 'capture', label: 'Roster Auto-Populate', keywords: ['roster', 'auto add', 'detected players', '83%', 'save'] },
-        { id: 'ocr-roi', section: 'capture', label: 'OCR Scan Regions (ROI)', keywords: ['roi', 'region', 'hazard', 'players', 'map'] },
+        { id: 'capture-flow', section: 'capture', label: 'Capture Mode', keywords: ['capture', 'deferred', 'auto', 'workflow'] },
+        { id: 'roster-auto-populate', section: 'capture', label: 'Roster Auto-Populate', keywords: ['roster', 'auto add', 'detected players', '78%', 'review', 'merge', 'save'] },
+        { id: 'ocr-roi', section: 'advanced-ocr-tuning', label: 'OCR Scan Regions (ROI)', keywords: ['roi', 'region', 'hazard', 'players', 'map', 'ocr boxes'] },
         { id: 'backup-db', section: 'data-updates', label: 'Backup Database', keywords: ['backup', 'db', 'export'] },
         { id: 'copy-logs', section: 'data-updates', label: 'Copy Logs', keywords: ['logs', 'errors', 'diagnostics', 'support'] },
         { id: 'updates', section: 'data-updates', label: 'App Updates', keywords: ['update', 'version', 'download', 'restart'] },
@@ -837,7 +832,7 @@ const SettingsModalContent: React.FC = () => {
                         >
                             Add Alias
                         </Button>
-                        <div className="max-h-40 overflow-y-auto custom-scrollbar space-y-2">
+                        <div className="max-h-80 overflow-y-auto custom-scrollbar space-y-2">
                             {learnedAliasGroups.map((group) => (
                                 <div key={group.targetName} className="md3-surface rounded-lg px-2 py-1.5">
                                     <div className="flex items-center justify-between gap-2 mb-1">
@@ -951,6 +946,29 @@ const SettingsModalContent: React.FC = () => {
                                     />
                                 </div>
                             </div>
+                            <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
+                                <label className="text-label-sm font-semibold opacity-60 block mb-2">Workspace Background URL</label>
+                                <div className="flex gap-2">
+                                    <Input
+                                        type="text"
+                                        value={customBgUrl}
+                                        onChange={(e) => setCustomBgUrl(e.target.value)}
+                                        placeholder="https://..."
+                                        className="flex-1 px-4 text-body"
+                                    />
+                                    {customBgUrl && (
+                                        <Button
+                                            variant="icon"
+                                            onClick={() => setCustomBgUrl('')}
+                                            className="w-10 h-10 text-danger"
+                                            aria-label="Clear background URL"
+                                        >
+                                            <X size={16} />
+                                        </Button>
+                                    )}
+                                </div>
+                                <p className="mt-2 text-label-sm text-md-sys-on-surface/55">Use an optional background image to personalize the desktop workspace.</p>
+                            </div>
                         </section>
                     )}
 
@@ -989,11 +1007,6 @@ const SettingsModalContent: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
-                        </section>
-                    )}
-
-                    {activeSection === 'interface-tools' && (
-                        <section className="space-y-6">
                             <div className="grid gap-4 xl:grid-cols-3">
                                 <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10 flex flex-col justify-between gap-4">
                                     <div>
@@ -1043,33 +1056,7 @@ const SettingsModalContent: React.FC = () => {
                             </div>
                         </section>
                     )}
-
-                    {activeSection === 'workspace-background' && (
-                        <section className="space-y-6">
-                            <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
-                                <label className="text-label-sm font-semibold opacity-60 block mb-2">Background URL</label>
-                                <div className="flex gap-2">
-                                    <Input
-                                        type="text"
-                                        value={customBgUrl}
-                                        onChange={(e) => setCustomBgUrl(e.target.value)}
-                                        placeholder="https://..."
-                                        className="flex-1 px-4 text-body"
-                                    />
-                                    {customBgUrl && (
-                                        <Button
-                                            variant="icon"
-                                            onClick={() => setCustomBgUrl('')}
-                                            className="w-10 h-10 text-danger"
-                                            aria-label="Clear background URL"
-                                        >
-                                            <X size={16} />
-                                        </Button>
-                                    )}
-                                </div>
-                            </div>
-                        </section>
-                    )}                    {/* Overlay Style Section */}
+                    {/* Overlay Style Section */}
                     {activeSection === 'overlay' && (
                         <section className="space-y-6">
                             <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
@@ -1243,8 +1230,8 @@ const SettingsModalContent: React.FC = () => {
                                 label="Roster Auto-populate"
                                 value={autoPopulateRosterOnSave ? 'enabled' : 'disabled'}
                                 descriptions={{
-                                    disabled: 'Detected players are not added to roster automatically.',
-                                    enabled: 'Auto-adds detected players after match save at 83%+ confidence.',
+                                    disabled: 'Detected names stay tracked only until you review them manually.',
+                                    enabled: '78%+ strong matches auto-add, fuzzy matches merge, and 70-77% names go to review.',
                                 }}
                             >
                                 <OptionCycler
@@ -1255,19 +1242,6 @@ const SettingsModalContent: React.FC = () => {
                                     value={autoPopulateRosterOnSave ? 'enabled' : 'disabled'}
                                     onChange={(id) => setAutoPopulateRosterOnSave(id === 'enabled')}
                                 />
-                            </SettingRow>
-                            <SettingRow
-                                label="Capture Framing"
-                                value="action"
-                                descriptions={{ action: 'Only use this when your capture framing is visibly off.' }}
-                            >
-                                <button
-                                    type="button"
-                                    onClick={() => setShowRoiEditor(true)}
-                                    className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold uppercase"
-                                >
-                                    Adjust OCR Boxes
-                                </button>
                             </SettingRow>
                         </div>
                         <div className="mt-4 rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-4 py-4">
@@ -1297,7 +1271,7 @@ const SettingsModalContent: React.FC = () => {
                         </div>
                         <div className="mt-4 rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-4 py-4">
                             <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">Tactical Map Key</div>
-                            <div className="mt-1 text-label-sm text-md-sys-on-surface/60">Focus this field and press the in-game tactical map key. Backspace or Delete clears it, which makes F10 fail fast until you rebind it.</div>
+                            <div className="mt-1 text-label-sm text-md-sys-on-surface/60">Focus this field and press the in-game tactical map key. Backspace or Delete clears it so auto-sequence stays disabled until you rebind it.</div>
                             <input
                                 aria-label="Tactical Map Key"
                                 type="text"
@@ -1329,9 +1303,6 @@ const SettingsModalContent: React.FC = () => {
                     {activeSection === 'advanced-ocr-tuning' && (
                         <section className="space-y-3">
                         <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
-                        <div className="mb-4 rounded-control border border-warning/40 bg-warning-soft/35 px-4 py-3 text-left text-label-sm leading-relaxed text-warning">
-                            OCR is tuned for 1920 x 1080. Using other resolutions can lower accuracy unless you adjust OCR scan regions (ROI).
-                        </div>
                         <div className="flex items-center justify-between mb-4">
                             <div>
                                 <div className="text-label-sm font-semibold text-md-sys-on-surface/70">Advanced controls</div>
@@ -1346,6 +1317,21 @@ const SettingsModalContent: React.FC = () => {
                                 {showAdvancedOcrSettings ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                                 {showAdvancedOcrSettings ? 'Hide Advanced' : 'Show Advanced'}
                             </button>
+                        </div>
+                        <div className="mt-3 p-3 md3-surface rounded-card border border-md-sys-outline/10 space-y-3">
+                            <div className="flex items-center justify-between gap-3">
+                                <div>
+                                    <div className="text-label-sm font-semibold">OCR Scan Regions (ROI)</div>
+                                    <div className="text-label-sm opacity-60">Adjust OCR boxes if the captured map, hazards, or player regions are visibly misaligned.</div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowRoiEditor(true)}
+                                    className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold uppercase"
+                                >
+                                    Adjust OCR Boxes
+                                </button>
+                            </div>
                         </div>
                         {showAdvancedOcrSettings && (
                             <>
@@ -1630,71 +1616,6 @@ const SettingsModalContent: React.FC = () => {
                         </section>
                     )}
 
-                    {/* Capture Mode */}
-                    {activeSection === 'capture-defaults' && (
-                        <section className="space-y-3">
-                        <div className="md3-surface-high p-4 rounded-card border border-md-sys-outline/10">
-                        <div className="grid grid-cols-2 gap-2">
-                            {[
-                                { id: 'auto' as CaptureMode, label: 'Capture Now + Auto OCR', desc: 'Capture immediately, OCR runs automatically after a short pause' },
-                                { id: 'deferred' as CaptureMode, label: 'Capture Now, OCR Later', desc: 'Capture immediately, run OCR manually from Smart Captures queue' },
-                            ].map(opt => (
-                                <button
-                                    key={opt.id}
-                                    onClick={() => setCaptureMode(opt.id)}
-                                    className={`p-3 rounded-control text-center transition-all ${captureMode === opt.id
-                                        ? 'md3-btn-filled ring-2 ring-md-sys-primary/50'
-                                        : 'md3-btn-outlined'
-                                        }`}
-                                >
-                                    <div className="text-label-sm font-bold">{opt.label}</div>
-                                    <div className="text-label-sm opacity-60">{opt.desc}</div>
-                                </button>
-                            ))}
-                        </div>
-                        {captureMode === 'deferred' && (
-                            <div className="mt-3 text-label-sm opacity-60 text-center">
-                                Screenshots are saved to disk instantly. Run OCR from the Captures panel when ready.
-                            </div>
-                        )}
-                        {captureMode === 'auto' && (
-                            <div className="mt-3 text-label-sm opacity-60 text-center">
-                                OCR runs automatically after about 4 seconds of no new captures, so multiple captures bundle into one batch.
-                            </div>
-                        )}
-                        <div className="mt-4 pt-4 border-t border-md-sys-outline/10">
-                            <h4 className="text-label-sm font-bold mb-2">Result Button Default</h4>
-                            <div className="grid grid-cols-2 gap-2">
-                                {[
-                                    {
-                                        id: 'prompt' as ResultOcrFlowMode,
-                                        label: 'Prompt Before OCR',
-                                        desc: 'Result click asks before processing queued captures.',
-                                    },
-                                    {
-                                        id: 'background' as ResultOcrFlowMode,
-                                        label: 'Background OCR',
-                                        desc: 'Open wizard instantly and run queued OCR in the background.',
-                                    },
-                                ].map((opt) => (
-                                    <button
-                                        key={opt.id}
-                                        onClick={() => setResultOcrFlowMode(opt.id)}
-                                        className={`p-3 rounded-control text-center transition-all ${resultOcrFlowMode === opt.id
-                                            ? 'md3-btn-filled ring-2 ring-md-sys-primary/50'
-                                            : 'md3-btn-outlined'
-                                            }`}
-                                    >
-                                        <div className="text-label-sm font-bold">{opt.label}</div>
-                                        <div className="text-label-sm opacity-60">{opt.desc}</div>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                        </div>
-                        </section>
-                    )}
-
                     {/* Data & Updates Section - Full Mode Only */}
                     {activeSection === 'telemetry-monitoring' && (
                         <section className="space-y-6">
@@ -1929,4 +1850,3 @@ const SettingsModalContent: React.FC = () => {
 };
 
 export const SettingsModal: React.FC = () => <SettingsModalContent />;
-

@@ -64,6 +64,8 @@ const uiState = {
   showReviewQueue: false,
   setShowReviewQueue: vi.fn(),
   requestSmartCapture: vi.fn().mockReturnValue('req_1'),
+  showSettings: false,
+  setShowSettings: vi.fn(),
   showIdMapper: false,
   setShowIdMapper: vi.fn(),
   sidebarCollapsed: false,
@@ -239,6 +241,7 @@ describe('App', () => {
     uiState.activeView = 'recording';
     uiState.isOverlayMode = false;
     uiState.showChangelog = false;
+    uiState.showSettings = false;
     uiState.showIdMapper = false;
     gameDataState.selectedOpponents = [];
     gameDataState.selectedReachModifiers = [];
@@ -287,6 +290,69 @@ describe('App', () => {
         type: 'success',
       }));
     });
+  });
+
+  it('shows a one-time tactical map setup popup when no keybind is configured', async () => {
+    appStoreState.tacticalMapKeybind = '';
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    await waitFor(() => {
+      expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({
+        message: expect.stringContaining('Set your Tactical Map key before using auto-sequence.'),
+        type: 'warning',
+        popup: true,
+        action: expect.objectContaining({ label: 'Go to settings' }),
+        deepLink: expect.objectContaining({
+          type: 'openSettings',
+          tab: 'ocr-capture',
+          section: 'tactical map key',
+        }),
+      }));
+    });
+
+    expect(window.localStorage.getItem('wg_tactical_map_key_prompt_seen_v1')).toBe('1');
+  });
+
+  it('opens capture settings from the tactical map popup action', async () => {
+    appStoreState.tacticalMapKeybind = '';
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    let tacticalPrompt: any;
+    await waitFor(() => {
+      tacticalPrompt = uiState.setToast.mock.calls
+        .map(([payload]) => payload)
+        .find((payload) => payload?.popup === true && String(payload?.message || '').includes('Tactical Map key'));
+      expect(tacticalPrompt).toBeTruthy();
+    });
+
+    act(() => {
+      tacticalPrompt.action.onClick();
+    });
+
+    expect(uiState.setShowSettings).toHaveBeenCalledWith(true);
+    expect(window.sessionStorage.getItem('wg_settings_focus_section_v1')).toContain('"tab":"ocr-capture"');
+    expect(window.sessionStorage.getItem('wg_settings_focus_section_v1')).toContain('"search":"tactical map key"');
+  });
+
+  it('does not show the tactical map popup again after it has already been seen', async () => {
+    window.localStorage.setItem('wg_tactical_map_key_prompt_seen_v1', '1');
+    appStoreState.tacticalMapKeybind = '';
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    await waitFor(() => {
+      expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Welcome, Pilot! Tracking is ready.',
+        type: 'success',
+      }));
+    });
+
+    expect(uiState.setToast).not.toHaveBeenCalledWith(expect.objectContaining({
+      message: expect.stringContaining('Set your Tactical Map key before using auto-sequence.'),
+      popup: true,
+    }));
   });
 
   it('shows restore session only after an unclean shutdown', async () => {

@@ -55,6 +55,26 @@ describe('calculateSocialData', () => {
     expect(enemy![1].wins).toBe(1);
   });
 
+  it('counts opponents from opponentTeams as well as flattened opponent lists', () => {
+    const matches = [
+      createMatch({
+        opponents: [],
+        opponentTeams: [{ teamName: 'Red', shipType: 'Hunter', color: 'red', players: ['EnemyTeam1'] }],
+        result: 'Win',
+      }),
+      createMatch({
+        opponents: [],
+        opponentTeams: [{ teamName: 'Red', shipType: 'Hunter', color: 'red', players: ['EnemyTeam1'] }],
+        result: 'Loss',
+      }),
+    ];
+    const result = calculateSocialData(matches);
+    const enemy = result.opponents.find(([name]) => name === 'EnemyTeam1');
+    expect(enemy).toBeDefined();
+    expect(enemy![1].total).toBe(2);
+    expect(enemy![1].wins).toBe(1);
+  });
+
   it('sorts by win rate descending, then by total encounters', () => {
     const matches = [
       createMatch({ teammates: ['A'], result: 'Win' }),
@@ -215,5 +235,32 @@ describe('calculateRelationshipAnalytics', () => {
     const rival = insights.find(i => i.type === 'rival');
     expect(rival).toBeDefined();
     expect(rival!.playerName).toBe('RivalPlayer');
+  });
+
+  it('uses knownMappings when a profile has no explicit name', () => {
+    const profiles = {
+      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA': {
+        id: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', sightings: 7, firstSeen: 0, lastSeen: 0,
+        teamsObserved: {}, playedWith: {}, playedAgainst: { me: 4 }, shipsObserved: { Hunter: 2 },
+        ocrSightings: 0, manualSightings: 0,
+      },
+      'p2': {
+        id: 'p2', name: 'AllyPlayer', sightings: 8, firstSeen: 0, lastSeen: 0,
+        teamsObserved: {}, playedWith: { me: 5 }, playedAgainst: {}, shipsObserved: {},
+        ocrSightings: 0, manualSightings: 0,
+      },
+      'p3': {
+        id: 'p3', name: 'SomeoneElse', sightings: 2, firstSeen: 0, lastSeen: 0,
+        teamsObserved: {}, playedWith: { me: 1 }, playedAgainst: {}, shipsObserved: {},
+        ocrSightings: 0, manualSightings: 0,
+      },
+    };
+
+    const insights = calculateRelationshipAnalytics(profiles, {
+      AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA: 'Mapped Nemesis',
+    });
+
+    const nemesis = insights.find((insight) => insight.type === 'nemesis');
+    expect(nemesis?.playerName).toBe('Mapped Nemesis');
   });
 });

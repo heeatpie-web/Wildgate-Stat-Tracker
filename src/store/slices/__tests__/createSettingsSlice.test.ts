@@ -17,6 +17,8 @@ describe('createSettingsSlice OCR policy', () => {
     expect(store.getState().autoSequenceOnCapture).toBe(true);
     expect(store.getState().autoCaptureSendKeypresses).toBe(true);
     expect(store.getState().autoCaptureWaitMultiplier).toBe(0.5);
+    expect(store.getState().tacticalMapKeybind).toBe('');
+    expect(store.getState().autoPopulateRosterOnSave).toBe(true);
   });
 
   it('clamps auto-capture wait multiplier into the supported range', () => {

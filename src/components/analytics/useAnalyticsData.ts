@@ -330,7 +330,7 @@ export const useAnalyticsData = (
         return completedModeMatches.filter((match) => Number(match.timestamp || 0) < activeWindowStart);
     }, [completedModeMatches, isMatchInProgress, matchStartTime]);
 
-    const filteredMatches = useMemo(() => {
+    const rangeFilteredMatches = useMemo(() => {
         let result: typeof stableCompletedModeMatches;
         if (timeRange === 'lastN') {
             result = stableCompletedModeMatches.slice(-lastN);
@@ -341,6 +341,10 @@ export const useAnalyticsData = (
         }
         return result;
     }, [stableCompletedModeMatches, timeRange, lastN, rangeStart]);
+    const filteredMatches = useMemo(
+        () => rangeFilteredMatches.filter((match) => matchPassesFilters(match, entityFilters)),
+        [rangeFilteredMatches, entityFilters]
+    );
 
     const isOverview = view === 'overview';
     const wantFullSuite = view === 'reactor' || view === 'essay' || !view;
@@ -443,8 +447,8 @@ export const useAnalyticsData = (
 
     const entityAnalytics = useMemo(() => {
         if (!wantEntities) return EMPTY_ENTITY_ANALYTICS;
-        const selectedMatches = filteredMatches.filter((match) => matchPassesFilters(match, entityFilters));
-        const allInRange = filteredMatches;
+        const selectedMatches = filteredMatches;
+        const allInRange = rangeFilteredMatches;
         const half = Math.floor(allInRange.length / 2);
         const previousPeriodMatches = allInRange.slice(0, half);
         const currentPeriodMatches = allInRange.slice(half);
@@ -473,9 +477,10 @@ export const useAnalyticsData = (
             },
         } satisfies EntityAnalyticsData;
         return analytics;
-    }, [wantEntities, filteredMatches, entityFilters]);
+    }, [wantEntities, filteredMatches, rangeFilteredMatches, entityFilters]);
 
     return {
+        rangeFilteredMatches,
         filteredMatches,
         winRate,
         currentStreak,

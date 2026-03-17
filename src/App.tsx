@@ -206,6 +206,7 @@ const SETTINGS_FOCUS_SECTION_STORAGE_KEY = 'wg_settings_focus_section_v1';
 const STARTUP_INTERACTION_GRACE_MS = 3500;
 const HAS_LAUNCHED_BEFORE_STORAGE_KEY = 'wg_has_launched_before_v1';
 const WELCOME_MESSAGE_SHOWN_THIS_LAUNCH_KEY = 'wg_welcome_message_shown_this_launch_v1';
+const TACTICAL_MAP_KEY_PROMPT_SEEN_STORAGE_KEY = 'wg_tactical_map_key_prompt_seen_v1';
 type SessionExitState = 'clean' | 'running';
 const getOnboardingUserScope = (user: string | null | undefined): string => {
     const normalized = String(user || '').trim().toLowerCase();
@@ -428,7 +429,9 @@ const App: React.FC = () => {
     const dismissedRosterCandidateKeys = useAppStore(s => s.dismissedRosterCandidateKeys);
     const recordOcrAliasCorrection = useAppStore(s => s.recordOcrAliasCorrection);
     const telemetryPerformanceProfile = useAppStore(s => s.telemetryPerformanceProfile);
+    const tacticalMapKeybind = useAppStore(s => s.tacticalMapKeybind);
     const welcomeBackToastShownRef = React.useRef(false);
+    const tacticalMapPromptShownRef = React.useRef(false);
     const tutorialAutoPromptedRef = React.useRef(false);
     const [preloadedViews, setPreloadedViews] = useState<Record<LazyDashboardView, boolean>>({
         analytics: lazyDashboardStatus.analytics === 'ready',
@@ -478,6 +481,25 @@ const App: React.FC = () => {
     const changelogDialogTitleId = React.useId();
     const changelogDialogDescriptionId = React.useId();
     const changelogFocusTrapRef = useFocusTrap<HTMLDivElement>(showChangelog);
+    const focusCaptureSettings = useCallback(() => {
+        try {
+            window.sessionStorage.setItem(
+                SETTINGS_FOCUS_SECTION_STORAGE_KEY,
+                JSON.stringify({
+                    tab: 'ocr-capture',
+                    search: 'tactical map key',
+                })
+            );
+        } catch {
+            // no-op: sessionStorage may be unavailable in restricted shells
+        }
+        window.dispatchEvent(new CustomEvent('settings:focus-section', {
+            detail: {
+                tab: 'ocr-capture',
+                search: 'tactical map key',
+            },
+        }));
+    }, []);
 
     const {
         matches,
@@ -761,6 +783,52 @@ const App: React.FC = () => {
             type: 'success',
         });
     }, [activeUser, isStoreLoading, setToast]);
+
+    useEffect(() => {
+        if (tacticalMapPromptShownRef.current) return;
+        if (isStoreLoading || !startupFlowReady) return;
+        if (showSetupWizard || showTutorial || renameModal) return;
+        if (String(tacticalMapKeybind || '').trim()) {
+            tacticalMapPromptShownRef.current = true;
+            return;
+        }
+
+        try {
+            if (window.localStorage.getItem(TACTICAL_MAP_KEY_PROMPT_SEEN_STORAGE_KEY) === '1') {
+                tacticalMapPromptShownRef.current = true;
+                return;
+            }
+            window.localStorage.setItem(TACTICAL_MAP_KEY_PROMPT_SEEN_STORAGE_KEY, '1');
+        } catch {
+            // localStorage is optional; the ref still prevents repeat prompts this launch.
+        }
+
+        tacticalMapPromptShownRef.current = true;
+        setToast({
+            message: 'Set your Tactical Map key before using auto-sequence. Match the button that opens the map, then choose whether the map is toggle or hold.',
+            type: 'warning',
+            popup: true,
+            source: 'settings',
+            action: {
+                label: 'Go to settings',
+                onClick: focusCaptureSettings,
+            },
+            deepLink: {
+                type: 'openSettings',
+                tab: 'ocr-capture',
+                section: 'tactical map key',
+            },
+        });
+    }, [
+        focusCaptureSettings,
+        isStoreLoading,
+        renameModal,
+        setToast,
+        showSetupWizard,
+        showTutorial,
+        startupFlowReady,
+        tacticalMapKeybind,
+    ]);
 
     useEffect(() => {
         if (isStoreLoading) {

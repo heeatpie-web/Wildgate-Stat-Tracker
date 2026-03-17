@@ -104,6 +104,7 @@ const mockStoreState: Record<string, any> = {
   sessionShipTypes: {},
   matches: [],
   sessionStartTime: 1_700_000_000_000,
+  discardMatch: vi.fn(),
 };
 
 vi.mock('../../store/useAppStore', () => {
@@ -199,6 +200,7 @@ describe('useMatchSubmission', () => {
       matches: [],
       sessionStartTime: 1_700_000_000_000,
     });
+    mockStoreState.discardMatch.mockClear();
     vi.mocked(bundleMatchArtifacts).mockReset();
     vi.mocked(bundleMatchArtifacts).mockResolvedValue([]);
     vi.mocked(applyArtifactRepair).mockReset();
@@ -215,11 +217,13 @@ describe('useMatchSubmission', () => {
     expect(result.current).toHaveProperty('initiateSubmission');
     expect(result.current).toHaveProperty('processFinalSubmission');
     expect(result.current).toHaveProperty('saveResultDraft');
+    expect(result.current).toHaveProperty('discardCurrentMatch');
     expect(result.current).toHaveProperty('discardTelemetryDraft');
     expect(result.current).toHaveProperty('submitting');
     expect(typeof result.current.initiateSubmission).toBe('function');
     expect(typeof result.current.processFinalSubmission).toBe('function');
     expect(typeof result.current.saveResultDraft).toBe('function');
+    expect(typeof result.current.discardCurrentMatch).toBe('function');
     expect(typeof result.current.discardTelemetryDraft).toBe('function');
     expect(result.current.submitting).toBe(false);
   });
@@ -943,8 +947,9 @@ describe('useMatchSubmission', () => {
     expect(savedMatch.subType).toBe('Artifact');
     expect(savedMatch.ocrState).toBe('reviewing');
     expect(bundleMatchArtifacts).not.toHaveBeenCalled();
-    expect(setSelectedTeammates).toHaveBeenCalledWith([]);
-    expect(setSelectedOpponents).toHaveBeenCalledWith([]);
+    expect(mockStoreState.discardMatch).toHaveBeenCalledTimes(1);
+    expect(setSelectedTeammates).not.toHaveBeenCalled();
+    expect(setSelectedOpponents).not.toHaveBeenCalled();
     expect(setSessionTeams).toHaveBeenCalledWith({});
     expect(setSessionShipTypes).toHaveBeenCalledWith({}, 'manual');
     expect(setToast).toHaveBeenCalledWith({ message: 'Results saved. You can return to OCR later.', type: 'success' });
@@ -1047,8 +1052,16 @@ describe('useMatchSubmission', () => {
     expect(removeMatchArtifact).toHaveBeenNthCalledWith(1, 4242, 'artifact-a');
     expect(removeMatchArtifact).toHaveBeenNthCalledWith(2, 4242, 'artifact-b');
     expect(deleteMatch).toHaveBeenCalledWith(4242);
-    expect(setPendingMatchData).toHaveBeenCalledWith(null);
-    expect(setShowWizard).toHaveBeenCalledWith(null);
+    expect(mockStoreState.discardMatch).toHaveBeenCalledTimes(1);
+    expect(setPendingKilledBy).toHaveBeenCalledWith('');
+    expect(setPendingKilledByShip).toHaveBeenCalledWith('');
+    expect(setSessionTeams).toHaveBeenCalledWith({});
+    expect(setSessionShipTypes).toHaveBeenCalledWith({}, 'manual');
+    expect(setTimelineEvents).toHaveBeenCalledWith([]);
+    expect(setTimeMin).toHaveBeenCalledWith('');
+    expect(setTimeSec).toHaveBeenCalledWith('');
+    expect(setDamageTaken).toHaveBeenCalledWith('');
+    expect(setActiveWeapons).not.toHaveBeenCalled();
     expect(StorageService.flush).toHaveBeenCalled();
 
     const resolvedEvent = dispatchEventSpy.mock.calls
@@ -1068,6 +1081,25 @@ describe('useMatchSubmission', () => {
       message: 'Match discarded. Removed 2 recorded screenshots.',
       type: 'info',
     });
+  });
+
+  it('discardCurrentMatch deletes the draft and clears submission state through the store helper', () => {
+    const { result } = renderHook(() => useMatchSubmission());
+
+    act(() => {
+      result.current.discardCurrentMatch(31337);
+    });
+
+    expect(deleteMatch).toHaveBeenCalledWith(31337);
+    expect(mockStoreState.discardMatch).toHaveBeenCalledTimes(1);
+    expect(setPendingKilledBy).toHaveBeenCalledWith('');
+    expect(setPendingKilledByShip).toHaveBeenCalledWith('');
+    expect(setSessionTeams).toHaveBeenCalledWith({});
+    expect(setSessionShipTypes).toHaveBeenCalledWith({}, 'manual');
+    expect(setTimelineEvents).toHaveBeenCalledWith([]);
+    expect(setTimeMin).toHaveBeenCalledWith('');
+    expect(setTimeSec).toHaveBeenCalledWith('');
+    expect(setDamageTaken).toHaveBeenCalledWith('');
   });
 });
 

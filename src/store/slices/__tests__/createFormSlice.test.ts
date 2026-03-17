@@ -344,4 +344,71 @@ describe('createFormSlice', () => {
       expect(store.getState().activeWeapons).toEqual({ 'Laser': 1 });
     });
   });
+
+  describe('discardMatch', () => {
+    it('restores weapons from currentLoadout when saved hero loadouts are stale or empty', () => {
+      (store as unknown as { setState: (value: unknown) => void }).setState({
+        activeHero: 'Ion',
+        currentLoadout: {
+          hero: 'Ion',
+          ship: 'Scout (3 Player)',
+          weapons: [],
+          equipment: [],
+          characterWeapons: ['Scattergun'],
+          characterEquipment: ['Shield Matrix'],
+        } satisfies Loadout,
+        characterLoadouts: {},
+        activeWeapons: {},
+        pendingMatchData: { id: 42, teammates: ['Wing1'], opponents: ['Enemy1'] },
+        showWizard: 'Win',
+        matchStartTime: Date.now(),
+        isMatchInProgress: true,
+      });
+
+      store.getState().discardMatch();
+
+      expect(store.getState().activeWeapons).toEqual({
+        Scattergun: 1,
+        'Shield Matrix': 1,
+      });
+      expect(store.getState().selectedTeammates).toEqual([]);
+      expect(store.getState().selectedOpponents).toEqual([]);
+      expect(store.getState().pendingMatchData).toBeNull();
+      expect(store.getState().showWizard).toBeNull();
+      expect(store.getState().isMatchInProgress).toBe(false);
+    });
+
+    it('preserves the active telemetry-selected hero and ship while clearing selection sources', () => {
+      (store as unknown as { setState: (value: unknown) => void }).setState({
+        currentLoadout: {
+          hero: 'Ion',
+          ship: 'Scout (3 Player)',
+          weapons: [],
+          equipment: [],
+          characterWeapons: ['The Doctor'],
+          characterEquipment: ['Repair Drone'],
+        } satisfies Loadout,
+      });
+
+      store.getState().setActiveHero('Ion', 'telemetry');
+      store.getState().setActiveShip('Scout (3 Player)', 'telemetry');
+      store.getState().setCurrentNote('discard me');
+      store.getState().toggleTeammate('Wing1');
+
+      store.getState().discardMatch();
+
+      expect(store.getState().activeHero).toBe('Ion');
+      expect(store.getState().activeShip).toBe('Scout (3 Player)');
+      expect(store.getState().heroSource).toBeUndefined();
+      expect(store.getState().shipSource).toBeUndefined();
+      expect(store.getState().telemetryDetectedHero).toBeUndefined();
+      expect(store.getState().telemetryDetectedShip).toBeUndefined();
+      expect(store.getState().activeWeapons).toEqual({
+        'The Doctor': 1,
+        'Repair Drone': 1,
+      });
+      expect(store.getState().currentNote).toBe('');
+      expect(store.getState().selectedTeammates).toEqual([]);
+    });
+  });
 });

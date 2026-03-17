@@ -99,10 +99,15 @@ export const Wizard: React.FC = () => {
     } = useGameData();
 
     const { showWizard, setShowWizard, isOverlayMode, activeMode, activeUser, pushNotification, requestSmartCapture } = useUIState();
-    const { processFinalSubmission, saveResultDraft, submitting } = useMatchSubmission();
+    const { processFinalSubmission, saveResultDraft, discardTelemetryDraft, submitting } = useMatchSubmission();
     const ocrMode = useAppStore((state) => state.ocrMode);
     const ocrRegions = useAppStore((state) => state.ocrRegions);
     const setPendingDraftData = useAppStore((state) => state.setPendingMatchData);
+    const pendingStoreMatch = useAppStore((state) => {
+        const pendingId = Number(state.pendingMatchData?.id || 0);
+        if (!Number.isInteger(pendingId) || pendingId <= 0) return null;
+        return state.matches.find((match) => match.id === pendingId) || null;
+    });
     const [selectedWinType, setSelectedWinType] = useState<'Combat' | 'Artifact' | null>(null);
     const [activeTab, setActiveTab] = useState<WizardTab>('result');
     const [guidedResultStep, setGuidedResultStep] = useState<'stats' | 'team-review' | 'save'>('stats');
@@ -391,6 +396,25 @@ export const Wizard: React.FC = () => {
     const isPendingOcrProcessing = normalizedPendingOcrState === 'processing';
     const hasPendingOcrReview = normalizedPendingOcrState === 'reviewing';
     const hasSavedOcrReview = normalizedPendingOcrState === 'saved' || Boolean(pendingMatchData?.ocrReviewedAt);
+    const isTelemetryDraftPending = pendingStoreMatch?.subType === 'Telemetry Draft';
+    const handleAbortSubmission = React.useCallback(async () => {
+        if (activeTab === 'ocr') {
+            React.startTransition(() => setActiveTab('result'));
+            return;
+        }
+        if (!isTelemetryDraftPending || !pendingStoreMatch?.id) {
+            setShowWizard(null);
+            return;
+        }
+        const confirmed = window.confirm(
+            'Discard this telemetry draft? Recorded screenshots will be deleted and the pending Smart Captures match will be removed.'
+        );
+        if (!confirmed) return;
+        await discardTelemetryDraft(pendingStoreMatch.id);
+    }, [activeTab, discardTelemetryDraft, isTelemetryDraftPending, pendingStoreMatch, setShowWizard]);
+    const abortButtonLabel = activeTab === 'ocr'
+        ? 'Back to Result'
+        : (isTelemetryDraftPending ? 'Discard Match Draft' : 'Abort Submission');
 
     React.useEffect(() => {
         if (!isWizardOpen || !showGuidedDetails) {
@@ -1441,17 +1465,15 @@ export const Wizard: React.FC = () => {
 
                 <div className="sticky bottom-0 z-10 border-t border-md-sys-outline/5 bg-md-sys-surface px-4 py-4 shadow-[0_-10px_24px_rgba(15,23,42,0.14)] flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <button
+                        type="button"
                         onClick={() => {
-                            if (activeTab === 'ocr') {
-                                React.startTransition(() => setActiveTab('result'));
-                                return;
-                            }
-                            setShowWizard(null);
+                            void handleAbortSubmission();
                         }}
+                        disabled={activeTab === 'result' && submitting}
                         className="text-label-sm font-bold uppercase tracking-widest text-md-sys-on-surface/70 hover:text-md-sys-on-surface transition-colors inline-flex items-center gap-2 justify-center sm:justify-start"
                     >
                         <CheckCircle2 size={14} />
-                        {activeTab === 'result' ? 'Abort Submission' : 'Back to Result'}
+                        {submitting && activeTab === 'result' && isTelemetryDraftPending ? 'Discarding...' : abortButtonLabel}
                     </button>
                     {activeTab === 'result' && (
                         <div className="flex w-full flex-col gap-3 sm:w-auto sm:min-w-[24rem] sm:items-end">

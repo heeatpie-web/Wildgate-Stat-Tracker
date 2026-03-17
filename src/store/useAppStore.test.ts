@@ -51,6 +51,8 @@ describe('useAppStore OCR preference hydration', () => {
     expect(store.getState().autoSequenceOnCapture).toBe(true);
     expect(store.getState().autoCaptureSendKeypresses).toBe(true);
     expect(store.getState().autoCaptureWaitMultiplier).toBe(0.5);
+    expect(store.getState().tacticalMapKeybind).toBe('');
+    expect(store.getState().autoPopulateRosterOnSave).toBe(true);
   });
 
   it('preserves explicit saved OCR preferences for existing users', async () => {
@@ -67,6 +69,26 @@ describe('useAppStore OCR preference hydration', () => {
     expect(store.getState().autoSequenceOnCapture).toBe(true);
     expect(store.getState().autoCaptureSendKeypresses).toBe(false);
     expect(store.getState().autoCaptureWaitMultiplier).toBe(2.2);
+  });
+
+  it('preserves an explicit roster auto-populate opt-out', async () => {
+    const store = await loadStore({
+      autoPopulateRosterOnSave: false,
+    });
+
+    expect(store.getState().autoPopulateRosterOnSave).toBe(false);
+  });
+
+  it('preserves explicit persisted tactical map keys from either storage field', async () => {
+    const explicitSettingStore = await loadStore({
+      tacticalMapKeybind: 'KeyM',
+    });
+    expect(explicitSettingStore.getState().tacticalMapKeybind).toBe('KeyM');
+
+    const legacySettingStore = await loadStore({
+      autoCaptureTacticalMapKey: 'Tab',
+    });
+    expect(legacySettingStore.getState().tacticalMapKeybind).toBe('Tab');
   });
 
   it('hydrates persisted perk mappings from uidMappings', async () => {

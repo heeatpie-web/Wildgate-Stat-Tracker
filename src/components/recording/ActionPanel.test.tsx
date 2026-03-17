@@ -62,12 +62,14 @@ const smartCaptureActions = {
   processStoredImage: vi.fn().mockResolvedValue(undefined),
   processAllStored: vi.fn().mockResolvedValue(undefined),
   clearError: vi.fn(),
+  clearCaptures: vi.fn(),
   dismissPendingData: vi.fn(),
   getPendingData: vi.fn(() => smartCaptureState.pendingData),
   reanalyzeCaptures: vi.fn(),
 };
 
 const initiateSubmission = vi.fn();
+const discardCurrentMatch = vi.fn();
 const startAutoCaptureMock = vi.fn().mockResolvedValue({ started: true });
 
 const appStoreState = {
@@ -132,6 +134,7 @@ vi.mock('../../hooks/useSmartCapture', () => ({
 vi.mock('../../hooks/useMatchSubmission', () => ({
   useMatchSubmission: () => ({
     initiateSubmission,
+    discardCurrentMatch,
     processFinalSubmission: vi.fn(),
     submitting: false,
   }),
@@ -220,9 +223,11 @@ describe('ActionPanel', () => {
     smartCaptureActions.processStoredImage.mockReset().mockResolvedValue(undefined);
     smartCaptureActions.processAllStored.mockReset().mockResolvedValue(undefined);
     smartCaptureActions.clearError.mockReset();
+    smartCaptureActions.clearCaptures.mockReset();
     smartCaptureActions.dismissPendingData.mockReset();
     smartCaptureActions.getPendingData.mockReset().mockImplementation(() => smartCaptureState.pendingData);
     smartCaptureActions.reanalyzeCaptures.mockReset();
+    discardCurrentMatch.mockReset();
     appStoreState.activeUser = 'TestPilot';
     appStoreState.sessionStartTime = Date.now() - 1_000;
     appStoreState.autoCaptureSendKeypresses = true;
@@ -315,6 +320,32 @@ describe('ActionPanel', () => {
     expect(appStoreState.matches).toEqual([]);
   });
 
+  it('routes live-match discard through the shared discard helper', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    const ongoingDraft = {
+      id: 4444,
+      timestamp: Date.now(),
+      player: 'TestPilot',
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+    };
+    gameData.isMatchInProgress = true;
+    gameData.matchStartTime = Date.now() - 15_000;
+    gameData.matches = [ongoingDraft] as any[];
+    appStoreState.matches = [ongoingDraft] as any[];
+
+    render(<ActionPanel />);
+    fireEvent.click(screen.getByRole('button', { name: /discard match/i }));
+
+    expect(smartCaptureActions.clearCaptures).toHaveBeenCalledTimes(1);
+    expect(discardCurrentMatch).toHaveBeenCalledWith(4444);
+    expect(uiState.pushNotification).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'Match discarded. Ready for a fresh start.',
+      type: 'info',
+      source: 'user',
+    }));
+  });
+
   it('does not render legacy ID Mapper buttons in recording layouts', async () => {
     const { ActionPanel } = await import('./ActionPanel');
 
@@ -395,6 +426,7 @@ describe('ActionPanel', () => {
         timestamp: now - 10_000,
         player: 'TestPilot',
         subType: 'Telemetry Draft',
+        telemetryDraftState: 'active',
       },
     ];
 
@@ -429,6 +461,7 @@ describe('ActionPanel', () => {
     gameData.matches = [{
       id: 901,
       subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
       timestamp: Date.now(),
       player: 'TestPilot',
     }];
@@ -532,6 +565,7 @@ describe('ActionPanel', () => {
     gameData.matches = [{
       id: 901,
       subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
       timestamp: Date.now(),
       player: 'TestPilot',
     }];

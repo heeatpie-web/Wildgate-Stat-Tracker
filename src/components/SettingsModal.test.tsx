@@ -61,7 +61,7 @@ const storeState = {
   setAutoCaptureSendKeypresses: vi.fn(),
   autoCaptureWaitMultiplier: 1,
   setAutoCaptureWaitMultiplier: vi.fn(),
-  tacticalMapKeybind: 'Tab',
+  tacticalMapKeybind: '',
   setTacticalMapKeybind: vi.fn(),
   showSmartCaptureInHeader: true,
   setShowSmartCaptureInHeader: vi.fn(),
@@ -189,10 +189,10 @@ describe('SettingsModal', () => {
     storeState.captureMode = 'auto';
     storeState.resultOcrFlowMode = 'prompt';
     storeState.autoSequenceOnCapture = false;
-    storeState.tacticalMapKeybind = 'Tab';
+    storeState.tacticalMapKeybind = '';
   });
 
-  it('renders a full-screen settings screen with per-section navigation', async () => {
+  it('renders appearance settings with workspace background in the default section', async () => {
     const { SettingsModal } = await import('./SettingsModal');
     render(<SettingsModal />);
 
@@ -200,14 +200,22 @@ describe('SettingsModal', () => {
     expect(dialog.className).toContain('h-full');
     expect(screen.getByRole('button', { name: /back to app/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /save & apply/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /workspace background/i })).toBeInTheDocument();
     expect(screen.getByText('Theme Accent')).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText('https://...')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /workspace background/i }));
-
     expect(screen.getByPlaceholderText('https://...')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /workspace background/i })).not.toBeInTheDocument();
   }, 40000);
+
+  it('folds interface tools into the interface section', async () => {
+    const { SettingsModal } = await import('./SettingsModal');
+    render(<SettingsModal />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^interface$/i }));
+
+    expect(screen.getByText('Header Smart Capture')).toBeInTheDocument();
+    expect(screen.getByText('Tutorial')).toBeInTheDocument();
+    expect(screen.getByText('Tips')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /interface tools/i })).not.toBeInTheDocument();
+  });
 
   it('routes telemetry search results to the telemetry section', async () => {
     const { SettingsModal } = await import('./SettingsModal');
@@ -230,7 +238,9 @@ describe('SettingsModal', () => {
 
     const grid = screen.getByTestId('settings-quick-setup-grid');
     expect(grid.className).toContain('divide-y');
-    expect(screen.getByText('Capture Defaults')).toBeInTheDocument();
+    expect(screen.getByText('Capture Mode')).toBeInTheDocument();
+    expect(screen.getByText('Result Button')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /capture defaults/i })).not.toBeInTheDocument();
   });
 
   it('lets users toggle F10 auto-sequence from the capture quick setup grid', async () => {
@@ -263,6 +273,18 @@ describe('SettingsModal', () => {
 
     expect(storeState.setAutoCaptureSendKeypresses).toHaveBeenCalledWith(false);
     expect(storeState.setAutoCaptureWaitMultiplier).toHaveBeenCalledWith(2.4);
+  });
+
+  it('keeps ROI controls in advanced OCR tuning instead of capture quick setup', async () => {
+    const { SettingsModal } = await import('./SettingsModal');
+    render(<SettingsModal />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^capture$/i }));
+    expect(screen.queryByText('Capture Framing')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /advanced ocr tuning/i }));
+    expect(screen.getByRole('button', { name: /adjust ocr boxes/i })).toBeInTheDocument();
+    expect(screen.queryByText(/1920 x 1080/i)).not.toBeInTheDocument();
   });
 
   it('captures the tactical map key as event.code and allows clearing it', async () => {

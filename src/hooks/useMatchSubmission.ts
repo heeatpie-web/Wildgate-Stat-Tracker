@@ -286,57 +286,36 @@ export const useMatchSubmission = () => {
                 pendingMatchId: Number(state.pendingMatchData?.id || 0) || null,
             });
         }
-        setShowWizard(null);
-        setPendingMatchData(null);
-        setPendingPlacement(null);
-        setPendingArtifactType("");
+        useAppStore.getState().discardMatch();
         setPendingKilledBy("");
         setPendingKilledByShip("");
-        setSelectedTeammates([]);
-        setSelectedOpponents([]);
         setSessionTeams({});
         setSessionShipTypes({}, 'manual');
         setTimelineEvents([]);
-        setIsMatchInProgress(false);
-        setMatchStartTime(null);
-        setPoiEasy(0);
-        setPoiMedium(0);
-        setPoiEpic(0);
-        setKills({ "AI Legion": 0 });
         setTimeMin("");
         setTimeSec("");
-        setSelectedReachModifiers([]);
         setDamageTaken("");
-        setCurrentNote("");
-        setActiveWeapons({}, false);
         // Preserve the latest telemetry loadout snapshot between matches so
         // the next loading-screen transition can reseed telemetry hero/ship
         // even when no fresh loadout event fires.
     }, [
-        setActiveWeapons,
-        setCurrentNote,
         setDamageTaken,
-        setIsMatchInProgress,
-        setKills,
-        setMatchStartTime,
-        setPendingArtifactType,
         setPendingKilledBy,
         setPendingKilledByShip,
-        setPendingMatchData,
-        setPendingPlacement,
-        setPoiEasy,
-        setPoiEpic,
-        setPoiMedium,
-        setSelectedTeammates,
-        setSelectedOpponents,
-        setSelectedReachModifiers,
         setSessionShipTypes,
         setSessionTeams,
-        setShowWizard,
         setTimeMin,
         setTimeSec,
         setTimelineEvents,
     ]);
+
+    const discardCurrentMatch = useCallback((matchId?: number | null) => {
+        const normalizedMatchId = Number(matchId);
+        if (Number.isInteger(normalizedMatchId) && normalizedMatchId > 0) {
+            deleteMatch(normalizedMatchId);
+        }
+        clearSubmissionState();
+    }, [clearSubmissionState, deleteMatch]);
 
     const notifyTelemetryDraftResolved = useCallback((matchId: number) => {
         window.dispatchEvent(new CustomEvent('telemetry-draft:resolved', {
@@ -996,8 +975,7 @@ export const useMatchSubmission = () => {
                 if (!removal.success) failedRemovals += 1;
             }
 
-            deleteMatch(draft.id);
-            clearSubmissionState();
+            discardCurrentMatch(draft.id);
             await StorageService.flush();
             notifyTelemetryDraftResolved(draft.id);
             notifyArtifactsConsumed(draft.id, consumedArtifactPaths);
@@ -1025,12 +1003,13 @@ export const useMatchSubmission = () => {
         } finally {
             setSubmitting(false);
         }
-    }, [clearSubmissionState, deleteMatch, notifyArtifactsConsumed, notifyTelemetryDraftResolved, setToast, submitting]);
+    }, [clearSubmissionState, discardCurrentMatch, notifyArtifactsConsumed, notifyTelemetryDraftResolved, setToast, submitting]);
 
     return {
         initiateSubmission,
         processFinalSubmission,
         saveResultDraft,
+        discardCurrentMatch,
         discardTelemetryDraft,
         submitting
     };

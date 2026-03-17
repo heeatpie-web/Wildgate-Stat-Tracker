@@ -256,7 +256,7 @@ describe('useLogMonitor', () => {
 
   it('creates a telemetry draft when loadingMap is only present on the payload envelope', async () => {
     const { useLogMonitor } = await import('../useLogMonitor');
-    renderHook(() => useLogMonitor('Pilot'));
+    const { rerender } = renderHook(() => useLogMonitor('Pilot'));
 
     act(() => {
       ipcCallbacks['log-data']?.([
@@ -276,7 +276,7 @@ describe('useLogMonitor', () => {
 
   it('treats practice-range map loads as a telemetry lifecycle start and creates a draft', async () => {
     const { useLogMonitor } = await import('../useLogMonitor');
-    renderHook(() => useLogMonitor('Pilot'));
+    const { rerender } = renderHook(() => useLogMonitor('Pilot'));
 
     act(() => {
       ipcCallbacks['log-data']?.([
@@ -390,7 +390,7 @@ describe('useLogMonitor', () => {
 
   it('does not create telemetry draft from session-id start without map start', async () => {
     const { useLogMonitor } = await import('../useLogMonitor');
-    renderHook(() => useLogMonitor('Pilot'));
+    const { rerender } = renderHook(() => useLogMonitor('Pilot'));
 
     act(() => {
       ipcCallbacks['log-data']?.([
@@ -744,6 +744,94 @@ describe('useLogMonitor', () => {
     dispatchSpy.mockRestore();
   });
 
+  it('ignores suspicious generic durationSeconds overrides when a longer telemetry draft ends', async () => {
+    const baseSec = Math.floor(Date.now() / 1000);
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'DesolationReach' },
+          ClientTimestamp: baseSec,
+        },
+      ]);
+    });
+
+    const createdDraft = addMatch.mock.calls[0]?.[0];
+    expect(createdDraft).toBeTruthy();
+    appStoreState.matches = createdDraft ? [createdDraft] : [];
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'Frontend_MainMenu', durationSeconds: 1 },
+          ClientTimestamp: baseSec + 120,
+        },
+      ]);
+    });
+
+    const finalizedDraft = updateMatch.mock.calls
+      .map(([match]) => match as {
+        id?: number;
+        time?: string;
+        telemetryConsistency?: { telemetryDurationSeconds?: number };
+      })
+      .find((match) => match.id === createdDraft?.id && typeof match.time === 'string');
+
+    expect(finalizedDraft).toBeTruthy();
+    expect(finalizedDraft?.time).toBe('02:00');
+    expect(finalizedDraft?.telemetryConsistency?.telemetryDurationSeconds).toBe(120);
+  });
+
+  it('prefers explicit matchDuration overrides when the frontend end payload provides them', async () => {
+    const baseSec = Math.floor(Date.now() / 1000);
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'DesolationReach' },
+          ClientTimestamp: baseSec,
+        },
+      ]);
+    });
+
+    const createdDraft = addMatch.mock.calls[0]?.[0];
+    expect(createdDraft).toBeTruthy();
+    appStoreState.matches = createdDraft ? [createdDraft] : [];
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: {
+            loadingMap: 'Frontend_MainMenu',
+            matchDuration: 125,
+            durationSeconds: 1,
+          },
+          ClientTimestamp: baseSec + 120,
+        },
+      ]);
+    });
+
+    const finalizedDraft = updateMatch.mock.calls
+      .map(([match]) => match as {
+        id?: number;
+        time?: string;
+        telemetryConsistency?: { telemetryDurationSeconds?: number };
+      })
+      .find((match) => match.id === createdDraft?.id && typeof match.time === 'string');
+
+    expect(finalizedDraft).toBeTruthy();
+    expect(finalizedDraft?.time).toBe('02:05');
+    expect(finalizedDraft?.telemetryConsistency?.telemetryDurationSeconds).toBe(125);
+  });
+
   it('does not reuse a finalized telemetry draft when the next match starts', async () => {
     const baseSec = Math.floor(Date.now() / 1000);
     const { useLogMonitor } = await import('../useLogMonitor');
@@ -965,7 +1053,7 @@ describe('useLogMonitor', () => {
               snapshot: {
                 currentLoadout: {
                   hero: 'Venture',
-                  ship: 'Scout',
+                  guidShip: 'NebShipAsset:238FE96442789BC0C2E416BBDFDBCC52',
                   characterWeapons: ['The Doctor'],
                   characterEquipment: ['Repair Drone'],
                 },
@@ -1026,7 +1114,7 @@ describe('useLogMonitor', () => {
               selection: {
                 snapshot: {
                   prospectorName: 'Venture',
-                  selectedShipName: 'Scout',
+                  guidShip: 'NebShipAsset:238FE96442789BC0C2E416BBDFDBCC52',
                   characterWeapons: ['The Doctor'],
                   characterEquipment: ['Repair Drone'],
                 },
@@ -1048,6 +1136,173 @@ describe('useLogMonitor', () => {
     };
     expect(latestLoadout?.hero).toBe('Venture');
     expect(latestLoadout?.ship).toBe('Scout');
+    expect(latestLoadout?.characterWeapons || []).toEqual(expect.arrayContaining(['The Doctor']));
+    expect(latestLoadout?.characterEquipment || []).toEqual(expect.arrayContaining(['Repair Drone']));
+  });
+
+  it('does not assign ships from nested loadout payload labels without a ship GUID after queue start', async () => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'PracticeRange_LobbyMap' },
+          ClientTimestamp: nowSec,
+        },
+      ]);
+    });
+
+    const createdDraft = addMatch.mock.calls[0]?.[0];
+    expect(createdDraft).toBeTruthy();
+    appStoreState.matches = [createdDraft];
+    gameDataState.setActiveHero.mockClear();
+    gameDataState.setActiveShip.mockClear();
+    gameDataState.setCurrentLoadout.mockClear();
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'CharacterLoadoutChanged',
+          Payload: {
+            isLocalPlayer: true,
+            payload: {
+              snapshot: {
+                currentLoadout: {
+                  hero: 'Venture',
+                  ship: 'Scout (Solo Outlaw)',
+                  characterWeapons: ['The Doctor'],
+                  characterEquipment: ['Repair Drone'],
+                },
+              },
+            },
+          },
+          ClientTimestamp: nowSec + 1,
+        },
+      ]);
+    });
+
+    expect(gameDataState.setActiveHero).toHaveBeenCalledWith('Venture', 'telemetry');
+    expect(gameDataState.setActiveShip).not.toHaveBeenCalled();
+    const latestLoadout = gameDataState.setCurrentLoadout.mock.calls.at(-1)?.[0] as {
+      hero?: string | null;
+      ship?: string | null;
+      characterWeapons?: string[];
+      characterEquipment?: string[];
+    };
+    expect(latestLoadout?.hero).toBe('Venture');
+    expect(latestLoadout?.ship ?? null).toBeNull();
+    expect(latestLoadout?.characterWeapons || []).toEqual(expect.arrayContaining(['The Doctor']));
+    expect(latestLoadout?.characterEquipment || []).toEqual(expect.arrayContaining(['Repair Drone']));
+  });
+
+  it('registers unknown ship telemetry IDs from local loadout payloads so they can be mapped', async () => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'PracticeRange_LobbyMap' },
+          ClientTimestamp: nowSec,
+        },
+      ]);
+    });
+
+    const createdDraft = addMatch.mock.calls[0]?.[0];
+    expect(createdDraft).toBeTruthy();
+    appStoreState.matches = [createdDraft];
+    gameDataState.setCurrentLoadout.mockClear();
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'CharacterLoadoutChanged',
+          Payload: {
+            isLocalPlayer: true,
+            payload: {
+              snapshot: {
+                currentLoadout: {
+                  hero: 'Venture',
+                  shipTypeId: 'ShipType_ExperimentalSolo',
+                  characterWeapons: ['The Doctor'],
+                  characterEquipment: ['Repair Drone'],
+                },
+              },
+            },
+          },
+          ClientTimestamp: nowSec + 1,
+        },
+      ]);
+    });
+
+    expect(appStoreState.registerUnknownId).toHaveBeenCalledWith('ShipType_ExperimentalSolo', 'Ship');
+    expect(gameDataState.setActiveShip).not.toHaveBeenCalled();
+    const latestLoadout = gameDataState.setCurrentLoadout.mock.calls.at(-1)?.[0] as {
+      ship?: string | null;
+    };
+    expect(latestLoadout?.ship).toBe('Unknown (SHIP)');
+  });
+
+  it('resolves solo outlaw ship GUIDs from telemetry loadout payloads even when labels stay scout', async () => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'PracticeRange_LobbyMap' },
+          ClientTimestamp: nowSec,
+        },
+      ]);
+    });
+
+    const createdDraft = addMatch.mock.calls[0]?.[0];
+    expect(createdDraft).toBeTruthy();
+    appStoreState.matches = [createdDraft];
+    gameDataState.setActiveHero.mockClear();
+    gameDataState.setActiveShip.mockClear();
+    gameDataState.setCurrentLoadout.mockClear();
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'CharacterLoadoutChanged',
+          Payload: {
+            isLocalPlayer: true,
+            payload: {
+              snapshot: {
+                currentLoadout: {
+                  hero: 'Venture',
+                  ship: 'Scout',
+                  guidShip: 'NebShipAsset:9299137344DC982A469564BDAD18711C',
+                  characterWeapons: ['The Doctor'],
+                  characterEquipment: ['Repair Drone'],
+                },
+              },
+            },
+          },
+          ClientTimestamp: nowSec + 1,
+        },
+      ]);
+    });
+
+    expect(gameDataState.setActiveHero).toHaveBeenCalledWith('Venture', 'telemetry');
+    expect(gameDataState.setActiveShip).toHaveBeenCalledWith('Solo Outlaw', 'telemetry');
+    const latestLoadout = gameDataState.setCurrentLoadout.mock.calls.at(-1)?.[0] as {
+      hero?: string | null;
+      ship?: string | null;
+      characterWeapons?: string[];
+      characterEquipment?: string[];
+    };
+    expect(latestLoadout?.hero).toBe('Venture');
+    expect(latestLoadout?.ship).toBe('Solo Outlaw');
     expect(latestLoadout?.characterWeapons || []).toEqual(expect.arrayContaining(['The Doctor']));
     expect(latestLoadout?.characterEquipment || []).toEqual(expect.arrayContaining(['Repair Drone']));
   });
@@ -1481,7 +1736,7 @@ describe('useLogMonitor', () => {
               actorId: platformAccountHyphenated,
               loadout: {
                 hero: 'Adrian',
-                ship: 'Hunter',
+                guidShip: 'NebShipAsset:0BFFF89B44027290DC6348B95A6B0F11',
                 characterWeapons: ['Double Whammy'],
                 characterEquipment: ['Repair Drone'],
               },
@@ -1533,7 +1788,7 @@ describe('useLogMonitor', () => {
             event: {
               actorId: 'lobby-leader-id',
               selection: {
-                shipName: 'Scout',
+                selectedShipGuid: 'NebShipAsset:238FE96442789BC0C2E416BBDFDBCC52',
               },
             },
           },
@@ -1550,10 +1805,89 @@ describe('useLogMonitor', () => {
       characterEquipment?: string[];
     };
     expect(latestLoadout?.hero).toBe('Adrian');
-    expect(latestLoadout?.ship).toBe('Scout');
-    expect(latestLoadout?.characterWeapons || []).toEqual(['Double Whammy']);
-    expect(latestLoadout?.characterEquipment || []).toEqual(['Repair Drone']);
-    expect(gameDataState.setActiveHero).not.toHaveBeenCalled();
+  expect(latestLoadout?.ship).toBe('Scout');
+  expect(latestLoadout?.characterWeapons || []).toEqual(['Double Whammy']);
+  expect(latestLoadout?.characterEquipment || []).toEqual(['Repair Drone']);
+  expect(gameDataState.setActiveHero).not.toHaveBeenCalled();
+  });
+
+  it('keeps shared ship-selection telemetry authoritative when a prior local loadout saved a different ship', async () => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    gameDataState.currentLoadout = {
+      hero: 'Adrian',
+      ship: 'Hunter',
+      weapons: [],
+      equipment: [],
+      characterWeapons: ['Double Whammy'],
+      characterEquipment: ['Repair Drone'],
+    };
+
+    const { useLogMonitor } = await import('../useLogMonitor');
+    const { rerender } = renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadoutSaved',
+          Payload: {
+            event: {
+              isLocalPlayer: true,
+              loadout: {
+                hero: 'Adrian',
+                guidShip: 'NebShipAsset:0BFFF89B44027290DC6348B95A6B0F11',
+                characterWeapons: ['Double Whammy'],
+                characterEquipment: ['Repair Drone'],
+              },
+            },
+          },
+          ClientTimestamp: nowSec,
+        },
+      ]);
+    });
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebCloudSaveRecordSize',
+          Payload: {
+            recordKey: 'GameModeShipSelection_v2',
+            event: {
+              actorId: 'lobby-leader-id',
+              selection: {
+                selectedShipGuid: 'NebShipAsset:9299137344DC982A469564BDAD18711C',
+              },
+            },
+          },
+          ClientTimestamp: nowSec + 1,
+        },
+      ]);
+    });
+
+    const latestSharedSelectionLoadout = gameDataState.setCurrentLoadout.mock.calls.at(-1)?.[0] as {
+      ship?: string | null;
+    };
+    expect(latestSharedSelectionLoadout?.ship).toBe('Solo Outlaw');
+    gameDataState.currentLoadout = {
+      ...(gameDataState.currentLoadout || {}),
+      ...(latestSharedSelectionLoadout || {}),
+    };
+    rerender();
+
+    gameDataState.setActiveHero.mockClear();
+    gameDataState.setActiveShip.mockClear();
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'DesolationReach' },
+          ClientTimestamp: nowSec + 2,
+        },
+      ]);
+    });
+
+    expect(gameDataState.setActiveHero).toHaveBeenCalledWith('Adrian', 'manual');
+    expect(gameDataState.setActiveShip).toHaveBeenCalledWith('Solo Outlaw', 'manual');
   });
 
   it('applies shared ship-selection telemetry when recordKey is nested below the payload envelope', async () => {
@@ -1581,7 +1915,7 @@ describe('useLogMonitor', () => {
             data: {
               recordKey: 'GameModeShipSelection_v2',
               selection: {
-                shipName: 'Scout',
+                selectedShipGuid: 'NebShipAsset:238FE96442789BC0C2E416BBDFDBCC52',
               },
             },
           },
@@ -1599,6 +1933,126 @@ describe('useLogMonitor', () => {
     };
     expect(latestLoadout?.hero).toBe('Adrian');
     expect(latestLoadout?.ship).toBe('Scout');
+    expect(latestLoadout?.characterWeapons || []).toEqual(['Double Whammy']);
+    expect(latestLoadout?.characterEquipment || []).toEqual(['Repair Drone']);
+    expect(gameDataState.setActiveHero).not.toHaveBeenCalled();
+  });
+
+  it('ignores shared ship-selection labels when no ship GUID is present', async () => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    gameDataState.currentLoadout = {
+      hero: 'Adrian',
+      ship: 'Hunter',
+      weapons: [],
+      equipment: [],
+      characterWeapons: ['Double Whammy'],
+      characterEquipment: ['Repair Drone'],
+    };
+
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebCloudSaveRecordSize',
+          Payload: {
+            recordKey: 'GameModeShipSelection_v2',
+            event: {
+              actorId: 'lobby-leader-id',
+              selection: {
+                shipName: 'Scout (Solo Outlaw)',
+              },
+            },
+          },
+          ClientTimestamp: nowSec,
+        },
+      ]);
+    });
+
+    expect(gameDataState.setActiveShip).not.toHaveBeenCalled();
+    expect(gameDataState.setCurrentLoadout).not.toHaveBeenCalled();
+    expect(gameDataState.setActiveHero).not.toHaveBeenCalled();
+  });
+
+  it('registers unknown shared ship-selection IDs so they appear in the mapper', async () => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    gameDataState.currentLoadout = {
+      hero: 'Adrian',
+      ship: 'Hunter',
+      weapons: [],
+      equipment: [],
+      characterWeapons: ['Double Whammy'],
+      characterEquipment: ['Repair Drone'],
+    };
+
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebCloudSaveRecordSize',
+          Payload: {
+            recordKey: 'GameModeShipSelection_v2',
+            event: {
+              actorId: 'lobby-leader-id',
+              selection: {
+                shipTypeId: 'ShipType_ExperimentalSolo',
+              },
+            },
+          },
+          ClientTimestamp: nowSec,
+        },
+      ]);
+    });
+
+    expect(appStoreState.registerUnknownId).toHaveBeenCalledWith('ShipType_ExperimentalSolo', 'Ship');
+    expect(gameDataState.setActiveShip).not.toHaveBeenCalled();
+    expect(gameDataState.setCurrentLoadout).not.toHaveBeenCalled();
+  });
+
+  it('resolves solo outlaw shared ship-selection telemetry from ship GUIDs when labels stay scout', async () => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    gameDataState.currentLoadout = {
+      hero: 'Adrian',
+      ship: 'Hunter',
+      weapons: [],
+      equipment: [],
+      characterWeapons: ['Double Whammy'],
+      characterEquipment: ['Repair Drone'],
+    };
+
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebCloudSaveRecordSize',
+          Payload: {
+            recordKey: 'GameModeShipSelection_v2',
+            event: {
+              actorId: 'lobby-leader-id',
+              selection: {
+                selectedShipGuid: 'NebShipAsset:9299137344DC982A469564BDAD18711C',
+              },
+            },
+          },
+          ClientTimestamp: nowSec,
+        },
+      ]);
+    });
+
+    expect(gameDataState.setActiveShip).toHaveBeenCalledWith('Solo Outlaw', 'telemetry');
+    const latestLoadout = gameDataState.setCurrentLoadout.mock.calls.at(-1)?.[0] as {
+      hero?: string | null;
+      ship?: string | null;
+      characterWeapons?: string[];
+      characterEquipment?: string[];
+    };
+    expect(latestLoadout?.hero).toBe('Adrian');
+    expect(latestLoadout?.ship).toBe('Solo Outlaw');
     expect(latestLoadout?.characterWeapons || []).toEqual(['Double Whammy']);
     expect(latestLoadout?.characterEquipment || []).toEqual(['Repair Drone']);
     expect(gameDataState.setActiveHero).not.toHaveBeenCalled();
@@ -1642,7 +2096,7 @@ describe('useLogMonitor', () => {
     expect(gameDataState.setCurrentLoadout).not.toHaveBeenCalled();
   });
 
-  it('does not let weak practice-range placeholder labels overwrite a trusted local loadout', async () => {
+  it('ignores guidShipName assets when no ship class GUID is present', async () => {
     const nowSec = Math.floor(Date.now() / 1000);
     gameDataState.currentLoadout = {
       hero: 'Adrian',
@@ -1679,7 +2133,7 @@ describe('useLogMonitor', () => {
             selection: {
               snapshot: {
                 prospectorName: 'Unknown Prospector',
-                selectedShipName: 'HunterLeaderSlot',
+                guidShipName: 'NebShipNameAsset:20701ABD479A34B3BBA05588F5FFD979',
                 characterWeapons: ['The Doctor'],
                 characterEquipment: ['Repair Drone'],
               },

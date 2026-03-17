@@ -53,7 +53,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         lastActivity, setLastActivity,
         matchStartTime, isMatchInProgress,
         setMatchStartTime, setIsMatchInProgress,
-        setSessionTeams,
         deleteMatch,
     } = useGameData();
 
@@ -72,7 +71,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     const isCompact = density === 'compact';
 
     const { handleSmartScan, isScanning, scanProgress, scanLogs } = useSmartScan();
-    const discardMatch = useAppStore(s => s.discardMatch);
     const resultOcrFlowMode = useAppStore(s => s.resultOcrFlowMode);
     const ocrAutoOpenAfterRerun = useAppStore(s => s.ocrAutoOpenAfterRerun);
     const showSmartCaptureInHeader = useAppStore(s => s.showSmartCaptureInHeader);
@@ -110,7 +108,10 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         getPendingData,
         reanalyzeCaptures
     } = smartCaptureActions;
-    const { initiateSubmission: openResultWizard } = useMatchSubmission();
+    const {
+        initiateSubmission: openResultWizard,
+        discardCurrentMatch,
+    } = useMatchSubmission();
 
     const resolveSubmissionMatchId = React.useCallback((): string | number | null => {
         // Read fresh state at call time to avoid stale closure issues.
@@ -305,13 +306,9 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
 
     const isBusy = isScanning || isCapturing || isProcessing;
     const handleDiscardMatch = React.useCallback(() => {
-        discardMatch();
         clearCaptures();
-        setSessionTeams({});
         const draftId = resolveActiveOngoingDraftId();
-        if (draftId != null) {
-            deleteMatch(draftId);
-        }
+        discardCurrentMatch(draftId);
         manualDraftIdRef.current = null;
         pushNotification({
             message: 'Match discarded. Ready for a fresh start.',
@@ -319,7 +316,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
             source: 'user',
             deepLink: { type: 'openView', view: 'recording' },
         });
-    }, [clearCaptures, deleteMatch, discardMatch, pushNotification, resolveActiveOngoingDraftId, setSessionTeams]);
+    }, [clearCaptures, discardCurrentMatch, pushNotification, resolveActiveOngoingDraftId]);
     const startFreshMatch = React.useCallback(() => {
         resetMatchTrackingForNewMatch();
         resetMatchMetricsForNewMatch();

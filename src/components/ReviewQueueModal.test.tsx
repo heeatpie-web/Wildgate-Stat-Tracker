@@ -196,14 +196,14 @@ describe('ReviewQueueModal', () => {
     expect(gameData.removePendingReview).toHaveBeenCalledWith('r1');
   });
 
-  it('auto-approves roster candidates at the 83% boundary to the best match on render', async () => {
+  it('auto-approves roster candidates at the 78% boundary to the best match on render', async () => {
     const { ReviewQueueModal } = await import('./ReviewQueueModal');
     gameData.pendingReviews = [{
       id: 'r2',
       type: 'roster_candidate',
       value: 'chrismar10',
       bestMatch: 'chrismario',
-      bestScore: 83,
+      bestScore: 78,
       originalConfidence: 100,
       context: 'OCR Review',
     }];
@@ -223,21 +223,21 @@ describe('ReviewQueueModal', () => {
     expect(gameData.addToRegistry).toHaveBeenCalledWith('chrismario', expect.objectContaining({ origin: 'ocr' }));
   });
 
-  it('shows a fuzzy-ready indicator and CTA for roster candidates scored up to the 82% boundary', async () => {
+  it('shows a fuzzy-ready indicator and CTA for roster candidates scored up to the 77% boundary', async () => {
     const { ReviewQueueModal } = await import('./ReviewQueueModal');
     gameData.pendingReviews = [{
       id: 'r3',
       type: 'roster_candidate',
       value: 'chrismar10',
       bestMatch: 'chrismario',
-      bestScore: 82,
+      bestScore: 77,
       originalConfidence: 100,
       context: 'OCR Review',
     }];
 
     render(<ReviewQueueModal onClose={vi.fn()} />);
 
-    expect(screen.getByText('Fuzzy-ready (70-82%)')).toBeInTheDocument();
+    expect(screen.getByText('Fuzzy-ready (70-77%)')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /approve fuzzy match/i }));
 
     expect(gameData.addToRegistry).toHaveBeenCalledWith('chrismario', expect.objectContaining({ origin: 'ocr' }));
@@ -258,7 +258,7 @@ describe('ReviewQueueModal', () => {
 
     render(<ReviewQueueModal onClose={vi.fn()} />);
 
-    expect(screen.getByText('Fuzzy-ready (70-82%)')).toBeInTheDocument();
+    expect(screen.getByText('Fuzzy-ready (70-77%)')).toBeInTheDocument();
     expect(gameData.removePendingReview).not.toHaveBeenCalledWith('r3b');
     fireEvent.click(screen.getByRole('button', { name: /approve fuzzy match/i }));
 
@@ -280,7 +280,7 @@ describe('ReviewQueueModal', () => {
 
     render(<ReviewQueueModal onClose={vi.fn()} />);
 
-    expect(screen.queryByText('Fuzzy-ready (70-82%)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Fuzzy-ready (70-77%)')).not.toBeInTheDocument();
     expect(gameData.removePendingReview).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: /approve chrismario/i }));
 

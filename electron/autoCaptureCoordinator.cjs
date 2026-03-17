@@ -22,10 +22,10 @@ const EXPECTED_SCREEN_TYPES = Object.freeze({
 
 const AUTO_CAPTURE_WAIT_PROFILES = Object.freeze({
   fast: Object.freeze({
-    tacticalMapOpenMs: 100,
-    tacticalMapCloseMs: 20,
-    heldMapOpenMs: 110,
-    heldMapCloseMs: 40,
+    tacticalMapOpenMs: 80,
+    tacticalMapCloseMs: 10,
+    heldMapOpenMs: 90,
+    heldMapCloseMs: 20,
     escMenuOpenMs: 25,
     crewHubOpenMs: 35,
     crewHubPanelStepMs: 10,
@@ -235,6 +235,8 @@ function createAutoCaptureCoordinator({
   waitForScreenType = null,
   lookupMapKeybind = lookupTacticalMapKeybind,
   delayFn = delay,
+  beforeSequence = null,
+  afterSequence = null,
 }) {
   let inProgress = false;
 
@@ -496,6 +498,9 @@ function createAutoCaptureCoordinator({
 
       void (async () => {
         try {
+          if (typeof beforeSequence === 'function') {
+            await beforeSequence(payload);
+          }
           await runSequence(payload);
           notify({
             phase: 'completed',
@@ -515,6 +520,13 @@ function createAutoCaptureCoordinator({
             message
           ));
         } finally {
+          if (typeof afterSequence === 'function') {
+            try {
+              await afterSequence(payload);
+            } catch (cleanupError) {
+              console.warn('[AutoCapture] Sequence cleanup failed:', cleanupError?.message || cleanupError);
+            }
+          }
           inProgress = false;
         }
       })();

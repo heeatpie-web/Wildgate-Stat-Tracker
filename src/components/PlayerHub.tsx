@@ -7,20 +7,27 @@ import {
 import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
 import type { RosterEntryMeta } from '../store/slices/createDataSlice';
+import { resolvePlayerProfileDisplayName } from '../store/slices/createMappingSlice';
 import type { Match } from '../types';
-import { getShipColor } from '../types';
+import { getShipColor, SHIPS, CHARACTERS, WEAPONS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT } from '../types';
 import { normalizeOcrName, similarityScore } from '../utils/stringUtils';
 import { buildRosterMergeSuggestionGroups, type RosterMergeSuggestionGroup } from '../utils/rosterMergeSuggestions';
+import { getPerkCatalog, getProspectorEquipmentCatalog, getProspectorWeaponCatalog, getShipCatalog } from './patch/patchEntityCatalog';
 import { LocalImage } from './LocalImage';
 import { useShallow } from 'zustand/react/shallow';
 import Logger from '../utils/logger';
 
 type SortMode = 'alpha' | 'favorites' | 'recent' | 'encounters';
+type PlayerFilterMode = 'all' | 'roster' | 'tracked-only' | 'needs-review';
 type PlayerHubMode = 'roster' | 'ocr-work';
 
 interface PlayerDetail {
     name: string;
     isFavorite: boolean;
+    isRoster: boolean;
+    isTrackedOnly: boolean;
+    isDetected: boolean;
+    needsReview: boolean;
     rosterMeta: RosterEntryMeta | null;
     note: string;
     asTeammate: { wins: number; total: number } | null;
@@ -33,6 +40,7 @@ interface PlayerDetail {
     ocrSightings: number;
     manualSightings: number;
     lastOcrConfidence: number | null;
+    profileIds: string[];
 }
 
 interface AliasInsight {
@@ -60,10 +68,64 @@ interface EncounterSnapshot {
 const normalizeNameKey = (value: string | null | undefined): string => (
     normalizeOcrName(String(value || '')).toLowerCase()
 );
+const normalizeEntityLabel = (value: string | null | undefined): string => (
+    normalizeNameKey(value)
+        .replace(/\([^)]*\)/g, ' ')
+        .replace(/\b\d+\s*player\b/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+);
+const buildEntityNameSet = (values: string[]): Set<string> => new Set(
+    values
+        .map((value) => normalizeEntityLabel(value))
+        .filter(Boolean)
+);
+const SHIP_NAME_SET = buildEntityNameSet(getShipCatalog([...(SHIPS || [])]));
+const PROSPECTOR_NAME_SET = buildEntityNameSet([...(CHARACTERS || [])]);
+const WEAPON_NAME_SET = buildEntityNameSet([
+    ...(WEAPONS || []),
+    ...getProspectorWeaponCatalog([...(CHARACTER_WEAPONS || [])]),
+]);
+const EQUIPMENT_NAME_SET = buildEntityNameSet(getProspectorEquipmentCatalog([...(CHARACTER_EQUIPMENT || [])]));
+const PERK_NAME_SET = buildEntityNameSet(getPerkCatalog());
+const NON_PLAYER_NAME_HINTS = [
+    'drone', 'trap', 'shield', 'repair', 'teleport', 'reloader', 'grenade',
+    'plasma', 'foam', 'can', 'dash', 'boom', 'launcher', 'rifle', 'cannon',
+    'beam', 'privateer', 'bastion', 'scout', 'hunter', 'outlaw', 'boarder',
+    'defender', 'inventor', 'salvager', 'factory', 'smash', 'explorer', 'bomber',
+] as const;
+const GUID_HEX_PATTERN = /^[A-F0-9]{32}$/i;
 
-const getRosterBadgeLabel = (meta: RosterEntryMeta | null | undefined): string | null => {
-    if (!meta || meta.origin !== 'ocr') return null;
-    return meta.status === 'detected' ? 'Detected' : 'Confirmed';
+const normalizeGuidKey = (value: string | null | undefined): string => (
+    String(value || '')
+        .replace(/[{}-]/g, '')
+        .trim()
+        .toUpperCase()
+);
+
+const lookupUidName = (lookup: Record<string, string> | undefined, value: string | null | undefined): string => {
+    const guid = normalizeGuidKey(value);
+    if (!guid || !lookup) return '';
+    return String(
+        lookup[guid]
+        || lookup[guid.toLowerCase()]
+        || lookup[guid.toUpperCase()]
+        || ''
+    ).trim();
+};
+
+const getStatusChipClassName = (type: 'roster' | 'tracked' | 'detected'): string => {
+    if (type === 'detected') return 'bg-info-soft text-info border border-info/20';
+    if (type === 'tracked') return 'bg-warning-soft/40 text-warning border border-warning-soft';
+    return 'bg-success/10 text-success border border-success/20';
+};
+
+const getPlayerStatusChips = (pilot: Pick<PlayerDetail, 'isRoster' | 'isTrackedOnly' | 'isDetected'>) => {
+    const chips: Array<{ key: 'roster' | 'tracked' | 'detected'; label: string }> = [];
+    if (pilot.isRoster) chips.push({ key: 'roster', label: 'Roster' });
+    if (pilot.isTrackedOnly) chips.push({ key: 'tracked', label: 'Tracked' });
+    if (pilot.isDetected) chips.push({ key: 'detected', label: 'Detected' });
+    return chips;
 };
 
 const getMatchOpponentNames = (match: Match): string[] => {
@@ -109,6 +171,8 @@ const PlayerHub: React.FC = () => {
         removePilotAlias,
         matches,
         playerProfiles,
+        knownMappings,
+        uidMappings,
         setDrillDownTarget,
         ocrAliasModel,
         ocrAutoApplyMinScore,
@@ -141,6 +205,8 @@ const PlayerHub: React.FC = () => {
         removePilotAlias: state.removePilotAlias,
         matches: state.matches,
         playerProfiles: state.playerProfiles,
+        knownMappings: state.knownMappings,
+        uidMappings: state.uidMappings,
         setDrillDownTarget: state.setDrillDownTarget,
         ocrAliasModel: state.ocrAliasModel,
         ocrAutoApplyMinScore: state.ocrAutoApplyMinScore,
@@ -152,6 +218,7 @@ const PlayerHub: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [ocrSearchTerm, setOcrSearchTerm] = useState('');
     const [sortMode, setSortMode] = useState<SortMode>('favorites');
+    const [playerFilterMode, setPlayerFilterMode] = useState<PlayerFilterMode>('all');
     const [panelMode, setPanelMode] = useState<PlayerHubMode>('roster');
     const [selectedPilot, setSelectedPilot] = useState<string | null>(null);
     const [editingNote, setEditingNote] = useState<string | null>(null);
@@ -179,6 +246,91 @@ const PlayerHub: React.FC = () => {
     const mergeKeepNameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const rosterScrollRef = useRef<HTMLDivElement | null>(null);
     const uniquePilotRegistry = useMemo(() => Array.from(new Set(pilotRegistry || [])), [pilotRegistry]);
+    const rosterNameSet = useMemo(() => new Set(uniquePilotRegistry), [uniquePilotRegistry]);
+    const normalizedPilotNameMap = useMemo(() => {
+        const lookup = new Map<string, string>();
+        uniquePilotRegistry.forEach((name) => {
+            const key = normalizeNameKey(name);
+            if (!key || lookup.has(key)) return;
+            lookup.set(key, name);
+        });
+        return lookup;
+    }, [uniquePilotRegistry]);
+    const shouldHideTrackedProfile = useMemo(() => (
+        (profileId: string, profile: Record<string, unknown>, displayName: string, rosterName: string | undefined): boolean => {
+            if (rosterName) return false;
+
+            const sightings = Number(profile?.sightings || 0);
+            const ocrSightings = Number(profile?.ocrSightings || 0);
+            const manualSightings = Number(profile?.manualSightings || 0);
+            if (sightings <= 0 && ocrSightings <= 0 && manualSightings <= 0) {
+                return true;
+            }
+
+            const mappedShip = lookupUidName(uidMappings?.ships, profileId);
+            const mappedWeapon = lookupUidName(uidMappings?.weapons, profileId);
+            const mappedEquipment = lookupUidName(uidMappings?.equipment, profileId);
+            const mappedPerk = lookupUidName(uidMappings?.perks, profileId);
+            if (mappedShip || mappedWeapon || mappedEquipment || mappedPerk) {
+                return true;
+            }
+
+            const normalizedDisplayName = normalizeEntityLabel(displayName);
+            if (!normalizedDisplayName) return true;
+
+            const normalizedProfileId = normalizeEntityLabel(profileId);
+            const guidLikeProfileId = GUID_HEX_PATTERN.test(normalizeGuidKey(profileId));
+            const isExactShipLikeEntity = (
+                SHIP_NAME_SET.has(normalizedDisplayName)
+                || WEAPON_NAME_SET.has(normalizedDisplayName)
+                || EQUIPMENT_NAME_SET.has(normalizedDisplayName)
+                || PERK_NAME_SET.has(normalizedDisplayName)
+            );
+            if (isExactShipLikeEntity && (guidLikeProfileId || normalizedProfileId === normalizedDisplayName)) {
+                return true;
+            }
+
+            if (PROSPECTOR_NAME_SET.has(normalizedDisplayName) && guidLikeProfileId) {
+                return true;
+            }
+
+            const hasNonPlayerHint = NON_PLAYER_NAME_HINTS.some((hint) => normalizedDisplayName.includes(hint));
+            if (hasNonPlayerHint && guidLikeProfileId) {
+                return true;
+            }
+
+            return false;
+        }
+    ), [uidMappings]);
+    const trackedProfilesByPilot = useMemo(() => {
+        const profilesByPilot = new Map<string, string[]>();
+
+        uniquePilotRegistry.forEach((name) => {
+            profilesByPilot.set(name, []);
+        });
+
+        const trackedOnlyNameByKey = new Map<string, string>();
+
+        Object.entries(playerProfiles || {}).forEach(([profileId, profile]) => {
+            const displayName = resolvePlayerProfileDisplayName(profileId, profile, knownMappings);
+            if (!displayName) return;
+            const key = normalizeNameKey(displayName);
+            if (!key) return;
+            const rosterName = normalizedPilotNameMap.get(key);
+            if (shouldHideTrackedProfile(profileId, profile, displayName, rosterName)) return;
+            const pilotName = rosterName || trackedOnlyNameByKey.get(key) || displayName;
+            if (!rosterName && !trackedOnlyNameByKey.has(key)) trackedOnlyNameByKey.set(key, pilotName);
+            const existingProfileIds = profilesByPilot.get(pilotName) || [];
+            if (!existingProfileIds.includes(profileId)) existingProfileIds.push(profileId);
+            profilesByPilot.set(pilotName, existingProfileIds);
+        });
+
+        return profilesByPilot;
+    }, [knownMappings, normalizedPilotNameMap, playerProfiles, shouldHideTrackedProfile, uniquePilotRegistry]);
+    const allTrackedPilots = useMemo(() => ([
+        ...uniquePilotRegistry,
+        ...Array.from(trackedProfilesByPilot.keys()).filter((name) => !rosterNameSet.has(name)),
+    ]), [rosterNameSet, trackedProfilesByPilot, uniquePilotRegistry]);
     const pendingRosterCandidates = useMemo(() => {
         const seen = new Set<string>();
         return (pendingReviews || [])
@@ -233,7 +385,7 @@ const PlayerHub: React.FC = () => {
         if (rosterScrollRef.current) {
             rosterScrollRef.current.scrollTop = 0;
         }
-    }, [searchTerm, sortMode, panelMode]);
+    }, [playerFilterMode, searchTerm, sortMode, panelMode]);
 
     const filteredOcrCandidates = useMemo(() => {
         const query = ocrSearchTerm.trim().toLowerCase();
@@ -250,18 +402,9 @@ const PlayerHub: React.FC = () => {
     }, [activeMergeNotificationId, mergeHistory]);
 
     const deferredPilotRegistry = useDeferredValue(uniquePilotRegistry);
-    const favoritePilotKeys = useMemo(() => (
-        new Set((favorites || []).map((entry) => normalizeNameKey(entry)).filter(Boolean))
+    const favoritePilotNames = useMemo(() => (
+        new Set((favorites || []).map((entry) => String(entry || '').trim()).filter(Boolean))
     ), [favorites]);
-    const normalizedPilotNameMap = useMemo(() => {
-        const lookup = new Map<string, string>();
-        uniquePilotRegistry.forEach((name) => {
-            const key = normalizeNameKey(name);
-            if (!key || lookup.has(key)) return;
-            lookup.set(key, name);
-        });
-        return lookup;
-    }, [uniquePilotRegistry]);
     const rosterCandidateMatchMap = useMemo(() => {
         const lookup = new Map<string, string | null>();
         if (panelMode !== 'ocr-work') return lookup;
@@ -357,11 +500,17 @@ const PlayerHub: React.FC = () => {
 
     const identityKeysByPilot = useMemo(() => {
         const lookup = new Map<string, Set<string>>();
-        uniquePilotRegistry.forEach((name) => {
+        allTrackedPilots.forEach((name) => {
             const keys = new Set<string>();
             const normalizedName = normalizeNameKey(name);
+            const isRoster = rosterNameSet.has(name);
+            const rosterName = isRoster ? name : (normalizedPilotNameMap.get(normalizedName) || name);
             if (normalizedName) keys.add(normalizedName);
-            (pilotAliases[name] || []).forEach((alias) => {
+            (trackedProfilesByPilot.get(name) || []).forEach((profileId) => {
+                const profileIdKey = normalizeNameKey(profileId);
+                if (profileIdKey && profileIdKey !== normalizedName) keys.add(profileIdKey);
+            });
+            (pilotAliases[rosterName] || []).forEach((alias) => {
                 const aliasKey = normalizeNameKey(alias);
                 if (aliasKey && aliasKey !== normalizedName) keys.add(aliasKey);
             });
@@ -372,7 +521,7 @@ const PlayerHub: React.FC = () => {
             lookup.set(name, keys);
         });
         return lookup;
-    }, [learnedAliasInsightsByTarget, pilotAliases, uniquePilotRegistry]);
+    }, [allTrackedPilots, learnedAliasInsightsByTarget, normalizedPilotNameMap, pilotAliases, rosterNameSet, trackedProfilesByPilot]);
 
     const pilotNamesByIdentityKey = useMemo(() => {
         const lookup = new Map<string, Set<string>>();
@@ -392,7 +541,7 @@ const PlayerHub: React.FC = () => {
 
     const encounterSnapshotsByPilot = useMemo(() => {
         const snapshots = new Map<string, EncounterSnapshot>();
-        uniquePilotRegistry.forEach((name) => {
+        allTrackedPilots.forEach((name) => {
             snapshots.set(name, {
                 totalEncounters: 0,
                 firstSeen: null,
@@ -447,36 +596,75 @@ const PlayerHub: React.FC = () => {
             });
 
         return snapshots;
-    }, [matches, pilotNamesByIdentityKey, uniquePilotRegistry]);
+    }, [allTrackedPilots, matches, pilotNamesByIdentityKey]);
 
     const rosterModel = useMemo(() => {
         const startedAt = performance.now();
-        const enrichedPilots = uniquePilotRegistry.map((name) => {
-            const profile = playerProfiles?.[name];
+        const mergeObservedCounts = (profileIds: string[], key: 'shipsObserved' | 'teamsObserved') => {
+            return profileIds.reduce<Record<string, number>>((acc, profileId) => {
+                const observed = playerProfiles?.[profileId]?.[key] || {};
+                Object.entries(observed).forEach(([label, count]) => {
+                    acc[label] = (acc[label] || 0) + Number(count || 0);
+                });
+                return acc;
+            }, {});
+        };
+        const getAggregateTimestamp = (profileIds: string[], key: 'firstSeen' | 'lastSeen', mode: 'min' | 'max') => {
+            const values = profileIds
+                .map((profileId) => Number(playerProfiles?.[profileId]?.[key] || 0))
+                .filter((value) => Number.isFinite(value) && value > 0);
+            if (values.length === 0) return null;
+            return mode === 'min' ? Math.min(...values) : Math.max(...values);
+        };
+        const getAggregateLastOcrConfidence = (profileIds: string[]) => {
+            const ranked = (profileIds
+                .map((profileId) => playerProfiles?.[profileId])
+                .filter(Boolean) as Array<NonNullable<NonNullable<typeof playerProfiles>[string]>>)
+                .sort((left, right) => Number(right.lastSeen || 0) - Number(left.lastSeen || 0));
+            const profileWithConfidence = ranked.find((profile) => Number.isFinite(profile.lastOcrConfidence));
+            return profileWithConfidence?.lastOcrConfidence ?? null;
+        };
+
+        const enrichedPilots = allTrackedPilots.map((name) => {
+            const normalizedName = normalizeNameKey(name);
+            const isRoster = rosterNameSet.has(name);
+            const rosterName = isRoster ? name : (normalizedPilotNameMap.get(normalizedName) || name);
+            const profileIds = trackedProfilesByPilot.get(name) || [];
             const encounterSnapshot = encounterSnapshotsByPilot.get(name);
-            const rosterMeta = rosterEntryMeta?.[normalizeNameKey(name)] || null;
+            const rosterMeta = rosterEntryMeta?.[normalizedName] || null;
+            const isDetected = rosterMeta?.origin === 'ocr' && rosterMeta?.status === 'detected';
+            const isTrackedOnly = !isRoster && profileIds.length > 0;
+            const totalEncounters = encounterSnapshot?.totalEncounters || 0;
+            if (!isRoster && !isDetected && totalEncounters <= 0) {
+                return null;
+            }
             return {
                 name,
-                isFavorite: favoritePilotKeys.has(normalizeNameKey(name)),
+                isFavorite: isRoster && favoritePilotNames.has(name),
+                isRoster,
+                isTrackedOnly,
+                isDetected,
+                needsReview: isDetected || isTrackedOnly,
                 rosterMeta,
-                note: pilotNotes[name] || '',
+                note: isRoster ? (pilotNotes[rosterName] || '') : '',
                 asTeammate: encounterSnapshot?.asTeammate || null,
                 asOpponent: encounterSnapshot?.asOpponent || null,
-                totalEncounters: encounterSnapshot?.totalEncounters || 0,
-                firstSeen: encounterSnapshot?.firstSeen ?? profile?.firstSeen ?? null,
-                lastSeen: encounterSnapshot?.lastSeen ?? profile?.lastSeen ?? null,
-                shipsObserved: profile?.shipsObserved || {},
-                teamsObserved: profile?.teamsObserved || {},
-                ocrSightings: profile?.ocrSightings || 0,
-                manualSightings: profile?.manualSightings || 0,
-                lastOcrConfidence: profile?.lastOcrConfidence ?? null,
+                totalEncounters,
+                firstSeen: encounterSnapshot?.firstSeen ?? getAggregateTimestamp(profileIds, 'firstSeen', 'min'),
+                lastSeen: encounterSnapshot?.lastSeen ?? getAggregateTimestamp(profileIds, 'lastSeen', 'max'),
+                shipsObserved: mergeObservedCounts(profileIds, 'shipsObserved'),
+                teamsObserved: mergeObservedCounts(profileIds, 'teamsObserved'),
+                ocrSightings: profileIds.reduce((sum, profileId) => sum + Number(playerProfiles?.[profileId]?.ocrSightings || 0), 0),
+                manualSightings: profileIds.reduce((sum, profileId) => sum + Number(playerProfiles?.[profileId]?.manualSightings || 0), 0),
+                lastOcrConfidence: getAggregateLastOcrConfidence(profileIds),
+                profileIds,
             } satisfies PlayerDetail;
-        });
+        }).filter(Boolean) as PlayerDetail[];
         const enrichedPilotsByName = new Map(enrichedPilots.map((pilot) => [pilot.name, pilot]));
         if (IS_DEV_BUILD) {
             Logger.debug('PlayerHub', 'Derived roster model', {
                 durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
-                pilotCount: uniquePilotRegistry.length,
+                pilotCount: allTrackedPilots.length,
                 pendingCandidateCount: pendingRosterCandidates.length,
                 panelMode,
             });
@@ -487,24 +675,38 @@ const PlayerHub: React.FC = () => {
         };
     }, [
         encounterSnapshotsByPilot,
-        favoritePilotKeys,
+        favoritePilotNames,
         panelMode,
         pendingRosterCandidates.length,
         pilotNotes,
         playerProfiles,
         rosterEntryMeta,
-        uniquePilotRegistry,
+        allTrackedPilots,
+        normalizedPilotNameMap,
+        rosterNameSet,
+        trackedProfilesByPilot,
     ]);
     const enrichedPilots = rosterModel.enrichedPilots;
     const deferredSearchTerm = useDeferredValue(searchTerm);
+    const rosteredPlayerCount = useMemo(() => enrichedPilots.filter((pilot) => pilot.isRoster).length, [enrichedPilots]);
+    const trackedOnlyPlayerCount = useMemo(() => enrichedPilots.filter((pilot) => pilot.isTrackedOnly).length, [enrichedPilots]);
+    const needsReviewPlayerCount = useMemo(() => enrichedPilots.filter((pilot) => pilot.needsReview).length, [enrichedPilots]);
 
     const filtered = useMemo(() => {
         let list = enrichedPilots;
+        if (playerFilterMode === 'roster') {
+            list = list.filter((pilot) => pilot.isRoster);
+        } else if (playerFilterMode === 'tracked-only') {
+            list = list.filter((pilot) => pilot.isTrackedOnly);
+        } else if (playerFilterMode === 'needs-review') {
+            list = list.filter((pilot) => pilot.needsReview);
+        }
         if (deferredSearchTerm) {
             const q = deferredSearchTerm.toLowerCase();
             list = list.filter(p => p.name.toLowerCase().includes(q));
         }
         list = [...list].sort((a, b) => {
+            if (a.isRoster !== b.isRoster) return a.isRoster ? -1 : 1;
             switch (sortMode) {
                 case 'favorites':
                     if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
@@ -520,19 +722,25 @@ const PlayerHub: React.FC = () => {
             }
         });
         return list;
-    }, [deferredSearchTerm, enrichedPilots, sortMode]);
+    }, [deferredSearchTerm, enrichedPilots, playerFilterMode, sortMode]);
 
     const selected = useMemo(() => {
         if (!selectedPilot) return null;
         return rosterModel.enrichedPilotsByName.get(selectedPilot) || null;
     }, [rosterModel.enrichedPilotsByName, selectedPilot]);
-    const selectedRosterBadgeLabel = getRosterBadgeLabel(selected?.rosterMeta);
-    const isSelectedDetectedEntry = selected?.rosterMeta?.origin === 'ocr' && selected?.rosterMeta?.status === 'detected';
+    const selectedStatusChips = selected ? getPlayerStatusChips(selected) : [];
 
     const selectedAliasInsights = useMemo(() => {
         if (!selected) return { manual: [] as AliasInsight[], learned: [] as AliasInsight[] };
         const selectedKey = normalizeNameKey(selected.name);
-        const manual = (pilotAliases[selected.name] || [])
+        const rosterName = selected.isRoster ? selected.name : (normalizedPilotNameMap.get(selectedKey) || selected.name);
+        if (!selected.isRoster) {
+            return {
+                manual: [] as AliasInsight[],
+                learned: learnedAliasInsightsByTarget.get(selectedKey) || [],
+            };
+        }
+        const manual = (pilotAliases[rosterName] || [])
             .map((alias) => String(alias || '').trim())
             .filter(Boolean)
             .filter((alias, index, list) => (
@@ -543,15 +751,15 @@ const PlayerHub: React.FC = () => {
         const learned = (learnedAliasInsightsByTarget.get(selectedKey) || [])
             .filter((entry) => !manual.some((alias) => normalizeNameKey(alias.label) === normalizeNameKey(entry.label)));
         return { manual, learned };
-    }, [learnedAliasInsightsByTarget, pilotAliases, selected]);
+    }, [learnedAliasInsightsByTarget, normalizedPilotNameMap, pilotAliases, selected]);
 
     const duplicateCandidates = useMemo(() => {
-        if (!selected) return [] as DuplicateCandidate[];
+        if (!selected || !selected.isRoster) return [] as DuplicateCandidate[];
         const selectedKey = normalizeOcrName(selected.name || '').toLowerCase();
         const selectedAliasKeys = getKnownAliasKeys(selected.name);
 
         return enrichedPilots
-            .filter((candidate) => candidate.name !== selected.name)
+            .filter((candidate) => candidate.name !== selected.name && candidate.isRoster)
             .map((candidate) => {
                 const candidateKey = normalizeOcrName(candidate.name || '').toLowerCase();
                 const candidateAliasKeys = getKnownAliasKeys(candidate.name);
@@ -603,10 +811,10 @@ const PlayerHub: React.FC = () => {
     const selectedPatternSignals = useMemo(() => {
         if (!selected) return { topTeammate: null as [string, number] | null, topOpponent: null as [string, number] | null };
 
-        const toNameKey = (value: string) => String(value || '').trim().toLowerCase();
+        const toNameKey = (value: string) => normalizeNameKey(value);
         const toDisplayName = (value: string) => String(value || '').trim();
-        const selectedKey = toNameKey(selected.name);
-        if (!selectedKey) return { topTeammate: null as [string, number] | null, topOpponent: null as [string, number] | null };
+        const selectedKeys = getKnownAliasKeys(selected.name);
+        if (selectedKeys.size === 0) return { topTeammate: null as [string, number] | null, topOpponent: null as [string, number] | null };
 
         const teammateCounts = new Map<string, { name: string; count: number }>();
         const opponentCounts = new Map<string, { name: string; count: number }>();
@@ -614,13 +822,25 @@ const PlayerHub: React.FC = () => {
         const incrementCounter = (counter: Map<string, { name: string; count: number }>, name: string) => {
             const cleaned = toDisplayName(name);
             const key = toNameKey(cleaned);
-            if (!cleaned || !key || key === selectedKey) return;
-            const current = counter.get(key);
+            if (!cleaned || !key || selectedKeys.has(key)) return;
+            const canonicalName = (() => {
+                const matches = Array.from(pilotNamesByIdentityKey.get(key) || []);
+                if (matches.length === 0) return cleaned;
+                return matches.sort((left, right) => {
+                    const leftIsRoster = Boolean(normalizedPilotNameMap.get(normalizeNameKey(left)));
+                    const rightIsRoster = Boolean(normalizedPilotNameMap.get(normalizeNameKey(right)));
+                    if (leftIsRoster !== rightIsRoster) return leftIsRoster ? -1 : 1;
+                    return left.localeCompare(right);
+                })[0];
+            })();
+            const canonicalKey = toNameKey(canonicalName);
+            if (!canonicalKey || selectedKeys.has(canonicalKey)) return;
+            const current = counter.get(canonicalKey);
             if (current) {
                 current.count += 1;
                 return;
             }
-            counter.set(key, { name: cleaned, count: 1 });
+            counter.set(canonicalKey, { name: canonicalName, count: 1 });
         };
 
         (matches || []).forEach((match) => {
@@ -651,13 +871,13 @@ const PlayerHub: React.FC = () => {
                 dedupedOpponents.set(key, name);
             });
 
-            const selectedInFriendly = dedupedTeam.has(selectedKey);
-            const selectedInEnemy = dedupedOpponents.has(selectedKey);
+            const selectedInFriendly = Array.from(dedupedTeam.keys()).some((key) => selectedKeys.has(key));
+            const selectedInEnemy = Array.from(dedupedOpponents.keys()).some((key) => selectedKeys.has(key));
             if (!selectedInFriendly && !selectedInEnemy) return;
 
             if (selectedInFriendly) {
                 dedupedTeam.forEach((name, key) => {
-                    if (key !== selectedKey) incrementCounter(teammateCounts, name);
+                    if (!selectedKeys.has(key)) incrementCounter(teammateCounts, name);
                 });
                 dedupedOpponents.forEach((name) => {
                     incrementCounter(opponentCounts, name);
@@ -666,7 +886,7 @@ const PlayerHub: React.FC = () => {
             }
 
             dedupedOpponents.forEach((name, key) => {
-                if (key !== selectedKey) incrementCounter(teammateCounts, name);
+                if (!selectedKeys.has(key)) incrementCounter(teammateCounts, name);
             });
             dedupedTeam.forEach((name) => {
                 incrementCounter(opponentCounts, name);
@@ -686,7 +906,7 @@ const PlayerHub: React.FC = () => {
             topTeammate: pickTop(teammateCounts),
             topOpponent: pickTop(opponentCounts),
         };
-    }, [matches, selected]);
+    }, [getKnownAliasKeys, matches, normalizedPilotNameMap, pilotNamesByIdentityKey, selected]);
 
     const rosterColumnCount = rosterViewportWidth >= 1536 ? 3 : 2;
     const rosterTotalRows = Math.ceil(filtered.length / rosterColumnCount);
@@ -750,19 +970,20 @@ const PlayerHub: React.FC = () => {
     };
 
     const handleAddAlias = (kind: 'manual' | 'learned') => {
-        if (!selected) return;
+        if (!selected || !selected.isRoster) return;
         const trimmedAlias = normalizeOcrName(newAliasValue);
         if (!trimmedAlias) return;
         const trimmedKey = normalizeNameKey(trimmedAlias);
         const selectedKey = normalizeNameKey(selected.name);
+        const rosterName = selected.name;
         if (!trimmedKey || trimmedKey === selectedKey) return;
         const manualExists = selectedAliasInsights.manual.some((alias) => normalizeNameKey(alias.label) === trimmedKey);
         const learnedExists = selectedAliasInsights.learned.some((alias) => normalizeNameKey(alias.label) === trimmedKey);
         if ((kind === 'manual' && manualExists) || (kind === 'learned' && learnedExists)) return;
         if (kind === 'manual') {
-            addPilotAlias(selected.name, trimmedAlias);
+            addPilotAlias(rosterName, trimmedAlias);
         }
-        recordOcrAliasCorrection(trimmedAlias, selected.name, {
+        recordOcrAliasCorrection(trimmedAlias, rosterName, {
             source: 'manual_correction',
             context: 'unknown',
             confidenceWeight: 1,
@@ -802,6 +1023,15 @@ const PlayerHub: React.FC = () => {
         setToast({ message: `Confirmed "${pilot}" in the roster`, type: 'success' });
     };
 
+    const handlePromoteTrackedEntry = (player: PlayerDetail) => {
+        if (player.isRoster) return;
+        addToRegistry(player.name, {
+            origin: player.ocrSightings > 0 ? 'ocr' : 'manual',
+            status: 'confirmed',
+        });
+        setToast({ message: `Added "${player.name}" to the roster`, type: 'success' });
+    };
+
     const handleDismissDetectedEntry = (pilot: string) => {
         removeFromRegistry(pilot);
         if (selectedPilot === pilot) setSelectedPilot(null);
@@ -836,7 +1066,7 @@ const PlayerHub: React.FC = () => {
         if (!selectedPilot) return [];
         const q = mergeSearch.toLowerCase();
         return enrichedPilots
-            .filter(p => p.name !== selectedPilot && (!q || p.name.toLowerCase().includes(q)))
+            .filter((pilot) => pilot.isRoster && pilot.name !== selectedPilot && (!q || pilot.name.toLowerCase().includes(q)))
             .slice(0, 20);
     }, [enrichedPilots, selectedPilot, mergeSearch]);
 
@@ -1237,7 +1467,10 @@ const PlayerHub: React.FC = () => {
                             </div>
                             <div>
                                 <h2 className="text-body font-bold text-md-sys-on-surface uppercase tracking-tight">Players</h2>
-                                <span className="text-label-xs text-md-sys-on-surface/60">{uniquePilotRegistry.length} registered</span>
+                                <span className="text-label-xs text-md-sys-on-surface/60">
+                                    {rosteredPlayerCount} rostered
+                                    {trackedOnlyPlayerCount > 0 ? ` · ${trackedOnlyPlayerCount} tracked only` : ''}
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -1297,6 +1530,27 @@ const PlayerHub: React.FC = () => {
                                     }`}
                             >
                                 {s.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1">
+                        {([
+                            { id: 'all', label: 'All', count: enrichedPilots.length },
+                            { id: 'roster', label: 'Roster', count: rosteredPlayerCount },
+                            { id: 'tracked-only', label: 'Tracked Only', count: trackedOnlyPlayerCount },
+                            { id: 'needs-review', label: 'Needs Review', count: needsReviewPlayerCount },
+                        ] as { id: PlayerFilterMode; label: string; count: number }[]).map((filter) => (
+                            <button
+                                key={filter.id}
+                                type="button"
+                                onClick={() => setPlayerFilterMode(filter.id)}
+                                className={`h-7 rounded-lg text-label-xs font-bold uppercase tracking-wide transition-all ${playerFilterMode === filter.id
+                                    ? 'bg-md-sys-secondaryContainer text-md-sys-onSecondaryContainer'
+                                    : 'text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'
+                                    }`}
+                            >
+                                {filter.label} {filter.count > 0 ? `(${filter.count})` : ''}
                             </button>
                         ))}
                     </div>
@@ -1362,7 +1616,7 @@ const PlayerHub: React.FC = () => {
                         <div className="flex-1 flex flex-col items-center justify-center py-12 text-md-sys-on-surface/40">
                             <Users size={32} className="mb-2 opacity-40" />
                             <span className="text-label-sm font-semibold">
-                                {searchTerm ? 'No players match your search' : 'No players registered yet'}
+                                {searchTerm ? 'No tracked players match your search' : 'No tracked players yet'}
                             </span>
                         </div>
                     ) : (
@@ -1378,8 +1632,7 @@ const PlayerHub: React.FC = () => {
                                     style={{ transform: `translateY(${rosterVisibleOffsetY}px)` }}
                                 >
                                 {rosterVisiblePilots.map((pilot) => {
-                                    const rosterBadgeLabel = getRosterBadgeLabel(pilot.rosterMeta);
-                                    const isDetectedBadge = pilot.rosterMeta?.origin === 'ocr' && pilot.rosterMeta?.status === 'detected';
+                                    const statusChips = getPlayerStatusChips(pilot);
                                     return (
                                     <button
                                         key={pilot.name}
@@ -1396,16 +1649,14 @@ const PlayerHub: React.FC = () => {
                                             <div className="flex items-center gap-1.5 min-w-0">
                                                 {pilot.isFavorite && <Star size={10} className="text-warning fill-amber-400 shrink-0" />}
                                                 <span className="player-list-name text-label-sm font-semibold truncate">{pilot.name}</span>
-                                                {rosterBadgeLabel && (
+                                                {statusChips.map((chip) => (
                                                     <span
-                                                        className={`shrink-0 px-1.5 py-0.5 rounded-pill text-[10px] font-bold uppercase tracking-wide ${isDetectedBadge
-                                                            ? 'bg-info-soft text-info border border-info/20'
-                                                            : 'bg-success/10 text-success border border-success/20'
-                                                            }`}
+                                                        key={`${pilot.name}-${chip.key}`}
+                                                        className={`shrink-0 px-1.5 py-0.5 rounded-pill text-[10px] font-bold uppercase tracking-wide ${getStatusChipClassName(chip.key)}`}
                                                     >
-                                                        {rosterBadgeLabel}
+                                                        {chip.label}
                                                     </span>
-                                                )}
+                                                ))}
                                             </div>
                                             {pilot.totalEncounters > 0 && (
                                                 <span className="text-label-xs text-md-sys-on-surface/40">
@@ -1414,7 +1665,7 @@ const PlayerHub: React.FC = () => {
                                                 </span>
                                             )}
                                         </div>
-                                        {pilot.note && (
+                                        {pilot.isRoster && pilot.note && (
                                             <span className="w-1.5 h-1.5 rounded-full bg-md-sys-primary/40 shrink-0" title="Has note" />
                                         )}
                                         <ChevronRight size={14} className="text-md-sys-on-surface/40 group-hover:text-md-sys-on-surface/40 shrink-0" />
@@ -1442,12 +1693,12 @@ const PlayerHub: React.FC = () => {
                                     ? `${pendingRosterCandidates.length} OCR candidate${pendingRosterCandidates.length === 1 ? '' : 's'} ready for review`
                                     : (selected
                                         ? `${selected.name} profile loaded`
-                                        : 'Choose a player from the roster to load the profile panel')}
+                                        : 'Choose a tracked player to load the profile panel')}
                             </div>
                             <div className="mt-1 text-label-sm text-md-sys-on-surface/58">
                                 {panelMode === 'ocr-work'
                                     ? 'Review OCR-detected names in the same pane as the profile workspace so the tab feels like one system instead of three separate columns.'
-                                    : 'Roster stays visible on the left while this pane focuses on the selected player and merge/alias decisions.'}
+                                    : 'Roster stays visible first while tracked-only players stay visible in the same workspace for review and promotion.'}
                             </div>
                         </div>
                         <div className="grid grid-cols-2 gap-1 shrink-0">
@@ -1486,7 +1737,7 @@ const PlayerHub: React.FC = () => {
                             Select a player to view details
                         </span>
                         <span className="text-label-sm mt-1 opacity-60">
-                            {uniquePilotRegistry.length} players in your roster
+                            {rosteredPlayerCount} rostered · {trackedOnlyPlayerCount} tracked only
                         </span>
                     </div>
                 ) : (
@@ -1515,16 +1766,14 @@ const PlayerHub: React.FC = () => {
                                         ) : (
                                             <div className="flex items-center gap-2 min-w-0">
                                                 <h2 className="text-body font-bold text-md-sys-on-surface truncate">{selected.name}</h2>
-                                                {selectedRosterBadgeLabel && (
+                                                {selectedStatusChips.map((chip) => (
                                                     <span
-                                                        className={`shrink-0 px-2 py-0.5 rounded-pill text-label-xs font-bold uppercase tracking-wide ${isSelectedDetectedEntry
-                                                            ? 'bg-info-soft text-info border border-info/20'
-                                                            : 'bg-success/10 text-success border border-success/20'
-                                                            }`}
+                                                        key={`selected-${chip.key}`}
+                                                        className={`shrink-0 px-2 py-0.5 rounded-pill text-label-xs font-bold uppercase tracking-wide ${getStatusChipClassName(chip.key)}`}
                                                     >
-                                                        {selectedRosterBadgeLabel}
+                                                        {chip.label}
                                                     </span>
-                                                )}
+                                                ))}
                                             </div>
                                         )}
                                         <div className="flex items-center gap-2 mt-0.5">
@@ -1544,9 +1793,14 @@ const PlayerHub: React.FC = () => {
                                                 </span>
                                             )}
                                         </div>
+                                        {selected.isTrackedOnly && (
+                                            <div className="mt-1 text-label-xs text-md-sys-on-surface/52">
+                                                Tracked from sightings and analytics, but not yet promoted into the roster.
+                                            </div>
+                                        )}
                                         {selected.rosterMeta?.origin === 'ocr' && (
                                             <div className="mt-1 text-label-xs text-md-sys-on-surface/52">
-                                                {isSelectedDetectedEntry
+                                                {selected.isDetected
                                                     ? 'Auto-added from OCR and still awaiting confirmation.'
                                                     : 'Originally learned from OCR and confirmed into the roster.'}
                                             </div>
@@ -1554,7 +1808,7 @@ const PlayerHub: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
-                                    {isSelectedDetectedEntry && (
+                                    {selected.isDetected && (
                                         <>
                                             <button
                                                 onClick={() => handleConfirmDetectedEntry(selected.name)}
@@ -1576,45 +1830,60 @@ const PlayerHub: React.FC = () => {
                                             </button>
                                         </>
                                     )}
-                                    <button
-                                        onClick={() => toggleFavorite(selected.name)}
-                                        className={`md3-icon-btn w-8 h-8 ${selected.isFavorite ? 'text-warning' : 'text-md-sys-on-surface/40'}`}
-                                        title={selected.isFavorite ? 'Unpin' : 'Pin'}
-                                        aria-label={selected.isFavorite ? 'Unpin player' : 'Pin player'}
-                                    >
-                                        <Star size={14} className={selected.isFavorite ? 'fill-amber-400' : ''} />
-                                    </button>
-                                    <button
-                                        onClick={() => handleStartRename(selected.name)}
-                                        className="md3-icon-btn w-8 h-8 text-md-sys-on-surface/40"
-                                        title="Rename"
-                                        aria-label="Rename player"
-                                    >
-                                        <Edit2 size={14} />
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            setShowFullProfile(true);
-                                            setMergeTarget(selected.name);
-                                        }}
-                                        className="md3-icon-btn w-8 h-8 text-md-sys-on-surface/40"
-                                        title="Merge with another player"
-                                        aria-label="Merge player"
-                                    >
-                                        <Merge size={14} />
-                                    </button>
-                                    <button
-                                        onClick={() => setConfirmDelete(selected.name)}
-                                        className="md3-icon-btn w-8 h-8 text-md-sys-error/60 hover:text-md-sys-error"
-                                        title="Remove from roster"
-                                        aria-label="Remove player from roster"
-                                    >
-                                        <Trash2 size={14} />
-                                    </button>
+                                    {selected.isTrackedOnly ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => handlePromoteTrackedEntry(selected)}
+                                            className="px-3 h-8 rounded-lg bg-md-sys-primary text-md-sys-onPrimary text-label-xs font-bold uppercase tracking-wide flex items-center gap-1"
+                                            title="Add tracked player to roster"
+                                            aria-label="Add tracked player to roster"
+                                        >
+                                            <Plus size={12} />
+                                            Add to Roster
+                                        </button>
+                                    ) : (
+                                        <>
+                                            <button
+                                                onClick={() => toggleFavorite(selected.name)}
+                                                className={`md3-icon-btn w-8 h-8 ${selected.isFavorite ? 'text-warning' : 'text-md-sys-on-surface/40'}`}
+                                                title={selected.isFavorite ? 'Unpin' : 'Pin'}
+                                                aria-label={selected.isFavorite ? 'Unpin player' : 'Pin player'}
+                                            >
+                                                <Star size={14} className={selected.isFavorite ? 'fill-amber-400' : ''} />
+                                            </button>
+                                            <button
+                                                onClick={() => handleStartRename(selected.name)}
+                                                className="md3-icon-btn w-8 h-8 text-md-sys-on-surface/40"
+                                                title="Rename"
+                                                aria-label="Rename player"
+                                            >
+                                                <Edit2 size={14} />
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setShowFullProfile(true);
+                                                    setMergeTarget(selected.name);
+                                                }}
+                                                className="md3-icon-btn w-8 h-8 text-md-sys-on-surface/40"
+                                                title="Merge with another player"
+                                                aria-label="Merge player"
+                                            >
+                                                <Merge size={14} />
+                                            </button>
+                                            <button
+                                                onClick={() => setConfirmDelete(selected.name)}
+                                                className="md3-icon-btn w-8 h-8 text-md-sys-error/60 hover:text-md-sys-error"
+                                                title="Remove from roster"
+                                                aria-label="Remove player from roster"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
                             </div>
 
-                            {confirmDelete === selected.name && (
+                            {selected.isRoster && confirmDelete === selected.name && (
                                 <div className="mt-3 bg-md-sys-errorContainer/20 border border-md-sys-error/20 rounded-xl px-4 py-3 flex items-center justify-between">
                                     <span className="text-label-sm text-md-sys-error font-semibold flex items-center gap-2">
                                         <AlertTriangle size={14} /> Delete {selected.name} from the roster?
@@ -1692,105 +1961,111 @@ const PlayerHub: React.FC = () => {
                                 >
                                     Back to Recording
                                 </button>
-                                <div className="mt-2 w-full">
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowAliases(prev => !prev)}
-                                        className="flex items-center gap-1 text-label-xs font-bold uppercase tracking-wide text-md-sys-primary hover:text-md-sys-primary/80"
-                                    >
-                                        <ChevronDown size={12} className={`transition-transform ${showAliases ? 'rotate-180' : ''}`} />
-                                        Manage OCR Aliases
-                                    </button>
-                                    {showAliases && (
-                                        <div className="mt-2 rounded-xl border border-md-sys-outline/12 bg-md-sys-on-surface/[0.04] p-3">
-                                            <div className="grid gap-3 md:grid-cols-2">
-                                                <div>
-                                                    <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/48 mb-2">
-                                                        Former names
-                                                    </div>
-                                                    <div className="flex flex-wrap gap-1 min-h-[24px]">
-                                                        {selectedAliasInsights.manual.length === 0 ? (
-                                                            <span className="text-label-xs text-md-sys-on-surface/40">No former names yet.</span>
-                                                        ) : selectedAliasInsights.manual.map((alias) => (
-                                                            <span
-                                                                key={`manual-manage-${alias.label}`}
-                                                                className="flex items-center gap-1 px-2 py-0.5 rounded-control bg-md-sys-primary/10 text-md-sys-primary text-label-xs font-semibold"
-                                                            >
-                                                                {alias.label}
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleRemoveAlias(selected.name, alias.label)}
-                                                                    className="hover:text-danger"
-                                                                    aria-label={`Remove former name ${alias.label}`}
+                                {selected.isRoster ? (
+                                    <div className="mt-2 w-full">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowAliases(prev => !prev)}
+                                            className="flex items-center gap-1 text-label-xs font-bold uppercase tracking-wide text-md-sys-primary hover:text-md-sys-primary/80"
+                                        >
+                                            <ChevronDown size={12} className={`transition-transform ${showAliases ? 'rotate-180' : ''}`} />
+                                            Manage OCR Aliases
+                                        </button>
+                                        {showAliases && (
+                                            <div className="mt-2 rounded-xl border border-md-sys-outline/12 bg-md-sys-on-surface/[0.04] p-3">
+                                                <div className="grid gap-3 md:grid-cols-2">
+                                                    <div>
+                                                        <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/48 mb-2">
+                                                            Former names
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-1 min-h-[24px]">
+                                                            {selectedAliasInsights.manual.length === 0 ? (
+                                                                <span className="text-label-xs text-md-sys-on-surface/40">No former names yet.</span>
+                                                            ) : selectedAliasInsights.manual.map((alias) => (
+                                                                <span
+                                                                    key={`manual-manage-${alias.label}`}
+                                                                    className="flex items-center gap-1 px-2 py-0.5 rounded-control bg-md-sys-primary/10 text-md-sys-primary text-label-xs font-semibold"
                                                                 >
-                                                                    <X size={10} />
-                                                                </button>
-                                                            </span>
-                                                        ))}
+                                                                    {alias.label}
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleRemoveAlias(selected.name, alias.label)}
+                                                                        className="hover:text-danger"
+                                                                        aria-label={`Remove former name ${alias.label}`}
+                                                                    >
+                                                                        <X size={10} />
+                                                                    </button>
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/48 mb-2">
+                                                            OCR variants
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-1 min-h-[24px]">
+                                                            {selectedAliasInsights.learned.length === 0 ? (
+                                                                <span className="text-label-xs text-md-sys-on-surface/40">No OCR variants yet.</span>
+                                                            ) : selectedAliasInsights.learned.map((alias) => (
+                                                                <span
+                                                                    key={`learned-manage-${alias.label}`}
+                                                                    className="flex items-center gap-1 px-2 py-0.5 rounded-control bg-info-soft text-info text-label-xs font-semibold border border-info/15"
+                                                                >
+                                                                    {alias.label}
+                                                                    {alias.count ? <span className="opacity-65">x{alias.count}</span> : null}
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleRemoveLearnedVariant(selected.name, alias.label)}
+                                                                        className="hover:text-danger"
+                                                                        aria-label={`Remove OCR variant ${alias.label}`}
+                                                                    >
+                                                                        <X size={10} />
+                                                                    </button>
+                                                                </span>
+                                                            ))}
+                                                        </div>
                                                     </div>
                                                 </div>
-                                                <div>
-                                                    <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/48 mb-2">
-                                                        OCR variants
-                                                    </div>
-                                                    <div className="flex flex-wrap gap-1 min-h-[24px]">
-                                                        {selectedAliasInsights.learned.length === 0 ? (
-                                                            <span className="text-label-xs text-md-sys-on-surface/40">No OCR variants yet.</span>
-                                                        ) : selectedAliasInsights.learned.map((alias) => (
-                                                            <span
-                                                                key={`learned-manage-${alias.label}`}
-                                                                className="flex items-center gap-1 px-2 py-0.5 rounded-control bg-info-soft text-info text-label-xs font-semibold border border-info/15"
-                                                            >
-                                                                {alias.label}
-                                                                {alias.count ? <span className="opacity-65">x{alias.count}</span> : null}
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleRemoveLearnedVariant(selected.name, alias.label)}
-                                                                    className="hover:text-danger"
-                                                                    aria-label={`Remove OCR variant ${alias.label}`}
-                                                                >
-                                                                    <X size={10} />
-                                                                </button>
-                                                            </span>
-                                                        ))}
-                                                    </div>
+                                                <div className="mt-3 flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        value={newAliasValue}
+                                                        onChange={(event) => setNewAliasValue(event.target.value)}
+                                                        onKeyDown={(event) => {
+                                                            if (event.key === 'Enter') handleAddAlias('manual');
+                                                        }}
+                                                        placeholder="Add former name or OCR variant..."
+                                                        className="flex-1 h-8 md3-textfield--outlined text-label-sm outline-none px-2"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleAddAlias('manual')}
+                                                        disabled={!newAliasValue.trim()}
+                                                        aria-label="Add former name"
+                                                        className="h-8 px-2 md3-btn-tonal rounded-control text-label-sm font-bold flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    >
+                                                        <Plus size={12} />
+                                                        Add Former Name
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleAddAlias('learned')}
+                                                        disabled={!newAliasValue.trim()}
+                                                        aria-label="Add OCR variant"
+                                                        className="h-8 px-2 rounded-control text-label-sm font-bold flex items-center gap-1 bg-info-soft text-info border border-info/15 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    >
+                                                        <ScanEye size={12} />
+                                                        Add OCR Variant
+                                                    </button>
                                                 </div>
                                             </div>
-                                            <div className="mt-3 flex gap-2">
-                                                <input
-                                                    type="text"
-                                                    value={newAliasValue}
-                                                    onChange={(event) => setNewAliasValue(event.target.value)}
-                                                    onKeyDown={(event) => {
-                                                        if (event.key === 'Enter') handleAddAlias('manual');
-                                                    }}
-                                                    placeholder="Add former name or OCR variant..."
-                                                    className="flex-1 h-8 md3-textfield--outlined text-label-sm outline-none px-2"
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleAddAlias('manual')}
-                                                    disabled={!newAliasValue.trim()}
-                                                    aria-label="Add former name"
-                                                    className="h-8 px-2 md3-btn-tonal rounded-control text-label-sm font-bold flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                >
-                                                    <Plus size={12} />
-                                                    Add Former Name
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleAddAlias('learned')}
-                                                    disabled={!newAliasValue.trim()}
-                                                    aria-label="Add OCR variant"
-                                                    className="h-8 px-2 rounded-control text-label-sm font-bold flex items-center gap-1 bg-info-soft text-info border border-info/15 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                >
-                                                    <ScanEye size={12} />
-                                                    Add OCR Variant
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="mt-2 w-full rounded-xl border border-md-sys-outline/12 bg-md-sys-on-surface/[0.04] px-3 py-2.5 text-label-sm text-md-sys-on-surface/60">
+                                        Add this tracked player to the roster before storing notes, aliases, or merge decisions.
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -2050,7 +2325,7 @@ const PlayerHub: React.FC = () => {
                                     <Edit2 size={14} className="text-md-sys-on-surface/40" />
                                     <span className="text-label-sm font-semibold uppercase tracking-wide text-md-sys-on-surface/60">Notes</span>
                                 </div>
-                                {editingNote !== selected.name && (
+                                {selected.isRoster && editingNote !== selected.name && (
                                     <button
                                         onClick={() => handleStartNote(selected.name)}
                                         className="text-label-xs font-bold text-md-sys-primary hover:text-md-sys-primary/80"
@@ -2059,7 +2334,11 @@ const PlayerHub: React.FC = () => {
                                     </button>
                                 )}
                             </div>
-                            {editingNote === selected.name ? (
+                            {!selected.isRoster ? (
+                                <p className="text-label-sm text-md-sys-on-surface/45">
+                                    Promote this tracked player into the roster before saving notes.
+                                </p>
+                            ) : editingNote === selected.name ? (
                                 <div className="flex flex-col gap-2">
                                     <textarea
                                         value={noteValue}

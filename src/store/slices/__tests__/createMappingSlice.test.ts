@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createStore } from 'zustand/vanilla';
-import { createMappingSlice, MappingSlice } from '../createMappingSlice';
+import { createMappingSlice, MappingSlice, resolvePlayerProfileDisplayName } from '../createMappingSlice';
 
 vi.mock('../../../utils/logger', () => ({
   default: { info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -150,6 +150,27 @@ describe('createMappingSlice', () => {
       store.getState().setUidMapping('weapons', '{bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb}', 'Test Weapon');
       expect(Object.keys(store.getState().detectedUnknowns)).toHaveLength(0);
       expect(store.getState().uidMappings.weapons[canonical]).toBe('Test Weapon');
+    });
+  });
+
+  describe('resolvePlayerProfileDisplayName', () => {
+    it('prefers an explicit profile name', () => {
+      expect(resolvePlayerProfileDisplayName('pilot-1', {
+        id: 'pilot-1',
+        name: 'Pilot One',
+      }, {})).toBe('Pilot One');
+    });
+
+    it('falls back to a human-readable id when no name exists', () => {
+      expect(resolvePlayerProfileDisplayName('pilot-1', {
+        id: 'pilot-1',
+      }, {})).toBe('pilot-1');
+    });
+
+    it('suppresses GUID-like ids when no name or mapping exists', () => {
+      expect(resolvePlayerProfileDisplayName('{aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa}', {
+        id: '{aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa}',
+      }, {})).toBeNull();
     });
   });
 

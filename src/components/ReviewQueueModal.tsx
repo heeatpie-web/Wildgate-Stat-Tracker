@@ -9,6 +9,10 @@ import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useAriaLiveRegion } from '../hooks/useAriaLiveRegion';
 import { getRosterCandidatePruneIds } from '../utils/pendingReviewUtils';
+import {
+    ROSTER_AUTO_POPULATE_DETECT_MIN,
+    ROSTER_AUTO_POPULATE_REVIEW_MIN,
+} from '../utils/rosterAutoPopulate';
 
 interface ReviewQueueModalProps {
     onClose: () => void;
@@ -37,8 +41,8 @@ interface LearningReviewItem {
 }
 
 type ReviewItem = PendingReview | UnknownReviewItem | LearningReviewItem;
-const AUTO_MERGE_APPROVAL_THRESHOLD = 83;
-const FUZZY_READY_APPROVAL_MIN = 70;
+const AUTO_MERGE_APPROVAL_THRESHOLD = ROSTER_AUTO_POPULATE_DETECT_MIN;
+const FUZZY_READY_APPROVAL_MIN = ROSTER_AUTO_POPULATE_REVIEW_MIN;
 
 const isUnknownReview = (review: ReviewItem): review is UnknownReviewItem =>
     review.type === 'unknown_id';
@@ -675,10 +679,10 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                                                     <div className="text-label-sm text-md-sys-on-surface/60">
                                                         Best match: <span className="font-semibold">{review.bestMatch || 'None'}</span> ({Math.round(bestScore)}%)
                                                         {bestScore >= AUTO_MERGE_APPROVAL_THRESHOLD && (
-                                                            <span className="ml-2 text-success font-bold">Auto-approve at 83%+</span>
+                                                            <span className="ml-2 text-success font-bold">Auto-approve at {AUTO_MERGE_APPROVAL_THRESHOLD}%+</span>
                                                         )}
                                                         {isFuzzyReady && (
-                                                            <span className="ml-2 text-warning font-bold">Fuzzy-ready (70-82%)</span>
+                                                            <span className="ml-2 text-warning font-bold">Fuzzy-ready ({FUZZY_READY_APPROVAL_MIN}-{AUTO_MERGE_APPROVAL_THRESHOLD - 1}%)</span>
                                                         )}
                                                     </div>
                                                 )}

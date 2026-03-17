@@ -109,7 +109,7 @@ describe('autoCaptureCoordinator sequencing', () => {
     expect(sendMenuKeySequence).toHaveBeenNthCalledWith(4, '{END}', 'Navigate to Crew Hub Panel End');
     expect(sendMenuKeySequence).toHaveBeenNthCalledWith(5, '{ESC}', 'Exit');
     expect(captureAndProcess).toHaveBeenCalledTimes(3);
-    expect(waits).toEqual([200, 40, 50, 70, 20, 16, 20]);
+    expect(waits).toEqual([160, 20, 50, 70, 20, 16, 20]);
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({
       phase: 'capture-progress',
       captureIndex: 1,
@@ -269,6 +269,53 @@ describe('autoCaptureCoordinator sequencing', () => {
     expect(sendKeySequence).not.toHaveBeenCalledWith('m', expect.anything());
     expect(sendMenuKeySequence).toHaveBeenCalledWith('{ESC}', 'Navigate to Crew Hub');
     expect(captureAndProcess).toHaveBeenCalledTimes(3);
+  });
+
+  it('runs sequence lifecycle hooks around the capture flow', async () => {
+    const notify = vi.fn();
+    const beforeSequence = vi.fn(() => Promise.resolve());
+    const afterSequence = vi.fn(() => Promise.resolve());
+    const sendKeySequence = vi.fn().mockResolvedValue({ success: true });
+    const sendMenuKeySequence = vi.fn().mockResolvedValue({ success: true });
+    const captureAndProcess = vi.fn()
+      .mockResolvedValueOnce({ success: true, filePath: 'map.png', filename: 'map.png', ocrData: { screenshotType: 'tactical_map' } })
+      .mockResolvedValueOnce({ success: true, filePath: 'crew-a.png', filename: 'crew-a.png', ocrData: { screenshotType: 'crew_hub' } })
+      .mockResolvedValueOnce({ success: true, filePath: 'crew-b.png', filename: 'crew-b.png', ocrData: { screenshotType: 'crew_hub' } });
+
+    const coordinator = createAutoCaptureCoordinator({
+      notify,
+      beforeSequence,
+      afterSequence,
+      sendKeySequence,
+      sendMenuKeySequence,
+      captureAndProcess,
+      lookupMapKeybind: vi.fn().mockResolvedValue({ raw: 'Tab', sendKeys: '{TAB}' }),
+      delayFn: vi.fn(() => Promise.resolve()),
+    });
+
+    const result = await coordinator.start({
+      lifecycleActive: true,
+      matchId: 44,
+      autoCaptureTacticalMapKey: 'Tab',
+    });
+
+    expect(result).toEqual({
+      started: true,
+      matchId: 44,
+      tacticalMapKeybind: 'Tab',
+    });
+
+    await vi.waitFor(() => {
+      expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+        phase: 'completed',
+        matchId: 44,
+      }));
+    });
+
+    expect(beforeSequence).toHaveBeenCalledTimes(1);
+    expect(afterSequence).toHaveBeenCalledTimes(1);
+    expect(beforeSequence.mock.invocationCallOrder[0]).toBeLessThan(captureAndProcess.mock.invocationCallOrder[0]);
+    expect(afterSequence.mock.invocationCallOrder[0]).toBeGreaterThan(captureAndProcess.mock.invocationCallOrder.at(-1));
   });
 
   it('fails when a saved screenshot OCR type does not match the expected screen', async () => {

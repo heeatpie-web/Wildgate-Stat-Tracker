@@ -103,6 +103,11 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
 }) => {
   const qs = getQueueStatus(match);
   const statusMeta = getStatusMeta(qs.key);
+  const awaitingResultLabel = match.subType === 'Telemetry Draft'
+    && match.telemetryDraftState === 'ready'
+    && match.result === 'Ongoing'
+    ? (compact ? 'Awaiting' : 'Awaiting Result')
+    : undefined;
   const when = new Date(match.timestamp);
   const timestampLabel = formatQueueTimestamp(when);
   const tooltipLabel = `Match ${displayNumber} - ${timestampLabel}. ${statusMeta.label}: ${statusMeta.description}`;
@@ -146,7 +151,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
           <span className="text-label-sm font-black leading-none">#{displayNumber}</span>
         </div>
         <div className="flex items-center justify-center gap-1">
-          <OutcomePill result={match.result} compact />
+          <OutcomePill result={match.result} label={awaitingResultLabel} compact />
           <span className={`rounded-pill px-1.5 py-0.5 text-[10px] font-black tracking-wider ${STATUS_PILL_BY_TONE[statusMeta.tone]}`}>
             {getCompactStatusLabel(statusMeta.label)}
           </span>
@@ -193,7 +198,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <OutcomePill result={match.result} />
+            <OutcomePill result={match.result} label={awaitingResultLabel} />
             <span
               aria-label={`Status ${statusMeta.label}`}
               title={statusMeta.description}

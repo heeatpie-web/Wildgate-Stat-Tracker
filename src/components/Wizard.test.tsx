@@ -53,6 +53,7 @@ const uiState = {
 
 const processFinalSubmission = vi.fn();
 const saveResultDraft = vi.fn();
+const discardTelemetryDraft = vi.fn();
 const setPendingMatchDataFromStore = vi.fn();
 const rerunOCRMulti = vi.fn();
 const bundleMatchArtifacts = vi.fn();
@@ -76,6 +77,7 @@ vi.mock('../hooks/useMatchSubmission', () => ({
     useMatchSubmission: () => ({
         processFinalSubmission,
         saveResultDraft,
+        discardTelemetryDraft,
         submitting: false,
     }),
 }));
@@ -315,6 +317,49 @@ describe('Wizard', () => {
         expect(getSubmitResultsButton()).toBeEnabled();
         fireEvent.click(screen.getByRole('button', { name: /save results only/i }));
         expect(saveResultDraft).toHaveBeenCalledWith('Artifact');
+    });
+
+    it('discards the underlying telemetry draft from the wizard footer instead of only closing the modal', async () => {
+        const { Wizard } = await import('./Wizard');
+        const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+        gameData.pendingMatchData = {
+            id: 4242,
+            result: 'Win',
+            subType: 'Artifact',
+            loadout: {
+                hero: 'Adrian',
+                ship: 'Hunter',
+                weapons: [],
+                equipment: [],
+            },
+            kills: { 'AI Legion': 0 },
+        };
+        appStoreState.pendingMatchData = { ...gameData.pendingMatchData };
+        appStoreState.matches = [{
+            id: 4242,
+            timestamp: 1_700_000_444_000,
+            date: '1/1/2024',
+            mode: 'Artifact Brawl',
+            player: 'TestPilot',
+            teammates: [],
+            opponents: [],
+            hero: 'Adrian',
+            ship: 'Hunter',
+            reachModifiers: [],
+            kills: { 'AI Legion': 0 },
+            result: 'Ongoing',
+            subType: 'Telemetry Draft',
+        }];
+        uiState.showWizard = 'Win';
+
+        render(<Wizard />);
+
+        fireEvent.click(screen.getByRole('button', { name: /discard match draft/i }));
+
+        expect(confirmSpy).toHaveBeenCalled();
+        expect(discardTelemetryDraft).toHaveBeenCalledWith(4242);
+        expect(uiState.setShowWizard).not.toHaveBeenCalledWith(null);
+        confirmSpy.mockRestore();
     });
 
     it('stores eliminator selection by normalized team color in loss flow', async () => {

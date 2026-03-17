@@ -90,6 +90,8 @@ const uiState = {
 };
 
 const appStoreState = {
+    knownMappings: {},
+    uidMappings: { players: {}, ships: {}, weapons: {}, equipment: {}, perks: {} },
     ocrAliasModel: {
         version: 1 as const,
         entries: {
@@ -179,6 +181,8 @@ describe('PlayerHub', () => {
         gameDataState.activeMergeNotificationId = null;
         gameDataState.dismissedRosterMergePairKeys = [];
         gameDataState.dismissedRosterCandidateKeys = [];
+        appStoreState.knownMappings = {};
+        appStoreState.uidMappings = { players: {}, ships: {}, weapons: {}, equipment: {}, perks: {} };
         appStoreState.ocrAliasModel = {
             version: 1 as const,
             entries: {
@@ -260,6 +264,153 @@ describe('PlayerHub', () => {
 
         fireEvent.click(screen.getByRole('button', { name: /dismiss detected roster entry/i }));
         expect(gameDataState.removeFromRegistry).toHaveBeenCalledWith('PilotOne');
+    });
+
+    it('shows tracked-only players, opens their detail pane, and promotes them into the roster', () => {
+        gameDataState.pilotRegistry = ['PilotOne'];
+        gameDataState.playerProfiles = {
+            PilotOne: {
+                id: 'PilotOne',
+                sightings: 3,
+                firstSeen: 1_700_000_000_000,
+                lastSeen: 1_700_000_000_000,
+                teamsObserved: {},
+                playedWith: { Wingman: 2 },
+                playedAgainst: {},
+                shipsObserved: { Hunter: 2 },
+                ocrSightings: 1,
+                manualSightings: 2,
+                lastOcrConfidence: 88,
+            },
+            ScoutGhost: {
+                id: 'ScoutGhost',
+                sightings: 2,
+                firstSeen: 1_700_000_500_000,
+                lastSeen: 1_700_000_800_000,
+                teamsObserved: { Blue: 2 },
+                playedWith: {},
+                playedAgainst: { PilotOne: 2 },
+                shipsObserved: { Scout: 2 },
+                ocrSightings: 0,
+                manualSightings: 2,
+                lastOcrConfidence: null,
+            },
+        };
+        gameDataState.matches = [{
+            id: 2,
+            timestamp: 1_700_000_900_000,
+            date: '2026-02-18',
+            mode: 'Artifact Brawl',
+            player: 'PilotOne',
+            teammates: [],
+            opponents: ['ScoutGhost'],
+            hero: 'Hero',
+            ship: 'Hunter',
+            reachModifiers: [],
+            kills: {},
+            result: 'Loss',
+            subType: 'Combat',
+        }];
+
+        render(<PlayerHub />);
+
+        const trackedButton = screen.getByRole('button', { name: /scoutghost/i });
+        expect(trackedButton).toHaveTextContent('Tracked');
+
+        fireEvent.click(trackedButton);
+
+        expect(screen.getAllByText('Tracked').length).toBeGreaterThan(0);
+        expect(screen.getByText(/tracked from sightings and analytics/i)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /add tracked player to roster/i })).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /add tracked player to roster/i }));
+
+        expect(gameDataState.addToRegistry).toHaveBeenCalledWith('ScoutGhost', {
+            origin: 'manual',
+            status: 'confirmed',
+        });
+    });
+
+    it('hides non-player entity mappings and zero-evidence ghosts from the tracked-only roster list', () => {
+        gameDataState.pilotRegistry = ['PilotOne'];
+        gameDataState.playerProfiles = {
+            PilotOne: {
+                id: 'PilotOne',
+                sightings: 3,
+                firstSeen: 1_700_000_000_000,
+                lastSeen: 1_700_000_000_000,
+                teamsObserved: {},
+                playedWith: { Wingman: 2 },
+                playedAgainst: {},
+                shipsObserved: { Hunter: 2 },
+                ocrSightings: 1,
+                manualSightings: 2,
+                lastOcrConfidence: 88,
+            },
+            ScoutGhost: {
+                id: 'ScoutGhost',
+                sightings: 2,
+                firstSeen: 1_700_000_500_000,
+                lastSeen: 1_700_000_800_000,
+                teamsObserved: { Blue: 2 },
+                playedWith: {},
+                playedAgainst: { PilotOne: 2 },
+                shipsObserved: { Scout: 2 },
+                ocrSightings: 0,
+                manualSightings: 2,
+                lastOcrConfidence: null,
+            },
+            '3E9EF2344C50F8026CDCAAAAF7777907': {
+                id: '3E9EF2344C50F8026CDCAAAAF7777907',
+                sightings: 4,
+                firstSeen: 1_700_000_500_000,
+                lastSeen: 1_700_000_800_000,
+                teamsObserved: { Blue: 4 },
+                playedWith: {},
+                playedAgainst: {},
+                shipsObserved: {},
+                ocrSightings: 0,
+                manualSightings: 4,
+                lastOcrConfidence: null,
+            },
+            GhostAlias: {
+                id: 'GhostAlias',
+                sightings: 0,
+                firstSeen: 1_700_000_500_000,
+                lastSeen: 1_700_000_800_000,
+                teamsObserved: {},
+                playedWith: {},
+                playedAgainst: {},
+                shipsObserved: {},
+                ocrSightings: 0,
+                manualSightings: 0,
+                lastOcrConfidence: null,
+            },
+        };
+        gameDataState.matches = [{
+            id: 2,
+            timestamp: 1_700_000_900_000,
+            date: '2026-02-18',
+            mode: 'Artifact Brawl',
+            player: 'PilotOne',
+            teammates: [],
+            opponents: ['ScoutGhost'],
+            hero: 'Hero',
+            ship: 'Hunter',
+            reachModifiers: [],
+            kills: {},
+            result: 'Loss',
+            subType: 'Combat',
+        }];
+        appStoreState.knownMappings = {
+            '3E9EF2344C50F8026CDCAAAAF7777907': 'Attack Drone',
+        };
+
+        render(<PlayerHub />);
+
+        expect(screen.getByRole('button', { name: /scoutghost/i })).toHaveTextContent('Tracked');
+        expect(screen.queryByRole('button', { name: /attack drone/i })).toBeNull();
+        expect(screen.queryByRole('button', { name: /ghostalias/i })).toBeNull();
     });
 
     it('lets the selected player add and remove former names and OCR variants from the players tab', () => {

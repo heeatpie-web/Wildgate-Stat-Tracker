@@ -104,25 +104,26 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
         return currentView;
     }, [currentView, isProMode]);
     const data = useAnalyticsData(timeRange, lastN, requestedDataView, entityFilters);
+    const filterOptionSourceMatches = data.rangeFilteredMatches ?? data.filteredMatches;
     const collectSortedUnique = (values: string[]): string[] => (
         Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)))
             .sort((a, b) => a.localeCompare(b))
     );
     const shipFilterOptions = useMemo(
-        () => collectSortedUnique(data.filteredMatches.map((match) => getMatchShip(match))),
-        [data.filteredMatches]
+        () => collectSortedUnique(filterOptionSourceMatches.map((match) => getMatchShip(match))),
+        [filterOptionSourceMatches]
     );
     const weaponFilterOptions = useMemo(
-        () => collectSortedUnique(data.filteredMatches.flatMap((match) => getMatchProspectorWeapons(match))),
-        [data.filteredMatches]
+        () => collectSortedUnique(filterOptionSourceMatches.flatMap((match) => getMatchProspectorWeapons(match))),
+        [filterOptionSourceMatches]
     );
     const equipmentFilterOptions = useMemo(
-        () => collectSortedUnique(data.filteredMatches.flatMap((match) => getMatchEquipment(match))),
-        [data.filteredMatches]
+        () => collectSortedUnique(filterOptionSourceMatches.flatMap((match) => getMatchEquipment(match))),
+        [filterOptionSourceMatches]
     );
     const perkFilterOptions = useMemo(
-        () => collectSortedUnique(data.filteredMatches.flatMap((match) => getMatchPerks(match))),
-        [data.filteredMatches]
+        () => collectSortedUnique(filterOptionSourceMatches.flatMap((match) => getMatchPerks(match))),
+        [filterOptionSourceMatches]
     );
     const activeContextTags = useMemo(() => {
         const timeRangeLabel = TIME_RANGE_OPTIONS.find((option) => option.value === timeRange)?.label || 'All Time';

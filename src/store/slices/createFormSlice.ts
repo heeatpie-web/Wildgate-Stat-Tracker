@@ -58,6 +58,15 @@ const resolvePreservedHeroWeapons = (
     return Object.keys(nextWeapons).length > 0 ? nextWeapons : null;
 };
 
+const resolveMatchResetWeapons = (
+    state: FormSlice,
+    currentLoadout: Loadout | null | undefined,
+): Record<string, number> => (
+    resolvePreservedHeroWeapons(state, state.activeHero, currentLoadout)
+    ?? state.characterLoadouts[state.activeHero]
+    ?? {}
+);
+
 export interface FormSlice {
     selectedTeammates: string[];
     selectedOpponents: string[];
@@ -366,9 +375,13 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
     }),
 
     resetForm: () => set((state) => {
+        const currentStoreState = get() as unknown as FormSliceStoreState;
+        const restoredWeapons = resolveMatchResetWeapons(state, currentStoreState.currentLoadout);
         traceLoadoutMutation('resetForm', {
             hero: state.activeHero,
-            restoredWeaponCount: Object.keys(state.characterLoadouts[state.activeHero] || {}).length,
+            restoredWeaponCount: Object.keys(restoredWeapons).length,
+            usedCurrentLoadout: Object.keys(restoredWeapons).length > 0
+                && Object.keys(state.characterLoadouts[state.activeHero] || {}).length === 0,
         });
         return {
             poiEasy: 0,
@@ -383,14 +396,18 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
             telemetryDetectedShip: undefined,
             elims: "",
             currentNote: "",
-            activeWeapons: state.characterLoadouts[state.activeHero] || {}
+            activeWeapons: restoredWeapons
         };
     }),
 
     discardMatch: () => set((state) => {
+        const currentStoreState = get() as unknown as FormSliceStoreState;
+        const restoredWeapons = resolveMatchResetWeapons(state, currentStoreState.currentLoadout);
         traceLoadoutMutation('discardMatch', {
             hero: state.activeHero,
-            restoredWeaponCount: Object.keys(state.characterLoadouts[state.activeHero] || {}).length,
+            restoredWeaponCount: Object.keys(restoredWeapons).length,
+            usedCurrentLoadout: Object.keys(restoredWeapons).length > 0
+                && Object.keys(state.characterLoadouts[state.activeHero] || {}).length === 0,
         });
         return {
             // Everything resetForm does
@@ -406,7 +423,7 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
             telemetryDetectedShip: undefined,
             elims: "",
             currentNote: "",
-            activeWeapons: state.characterLoadouts[state.activeHero] || {},
+            activeWeapons: restoredWeapons,
             // Full discard: clear teammates, opponents, pending data, timer
             selectedTeammates: [],
             selectedOpponents: [],

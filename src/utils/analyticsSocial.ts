@@ -3,6 +3,17 @@
  * Social analytics: teammate/opponent stats, synergy matrix, relationship insights.
  */
 import { Match, CHARACTERS, SHIPS } from '../types';
+import { resolvePlayerProfileDisplayName } from '../store/slices/createMappingSlice';
+
+const getMatchOpponentNames = (match: Match): string[] => {
+    const opponentsFromTeams = Array.isArray(match.opponentTeams)
+        ? match.opponentTeams.flatMap((team) => (Array.isArray(team.players) ? team.players : []))
+        : [];
+    return [
+        ...(Array.isArray(match.opponents) ? match.opponents : []),
+        ...opponentsFromTeams,
+    ];
+};
 
 export const calculateSocialData = (matches: Match[]) => {
     const completedMatches = matches.filter((m) => m.result !== 'Ongoing');
@@ -15,7 +26,7 @@ export const calculateSocialData = (matches: Match[]) => {
             teammates[t].total++;
             if (m.result === 'Win') teammates[t].wins++;
         });
-        m.opponents.forEach(o => {
+        Array.from(new Set(getMatchOpponentNames(m))).forEach(o => {
             if (!opponents[o]) opponents[o] = { wins: 0, total: 0 };
             opponents[o].total++;
             if (m.result === 'Win') opponents[o].wins++;
@@ -122,7 +133,7 @@ export const calculateRelationshipAnalytics = (
 
         return {
             ...p,
-            displayName: p.name || p.id,
+            displayName: resolvePlayerProfileDisplayName(p.id, p, knownMappings) || p.id,
             usualRole: role,
             withCount,
             againstCount,
