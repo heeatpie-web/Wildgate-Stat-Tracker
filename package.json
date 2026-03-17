@@ -2,7 +2,7 @@
   "name": "wildgate-stat-tracker",
   "productName": "Wildgate Stat Tracker",
   "private": true,
-  "version": "3.3.1",
+  "version": "3.3.2",
   "type": "module",
   "main": "electron/main.cjs",
   "author": {
@@ -117,6 +117,10 @@
       "node_modules/screenshot-desktop/**/*"
     ],
     "extraResources": [
+      {
+        "from": "uid-seed.json",
+        "to": "uid-seed.json"
+      },
       {
         "from": "models/paddleocr",
         "to": "models/paddleocr"

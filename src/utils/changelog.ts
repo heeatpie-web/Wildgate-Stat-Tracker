@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.3.2": [
+    "Release: Version 3.3.2 updates the app, installer, and bundled release metadata to the new release number.",
+    "Reliability: Packaged builds now ship the UID seed as an installer resource so prospectors, ships, weapons, equipment, and perks can be resolved on first launch without relying on existing user data.",
+    "Fix: Electron now checks the bundled resources copy of uid-seed.json before falling back, making silent installs and packaged app launches seed known IDs more reliably."
+  ],
   "v3.3.1": [
     "Release: Version 3.3.1 restructures Settings around SegmentedControl, OptionCycler, and SettingRow controls so appearance, overlay, capture, telemetry, and OCR review options are faster to scan and change.",
     "Fix: Auto-capture now defaults to the faster 0.5 pacing and trims the longest tactical-map and crew-hub waits during push-to-show and F10 auto-sequence flows.",

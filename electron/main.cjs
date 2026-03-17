@@ -2014,6 +2014,7 @@ ipcMain.handle('read-uid-seed', async () => {
   try {
     const candidates = [
       path.join(app.getPath('userData'), 'uid-seed.json'),
+      path.join(process.resourcesPath, 'uid-seed.json'),
       path.join(app.getAppPath(), 'uid-seed.json'),
     ];
     for (const candidate of candidates) {

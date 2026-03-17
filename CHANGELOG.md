@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.3.2] - 2026-03-17
+
+### Changed
+- Release metadata, bundled changelog content, and installer outputs now report version `3.3.2`
+
+### Fixed
+- Prospectors, ships, weapons, equipment, and perks UID mappings are now bundled as installer resources and resolved from packaged app resources so fresh installs and silent installs seed known IDs reliably
+
 ## [3.3.1] - 2026-03-15
 
 ### Changed
