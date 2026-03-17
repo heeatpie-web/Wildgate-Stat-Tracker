@@ -111,6 +111,14 @@ const errorMessage = (error: unknown): string =>
 const toArtifactKey = (value: string): string =>
     value.replace(/[\\/]+/g, '\\').toLowerCase();
 
+export const resolveSmartCaptureOpenFolderTarget = (
+    artifacts: Pick<MatchArtifactsStructured, 'images' | 'imageFiles'>
+): string => {
+    const preferredPath = artifacts.imageFiles.find((file) => typeof file?.path === 'string' && file.path.trim().length > 0)?.path;
+    if (preferredPath) return preferredPath;
+    return typeof artifacts.images[0] === 'string' ? artifacts.images[0] : '';
+};
+
 const toLocalDateKey = (timestamp: number | null | undefined): string => {
     const numericTs = Number(timestamp);
     if (!Number.isFinite(numericTs) || numericTs <= 0) return '';
@@ -3364,13 +3372,15 @@ const SmartMatchDetail: React.FC<{
                 return;
             }
             const file = artifacts.imageFiles[index];
-            if (!file?.artifactId) {
-                setToast({ message: 'Screenshot token missing. Refresh artifacts and try again.', type: 'warning' });
+            const imagePath = String(file?.path || artifacts.images[index] || '').trim();
+            if (!file?.artifactId && !imagePath) {
+                setToast({ message: 'Screenshot path missing. Refresh artifacts and try again.', type: 'warning' });
+                setConfirmDeleteIdx(null);
                 return;
             }
-            const result = await removeMatchArtifact(match.id, file.artifactId);
+            const result = await removeMatchArtifact(match.id, file?.artifactId || '', imagePath);
             if (result.success) {
-                const normFilePath = String(file.path || '').replace(/[\\/]+/g, '/').toLowerCase();
+                const normFilePath = imagePath.replace(/[\\/]+/g, '/').toLowerCase();
                 const fallbackArtifacts = (match.artifacts || []).filter((p) => String(p || '').replace(/[\\/]+/g, '/').toLowerCase() !== normFilePath);
                 const updated = await getMatchArtifactsStructured(match.id, fallbackArtifacts);
                 setArtifacts(updated);
@@ -4136,8 +4146,13 @@ const SmartMatchDetail: React.FC<{
                                             </button>
                                             <button
                                                 onClick={() => {
-                                                    const dir = artifacts.images[0]?.replace(/[/][^/]+$/, '');
-                                                    if (dir) getElectronAPI()?.invoke('open-path', dir);
+                                                    const targetPath = resolveSmartCaptureOpenFolderTarget(artifacts);
+                                                    if (targetPath) {
+                                                        void getElectronAPI()?.invoke('open-path', {
+                                                            targetPath,
+                                                            revealInFolder: true,
+                                                        });
+                                                    }
                                                 }}
                                                 className="flex items-center gap-1 text-label-xs font-semibold text-md-sys-on-surface/50 hover:text-md-sys-primary transition-colors"
                                             >

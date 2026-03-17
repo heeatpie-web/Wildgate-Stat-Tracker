@@ -3555,13 +3555,28 @@ ipcMain.handle('db-status', async () => {
   }
 });
 
-ipcMain.handle('open-path', async (event, targetPath) => {
+ipcMain.handle('open-path', async (event, target) => {
   try {
+    const isObjectTarget = target && typeof target === 'object';
+    const targetPath = isObjectTarget
+      ? String(target.targetPath || target.path || '').trim()
+      : String(target || '').trim();
+    const revealInFolder = isObjectTarget && target.revealInFolder === true;
+    if (!targetPath) {
+      return { success: false, error: 'Path not provided' };
+    }
     if (!isAllowedRendererPath(targetPath)) {
       return { success: false, error: 'Path not allowed' };
     }
-    await shell.openPath(path.resolve(targetPath));
-    return { success: true };
+    const resolvedPath = path.resolve(targetPath);
+    if (revealInFolder) {
+      shell.showItemInFolder(resolvedPath);
+      return { success: true };
+    }
+    const errorMessage = await shell.openPath(resolvedPath);
+    return errorMessage
+      ? { success: false, error: errorMessage }
+      : { success: true };
   } catch (e) {
     return { success: false, error: e.message };
   }

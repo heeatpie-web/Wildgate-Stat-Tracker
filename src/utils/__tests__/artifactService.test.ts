@@ -151,9 +151,25 @@ describe('artifactService', () => {
 
     it('invokes remove-match-artifact and returns result', async () => {
       mockInvoke.mockResolvedValue({ success: true, data: { removed: 'capture_123.png' } });
-      const result = await removeMatchArtifact(2, 'artifact-token-1');
-      expect(mockInvoke).toHaveBeenCalledWith('remove-match-artifact', { matchId: 2, artifactId: 'artifact-token-1' });
+      const result = await removeMatchArtifact(2, 'artifact-token-1', 'C:\\match_artifacts\\2\\capture_123.png');
+      expect(mockInvoke).toHaveBeenCalledWith('remove-match-artifact', {
+        matchId: 2,
+        artifactId: 'artifact-token-1',
+        artifactPath: 'C:\\match_artifacts\\2\\capture_123.png',
+      });
       expect(result).toEqual({ success: true });
+    });
+
+    it('omits artifactPath when it is blank', async () => {
+      mockInvoke.mockResolvedValue({ success: true, data: { removed: 'capture_123.png' } });
+
+      await removeMatchArtifact(2, 'artifact-token-1', '   ');
+
+      expect(mockInvoke).toHaveBeenCalledWith('remove-match-artifact', {
+        matchId: 2,
+        artifactId: 'artifact-token-1',
+        artifactPath: undefined,
+      });
     });
 
     it('maps structured IPC failures to error result', async () => {
@@ -237,8 +253,16 @@ describe('artifactService', () => {
         matchId: 12,
         fallbackImages: ['D:\\old\\match_artifacts\\77\\shot_2.png'],
       });
-      expect(mockInvoke).toHaveBeenNthCalledWith(3, 'remove-match-artifact', { matchId: 12, artifactId: 'tok_1' });
-      expect(mockInvoke).toHaveBeenNthCalledWith(4, 'remove-match-artifact', { matchId: 12, artifactId: 'tok_2' });
+      expect(mockInvoke).toHaveBeenNthCalledWith(3, 'remove-match-artifact', {
+        matchId: 12,
+        artifactId: 'tok_1',
+        artifactPath: 'C:\\new\\match_artifacts\\12\\shot_1.png',
+      });
+      expect(mockInvoke).toHaveBeenNthCalledWith(4, 'remove-match-artifact', {
+        matchId: 12,
+        artifactId: 'tok_2',
+        artifactPath: 'D:\\old\\match_artifacts\\77\\shot_2.png',
+      });
     });
 
     it('surfaces failed paths returned by the bulk removal IPC', async () => {

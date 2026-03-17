@@ -149,4 +149,26 @@ describe('artifactHandlers token-backed fallback artifacts', () => {
     expect(fs.existsSync(artifactPath)).toBe(false);
     expect(fs.existsSync(canonicalDir)).toBe(false);
   });
+
+  it('removes artifacts by validated file path when the token is unavailable', async () => {
+    const rootDir = makeTempDir();
+    tempDirs.push(rootDir);
+    const fallbackPath = path.join(rootDir, 'match_artifacts', '77', 'shot_3.png');
+    writeImage(fallbackPath, 'fallback-image');
+
+    const ipcMain = createIpcMainHarness();
+    registerArtifactHandlers(ipcMain, createArtifactContext(rootDir));
+    const removeArtifact = ipcMain.handlers.get('remove-match-artifact');
+
+    const result = await removeArtifact({ sender: { id: 504 } }, {
+      matchId: 12,
+      artifactPath: fallbackPath,
+    });
+
+    expect(result).toEqual(expect.objectContaining({
+      success: true,
+      data: { removed: 'shot_3.png' },
+    }));
+    expect(fs.existsSync(fallbackPath)).toBe(false);
+  });
 });

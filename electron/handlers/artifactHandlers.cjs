@@ -526,7 +526,7 @@ function registerArtifactHandlers(ipcMain, ctx) {
     }
   });
 
-  ipcMain.handle('remove-match-artifact', async (event, { matchId, artifactId }) => {
+  ipcMain.handle('remove-match-artifact', async (event, { matchId, artifactId, artifactPath }) => {
     try {
       const validated = getValidatedMatchDir(app, artifactHelpers, matchId, { mode: 'read' });
       if (!validated.success) {
@@ -534,20 +534,24 @@ function registerArtifactHandlers(ipcMain, ctx) {
         return validated;
       }
       const { matchDir, matchId: safeMatchId, paths } = validated.data;
-      if (typeof artifactId !== 'string' || !artifactId.trim()) {
-        recordSecurityBlock('remove-match-artifact', IpcErrorCode.INVALID_INPUT, 'artifactId required');
-        return fail(IpcErrorCode.INVALID_INPUT, 'artifactId required');
-      }
-      const scope = getArtifactScope(event.sender.id, safeMatchId);
-      const resolved = artifactTokenRegistry.resolve(scope, artifactId);
-      if (!resolved || typeof resolved.filename !== 'string') {
-        recordSecurityBlock('remove-match-artifact', IpcErrorCode.INVALID_INPUT, 'Invalid or expired artifactId');
-        return fail(IpcErrorCode.INVALID_INPUT, 'Invalid or expired artifactId');
+      const normalizedArtifactId = typeof artifactId === 'string' ? artifactId.trim() : '';
+      const normalizedArtifactPath = typeof artifactPath === 'string' ? artifactPath.trim() : '';
+      let resolved = null;
+      if (normalizedArtifactId) {
+        const scope = getArtifactScope(event.sender.id, safeMatchId);
+        resolved = artifactTokenRegistry.resolve(scope, normalizedArtifactId);
+        if (!resolved && !normalizedArtifactPath) {
+          recordSecurityBlock('remove-match-artifact', IpcErrorCode.INVALID_INPUT, 'Invalid or expired artifactId');
+          return fail(IpcErrorCode.INVALID_INPUT, 'Invalid or expired artifactId');
+        }
+      } else if (!normalizedArtifactPath) {
+        recordSecurityBlock('remove-match-artifact', IpcErrorCode.INVALID_INPUT, 'artifactId or artifactPath required');
+        return fail(IpcErrorCode.INVALID_INPUT, 'artifactId or artifactPath required');
       }
       const resolvedPath = resolveArtifactTokenPath(
         app,
         resolved,
-        path.join(matchDir, resolved.filename),
+        normalizedArtifactPath || path.join(matchDir, resolved?.filename || ''),
         [paths.matchArtifactsRoot]
       );
       if (!resolvedPath.success) {
@@ -555,10 +559,13 @@ function registerArtifactHandlers(ipcMain, ctx) {
         return resolvedPath;
       }
       const filePath = resolvedPath.data.filePath;
+      const removedName = typeof resolved?.filename === 'string' && resolved.filename
+        ? resolved.filename
+        : path.basename(filePath);
       if (fs.existsSync(filePath)) {
         await fsPromises.unlink(filePath);
-        console.log(`[Artifacts] Removed ${resolved.filename} from match ${safeMatchId}`);
-        return ok({ removed: resolved.filename });
+        console.log(`[Artifacts] Removed ${removedName} from match ${safeMatchId}`);
+        return ok({ removed: removedName });
       }
       return fail(IpcErrorCode.NOT_FOUND, 'File not found');
     } catch (e) {

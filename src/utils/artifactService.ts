@@ -368,10 +368,18 @@ export const rerunOCRMulti = async (
     };
 };
 
-export const removeMatchArtifact = async (matchId: number, artifactId: string): Promise<{ success: boolean; error?: string; code?: IpcErrorCode }> => {
+export const removeMatchArtifact = async (
+    matchId: number,
+    artifactId: string,
+    artifactPath?: string | null
+): Promise<{ success: boolean; error?: string; code?: IpcErrorCode }> => {
     const api = getElectronAPI();
     if (!api) return { success: false, error: 'Electron API not available' };
-    const raw = await api.invoke('remove-match-artifact', { matchId, artifactId });
+    const raw = await api.invoke('remove-match-artifact', {
+        matchId,
+        artifactId,
+        artifactPath: typeof artifactPath === 'string' && artifactPath.trim().length > 0 ? artifactPath : undefined,
+    });
     const result = unwrapIpcResult<{ removed: string }>(raw);
     if (!result.ok) return { success: false, error: result.message, code: result.code };
     return { success: true };
@@ -420,7 +428,7 @@ export const removeAllMatchArtifacts = async (
 
         let result;
         try {
-            result = await removeMatchArtifact(matchId, file.artifactId);
+            result = await removeMatchArtifact(matchId, file.artifactId, normalizedPath);
         } catch {
             continue;
         }

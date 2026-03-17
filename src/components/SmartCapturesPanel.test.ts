@@ -11,6 +11,7 @@ import {
   getSmartCaptureWizardInitialTab,
   getRosterCandidateSuggestions,
   resolveOpenWizardSeed,
+  resolveSmartCaptureOpenFolderTarget,
   resolveFriendlyTeamLabel,
   shouldSyncOcrApplyToCurrentSession,
 } from './SmartCapturesPanel';
@@ -248,6 +249,22 @@ describe('commitPendingMatchDataForWizard', () => {
     );
 
     expect(committed).toBe(false);
+  });
+});
+
+describe('resolveSmartCaptureOpenFolderTarget', () => {
+  it('prefers the resolved artifact file path when available', () => {
+    expect(resolveSmartCaptureOpenFolderTarget({
+      images: ['C:\\fallback\\match_artifacts\\12\\capture.png'],
+      imageFiles: [{ artifactId: 'tok_1', filename: 'capture.png', path: 'C:\\canonical\\match_artifacts\\193\\capture.png' }],
+    })).toBe('C:\\canonical\\match_artifacts\\193\\capture.png');
+  });
+
+  it('falls back to the first image path when no artifact file metadata exists', () => {
+    expect(resolveSmartCaptureOpenFolderTarget({
+      images: ['C:\\captures\\match-1.png'],
+      imageFiles: [],
+    })).toBe('C:\\captures\\match-1.png');
   });
 });
 
