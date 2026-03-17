@@ -92,6 +92,7 @@ const uiState = {
 const appStoreState = {
     knownMappings: {},
     uidMappings: { players: {}, ships: {}, weapons: {}, equipment: {}, perks: {} },
+    ocrCorrections: {},
     ocrAliasModel: {
         version: 1 as const,
         entries: {
@@ -183,6 +184,7 @@ describe('PlayerHub', () => {
         gameDataState.dismissedRosterCandidateKeys = [];
         appStoreState.knownMappings = {};
         appStoreState.uidMappings = { players: {}, ships: {}, weapons: {}, equipment: {}, perks: {} };
+        appStoreState.ocrCorrections = {};
         appStoreState.ocrAliasModel = {
             version: 1 as const,
             entries: {
@@ -411,6 +413,63 @@ describe('PlayerHub', () => {
         expect(screen.getByRole('button', { name: /scoutghost/i })).toHaveTextContent('Tracked');
         expect(screen.queryByRole('button', { name: /attack drone/i })).toBeNull();
         expect(screen.queryByRole('button', { name: /ghostalias/i })).toBeNull();
+    });
+
+    it('folds learned OCR variants into the roster entry and hides OCR noise from review lists', () => {
+        gameDataState.pilotRegistry = ['PilotOne'];
+        gameDataState.playerProfiles = {
+            PilotOne: {
+                id: 'PilotOne',
+                sightings: 3,
+                firstSeen: 1_700_000_000_000,
+                lastSeen: 1_700_000_000_000,
+                teamsObserved: {},
+                playedWith: {},
+                playedAgainst: {},
+                shipsObserved: { Hunter: 2 },
+                ocrSightings: 2,
+                manualSightings: 1,
+                lastOcrConfidence: 88,
+            },
+            PliotOne: {
+                id: 'PliotOne',
+                sightings: 2,
+                firstSeen: 1_700_000_500_000,
+                lastSeen: 1_700_000_800_000,
+                teamsObserved: { Blue: 2 },
+                playedWith: {},
+                playedAgainst: { PilotOne: 2 },
+                shipsObserved: { Hunter: 2 },
+                ocrSightings: 2,
+                manualSightings: 0,
+                lastOcrConfidence: 74,
+            },
+            'GPU: RTX 3080': {
+                id: 'GPU: RTX 3080',
+                sightings: 2,
+                firstSeen: 1_700_000_500_000,
+                lastSeen: 1_700_000_800_000,
+                teamsObserved: { Blue: 2 },
+                playedWith: {},
+                playedAgainst: {},
+                shipsObserved: {},
+                ocrSightings: 2,
+                manualSightings: 0,
+                lastOcrConfidence: 55,
+            },
+        };
+        appStoreState.ocrCorrections = {
+            PliotOne: {
+                correctedTo: 'PilotOne',
+                count: 3,
+            },
+        };
+
+        render(<PlayerHub />);
+
+        expect(screen.getByRole('button', { name: /pilotone/i })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /pliotone/i })).toBeNull();
+        expect(screen.queryByRole('button', { name: /gpu: rtx 3080/i })).toBeNull();
     });
 
     it('lets the selected player add and remove former names and OCR variants from the players tab', () => {

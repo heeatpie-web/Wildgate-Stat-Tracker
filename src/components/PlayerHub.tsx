@@ -10,7 +10,8 @@ import type { RosterEntryMeta } from '../store/slices/createDataSlice';
 import { resolvePlayerProfileDisplayName } from '../store/slices/createMappingSlice';
 import type { Match } from '../types';
 import { getShipColor, SHIPS, CHARACTERS, WEAPONS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT } from '../types';
-import { normalizeOcrName, similarityScore } from '../utils/stringUtils';
+import { buildAliasVariantMap } from '../utils/ocrNameResolver';
+import { isOcrNoise, normalizeOcrName, similarityScore } from '../utils/stringUtils';
 import { buildRosterMergeSuggestionGroups, type RosterMergeSuggestionGroup } from '../utils/rosterMergeSuggestions';
 import { getPerkCatalog, getProspectorEquipmentCatalog, getProspectorWeaponCatalog, getShipCatalog } from './patch/patchEntityCatalog';
 import { LocalImage } from './LocalImage';
@@ -176,6 +177,7 @@ const PlayerHub: React.FC = () => {
         knownMappings,
         uidMappings,
         setDrillDownTarget,
+        ocrCorrections,
         ocrAliasModel,
         ocrAutoApplyMinScore,
         recordOcrAliasCorrection,
@@ -210,6 +212,7 @@ const PlayerHub: React.FC = () => {
         knownMappings: state.knownMappings,
         uidMappings: state.uidMappings,
         setDrillDownTarget: state.setDrillDownTarget,
+        ocrCorrections: state.ocrCorrections,
         ocrAliasModel: state.ocrAliasModel,
         ocrAutoApplyMinScore: state.ocrAutoApplyMinScore,
         recordOcrAliasCorrection: state.recordOcrAliasCorrection,
@@ -249,18 +252,57 @@ const PlayerHub: React.FC = () => {
     const rosterScrollRef = useRef<HTMLDivElement | null>(null);
     const uniquePilotRegistry = useMemo(() => Array.from(new Set(pilotRegistry || [])), [pilotRegistry]);
     const rosterNameSet = useMemo(() => new Set(uniquePilotRegistry), [uniquePilotRegistry]);
+    const aliasVariantMap = useMemo(() => buildAliasVariantMap(ocrAliasModel), [ocrAliasModel]);
     const normalizedPilotNameMap = useMemo(() => {
         const lookup = new Map<string, string>();
         uniquePilotRegistry.forEach((name) => {
             const key = normalizeNameKey(name);
             if (!key || lookup.has(key)) return;
             lookup.set(key, name);
+            (pilotAliases[name] || []).forEach((alias) => {
+                const aliasKey = normalizeNameKey(alias);
+                if (!aliasKey || lookup.has(aliasKey)) return;
+                lookup.set(aliasKey, name);
+            });
         });
         return lookup;
-    }, [uniquePilotRegistry]);
+    }, [pilotAliases, uniquePilotRegistry]);
+    const resolveTrackedProfileRosterName = useMemo(() => (
+        (displayName: string): string | undefined => {
+            const directKey = normalizeNameKey(displayName);
+            if (!directKey) return undefined;
+            const directRosterName = normalizedPilotNameMap.get(directKey);
+            if (directRosterName) return directRosterName;
+
+            const directCorrection = ocrCorrections[displayName] || ocrCorrections[normalizeOcrName(displayName)];
+            if (directCorrection?.count >= 2) {
+                const correctedKey = normalizeNameKey(directCorrection.correctedTo);
+                if (correctedKey) {
+                    const correctedRosterName = normalizedPilotNameMap.get(correctedKey);
+                    if (correctedRosterName) return correctedRosterName;
+                }
+            }
+
+            for (const [canonicalName, variants] of Object.entries(aliasVariantMap)) {
+                if (!(variants || []).some((variant) => normalizeNameKey(variant) === directKey)) continue;
+                const canonicalKey = normalizeNameKey(canonicalName);
+                if (!canonicalKey) continue;
+                const canonicalRosterName = normalizedPilotNameMap.get(canonicalKey);
+                if (canonicalRosterName) return canonicalRosterName;
+            }
+
+            return undefined;
+        }
+    ), [aliasVariantMap, normalizedPilotNameMap, ocrCorrections]);
     const shouldHideTrackedProfile = useMemo(() => (
-        (profileId: string, profile: Record<string, unknown>, displayName: string, rosterName: string | undefined): boolean => {
+        (
+            profileId: string,
+            profile: { sightings?: number; ocrSightings?: number; manualSightings?: number } | null | undefined,
+            displayName: string,
+            rosterName: string | undefined
+        ): boolean => {
             if (rosterName) return false;
+            if (isOcrNoise(displayName)) return true;
 
             const sightings = Number(profile?.sightings || 0);
             const ocrSightings = Number(profile?.ocrSightings || 0);
@@ -318,7 +360,7 @@ const PlayerHub: React.FC = () => {
             if (!displayName) return;
             const key = normalizeNameKey(displayName);
             if (!key) return;
-            const rosterName = normalizedPilotNameMap.get(key);
+            const rosterName = resolveTrackedProfileRosterName(displayName);
             if (shouldHideTrackedProfile(profileId, profile, displayName, rosterName)) return;
             const pilotName = rosterName || trackedOnlyNameByKey.get(key) || displayName;
             if (!rosterName && !trackedOnlyNameByKey.has(key)) trackedOnlyNameByKey.set(key, pilotName);
@@ -328,7 +370,7 @@ const PlayerHub: React.FC = () => {
         });
 
         return profilesByPilot;
-    }, [knownMappings, normalizedPilotNameMap, playerProfiles, shouldHideTrackedProfile, uniquePilotRegistry]);
+    }, [knownMappings, playerProfiles, resolveTrackedProfileRosterName, shouldHideTrackedProfile, uniquePilotRegistry]);
     const allTrackedPilots = useMemo(() => ([
         ...uniquePilotRegistry,
         ...Array.from(trackedProfilesByPilot.keys()).filter((name) => !rosterNameSet.has(name)),

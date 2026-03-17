@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { PendingReview } from '../../store/slices/createDataSlice';
-import { getRosterCandidatePruneIdsForAcceptedName } from '../pendingReviewUtils';
+import {
+    getAutoPrunablePendingReviewIds,
+    getRosterCandidatePruneIdsForAcceptedName,
+    shouldQueueCanonicalRosterCandidate,
+} from '../pendingReviewUtils';
 
 describe('getRosterCandidatePruneIdsForAcceptedName', () => {
     it('prunes exact and canonical roster-candidate matches for an accepted OCR name', () => {
@@ -39,5 +43,42 @@ describe('getRosterCandidatePruneIdsForAcceptedName', () => {
             pendingReviews: [],
             acceptedName: '   ',
         })).toEqual([]);
+    });
+
+    it('auto-prunes exact roster matches and OCR noise while keeping unresolved merge suggestions', () => {
+        const pendingReviews: PendingReview[] = [
+            {
+                id: 'exact',
+                type: 'player_name',
+                value: 'PilotOne',
+                originalConfidence: 66,
+            },
+            {
+                id: 'noise',
+                type: 'player_name',
+                value: 'GPU: RTX 3080',
+                originalConfidence: 61,
+            },
+            {
+                id: 'merge',
+                type: 'roster_candidate',
+                value: 'PliotOne',
+                originalConfidence: 83,
+                canonicalTargetKey: 'pilotone',
+            },
+        ];
+
+        expect(getAutoPrunablePendingReviewIds({
+            pendingReviews,
+            pilotRegistry: ['PilotOne'],
+        })).toEqual(['exact', 'noise']);
+    });
+
+    it('refuses to queue OCR noise as a roster candidate', () => {
+        expect(shouldQueueCanonicalRosterCandidate({
+            rawName: 'GPU: RTX 3080',
+            pendingReviews: [],
+            pilotRegistry: [],
+        })).toBe(false);
     });
 });

@@ -231,11 +231,18 @@ export const useSmartScan = () => {
                                     continue;
                                 }
 
+                                const rawName = r.name;
+                                const normalizedName = normalizeOcrName(rawName);
+                                if (isNoiseName(normalizedName, res.mode)) {
+                                    Logger.debug('SmartScan', `Filtered noise name: "${rawName}" (${res.mode})`);
+                                    continue;
+                                }
+
                                 if (r.confidence < OCR_THRESHOLDS.REVIEW) {
                                     addPendingReview({
                                         id: Date.now() + Math.random().toString(),
                                         type: 'player_name',
-                                        value: r.name,
+                                        value: normalizedName,
                                         originalConfidence: r.confidence,
                                         context: res.mode,
                                         source: 'ocr',
@@ -248,13 +255,6 @@ export const useSmartScan = () => {
                                 if (!mergedTeams[teamKey]) mergedTeams[teamKey] = [];
                                 const teamList = mergedTeams[teamKey];
                                 const isGenericShip = SHIPS.some(st => r.name.toUpperCase().includes(st.split(' ')[0].toUpperCase()));
-
-                                const rawName = r.name;
-                                const normalizedName = normalizeOcrName(rawName);
-                                if (isNoiseName(normalizedName, res.mode)) {
-                                    Logger.debug('SmartScan', `Filtered noise name: "${rawName}" (${res.mode})`);
-                                    continue;
-                                }
                                 const aliasResolution = ocrLearningEnabled
                                     ? resolveOcrAlias(rawName, {
                                         context: contextForMode(res.mode),

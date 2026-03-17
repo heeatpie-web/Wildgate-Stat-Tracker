@@ -18,6 +18,7 @@ import {
   resolveOcrName,
   resolveWithSocialContext,
 } from '../utils/ocrNameResolver';
+import { shouldIgnorePendingReviewName } from '../utils/pendingReviewUtils';
 import { capTeammatePlayers } from '../utils/teamLimits';
 import { useUIState } from '../providers/UIStateProvider';
 import { useGameData } from '../providers/GameDataProvider';
@@ -448,7 +449,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       const queueSmartScanReview = (rawName: string, confidence: number, context: string) => {
         const cleaned = normalizeOcrName(rawName || '');
         const key = cleaned.toLowerCase();
-        if (!cleaned || cleaned.length < 2 || pendingPlayerReviewKeys.has(key)) return;
+        if (shouldIgnorePendingReviewName(cleaned) || pendingPlayerReviewKeys.has(key)) return;
         addPendingReview({
           id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
           type: 'player_name',

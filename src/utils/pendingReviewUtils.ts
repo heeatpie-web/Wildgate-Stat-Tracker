@@ -1,9 +1,15 @@
 import type { PendingReview } from '../store/slices/createDataSlice';
-import { normalizeOcrName } from './stringUtils';
+import { isOcrNoise, normalizeOcrName } from './stringUtils';
 
 export const normalizePendingReviewKey = (value: string | null | undefined): string => (
     normalizeOcrName(String(value || '')).toLowerCase()
 );
+
+export const shouldIgnorePendingReviewName = (value: string | null | undefined): boolean => {
+    const normalized = normalizeOcrName(String(value || ''));
+    if (!normalized || normalized.length < 2) return true;
+    return isOcrNoise(normalized);
+};
 
 interface CanonicalTargetOptions {
     rawName: string;
@@ -48,6 +54,7 @@ export const shouldQueueCanonicalRosterCandidate = ({
     canonicalTargetKey = '',
     dismissedCandidateKeys = [],
 }: QueueCheckOptions): boolean => {
+    if (shouldIgnorePendingReviewName(rawName)) return false;
     const rawKey = normalizePendingReviewKey(rawName);
     if (!rawKey || rawKey.length < 2) return false;
 
@@ -68,6 +75,32 @@ export const shouldQueueCanonicalRosterCandidate = ({
     }
 
     return true;
+};
+
+interface AutoPruneOptions {
+    pendingReviews: PendingReview[];
+    pilotRegistry?: string[];
+}
+
+export const getAutoPrunablePendingReviewIds = ({
+    pendingReviews,
+    pilotRegistry = [],
+}: AutoPruneOptions): string[] => {
+    const rosterKeys = new Set(
+        (pilotRegistry || [])
+            .map((entry) => normalizePendingReviewKey(entry))
+            .filter(Boolean)
+    );
+
+    return (pendingReviews || [])
+        .filter((review) => review.type === 'player_name' || review.type === 'roster_candidate')
+        .filter((review) => {
+            if (shouldIgnorePendingReviewName(review.value)) return true;
+            const reviewKey = normalizePendingReviewKey(review.value);
+            if (!reviewKey) return true;
+            return rosterKeys.has(reviewKey);
+        })
+        .map((review) => review.id);
 };
 
 interface PruneOptions {

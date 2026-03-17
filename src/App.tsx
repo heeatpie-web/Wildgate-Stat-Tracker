@@ -136,7 +136,9 @@ import { buildOcrNameConfidenceMapFromExtractedData } from './utils/ocr/nameSour
 import { buildAutoCaptureStateSnapshot } from './utils/autoCaptureState';
 import {
     deriveCanonicalRosterCandidateTargetKey,
+    getAutoPrunablePendingReviewIds,
     getRosterCandidatePruneIds,
+    shouldIgnorePendingReviewName,
     shouldQueueCanonicalRosterCandidate,
 } from './utils/pendingReviewUtils';
 import Logger from './utils/logger';
@@ -594,10 +596,21 @@ const App: React.FC = () => {
             .filter((review) => review.type === 'roster_candidate' && Number(review.bestScore || 0) >= 70)
             .sort((a, b) => Number(b.bestScore || 0) - Number(a.bestScore || 0))
     ), [pendingReviews]);
+    const autoPrunablePendingReviewIds = React.useMemo(() => (
+        getAutoPrunablePendingReviewIds({
+            pendingReviews,
+            pilotRegistry,
+        })
+    ), [pendingReviews, pilotRegistry]);
     const unknownIdCount = React.useMemo(
         () => Object.keys(detectedUnknowns || {}).length,
         [detectedUnknowns]
     );
+
+    useEffect(() => {
+        if (autoPrunablePendingReviewIds.length === 0) return;
+        removePendingReviews(autoPrunablePendingReviewIds);
+    }, [autoPrunablePendingReviewIds, removePendingReviews]);
 
     useEffect(() => {
         const fuzzyCount = fuzzyRosterCandidates.length;
@@ -2266,7 +2279,7 @@ const App: React.FC = () => {
         const queuePlayerNameReview = (rawName: string, confidence: number, context: string) => {
             const normalized = normalizeOcrName(rawName || '');
             const key = toNameKey(normalized);
-            if (!normalized || normalized.length < 2 || pendingPlayerNameKeys.has(key)) return;
+            if (shouldIgnorePendingReviewName(normalized) || pendingPlayerNameKeys.has(key)) return;
             const suggestions = buildRosterSuggestions(normalized);
             addPendingReview({
                 id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
