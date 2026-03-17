@@ -4,6 +4,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import type { Match } from '../types';
 import { DrillDownOverlay } from './DrillDownOverlay';
+import { createEmptyOcrAliasModel } from '../utils/ocrAliasEngine';
 
 vi.mock('recharts', async () => {
     const actual = await vi.importActual<typeof import('recharts')>('recharts');
@@ -25,7 +26,7 @@ vi.stubGlobal('ResizeObserver', ResizeObserverMock);
 
 const setDrillDownTarget = vi.fn();
 
-const matches: Match[] = [
+const baseMatches: Match[] = [
     {
         id: 1,
         timestamp: 1_700_000_000_000,
@@ -107,9 +108,14 @@ const matches: Match[] = [
 ];
 
 const gameDataState = {
-    matches,
+    matches: baseMatches,
     drillDownTarget: { type: 'Teammate', name: 'Wingman' } as { type: 'Teammate'; name: string; matchIds?: number[] } | null,
     setDrillDownTarget,
+    pilotRegistry: [] as string[],
+    pilotAliases: {} as Record<string, string[]>,
+    playerProfiles: {},
+    knownMappings: {} as Record<string, string>,
+    ocrAliasModel: createEmptyOcrAliasModel(),
 };
 
 const uiState = {
@@ -127,7 +133,21 @@ vi.mock('../providers/UIStateProvider', () => ({
 describe('DrillDownOverlay', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        gameDataState.matches = baseMatches.map((match) => ({
+            ...match,
+            teammates: [...match.teammates],
+            opponents: [...match.opponents],
+            opponentTeams: match.opponentTeams?.map((team) => ({
+                ...team,
+                players: [...team.players],
+            })),
+        }));
         gameDataState.drillDownTarget = { type: 'Teammate', name: 'Wingman' };
+        gameDataState.pilotRegistry = [];
+        gameDataState.pilotAliases = {};
+        gameDataState.playerProfiles = {};
+        gameDataState.knownMappings = {};
+        gameDataState.ocrAliasModel = createEmptyOcrAliasModel();
     });
 
     it('renders dialog semantics and tabbed explorer content', () => {
@@ -156,6 +176,64 @@ describe('DrillDownOverlay', () => {
 
         expect(screen.getByText(/match #1/i)).toBeInTheDocument();
         expect(screen.queryByText(/match #3/i)).not.toBeInTheDocument();
+    });
+
+    it('matches canonical teammate targets across alias-backed historical names', () => {
+        gameDataState.pilotRegistry = ['Wingman'];
+        gameDataState.pilotAliases = { Wingman: ['WingmanAlias'] };
+        gameDataState.matches = baseMatches.map((match, index) => ({
+            ...match,
+            teammates: index === 1 ? ['WingmanAlias'] : [...match.teammates],
+            opponents: [...match.opponents],
+            opponentTeams: match.opponentTeams?.map((team) => ({
+                ...team,
+                players: [...team.players],
+            })),
+        }));
+        gameDataState.drillDownTarget = { type: 'Teammate', name: 'Wingman' };
+
+        render(<DrillDownOverlay />);
+        fireEvent.click(screen.getByRole('button', { name: /^Matches$/i }));
+
+        expect(screen.getByText(/match #1/i)).toBeInTheDocument();
+        expect(screen.getByText(/match #2/i)).toBeInTheDocument();
+        expect(screen.queryByText(/match #3/i)).not.toBeInTheDocument();
+    });
+
+    it('keeps full encounter scope when player hub opens a cross-role profile', () => {
+        gameDataState.pilotRegistry = ['Wingman'];
+        gameDataState.pilotAliases = { Wingman: ['WingmanAlias'] };
+        gameDataState.matches = baseMatches.map((match, index) => {
+            if (index !== 2) {
+                return {
+                    ...match,
+                    teammates: [...match.teammates],
+                    opponents: [...match.opponents],
+                    opponentTeams: match.opponentTeams?.map((team) => ({
+                        ...team,
+                        players: [...team.players],
+                    })),
+                };
+            }
+            return {
+                ...match,
+                teammates: ['OtherMate'],
+                opponents: ['WingmanAlias'],
+            };
+        });
+        gameDataState.drillDownTarget = {
+            type: 'Teammate',
+            name: 'Wingman',
+            matchIds: [1, 2, 3],
+            encounterScope: 'all',
+        };
+
+        render(<DrillDownOverlay />);
+        fireEvent.click(screen.getByRole('button', { name: /^Matches$/i }));
+
+        expect(screen.getByText(/match #1/i)).toBeInTheDocument();
+        expect(screen.getByText(/match #2/i)).toBeInTheDocument();
+        expect(screen.getByText(/match #3/i)).toBeInTheDocument();
     });
 
     it('closes on escape key', () => {

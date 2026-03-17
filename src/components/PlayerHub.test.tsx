@@ -499,6 +499,115 @@ describe('PlayerHub', () => {
         dateNowSpy.mockRestore();
     });
 
+    it('opens analytics profile with the full encounter set across teammate and opponent roles', () => {
+        gameDataState.pilotRegistry = ['Wingman'];
+        gameDataState.pilotAliases = { Wingman: ['WingmanAlias'] };
+        gameDataState.playerProfiles = {
+            Wingman: {
+                id: 'Wingman',
+                sightings: 2,
+                firstSeen: 1_700_000_000_000,
+                lastSeen: 1_700_100_000_000,
+                teamsObserved: {},
+                playedWith: { PilotOne: 1 },
+                playedAgainst: { PilotOne: 1 },
+                shipsObserved: { Hunter: 2 },
+                ocrSightings: 1,
+                manualSightings: 1,
+                lastOcrConfidence: 87,
+            },
+        };
+        gameDataState.matches = [
+            {
+                id: 11,
+                timestamp: 1_700_000_000_000,
+                date: '2026-02-17',
+                mode: 'Artifact Brawl',
+                player: 'PilotOne',
+                teammates: ['Wingman'],
+                opponents: [],
+                hero: 'Hero',
+                ship: 'Hunter',
+                reachModifiers: [],
+                kills: {},
+                result: 'Win',
+                subType: 'Combat',
+            },
+            {
+                id: 12,
+                timestamp: 1_700_100_000_000,
+                date: '2026-02-18',
+                mode: 'Artifact Brawl',
+                player: 'PilotOne',
+                teammates: [],
+                opponents: ['WingmanAlias'],
+                hero: 'Hero',
+                ship: 'Hunter',
+                reachModifiers: [],
+                kills: {},
+                result: 'Loss',
+                subType: 'Combat',
+            },
+        ];
+
+        render(<PlayerHub />);
+
+        fireEvent.click(screen.getByRole('button', { name: /wingman/i }));
+        fireEvent.click(screen.getByRole('button', { name: /open analytics profile/i }));
+
+        expect(gameDataState.setDrillDownTarget).toHaveBeenCalledWith({
+            name: 'Wingman',
+            type: 'Teammate',
+            matchIds: [11, 12],
+            encounterScope: 'all',
+        });
+        expect(uiState.setActiveView).toHaveBeenCalledWith('analytics');
+    });
+
+    it('counts distinct matches once even if a player appears on both sides of the same match', () => {
+        gameDataState.pilotRegistry = ['Wingman'];
+        gameDataState.playerProfiles = {
+            Wingman: {
+                id: 'Wingman',
+                sightings: 1,
+                firstSeen: 1_700_000_000_000,
+                lastSeen: 1_700_000_000_000,
+                teamsObserved: {},
+                playedWith: { PilotOne: 1 },
+                playedAgainst: { PilotOne: 1 },
+                shipsObserved: { Hunter: 1 },
+                ocrSightings: 0,
+                manualSightings: 1,
+                lastOcrConfidence: null,
+            },
+        };
+        gameDataState.matches = [
+            {
+                id: 21,
+                timestamp: 1_700_000_000_000,
+                date: '2026-02-17',
+                mode: 'Artifact Brawl',
+                player: 'PilotOne',
+                teammates: ['Wingman'],
+                opponents: ['Wingman'],
+                hero: 'Hero',
+                ship: 'Hunter',
+                reachModifiers: [],
+                kills: {},
+                result: 'Win',
+                subType: 'Combat',
+            },
+        ];
+
+        render(<PlayerHub />);
+
+        const playerButton = screen.getByRole('button', { name: /wingman/i });
+        expect(playerButton).toHaveTextContent('1 encounter');
+
+        fireEvent.click(playerButton);
+        expect(screen.getByText(/^1 encounters?$/i)).toBeInTheDocument();
+    });
+
     it('shows a dismissible merge notification banner for the active merge', () => {
         gameDataState.mergeHistory = [{
             id: 'merge-1',

@@ -137,6 +137,30 @@ const formatQueueDayLabel = (dayKey: string, todayKey: string): string => {
     return parsed.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 };
 
+const buildAutoRepairSignature = (matches: Match[]): string => matches
+    .map((match) => {
+        const artifactKeys = Array.isArray(match.artifacts)
+            ? match.artifacts
+                .map((artifact) => toArtifactKey(String(artifact || '').trim()))
+                .filter(Boolean)
+                .sort()
+                .join(',')
+            : '';
+        const timestamp = Number.isFinite(Number(match.timestamp)) ? String(Number(match.timestamp)) : '';
+        const reviewedAt = Number.isFinite(Number(match.ocrReviewedAt)) ? String(Number(match.ocrReviewedAt)) : '';
+        return [
+            String(match.id || ''),
+            timestamp,
+            String(match.date || '').trim(),
+            String(match.ocrState || '').trim(),
+            String(match.result || '').trim(),
+            reviewedAt,
+            artifactKeys,
+        ].join(':');
+    })
+    .sort()
+    .join('|');
+
 const normalizeModifierEntries = (
     entries: Array<string | ExtractedModifier>,
     normalizeModifierName: (name: string) => string
@@ -439,7 +463,7 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
     const rerunRuntimeOptions = useMemo<OCRProcessRuntimeOptions>(() => ({}), []);
     const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
     const [bulkBusy, setBulkBusy] = useState(false);
-    const todayQueueDayKey = useMemo(() => toLocalDateKey(Date.now()), []);
+    const todayQueueDayKey = toLocalDateKey(Date.now());
     const [queueDayFilter, setQueueDayFilter] = useState<string>(todayQueueDayKey);
     const queueDayManuallySelectedRef = useRef(false);
     const [modeFilter, setModeFilter] = useState<ModeFilter>('all');
@@ -541,18 +565,10 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
 
     useEffect(() => {
         if (!isActive) return;
-        const artifactSignature = matches
-            .flatMap((match) => (
-                Array.isArray(match.artifacts)
-                    ? match.artifacts.map((artifact) => `${match.id}:${toArtifactKey(String(artifact || '').trim())}`)
-                    : []
-            ))
-            .filter((entry) => !!entry && !entry.endsWith(':'))
-            .sort()
-            .join('|');
-        if (!artifactSignature) return;
-        if (autoRepairAttemptSignaturesRef.current.has(artifactSignature)) return;
-        autoRepairAttemptSignaturesRef.current.add(artifactSignature);
+        const repairSignature = buildAutoRepairSignature(matches);
+        if (!repairSignature) return;
+        if (autoRepairAttemptSignaturesRef.current.has(repairSignature)) return;
+        autoRepairAttemptSignaturesRef.current.add(repairSignature);
         let cancelled = false;
         const runAutoRepair = async () => {
             try {

@@ -289,7 +289,17 @@ export const getDrillDownMatches = (
             if (!scopedIds && activeMode) return match.mode === activeMode;
             return true;
         })
-        .filter((match) => matchesTarget(match, target))
+        .filter((match) => {
+            if (
+                target.encounterScope === 'all'
+                && scopedIds
+                && scopedIds.size > 0
+                && (target.type === 'Teammate' || target.type === 'Opponent')
+            ) {
+                return true;
+            }
+            return matchesTarget(match, target);
+        })
         .sort((left, right) => left.timestamp - right.timestamp);
 };
 

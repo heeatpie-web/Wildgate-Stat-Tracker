@@ -33,6 +33,7 @@ interface PlayerDetail {
     asTeammate: { wins: number; total: number } | null;
     asOpponent: { wins: number; total: number } | null;
     totalEncounters: number;
+    encounterMatchIds: number[];
     firstSeen: number | null;
     lastSeen: number | null;
     shipsObserved: Record<string, number>;
@@ -59,6 +60,7 @@ interface DuplicateCandidate {
 
 interface EncounterSnapshot {
     totalEncounters: number;
+    encounterMatchIds: number[];
     firstSeen: number | null;
     lastSeen: number | null;
     asTeammate: { wins: number; total: number } | null;
@@ -544,6 +546,7 @@ const PlayerHub: React.FC = () => {
         allTrackedPilots.forEach((name) => {
             snapshots.set(name, {
                 totalEncounters: 0,
+                encounterMatchIds: [],
                 firstSeen: null,
                 lastSeen: null,
                 asTeammate: null,
@@ -567,9 +570,18 @@ const PlayerHub: React.FC = () => {
             snapshot.lastSeen = snapshot.lastSeen === null ? timestamp : Math.max(snapshot.lastSeen, timestamp);
         };
 
+        const recordEncounter = (snapshot: EncounterSnapshot, matchId: number, timestamp: number) => {
+            if (Number.isFinite(matchId) && !snapshot.encounterMatchIds.includes(matchId)) {
+                snapshot.encounterMatchIds.push(matchId);
+                snapshot.totalEncounters = snapshot.encounterMatchIds.length;
+            }
+            touchSeen(snapshot, timestamp);
+        };
+
         (matches || [])
             .filter((match) => match?.result !== 'Ongoing')
             .forEach((match) => {
+                const matchId = Number(match?.id);
                 const timestamp = Number(match?.timestamp || 0);
                 const teammatePilots = collectPilots(Array.isArray(match.teammates) ? match.teammates : []);
                 const opponentPilots = collectPilots(getMatchOpponentNames(match));
@@ -577,21 +589,19 @@ const PlayerHub: React.FC = () => {
                 teammatePilots.forEach((pilotName) => {
                     const snapshot = snapshots.get(pilotName);
                     if (!snapshot) return;
-                    snapshot.totalEncounters += 1;
+                    recordEncounter(snapshot, matchId, timestamp);
                     snapshot.asTeammate = snapshot.asTeammate || { wins: 0, total: 0 };
                     snapshot.asTeammate.total += 1;
                     if (match.result === 'Win') snapshot.asTeammate.wins += 1;
-                    touchSeen(snapshot, timestamp);
                 });
 
                 opponentPilots.forEach((pilotName) => {
                     const snapshot = snapshots.get(pilotName);
                     if (!snapshot) return;
-                    snapshot.totalEncounters += 1;
+                    recordEncounter(snapshot, matchId, timestamp);
                     snapshot.asOpponent = snapshot.asOpponent || { wins: 0, total: 0 };
                     snapshot.asOpponent.total += 1;
                     if (match.result === 'Win') snapshot.asOpponent.wins += 1;
-                    touchSeen(snapshot, timestamp);
                 });
             });
 
@@ -650,6 +660,7 @@ const PlayerHub: React.FC = () => {
                 asTeammate: encounterSnapshot?.asTeammate || null,
                 asOpponent: encounterSnapshot?.asOpponent || null,
                 totalEncounters,
+                encounterMatchIds: encounterSnapshot?.encounterMatchIds || [],
                 firstSeen: encounterSnapshot?.firstSeen ?? getAggregateTimestamp(profileIds, 'firstSeen', 'min'),
                 lastSeen: encounterSnapshot?.lastSeen ?? getAggregateTimestamp(profileIds, 'lastSeen', 'max'),
                 shipsObserved: mergeObservedCounts(profileIds, 'shipsObserved'),
@@ -1058,7 +1069,14 @@ const PlayerHub: React.FC = () => {
         const teammateTotal = player.asTeammate?.total || 0;
         const opponentTotal = player.asOpponent?.total || 0;
         const drillType = teammateTotal >= opponentTotal ? 'Teammate' : 'Opponent';
-        setDrillDownTarget({ name: player.name, type: drillType });
+        setDrillDownTarget({
+            name: player.name,
+            type: drillType,
+            ...(player.encounterMatchIds.length > 0 ? {
+                matchIds: player.encounterMatchIds,
+                encounterScope: 'all' as const,
+            } : {}),
+        });
         setActiveView('analytics');
     };
 

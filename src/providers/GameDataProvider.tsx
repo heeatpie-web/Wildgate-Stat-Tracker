@@ -10,6 +10,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { Match, DrillDownTarget, KillMap, Loadout, GameMode, type DetectedUnknownMapping } from '../types';
 import { PlayerProfile } from '../store/slices/createMappingSlice';
 import type { PendingReview, RosterEntryMeta, TimelineEvent } from '../store/slices/createDataSlice';
+import type { OcrAliasModel } from '../utils/ocrAliasEngine';
 import { getElectronAPI } from '../utils/electronAPI';
 import Logger from '../utils/logger';
 
@@ -37,6 +38,8 @@ interface GameDataContextType {
     pilotAliases: Record<string, string[]>;
     addPilotAlias: (pilotName: string, alias: string) => void;
     removePilotAlias: (pilotName: string, alias: string) => void;
+    knownMappings: Record<string, string>;
+    ocrAliasModel: OcrAliasModel;
     playerIdMap: Record<string, string>;
     setPlayerIdMap: (map: Record<string, string>) => void;
     updatePlayerIdMapping: (id: string, name: string) => void;
@@ -171,6 +174,7 @@ export const GameDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         favorites: s.favorites, setFavorites: s.setFavorites, toggleFavorite: s.toggleFavorite,
         pilotNotes: s.pilotNotes, setPilotNotes: s.setPilotNotes, updatePilotNote: s.updatePilotNote,
         pilotAliases: s.pilotAliases, addPilotAlias: s.addPilotAlias, removePilotAlias: s.removePilotAlias,
+        knownMappings: s.knownMappings, ocrAliasModel: s.ocrAliasModel,
         playerIdMap: s.playerIdMap, setPlayerIdMap: s.setPlayerIdMap,
         updatePlayerIdMapping: s.updatePlayerIdMapping,
         mergePilots: s.mergePilots, undoLastMerge: s.undoLastMerge, mergeHistory: s.mergeHistory,

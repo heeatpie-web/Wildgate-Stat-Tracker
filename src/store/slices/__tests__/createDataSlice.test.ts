@@ -307,6 +307,23 @@ describe('createDataSlice', () => {
       expect(s.pilotRegistry).not.toContain('DupePlayer');
     });
 
+    it('rewrites nested opponent team player names during merge', () => {
+      store.getState().addMatch(createMatch({
+        id: 11,
+        opponents: ['DupePlayer'],
+        opponentTeams: [{ teamName: 'Red', shipType: 'Hunter', color: 'red', players: ['dupeplayer', 'Wingman'] }],
+      }));
+      store.getState().addToRegistry('DupePlayer');
+      store.getState().addToRegistry('RealPlayer');
+
+      store.getState().mergePilots('DupePlayer', 'RealPlayer');
+
+      const saved = store.getState().matches[0];
+      expect(saved.opponents).toContain('RealPlayer');
+      expect(saved.opponentTeams?.[0]?.players).toEqual(['RealPlayer', 'Wingman']);
+      expect(saved.opponentTeams?.[0]?.players).not.toContain('dupeplayer');
+    });
+
     it('merges notes by appending', () => {
       store.getState().updatePilotNote('Dupe', 'Note A');
       store.getState().updatePilotNote('Real', 'Note B');
@@ -401,6 +418,24 @@ describe('createDataSlice', () => {
 
     it('returns false when no history', () => {
       expect(store.getState().undoLastMerge()).toBe(false);
+    });
+  });
+
+  describe('renamePilot', () => {
+    it('rewrites nested opponent team player names during rename', () => {
+      store.getState().addToRegistry('OldName');
+      store.getState().addMatch(createMatch({
+        id: 21,
+        opponents: ['OldName'],
+        opponentTeams: [{ teamName: 'Blue', shipType: 'Hunter', color: 'blue', players: ['OldName', 'Scout'] }],
+      }));
+
+      store.getState().renamePilot('OldName', 'NewName');
+
+      const saved = store.getState().matches[0];
+      expect(saved.opponents).toContain('NewName');
+      expect(saved.opponentTeams?.[0]?.players).toEqual(['NewName', 'Scout']);
+      expect(saved.opponentTeams?.[0]?.players).not.toContain('OldName');
     });
   });
 

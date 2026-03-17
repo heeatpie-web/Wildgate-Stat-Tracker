@@ -119,6 +119,23 @@ type ProfileSnapshotMap = Record<string, Record<string, unknown>>;
 const normalizeNameKey = (value: string): string => normalizeOcrName(value || '').toLowerCase();
 export const normalizeRosterEntryKey = (value: string): string => normalizeNameKey(value);
 
+const rewriteMatchPlayerNames = (
+  match: Match,
+  predicate: (name: string) => boolean,
+  replacement: string
+): Match => ({
+  ...match,
+  player: predicate(match.player) ? replacement : match.player,
+  teammates: (match.teammates || []).map((name) => predicate(name) ? replacement : name),
+  opponents: (match.opponents || []).map((name) => predicate(name) ? replacement : name),
+  opponentTeams: Array.isArray(match.opponentTeams)
+    ? match.opponentTeams.map((team) => ({
+      ...team,
+      players: (team.players || []).map((name) => predicate(name) ? replacement : name),
+    }))
+    : match.opponentTeams,
+});
+
 const dedupeAliasList = (values: string[], canonicalName?: string): string[] => {
   const seen = new Set<string>();
   const canonicalKey = normalizeNameKey(String(canonicalName || ''));
@@ -811,12 +828,11 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
       newNotes[newName] = newNotes[oldName];
       delete newNotes[oldName];
     }
-    const newMatches = state.matches.map(m => ({
-      ...m,
-      player: m.player === oldName ? newName : m.player,
-      teammates: (m.teammates || []).map(t => t === oldName ? newName : t),
-      opponents: (m.opponents || []).map(o => o === oldName ? newName : o)
-    }));
+    const newMatches = state.matches.map((match) => rewriteMatchPlayerNames(
+      match,
+      (name) => name === oldName,
+      newName
+    ));
 
     const newAliases = clonePilotAliases(state.pilotAliases);
     const mergedAliases = dedupeAliasList([
@@ -910,12 +926,11 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
       name === sourceName || normalizeOcrName(name).toLowerCase() === srcNorm;
 
     // 1. Update Matches (case-insensitive)
-    const newMatches = state.matches.map(m => ({
-      ...m,
-      player: isSource(m.player) ? targetName : m.player,
-      teammates: (m.teammates || []).map(t => isSource(t) ? targetName : t),
-      opponents: (m.opponents || []).map(o => isSource(o) ? targetName : o)
-    }));
+    const newMatches = state.matches.map((match) => rewriteMatchPlayerNames(
+      match,
+      isSource,
+      targetName
+    ));
 
     // 2. Update Registry
     const newRegistry = state.pilotRegistry.filter(p => !isSource(p));

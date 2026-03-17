@@ -19,13 +19,15 @@ import { useUIState } from '../providers/UIStateProvider';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { buildDrillDownModel, type DrillDownMatchRow, type DrillDownRow } from '../utils/analyticsDrilldown';
+import { buildAnalyticsIdentityResolver } from '../utils/analyticsIdentity';
 
 type OverlayTab = 'overview' | 'people' | 'hazards' | 'loadouts' | 'matches';
 
 const targetKey = (target: DrillDownTarget | null | undefined): string => {
     if (!target) return '';
     const matchIdKey = Array.isArray(target.matchIds) ? target.matchIds.join(',') : '';
-    return `${target.type}:${target.name}:${matchIdKey}`;
+    const encounterScopeKey = target.encounterScope || '';
+    return `${target.type}:${target.name}:${matchIdKey}:${encounterScopeKey}`;
 };
 
 const formatTargetType = (type: DrillDownTarget['type']): string => {
@@ -172,7 +174,16 @@ const SectionShell: React.FC<{
 );
 
 export const DrillDownOverlay: React.FC = () => {
-    const { matches, drillDownTarget, setDrillDownTarget } = useGameData();
+    const {
+        matches,
+        drillDownTarget,
+        setDrillDownTarget,
+        pilotRegistry,
+        pilotAliases,
+        playerProfiles,
+        knownMappings,
+        ocrAliasModel,
+    } = useGameData();
     const { activeMode } = useUIState();
     const isOpen = Boolean(drillDownTarget);
     const dialogTitleId = useId();
@@ -181,25 +192,46 @@ export const DrillDownOverlay: React.FC = () => {
     const [navigationStack, setNavigationStack] = useState<DrillDownTarget[]>([]);
     const [activeTab, setActiveTab] = useState<OverlayTab>('overview');
 
+    const analyticsIdentity = useMemo(() => buildAnalyticsIdentityResolver({
+        pilotRegistry,
+        pilotAliases,
+        knownMappings,
+        playerProfiles,
+        aliasModel: ocrAliasModel,
+    }), [pilotAliases, pilotRegistry, knownMappings, ocrAliasModel, playerProfiles]);
+
+    const canonicalMatches = useMemo(
+        () => analyticsIdentity.canonicalizeMatches(matches),
+        [analyticsIdentity, matches]
+    );
+
+    const canonicalizeTarget = (target: DrillDownTarget | null | undefined): DrillDownTarget | null => {
+        if (!target) return null;
+        if (target.type !== 'Teammate' && target.type !== 'Opponent') return target;
+        const canonicalName = analyticsIdentity.resolveName(target.name) || String(target.name || '').trim();
+        return canonicalName === target.name ? target : { ...target, name: canonicalName };
+    };
+
     useKeyboardShortcuts([
         { key: 'Escape', handler: () => setDrillDownTarget(null) },
     ], isOpen);
 
-    const externalTargetKey = targetKey(drillDownTarget);
+    const externalTarget = canonicalizeTarget(drillDownTarget);
+    const externalTargetKey = targetKey(externalTarget);
 
     useEffect(() => {
-        if (!drillDownTarget) {
+        if (!externalTarget) {
             setNavigationStack([]);
             return;
         }
         setNavigationStack((current) => {
             const top = current[current.length - 1];
             if (top && targetKey(top) === externalTargetKey) return current;
-            return [drillDownTarget];
+            return [externalTarget];
         });
-    }, [drillDownTarget, externalTargetKey]);
+    }, [externalTarget, externalTargetKey]);
 
-    const currentTarget = navigationStack[navigationStack.length - 1] || drillDownTarget;
+    const currentTarget = navigationStack[navigationStack.length - 1] || externalTarget;
     const currentTargetKey = targetKey(currentTarget);
 
     useEffect(() => {
@@ -207,8 +239,8 @@ export const DrillDownOverlay: React.FC = () => {
     }, [currentTargetKey]);
 
     const model = useMemo(
-        () => (currentTarget ? buildDrillDownModel(matches, currentTarget, activeMode) : null),
-        [matches, currentTarget, activeMode]
+        () => (currentTarget ? buildDrillDownModel(canonicalMatches, currentTarget, activeMode) : null),
+        [canonicalMatches, currentTarget, activeMode]
     );
 
     useEffect(() => {

@@ -28,6 +28,7 @@ import {
     calculatePlacementDistribution,
     calculatePerformanceMomentum,
 } from '../../utils/analytics';
+import { buildAnalyticsIdentityResolver } from '../../utils/analyticsIdentity';
 import { useGameData } from '../../providers/GameDataProvider';
 import { useUIState } from '../../providers/UIStateProvider';
 import { getUpdateLabel } from '../../data/gamePatches';
@@ -291,8 +292,30 @@ export const useAnalyticsData = (
     view?: AnalyticsView,
     entityFilters: EntityAnalyticsFilters = EMPTY_ENTITY_FILTERS
 ) => {
-    const { matches, playerProfiles, isMatchInProgress, matchStartTime } = useGameData();
+    const {
+        matches,
+        pilotRegistry,
+        pilotAliases,
+        playerProfiles,
+        knownMappings,
+        ocrAliasModel,
+        isMatchInProgress,
+        matchStartTime,
+    } = useGameData();
     const { activeMode } = useUIState();
+
+    const analyticsIdentity = useMemo(() => buildAnalyticsIdentityResolver({
+        pilotRegistry,
+        pilotAliases,
+        knownMappings,
+        playerProfiles,
+        aliasModel: ocrAliasModel,
+    }), [pilotAliases, pilotRegistry, knownMappings, ocrAliasModel, playerProfiles]);
+
+    const canonicalPlayerProfiles = useMemo(
+        () => analyticsIdentity.canonicalizePlayerProfiles(playerProfiles),
+        [analyticsIdentity, playerProfiles]
+    );
 
     const rangeStart = useMemo(() => {
         if (timeRange === 'today') {
@@ -316,8 +339,10 @@ export const useAnalyticsData = (
     }, [timeRange]);
 
     const modeMatches = useMemo(
-        () => matches.filter(m => m.mode === activeMode).sort((a, b) => a.timestamp - b.timestamp),
-        [matches, activeMode]
+        () => analyticsIdentity
+            .canonicalizeMatches(matches.filter(m => m.mode === activeMode))
+            .sort((a, b) => a.timestamp - b.timestamp),
+        [analyticsIdentity, matches, activeMode]
     );
     const completedModeMatches = useMemo(
         () => modeMatches.filter((m) => m.result !== 'Ongoing'),
@@ -391,8 +416,8 @@ export const useAnalyticsData = (
     );
 
     const relationshipInsights = useMemo(
-        () => (wantSocial ? calculateRelationshipAnalytics(playerProfiles as any, {}) : []),
-        [wantSocial, playerProfiles]
+        () => (wantSocial ? calculateRelationshipAnalytics(canonicalPlayerProfiles as any, knownMappings) : []),
+        [wantSocial, canonicalPlayerProfiles, knownMappings]
     );
 
     const timePatterns = useMemo(
@@ -496,7 +521,7 @@ export const useAnalyticsData = (
         placementData,
         momentum,
         avgSortiesPerDay,
-        playerProfiles,
+        playerProfiles: canonicalPlayerProfiles,
         entityAnalytics,
     };
 };

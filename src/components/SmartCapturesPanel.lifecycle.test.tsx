@@ -276,4 +276,115 @@ describe('SmartCapturesPanel paused lifecycle', () => {
       );
     });
   });
+
+  it('runs background artifact repair for new smart-capture rows even before artifacts are attached', async () => {
+    gameData.matches = [
+      {
+        id: 202,
+        timestamp: Date.parse('2026-03-17T00:26:00-06:00'),
+        date: '3/17/2026',
+        mode: 'Artifact Brawl',
+        player: 'Pilot',
+        teammates: ['Wingman'],
+        opponents: ['Enemy'],
+        hero: 'Adrian',
+        ship: 'Hunter',
+        reachModifiers: [],
+        kills: {},
+        artifacts: [],
+        result: 'Win',
+        ocrState: 'queued',
+      },
+    ];
+    appStoreState.matches = gameData.matches;
+
+    const { default: SmartCapturesPanel } = await import('./SmartCapturesPanel');
+    render(<SmartCapturesPanel />);
+
+    await waitFor(() => {
+      expect(previewArtifactRepair).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(applyArtifactRepair).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('switches the queue day to the new local day when midnight passes and a new match arrives', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-03-16T23:58:00-06:00'));
+      appStoreState.activeSection = 'capture';
+      previewArtifactRepair.mockResolvedValue({
+        summary: {
+          candidatesScanned: 0,
+          candidatesEligible: 0,
+          plannedLinks: 0,
+        },
+      });
+      applyArtifactRepair.mockResolvedValue({
+        summary: {
+          candidatesScanned: 0,
+          candidatesEligible: 0,
+          plannedLinks: 0,
+          appliedLinks: 0,
+        },
+      });
+      gameData.matches = [
+        {
+          id: 101,
+          timestamp: Date.parse('2026-03-16T23:45:00-06:00'),
+          date: '3/16/2026',
+          mode: 'Artifact Brawl',
+          player: 'Pilot',
+          teammates: [],
+          opponents: ['Enemy'],
+          hero: 'Adrian',
+          ship: 'Hunter',
+          reachModifiers: [],
+          kills: {},
+          artifacts: ['C:\\captures\\match-101.png'],
+          result: 'Win',
+          ocrState: 'queued',
+        },
+      ];
+      appStoreState.matches = gameData.matches;
+
+      const { default: SmartCapturesPanel } = await import('./SmartCapturesPanel');
+      const { rerender } = render(<SmartCapturesPanel />);
+
+      expect(screen.getByLabelText('Match day')).toHaveValue('2026-03-16');
+
+      act(() => {
+        vi.setSystemTime(new Date('2026-03-17T00:26:00-06:00'));
+        gameData.matches = [
+          {
+            id: 202,
+            timestamp: Date.parse('2026-03-17T00:26:00-06:00'),
+            date: '3/17/2026',
+            mode: 'Artifact Brawl',
+            player: 'Pilot',
+            teammates: ['Wingman'],
+            opponents: ['Enemy'],
+            hero: 'Adrian',
+            ship: 'Hunter',
+            reachModifiers: [],
+            kills: {},
+            artifacts: [],
+            result: 'Win',
+            ocrState: 'queued',
+          },
+          ...gameData.matches,
+        ];
+        appStoreState.matches = gameData.matches;
+        rerender(<SmartCapturesPanel />);
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(screen.getByLabelText('Match day')).toHaveValue('2026-03-17');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
