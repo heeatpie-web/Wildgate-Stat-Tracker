@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { AnalyticsView, AnalyticsTimeRange, DrillDownTarget, EntityAnalyticsFilters } from '../../types';
-import { Activity, ArrowLeft, Download, LayoutGrid, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Activity, ArrowLeft, Download, LayoutGrid, Pin, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useGameData } from '../../providers/GameDataProvider';
 import { useUIState } from '../../providers/UIStateProvider';
 import { useUserPreferences } from '../../providers/UserPreferencesProvider';
@@ -23,6 +23,7 @@ import { PlacementDistView } from './PlacementDistView';
 import { MomentumView } from './MomentumView';
 import { VisualEssayView } from './VisualEssayView';
 import { AnalyticsNavigation, AnalyticsCategory } from './AnalyticsNavigation';
+import { StatExportModal } from './StatExportModal';
 import { EntityAnalyticsView } from './EntityAnalyticsView';
 import { getUpdateLabel, UPDATE_DEFINITIONS } from '../../data/gamePatches';
 import { getMatchEquipment, getMatchPerks, getMatchProspectorWeapons, getMatchShip } from '../patch/patchEntityCatalog';
@@ -96,6 +97,8 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
         update: [],
     });
     const contentRef = useRef<HTMLDivElement>(null);
+    const [pinnedTiles, setPinnedTiles] = useState<Set<string>>(new Set());
+    const [showExportModal, setShowExportModal] = useState(false);
 
     const requestedDataView = useMemo<AnalyticsView | undefined>(() => {
         // Standard overview only needs lightweight metrics.
@@ -146,6 +149,14 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
             matchIds: data.filteredMatches.map((match) => Number(match.id)).filter((id) => Number.isFinite(id)),
         });
     }, [data.filteredMatches, setDrillDownTarget]);
+
+    const togglePin = useCallback((id: string) => {
+        setPinnedTiles(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    }, []);
 
     const navigateTo = (view: AnalyticsView) => setCurrentView(view);
     const goBack = () => setCurrentView('overview');
@@ -380,6 +391,17 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
         return proTiles.filter((tile) => tile.category === proCategory);
     }, [proCategory, proTiles]);
     const isCockpitView = !isProMode && currentView === 'overview';
+    const exportTileData = {
+        filteredMatches: data.filteredMatches,
+        winRate: data.winRate,
+        currentStreak: data.currentStreak,
+        momentum: data.momentum,
+        placementData: data.placementData,
+        killEfficiency: data.killEfficiency,
+        streakHistory: data.streakHistory,
+        periodComparison: data.periodComparison,
+        timePatterns: data.timePatterns,
+    };
     const entitySelectorControls = (
         <>
             <select
@@ -601,13 +623,63 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
                                                 {VIEW_LABELS[view]}
                                             </button>
                                         ))}
+                                        {/* Pin button for current view */}
+                                        <button
+                                            type="button"
+                                            onClick={() => togglePin(currentView)}
+                                            className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-control text-label-sm font-bold uppercase tracking-wide transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary ${
+                                                pinnedTiles.has(currentView)
+                                                    ? 'bg-md-sys-primary/15 text-md-sys-primary border border-md-sys-primary/30'
+                                                    : 'text-md-sys-on-surface/40 hover:text-md-sys-on-surface/70 border border-transparent'
+                                            }`}
+                                            aria-label={pinnedTiles.has(currentView) ? 'Unpin this view' : 'Pin this view for export'}
+                                        >
+                                            <Pin size={12} fill={pinnedTiles.has(currentView) ? 'currentColor' : 'none'} />
+                                            {pinnedTiles.has(currentView) ? 'Pinned' : 'Pin'}
+                                        </button>
                                     </div>
                                     {renderExpandedView()}
                                 </>
                             )}
+                            {pinnedTiles.size > 0 && (
+                                <div className="sticky bottom-0 mt-4 flex items-center justify-between gap-3 md3-card rounded-card p-3 border border-md-sys-primary/20 bg-md-sys-primary/5">
+                                    <div className="flex items-center gap-2 text-label-sm font-bold text-md-sys-on-surface/70">
+                                        <Pin size={14} className="text-md-sys-primary" fill="currentColor" />
+                                        <span>{pinnedTiles.size} tile{pinnedTiles.size !== 1 ? 's' : ''} pinned</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setPinnedTiles(new Set())}
+                                            className="text-label-sm font-bold text-md-sys-on-surface/50 hover:text-md-sys-on-surface/80 transition-colors"
+                                        >
+                                            Clear
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowExportModal(true)}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-control text-label-sm font-bold uppercase tracking-wide bg-md-sys-primary text-md-sys-onPrimary hover:opacity-90 transition-opacity"
+                                        >
+                                            <Download size={12} />
+                                            Export
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                 </>
+            )}
+            {showExportModal && (
+                <StatExportModal
+                    pinnedIds={[...pinnedTiles]}
+                    analyticsData={exportTileData}
+                    onClose={() => setShowExportModal(false)}
+                    onClearPins={() => {
+                        setPinnedTiles(new Set());
+                        setShowExportModal(false);
+                    }}
+                />
             )}
         </div>
     );

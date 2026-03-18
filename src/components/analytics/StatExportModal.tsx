@@ -10,7 +10,7 @@ interface StatExportModalProps {
   onClearPins: () => void;
 }
 
-export default function StatExportModal({
+export function StatExportModal({
   pinnedIds,
   analyticsData,
   onClose,
