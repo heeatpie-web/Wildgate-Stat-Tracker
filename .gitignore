@@ -51,6 +51,14 @@ dataset/
 # ML models (download at runtime)
 models/
 
+# Caziban OCR test screenshots
+*Caziban.png
+
+# Internal planning / audit docs
+README_SNOWFLAKE_SONNET.md
+TELEMETRY_STABILIZATION_AUDIT.md
+WORK_OWNERSHIP.md
+
 # AI assistant configuration files
 .cursorrules
 .gemini_memory.md
