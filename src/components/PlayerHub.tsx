@@ -17,6 +17,7 @@ import { getPerkCatalog, getProspectorEquipmentCatalog, getProspectorWeaponCatal
 import { LocalImage } from './LocalImage';
 import { useShallow } from 'zustand/react/shallow';
 import Logger from '../utils/logger';
+import { resolveEncounterRole } from '../utils/playerEncounterRoles';
 
 type SortMode = 'alpha' | 'favorites' | 'recent' | 'encounters';
 type PlayerFilterMode = 'all' | 'roster' | 'tracked-only' | 'needs-review';
@@ -35,6 +36,7 @@ interface PlayerDetail {
     asOpponent: { wins: number; total: number } | null;
     totalEncounters: number;
     encounterMatchIds: number[];
+    roleConflictMatchIds: number[];
     firstSeen: number | null;
     lastSeen: number | null;
     shipsObserved: Record<string, number>;
@@ -62,10 +64,32 @@ interface DuplicateCandidate {
 interface EncounterSnapshot {
     totalEncounters: number;
     encounterMatchIds: number[];
+    roleConflictMatchIds: number[];
     firstSeen: number | null;
     lastSeen: number | null;
     asTeammate: { wins: number; total: number } | null;
     asOpponent: { wins: number; total: number } | null;
+}
+
+interface EncounterMatchListItem {
+    id: number;
+    label: string;
+    displayTimestamp: string;
+    relativeTimestamp: string;
+    roleLabel: string;
+    result: Match['result'];
+    shipLabel: string;
+    timestamp: number;
+}
+
+interface RoleConflictWorkbenchItem {
+    key: string;
+    playerName: string;
+    matchId: number;
+    displayTimestamp: string;
+    relativeTimestamp: string;
+    shipLabel: string;
+    result: Match['result'];
 }
 
 const normalizeNameKey = (value: string | null | undefined): string => (
@@ -141,6 +165,25 @@ const getMatchOpponentNames = (match: Match): string[] => {
     ];
 };
 
+const formatEncounterDisplayTimestamp = (match: Match): string => {
+    const timestamp = Number(match.timestamp || 0);
+    if (Number.isFinite(timestamp) && timestamp > 0) {
+        return new Date(timestamp).toLocaleString();
+    }
+    return [String(match.date || '').trim(), String(match.time || '').trim()].filter(Boolean).join(' ') || `Match #${match.id}`;
+};
+
+const formatRelativeEncounterTimestamp = (timestamp: number): string => {
+    if (!Number.isFinite(timestamp) || timestamp <= 0) return 'Never';
+    const diff = Date.now() - timestamp;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    return `${days}d ago`;
+};
+
 const IS_DEV_BUILD = import.meta.env.DEV || process.env.NODE_ENV !== 'production';
 const DEFAULT_ROSTER_VIEWPORT_HEIGHT = 640;
 const ROSTER_GRID_ROW_HEIGHT = 74;
@@ -180,8 +223,11 @@ const PlayerHub: React.FC = () => {
         ocrCorrections,
         ocrAliasModel,
         ocrAutoApplyMinScore,
+        playerEncounterRoleCorrections,
         recordOcrAliasCorrection,
         removeOcrAliasCorrection,
+        recordPlayerEncounterRoleCorrection,
+        getPlayerEncounterRoleCorrection,
     } = useAppStore(useShallow((state) => ({
         pilotRegistry: state.pilotRegistry,
         rosterEntryMeta: state.rosterEntryMeta,
@@ -215,10 +261,13 @@ const PlayerHub: React.FC = () => {
         ocrCorrections: state.ocrCorrections,
         ocrAliasModel: state.ocrAliasModel,
         ocrAutoApplyMinScore: state.ocrAutoApplyMinScore,
+        playerEncounterRoleCorrections: state.playerEncounterRoleCorrections,
         recordOcrAliasCorrection: state.recordOcrAliasCorrection,
         removeOcrAliasCorrection: state.removeOcrAliasCorrection,
+        recordPlayerEncounterRoleCorrection: state.recordPlayerEncounterRoleCorrection,
+        getPlayerEncounterRoleCorrection: state.getPlayerEncounterRoleCorrection,
     })));
-    const { setActiveView, setToast } = useUIState();
+    const { setActiveView, setToast, setSmartCapturesFocusMatchId } = useUIState();
 
     const [searchTerm, setSearchTerm] = useState('');
     const [ocrSearchTerm, setOcrSearchTerm] = useState('');
@@ -476,9 +525,14 @@ const PlayerHub: React.FC = () => {
     };
 
     useEffect(() => {
-        setShowFullProfile(false);
         setShowAliases(false);
         setNewAliasValue('');
+        setEditingNote(null);
+        setRenaming(null);
+        setConfirmDelete(null);
+        setMergeTarget(null);
+        setMergeSearch('');
+        setMergeKeepName(null);
     }, [selectedPilot]);
 
     useEffect(() => {
@@ -589,6 +643,7 @@ const PlayerHub: React.FC = () => {
             snapshots.set(name, {
                 totalEncounters: 0,
                 encounterMatchIds: [],
+                roleConflictMatchIds: [],
                 firstSeen: null,
                 lastSeen: null,
                 asTeammate: null,
@@ -625,30 +680,52 @@ const PlayerHub: React.FC = () => {
             .forEach((match) => {
                 const matchId = Number(match?.id);
                 const timestamp = Number(match?.timestamp || 0);
-                const teammatePilots = collectPilots(Array.isArray(match.teammates) ? match.teammates : []);
-                const opponentPilots = collectPilots(getMatchOpponentNames(match));
+                const friendlyNames = [
+                    String(match.player || '').trim(),
+                    ...(Array.isArray(match.teammates) ? match.teammates : []),
+                ];
+                const friendlyKeys = new Set(friendlyNames.map(normalizeNameKey).filter(Boolean));
+                const opponentNames = getMatchOpponentNames(match);
+                const opponentKeys = new Set(opponentNames.map(normalizeNameKey).filter(Boolean));
+                const encounteredPilots = new Set<string>([
+                    ...collectPilots(friendlyNames),
+                    ...collectPilots(opponentNames),
+                ]);
 
-                teammatePilots.forEach((pilotName) => {
+                encounteredPilots.forEach((pilotName) => {
                     const snapshot = snapshots.get(pilotName);
                     if (!snapshot) return;
                     recordEncounter(snapshot, matchId, timestamp);
-                    snapshot.asTeammate = snapshot.asTeammate || { wins: 0, total: 0 };
-                    snapshot.asTeammate.total += 1;
-                    if (match.result === 'Win') snapshot.asTeammate.wins += 1;
-                });
+                    const resolvedRole = resolveEncounterRole({
+                        selectedKeys: getKnownAliasKeys(pilotName),
+                        friendlyKeys,
+                        opponentKeys,
+                        correctedRole: getPlayerEncounterRoleCorrection(matchId, pilotName),
+                    });
 
-                opponentPilots.forEach((pilotName) => {
-                    const snapshot = snapshots.get(pilotName);
-                    if (!snapshot) return;
-                    recordEncounter(snapshot, matchId, timestamp);
-                    snapshot.asOpponent = snapshot.asOpponent || { wins: 0, total: 0 };
-                    snapshot.asOpponent.total += 1;
-                    if (match.result === 'Win') snapshot.asOpponent.wins += 1;
+                    if (resolvedRole === 'conflict') {
+                        if (Number.isFinite(matchId) && !snapshot.roleConflictMatchIds.includes(matchId)) {
+                            snapshot.roleConflictMatchIds.push(matchId);
+                        }
+                        return;
+                    }
+
+                    if (resolvedRole === 'teammate') {
+                        snapshot.asTeammate = snapshot.asTeammate || { wins: 0, total: 0 };
+                        snapshot.asTeammate.total += 1;
+                        if (match.result === 'Win') snapshot.asTeammate.wins += 1;
+                    }
+
+                    if (resolvedRole === 'opponent') {
+                        snapshot.asOpponent = snapshot.asOpponent || { wins: 0, total: 0 };
+                        snapshot.asOpponent.total += 1;
+                        if (match.result === 'Win') snapshot.asOpponent.wins += 1;
+                    }
                 });
             });
 
         return snapshots;
-    }, [allTrackedPilots, matches, pilotNamesByIdentityKey]);
+    }, [allTrackedPilots, getKnownAliasKeys, getPlayerEncounterRoleCorrection, matches, pilotNamesByIdentityKey, playerEncounterRoleCorrections]);
 
     const rosterModel = useMemo(() => {
         const startedAt = performance.now();
@@ -687,6 +764,7 @@ const PlayerHub: React.FC = () => {
             const isDetected = rosterMeta?.origin === 'ocr' && rosterMeta?.status === 'detected';
             const isTrackedOnly = !isRoster && profileIds.length > 0;
             const totalEncounters = encounterSnapshot?.totalEncounters || 0;
+            const roleConflictMatchIds = encounterSnapshot?.roleConflictMatchIds || [];
             if (!isRoster && !isDetected && totalEncounters <= 0) {
                 return null;
             }
@@ -696,13 +774,14 @@ const PlayerHub: React.FC = () => {
                 isRoster,
                 isTrackedOnly,
                 isDetected,
-                needsReview: isDetected || isTrackedOnly,
+                needsReview: isDetected || isTrackedOnly || roleConflictMatchIds.length > 0,
                 rosterMeta,
                 note: isRoster ? (pilotNotes[rosterName] || '') : '',
                 asTeammate: encounterSnapshot?.asTeammate || null,
                 asOpponent: encounterSnapshot?.asOpponent || null,
                 totalEncounters,
                 encounterMatchIds: encounterSnapshot?.encounterMatchIds || [],
+                roleConflictMatchIds,
                 firstSeen: encounterSnapshot?.firstSeen ?? getAggregateTimestamp(profileIds, 'firstSeen', 'min'),
                 lastSeen: encounterSnapshot?.lastSeen ?? getAggregateTimestamp(profileIds, 'lastSeen', 'max'),
                 shipsObserved: mergeObservedCounts(profileIds, 'shipsObserved'),
@@ -782,6 +861,36 @@ const PlayerHub: React.FC = () => {
         return rosterModel.enrichedPilotsByName.get(selectedPilot) || null;
     }, [rosterModel.enrichedPilotsByName, selectedPilot]);
     const selectedStatusChips = selected ? getPlayerStatusChips(selected) : [];
+    const roleConflictWorkbenchItems = useMemo(() => {
+        const matchesById = new Map(
+            (matches || []).map((match) => [Number(match.id), match] as const)
+        );
+
+        return enrichedPilots
+            .flatMap((pilot) => pilot.roleConflictMatchIds.map((matchId) => {
+                const match = matchesById.get(Number(matchId));
+                if (!match) return null;
+                const timestamp = Number(match.timestamp || 0);
+                return {
+                    key: `${pilot.name}:${matchId}`,
+                    playerName: pilot.name,
+                    matchId: Number(match.id),
+                    displayTimestamp: formatEncounterDisplayTimestamp(match),
+                    relativeTimestamp: formatRelativeEncounterTimestamp(timestamp),
+                    shipLabel: String(match.ship || 'Unknown ship').split('(')[0].trim() || 'Unknown ship',
+                    result: match.result,
+                } satisfies RoleConflictWorkbenchItem;
+            }))
+            .filter((item): item is RoleConflictWorkbenchItem => Boolean(item))
+            .sort((left, right) => {
+                const leftTimestamp = matchesById.get(left.matchId)?.timestamp || 0;
+                const rightTimestamp = matchesById.get(right.matchId)?.timestamp || 0;
+                if (rightTimestamp !== leftTimestamp) return rightTimestamp - leftTimestamp;
+                if (left.playerName !== right.playerName) return left.playerName.localeCompare(right.playerName);
+                return right.matchId - left.matchId;
+            });
+    }, [enrichedPilots, matches]);
+    const ocrWorkbenchCount = pendingRosterCandidates.length + roleConflictWorkbenchItems.length;
 
     const selectedAliasInsights = useMemo(() => {
         if (!selected) return { manual: [] as AliasInsight[], learned: [] as AliasInsight[] };
@@ -976,6 +1085,61 @@ const PlayerHub: React.FC = () => {
 
     const selectedTopTeammate = selectedPatternSignals.topTeammate;
     const selectedTopOpponent = selectedPatternSignals.topOpponent;
+    const selectedEncounterMatches = useMemo(() => {
+        if (!selected || selected.encounterMatchIds.length === 0) return [] as EncounterMatchListItem[];
+
+        const selectedKeys = getKnownAliasKeys(selected.name);
+        if (selectedKeys.size === 0) return [] as EncounterMatchListItem[];
+
+        const matchesById = new Map(
+            (matches || []).map((match) => [Number(match.id), match] as const)
+        );
+
+        return selected.encounterMatchIds
+            .map((matchId) => matchesById.get(Number(matchId)))
+            .filter((match): match is Match => Boolean(match))
+            .map((match) => {
+                const friendlyNames = [
+                    String(match.player || '').trim(),
+                    ...(Array.isArray(match.teammates) ? match.teammates.map((name) => String(name || '').trim()) : []),
+                ].filter(Boolean);
+                const opponentNames = getMatchOpponentNames(match)
+                    .map((name) => String(name || '').trim())
+                    .filter(Boolean);
+                const friendlyKeys = new Set(friendlyNames.map(normalizeNameKey).filter(Boolean));
+                const opponentKeys = new Set(opponentNames.map(normalizeNameKey).filter(Boolean));
+                const resolvedRole = resolveEncounterRole({
+                    selectedKeys,
+                    friendlyKeys,
+                    opponentKeys,
+                    correctedRole: getPlayerEncounterRoleCorrection(Number(match.id), selected.name),
+                });
+                const roleLabel = resolvedRole === 'conflict'
+                    ? 'Needs review'
+                    : resolvedRole === 'teammate'
+                        ? 'Teammate'
+                        : resolvedRole === 'opponent'
+                            ? 'Opponent'
+                            : 'Encounter';
+                const timestamp = Number(match.timestamp || 0);
+                return {
+                    id: Number(match.id),
+                    label: Number.isFinite(Number(match.canonicalMatchNumber))
+                        ? `Match ${Number(match.canonicalMatchNumber)}`
+                        : `Match #${match.id}`,
+                    displayTimestamp: formatEncounterDisplayTimestamp(match),
+                    relativeTimestamp: formatRelativeEncounterTimestamp(timestamp),
+                    roleLabel,
+                    result: match.result,
+                    shipLabel: String(match.ship || 'Unknown ship').split('(')[0].trim() || 'Unknown ship',
+                    timestamp,
+                } satisfies EncounterMatchListItem;
+            })
+            .sort((left, right) => {
+                if (right.timestamp !== left.timestamp) return right.timestamp - left.timestamp;
+                return right.id - left.id;
+            });
+    }, [getKnownAliasKeys, getPlayerEncounterRoleCorrection, matches, playerEncounterRoleCorrections, selected]);
 
     const handleStartNote = (pilot: string) => {
         setEditingNote(pilot);
@@ -1122,6 +1286,20 @@ const PlayerHub: React.FC = () => {
         setActiveView('analytics');
     };
 
+    const handleOpenMatchInSmartCaptures = (matchId: number) => {
+        if (!Number.isFinite(matchId)) return;
+        setSmartCapturesFocusMatchId(matchId);
+        setActiveView('smart-captures');
+    };
+
+    const handleResolveRoleConflict = (matchId: number, playerName: string, role: 'teammate' | 'opponent') => {
+        recordPlayerEncounterRoleCorrection(matchId, playerName, role);
+        setToast({
+            message: `Counted ${playerName} as ${role} for match #${matchId}`,
+            type: 'success',
+        });
+    };
+
     const mergeCandidates = useMemo(() => {
         if (!selectedPilot) return [];
         const q = mergeSearch.toLowerCase();
@@ -1219,7 +1397,7 @@ const PlayerHub: React.FC = () => {
         });
         setSelectedPilot(group.canonicalName);
         setToast({
-            message: `Merged ${group.variants.length} roster variant${group.variants.length === 1 ? '' : 's'} into "${group.canonicalName}"`,
+            message: `Merged ${group.variants.length} roster variant${group.variants.length === 1 ? '' : 's'} into "${group.canonicalDisplayName}"`,
             type: 'success',
         });
     };
@@ -1227,7 +1405,7 @@ const PlayerHub: React.FC = () => {
     const handleDismissMergeSuggestionGroup = (group: RosterMergeSuggestionGroup) => {
         dismissRosterMergeSuggestionPairs(group.pairKeys);
         setToast({
-            message: `Dismissed possible merge suggestion for "${group.canonicalName}"`,
+            message: `Dismissed possible merge suggestion for "${group.canonicalDisplayName}"`,
             type: 'info',
         });
     };
@@ -1244,12 +1422,82 @@ const PlayerHub: React.FC = () => {
                         <div className="text-label-sm font-semibold uppercase tracking-wide text-info">OCR Roster Workbench</div>
                     </div>
                     <span className="text-label-xs font-bold px-2 py-0.5 rounded-pill bg-info-soft text-info">
-                        {pendingRosterCandidates.length}
+                        {ocrWorkbenchCount}
                     </span>
                 </div>
                 <p className="text-label-xs text-md-sys-on-surface/62">
                     Review OCR-detected roster names, add them as new pilots, or merge them into an existing identity without hiding your roster list.
                 </p>
+                <div className="ocr-workbench-role-conflicts rounded-xl p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                        <div>
+                            <div className="text-label-sm font-semibold uppercase tracking-wide text-danger">Role conflicts</div>
+                            <div className="text-label-xs text-md-sys-on-surface/62">
+                                Same resolved player was detected on both teams in these matches. They stay in total encounters but do not count toward teammate or opponent stats until reviewed.
+                            </div>
+                        </div>
+                        <span className="text-label-xs font-bold px-2 py-0.5 rounded-pill bg-danger/12 text-danger shrink-0">
+                            {roleConflictWorkbenchItems.length}
+                        </span>
+                    </div>
+                    {roleConflictWorkbenchItems.length === 0 ? (
+                        <div className="rounded-lg border border-md-sys-outline/12 bg-md-sys-surface px-3 py-2 text-label-sm text-md-sys-on-surface/50">
+                            No unresolved role conflicts right now.
+                        </div>
+                    ) : (
+                        <div className="max-h-60 overflow-y-auto custom-scrollbar pr-1 flex flex-col gap-2">
+                            {roleConflictWorkbenchItems.map((item) => (
+                                <div key={item.key} className="ocr-workbench-role-conflict-row rounded-lg px-3 py-2.5">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <div className="text-label-sm font-semibold text-md-sys-on-surface truncate">
+                                                {item.playerName}
+                                            </div>
+                                            <div className="mt-1 text-label-xs text-md-sys-on-surface/58">
+                                                Match #{item.matchId} · {item.displayTimestamp}
+                                            </div>
+                                            <div className="mt-1 text-label-xs text-md-sys-on-surface/58">
+                                                {item.relativeTimestamp} · {item.shipLabel}
+                                            </div>
+                                        </div>
+                                        <span className={`rounded-pill px-2 py-0.5 text-label-xs font-bold uppercase tracking-wide shrink-0 ${
+                                            item.result === 'Win'
+                                                ? 'bg-success/15 text-success'
+                                                : item.result === 'Loss'
+                                                    ? 'bg-danger/15 text-danger'
+                                                    : 'bg-md-sys-primary/12 text-md-sys-primary'
+                                        }`}>
+                                            {item.result}
+                                        </span>
+                                    </div>
+                                    <div className="mt-3 flex flex-wrap gap-1.5">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleResolveRoleConflict(item.matchId, item.playerName, 'teammate')}
+                                            className="px-2.5 py-1.5 rounded-md text-label-xs font-bold bg-success/15 text-success hover:bg-success/25"
+                                        >
+                                            Count as teammate
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleResolveRoleConflict(item.matchId, item.playerName, 'opponent')}
+                                            className="px-2.5 py-1.5 rounded-md text-label-xs font-bold bg-danger/12 text-danger hover:bg-danger/20"
+                                        >
+                                            Count as opponent
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleOpenMatchInSmartCaptures(item.matchId)}
+                                            className="px-2.5 py-1.5 rounded-md text-label-xs font-bold bg-info/15 text-info hover:bg-info/25"
+                                        >
+                                            Open in Smart Captures
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
                 {possibleMergeGroups.length === 0 ? (
                     <div className="px-1 text-label-xs text-md-sys-on-surface/50">
                         No merge candidates found
@@ -1280,7 +1528,7 @@ const PlayerHub: React.FC = () => {
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="min-w-0">
                                                 <div className="text-label-sm font-semibold text-warning truncate">
-                                                    Merge into {group.canonicalName}
+                                                    Merge into {group.canonicalDisplayName}
                                                 </div>
                                                 <div className="text-label-xs text-md-sys-on-surface/58">
                                                     Highest similarity: {Math.round(group.score)}%
@@ -1292,14 +1540,14 @@ const PlayerHub: React.FC = () => {
                                         </div>
                                         <div className="flex flex-wrap gap-1.5">
                                             <span className="px-2 py-1 rounded-pill bg-warning text-ink-strong text-label-xs font-bold">
-                                                Keep {group.canonicalName}
+                                                Keep {group.canonicalDisplayName}
                                             </span>
                                             {group.variants.map((variant) => (
                                                 <span
                                                     key={`${group.canonicalName}-${variant.name}`}
                                                     className="px-2 py-1 rounded-pill bg-md-sys-on-surface/8 text-label-xs font-semibold text-md-sys-on-surface/72"
                                                 >
-                                                    {variant.name} ({Math.round(variant.score)}%)
+                                                    {variant.displayName} ({Math.round(variant.score)}%)
                                                 </span>
                                             ))}
                                         </div>
@@ -1308,7 +1556,7 @@ const PlayerHub: React.FC = () => {
                                                 type="button"
                                                 onClick={() => handleMergeSuggestionGroup(group)}
                                                 className="flex-1 h-8 rounded-md text-label-xs font-bold bg-warning text-ink-strong hover:brightness-95"
-                                                aria-label={`Merge possible roster variants into ${group.canonicalName}`}
+                                                aria-label={`Merge possible roster variants into ${group.canonicalDisplayName}`}
                                             >
                                                 Merge
                                             </button>
@@ -1316,7 +1564,7 @@ const PlayerHub: React.FC = () => {
                                                 type="button"
                                                 onClick={() => handleDismissMergeSuggestionGroup(group)}
                                                 className="flex-1 h-8 rounded-md text-label-xs font-bold bg-md-sys-on-surface/10 text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/15"
-                                                aria-label={`Dismiss possible merge suggestions for ${group.canonicalName}`}
+                                                aria-label={`Dismiss possible merge suggestions for ${group.canonicalDisplayName}`}
                                             >
                                                 Dismiss
                                             </button>
@@ -1544,7 +1792,7 @@ const PlayerHub: React.FC = () => {
                                 : 'text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'
                                 }`}
                         >
-                            OCR Work {pendingRosterCandidates.length > 0 ? `(${pendingRosterCandidates.length})` : ''}
+                            OCR Work {ocrWorkbenchCount > 0 ? `(${ocrWorkbenchCount})` : ''}
                         </button>
                         <button
                             type="button"
@@ -1698,7 +1946,6 @@ const PlayerHub: React.FC = () => {
                                         key={pilot.name}
                                         onClick={() => {
                                             setSelectedPilot(pilot.name);
-                                            setShowFullProfile(false);
                                         }}
                                         className={`player-list-item w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-3 transition-all group ${selectedPilot === pilot.name
                                             ? 'bg-md-sys-primary/10 border border-md-sys-primary/20 text-md-sys-on-surface'
@@ -2127,6 +2374,71 @@ const PlayerHub: React.FC = () => {
                                     </div>
                                 )}
                             </div>
+                        </div>
+
+                        <div className="md3-card mg-surface shadow-lg p-4">
+                            <div className="flex items-center justify-between gap-3 mb-3">
+                                <div>
+                                    <div className="text-label-sm font-semibold uppercase tracking-wide text-md-sys-on-surface/60">
+                                        Encounter Matches
+                                    </div>
+                                    <div className="mt-1 text-label-xs text-md-sys-on-surface/45">
+                                        Click any match to open it in Smart Captures.
+                                    </div>
+                                </div>
+                                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">
+                                    {selectedEncounterMatches.length} match{selectedEncounterMatches.length === 1 ? '' : 'es'}
+                                </div>
+                            </div>
+                            {selectedEncounterMatches.length === 0 ? (
+                                <div className="rounded-xl border border-md-sys-outline/12 bg-md-sys-on-surface/[0.04] px-3 py-3 text-label-sm text-md-sys-on-surface/45">
+                                    No saved encounters for this player yet.
+                                </div>
+                            ) : (
+                                <div className="max-h-72 overflow-y-auto custom-scrollbar pr-1 flex flex-col gap-2">
+                                    {selectedEncounterMatches.map((match) => (
+                                        <button
+                                            key={`encounter-match-${match.id}`}
+                                            type="button"
+                                            onClick={() => handleOpenMatchInSmartCaptures(match.id)}
+                                            aria-label={`Open match #${match.id} in Smart Captures`}
+                                            className="group w-full rounded-xl border border-md-sys-outline/12 bg-md-sys-on-surface/[0.04] px-3 py-2.5 text-left transition-colors hover:bg-md-sys-on-surface/[0.07]"
+                                        >
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="min-w-0">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <span className="text-label-sm font-bold text-md-sys-on-surface">
+                                                            {match.label}
+                                                        </span>
+                                                        <span className={`px-2 py-0.5 rounded-pill text-label-xs font-bold uppercase tracking-wide ${match.result === 'Win'
+                                                            ? 'bg-success/12 text-success border border-success/20'
+                                                            : match.result === 'Loss'
+                                                                ? 'bg-danger/12 text-danger border border-danger/20'
+                                                                : 'bg-warning-soft/40 text-warning border border-warning-soft'
+                                                            }`}>
+                                                            {match.result}
+                                                        </span>
+                                                        <span className="px-2 py-0.5 rounded-pill text-label-xs font-bold uppercase tracking-wide bg-md-sys-primary/10 text-md-sys-primary border border-md-sys-primary/15">
+                                                            {match.roleLabel}
+                                                        </span>
+                                                    </div>
+                                                    <div className="mt-1 text-label-sm text-md-sys-on-surface/65 truncate">
+                                                        {match.displayTimestamp}
+                                                    </div>
+                                                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-label-xs text-md-sys-on-surface/45">
+                                                        <span style={{ color: getShipColor(match.shipLabel) }}>{match.shipLabel}</span>
+                                                        <span>{match.relativeTimestamp}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="shrink-0 flex items-center gap-1 text-label-xs font-bold uppercase tracking-wide text-md-sys-primary group-hover:text-md-sys-primary/80">
+                                                    Smart Captures
+                                                    <ChevronRight size={12} />
+                                                </div>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         {showFullProfile && (

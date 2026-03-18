@@ -60,6 +60,7 @@ const bundleMatchArtifacts = vi.fn();
 const appStoreState = {
     ocrMode: 'local',
     ocrRegions: undefined,
+    wizardCloseOnOcrApply: false,
     pendingMatchData: null as any,
     matches: [] as any[],
     setPendingMatchData: setPendingMatchDataFromStore,
@@ -140,6 +141,7 @@ describe('Wizard', () => {
         gameData.sessionTeams = {};
         gameData.sessionShipTypes = {};
         uiState.showWizard = null;
+        appStoreState.wizardCloseOnOcrApply = false;
         appStoreState.pendingMatchData = null;
         appStoreState.matches = [];
         vi.clearAllMocks();
@@ -674,7 +676,7 @@ describe('Wizard', () => {
         expect(screen.queryByTestId('wizard-ocr-processing-overlay')).toBeNull();
     });
 
-    it('returns to the result tab after embedded OCR save-and-apply instead of closing the wizard', async () => {
+    it('returns to the result tab after embedded OCR save-and-apply when close-on-apply is disabled', async () => {
         const { Wizard } = await import('./Wizard');
         gameData.pendingMatchData = {
             id: 915,
@@ -719,6 +721,57 @@ describe('Wizard', () => {
         expect(uiState.setShowWizard).not.toHaveBeenCalledWith(null);
         expect(gameData.updateMatch).toHaveBeenCalledWith(expect.objectContaining({
             id: 915,
+            ocrState: 'saved',
+        }));
+    });
+
+    it('closes the wizard after embedded OCR save-and-apply when smart-captures close-on-apply is enabled', async () => {
+        const { Wizard } = await import('./Wizard');
+        gameData.pendingMatchData = {
+            id: 916,
+            loadout: {
+                hero: 'Adrian',
+                ship: 'Hunter',
+                weapons: [],
+                equipment: [],
+            },
+            kills: { 'AI Legion': 0 },
+            ocrState: 'reviewing',
+        };
+        appStoreState.pendingMatchData = {
+            ...gameData.pendingMatchData,
+            result: 'Win',
+        };
+        appStoreState.matches = [{
+            id: 916,
+            timestamp: 1_700_000_000_000,
+            date: '1/1/2024',
+            mode: 'Artifact Brawl',
+            player: 'TestPilot',
+            teammates: [],
+            opponents: [],
+            hero: 'Adrian',
+            ship: 'Hunter',
+            reachModifiers: [],
+            kills: { 'AI Legion': 0 },
+            result: 'Win',
+            subType: 'Combat',
+        }];
+        appStoreState.wizardCloseOnOcrApply = true;
+        uiState.showWizard = 'Win';
+
+        const { rerender } = render(<Wizard />);
+        fireEvent.click(screen.getByRole('button', { name: /ocr review/i }));
+        fireEvent.click(screen.getByRole('button', { name: /save and apply/i }));
+
+        await waitFor(() => {
+            expect(uiState.setShowWizard).toHaveBeenCalledWith(null);
+        });
+        rerender(<Wizard />);
+
+        expect(screen.queryByRole('button', { name: /save and apply/i })).not.toBeInTheDocument();
+        expect(gameData.updateMatch).toHaveBeenCalledWith(expect.objectContaining({
+            id: 916,
             ocrState: 'saved',
         }));
     });

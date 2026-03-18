@@ -34,4 +34,22 @@ describe('rosterMergeSuggestions', () => {
 
     expect(groups).toEqual([]);
   });
+
+  it('derives readable display labels without changing raw merge targets', () => {
+    const groups = buildRosterMergeSuggestionGroups({
+      pilotRegistry: ['🛸 Ace Pilot', 'Ace Pliot', '| |'],
+      autoMergeThresholdPct: 83,
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].canonicalName).toBe('🛸 Ace Pilot');
+    expect(groups[0].canonicalDisplayName).toBe('Ace Pilot');
+    expect(groups[0].variants).toEqual([
+      expect.objectContaining({
+        name: 'Ace Pliot',
+        displayName: 'Ace Pliot',
+      }),
+    ]);
+    expect(groups[0].pairKeys).toEqual(['ace pilot::ace pliot']);
+  });
 });

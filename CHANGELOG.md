@@ -1,5 +1,14 @@
 # Changelog
 
+## [3.3.3] - 2026-03-17
+
+### Changed
+- Release metadata, bundled changelog content, and installer outputs now report version `3.3.3`
+
+### Fixed
+- Smart Captures Analyze and Re-analyze now hydrate a populated wizard draft instead of stopping at an empty review state
+- The simulator panel now uses the current telemetry action/context contract so analysis can complete cleanly
+
 ## [3.3.2] - 2026-03-17
 
 ### Changed

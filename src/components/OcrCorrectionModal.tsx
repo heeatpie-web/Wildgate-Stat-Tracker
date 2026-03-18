@@ -51,6 +51,7 @@ interface OcrCorrectionModalProps {
     onRequestRerunOcr?: () => void;
     rerunOcrDisabled?: boolean;
     isRerunningOcr?: boolean;
+    autoAcceptOnSaveAndApply?: boolean;
 }
 
 interface DetectedPlayer {
@@ -93,6 +94,7 @@ interface DropdownAnchor {
 
 interface SubmitCorrectionsOptions {
     closeAfterApply?: boolean;
+    autoAcceptHighConfidence?: boolean;
     correctionOverrides?: Record<string, string>;
 }
 
@@ -450,6 +452,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     onRequestRerunOcr,
     rerunOcrDisabled = false,
     isRerunningOcr = false,
+    autoAcceptOnSaveAndApply = false,
 }) => {
     const {
         sessionTeams,
@@ -944,9 +947,28 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         setModifierDraft((prev) => prev.filter((entry) => normalizeModifierKey(entry) !== targetKey));
     };
 
+    const buildAutoAcceptCorrectionOverrides = (threshold: number): Record<string, string> => {
+        const eligible = getHighConfidenceBatchEligible(detectedPlayers, corrections, ignored, threshold);
+        if (eligible.length === 0) return {};
+
+        return eligible.reduce<Record<string, string>>((nextCorrections, player) => {
+            const priorCorrection = ocrCorrections?.[player.name];
+            const correctedName = normalizeSubmittedName(priorCorrection?.correctedTo || player.name);
+            if (!correctedName) return nextCorrections;
+            nextCorrections[player.name] = correctedName;
+            return nextCorrections;
+        }, {});
+    };
+
     const handleSubmitCorrections = (options?: SubmitCorrectionsOptions) => {
         const closeAfterApply = options?.closeAfterApply ?? false;
-        const correctionOverrides = options?.correctionOverrides || {};
+        const autoAcceptOverrides = options?.autoAcceptHighConfidence
+            ? buildAutoAcceptCorrectionOverrides(ocrBatchAcceptThreshold)
+            : {};
+        const correctionOverrides = {
+            ...autoAcceptOverrides,
+            ...(options?.correctionOverrides || {}),
+        };
         let corrected = 0;
         let added = 0;
         const correctionContext = embedded ? 'matchstats' : 'lobby';
@@ -968,6 +990,12 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
             if (ignored.has(ocrName)) return;
             const normalizedOcrName = String(ocrName || '').trim().toLowerCase();
             const normalizedCorrectedName = String(correctedName || '').trim().toLowerCase();
+            const correctedKey = normalizeNameKey(correctedName);
+
+            if (correctedKey && !registryKeys.has(correctedKey)) {
+                addToRegistry(correctedName, { origin: 'ocr', status: 'confirmed' });
+                registryKeys.add(correctedKey);
+            }
 
             recordCalibrationSample?.({
                 predictedConfidence: confidenceByName.get(ocrName) ?? 0,
@@ -978,11 +1006,6 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
             });
 
             if (ocrName !== correctedName) {
-                const correctedKey = normalizeNameKey(correctedName);
-                if (correctedKey && !registryKeys.has(correctedKey)) {
-                    addToRegistry(correctedName, { origin: 'ocr', status: 'confirmed' });
-                    registryKeys.add(correctedKey);
-                }
                 // Record correction for future matching
                 recordOcrAliasCorrection?.(ocrName, correctedName, {
                     source: 'review_modal',
@@ -1190,17 +1213,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     };
 
     const applyBatchAccept = (threshold: number): Record<string, string> => {
-        const eligible = getHighConfidenceBatchEligible(detectedPlayers, corrections, ignored, threshold);
-        if (eligible.length === 0) return {};
-
-        const nextCorrections: Record<string, string> = {};
-        eligible.forEach((player) => {
-            const priorCorrection = ocrCorrections?.[player.name];
-            const correctedName = normalizeSubmittedName(priorCorrection?.correctedTo || player.name);
-            if (!correctedName) return;
-            nextCorrections[player.name] = correctedName;
-        });
-
+        const nextCorrections = buildAutoAcceptCorrectionOverrides(threshold);
         const appliedEntries = Object.entries(nextCorrections);
         if (appliedEntries.length === 0) return {};
 
@@ -1280,7 +1293,10 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         onClose();
     };
     const handleSaveAndClose = () => {
-        handleSubmitCorrections({ closeAfterApply: true });
+        handleSubmitCorrections({
+            closeAfterApply: true,
+            autoAcceptHighConfidence: autoAcceptOnSaveAndApply,
+        });
     };
     const embeddedDiscardActionRef = useRef<() => void>(() => {});
     const embeddedSaveActionRef = useRef<() => void>(() => {});
@@ -1487,14 +1503,12 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                             {isRerunningOcr ? 'Re-running...' : 'Re-run OCR'}
                                         </button>
                                         {isRerunningOcr && (
-                                            <div className="w-full overflow-hidden rounded-full bg-md-sys-surface-container-highest h-1">
-                                                <div className="h-full w-2/5 bg-md-sys-primary rounded-full animate-progress-indeterminate" />
-                                            </div>
+                                            <div className="wg-indeterminate-bar mt-0.5" aria-hidden="true" />
                                         )}
                                     </div>
                                 )}
                             </div>
-                            <div className="rounded-3xl border border-md-sys-primary/10 bg-md-sys-surface-container-low p-4 space-y-3">
+                            <div className="ocr-batch-threshold-surface rounded-3xl border border-md-sys-primary/10 bg-md-sys-surface-container-low p-4 space-y-3">
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0">
                                         <div className="text-label-xs font-bold uppercase tracking-[0.16em] text-md-sys-on-surface/54">
@@ -1504,7 +1518,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                             Players at or above this confidence are treated as strong matches.
                                         </div>
                                     </div>
-                                    <div className="shrink-0 rounded-2xl border border-md-sys-primary/16 bg-md-sys-surface-container-high px-3 py-2 text-right">
+                                    <div className="ocr-batch-threshold-current shrink-0 rounded-2xl border border-md-sys-primary/16 bg-md-sys-surface-container-high px-3 py-2 text-right">
                                         <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-md-sys-on-surface/48">
                                             Current
                                         </div>
@@ -1556,7 +1570,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                     type="button"
                                     onClick={() => setPendingBatchAction('accept')}
                                     disabled={highEligibleCount === 0}
-                                    className="rounded-2xl border border-success/18 bg-success-soft px-4 py-3 text-success disabled:opacity-disabled flex flex-col items-center gap-0.5 transition-colors hover:border-success/28"
+                                    className="ocr-batch-action-btn ocr-batch-action-btn--accept rounded-2xl border border-success/18 bg-success-soft px-4 py-3 text-success disabled:opacity-disabled flex flex-col items-center gap-0.5 transition-colors hover:border-success/28"
                                 >
                                     <span className="text-label-sm font-bold">Accept {highEligibleCount}</span>
                                     <span className="text-[10px] opacity-70 font-medium">At or above {ocrBatchAcceptThreshold}% confidence</span>
@@ -1565,7 +1579,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                     type="button"
                                     onClick={() => setPendingBatchAction('ignore')}
                                     disabled={lowEligibleCount === 0}
-                                    className="rounded-2xl border border-warning/18 bg-warning-soft px-4 py-3 text-warning disabled:opacity-disabled flex flex-col items-center gap-0.5 transition-colors hover:border-warning/28"
+                                    className="ocr-batch-action-btn ocr-batch-action-btn--ignore rounded-2xl border border-warning/18 bg-warning-soft px-4 py-3 text-warning disabled:opacity-disabled flex flex-col items-center gap-0.5 transition-colors hover:border-warning/28"
                                 >
                                     <span className="text-label-sm font-bold">Ignore {lowEligibleCount}</span>
                                     <span className="text-[10px] opacity-70 font-medium">Below {ocrBatchAcceptThreshold}% confidence</span>

@@ -853,19 +853,15 @@ export const calculatePerformanceMomentum = (matches: Match[], windowSize = 10):
 
     // Compute normalization baselines
     const allKills = sorted.map(m => Object.values(m.kills || {}).reduce((a, b) => a + b, 0));
-    const allDamage = sorted.map(m => Math.min(Number(m.damageTaken) || 0, 15000));
     const maxKills = Math.max(1, ...allKills);
-    // Cap maxDamage at 10000 to prevent single outlier from killing normalization
-    const maxDamage = Math.min(10000, Math.max(1, ...allDamage));
 
     const timeline = sorted.map((_, i) => {
         const start = Math.max(0, i - windowSize + 1);
         const window = sorted.slice(start, i + 1);
         const winRate = window.filter(m => m.result === 'Win').length / window.length;
         const avgKillsNorm = (window.reduce((s, m) => s + Object.values(m.kills || {}).reduce((a, b) => a + b, 0), 0) / window.length) / maxKills;
-        const avgDamageNorm = (window.reduce((s, m) => s + (Number(m.damageTaken) || 0), 0) / window.length) / maxDamage;
 
-        const score = Math.round((winRate * 40) + (avgKillsNorm * 30) + (avgDamageNorm * 30));
+        const score = Math.round((((winRate * 4) + (avgKillsNorm * 3)) / 7) * 100);
 
         return { index: i, score: Math.min(100, Math.max(0, score)), timestamp: sorted[i].timestamp };
     });

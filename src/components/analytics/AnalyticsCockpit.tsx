@@ -364,6 +364,39 @@ export const AnalyticsCockpit: React.FC<AnalyticsCockpitProps> = ({
                 </div>
             </section>
 
+            <section className="rounded-card border border-md-sys-outline/12 bg-md-sys-surface p-4 md:p-5">
+                <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-md-sys-surface-container-high flex items-center justify-center text-md-sys-primary">
+                        <ShieldPlus size={18} />
+                    </div>
+                    <div className="min-w-0">
+                        <div className="text-label-xs font-bold uppercase tracking-widest text-md-sys-on-surface/42">
+                            Suggested next drill-down
+                        </div>
+                        <div className="mt-1 text-title font-black tracking-tight text-md-sys-on-surface">
+                            {bestHazard?.name || cockpitModel.entities.ships[0]?.name || strongestLoadoutSignal?.name || 'Capture more matches'}
+                        </div>
+                        <div className="mt-2 text-body text-md-sys-on-surface/58">
+                            Use the focus cards and quick filters below to keep moving through related hazards, people, and loadouts without losing your current scope.
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+                {focusCards.map((card) => (
+                    <FocusCard
+                        key={card.key}
+                        icon={card.icon}
+                        label={card.label}
+                        headline={card.headline}
+                        supporting={card.supporting}
+                        accent={card.accent}
+                        onClick={card.action}
+                    />
+                ))}
+            </section>
+
             <ExplorerSection
                 title="Next moves"
                 subtitle="Jump straight into the detailed views when you want a fuller chart-heavy breakdown."
@@ -392,33 +425,7 @@ export const AnalyticsCockpit: React.FC<AnalyticsCockpitProps> = ({
                         </button>
                     ))}
                 </div>
-                <div className="px-1 py-1">
-                    <div className="flex items-center gap-2 text-label-sm font-bold uppercase tracking-wide text-md-sys-on-surface/50">
-                        <ShieldPlus size={14} />
-                        Suggested next drill-down
-                    </div>
-                    <div className="mt-2 text-body font-semibold text-md-sys-on-surface">
-                        {bestHazard?.name || cockpitModel.entities.ships[0]?.name || strongestLoadoutSignal?.name || 'Capture more matches'}
-                    </div>
-                    <div className="mt-1 text-label-sm text-md-sys-on-surface/58">
-                        Use the focus cards below to keep moving through related hazards, people, and loadouts without losing your current scope.
-                    </div>
-                </div>
             </ExplorerSection>
-
-            <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-                {focusCards.map((card) => (
-                    <FocusCard
-                        key={card.key}
-                        icon={card.icon}
-                        label={card.label}
-                        headline={card.headline}
-                        supporting={card.supporting}
-                        accent={card.accent}
-                        onClick={card.action}
-                    />
-                ))}
-            </section>
 
             <section className="grid gap-4 xl:grid-cols-2">
                 <ExplorerSection

@@ -1,7 +1,12 @@
 import { getElectronAPI } from './electronAPI';
 import type { Match, UidMappingsContract } from '../types';
 import type { PendingReview, RosterEntryMeta, TimelineEvent } from '../store/slices/createDataSlice';
-import type { OcrCorrection, PlayerProfile, TeamIdentityCorrection } from '../store/slices/createMappingSlice';
+import type {
+  OcrCorrection,
+  PlayerEncounterRoleCorrection,
+  PlayerProfile,
+  TeamIdentityCorrection,
+} from '../store/slices/createMappingSlice';
 import type { OcrAliasModel, OcrLearningEvent, OcrLearningQueueItem } from './ocrAliasEngine';
 import { normalizeSharedUidMappings } from '../services/mappingContract';
 import Logger from './logger';
@@ -48,6 +53,7 @@ export interface StorageData {
   playerIdMap?: StringMap;
   ocrCorrections?: Record<string, OcrCorrection>;
   teamIdentityCorrections?: Record<string, TeamIdentityCorrection>;
+  playerEncounterRoleCorrections?: Record<string, PlayerEncounterRoleCorrection>;
   ocrAliasModel?: OcrAliasModel;
   ocrLearningEvents?: OcrLearningEvent[];
   ocrLearningQueue?: OcrLearningQueueItem[];
@@ -173,6 +179,16 @@ const toTeamIdentityCorrections = (value: unknown): Record<string, TeamIdentityC
   return corrections;
 };
 
+const toPlayerEncounterRoleCorrections = (value: unknown): Record<string, PlayerEncounterRoleCorrection> => {
+  if (!isRecord(value)) return {};
+  const corrections: Record<string, PlayerEncounterRoleCorrection> = {};
+  Object.entries(value).forEach(([key, raw]) => {
+    if (!isRecord(raw)) return;
+    corrections[key] = raw as unknown as PlayerEncounterRoleCorrection;
+  });
+  return corrections;
+};
+
 const toNumberOr = (value: unknown, fallback: number) => {
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
@@ -222,6 +238,7 @@ const createDefaultStorageData = (): StorageData => ({
   rosterEntryMeta: {},
   favorites: [],
   pilotNotes: {},
+  playerEncounterRoleCorrections: {},
   pendingReviews: [],
   dismissedRosterMergePairKeys: [],
   dismissedRosterCandidateKeys: [],
@@ -272,6 +289,7 @@ const coerceStorageData = (value: unknown): StorageData | null => {
     playerIdMap: toStringMap(value.playerIdMap),
     ocrCorrections: toOcrCorrections(value.ocrCorrections),
     teamIdentityCorrections: toTeamIdentityCorrections(value.teamIdentityCorrections),
+    playerEncounterRoleCorrections: toPlayerEncounterRoleCorrections(value.playerEncounterRoleCorrections),
     ocrAliasModel: isRecord(value.ocrAliasModel) ? value.ocrAliasModel as unknown as OcrAliasModel : undefined,
     ocrLearningEvents: Array.isArray(value.ocrLearningEvents)
       ? value.ocrLearningEvents.filter((item): item is OcrLearningEvent => isRecord(item))

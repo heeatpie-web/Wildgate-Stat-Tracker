@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.3.3": [
+    "Release: Version 3.3.3 rolls in the Smart Captures OCR handoff fix, simulator telemetry cleanup, and refreshed release metadata.",
+    "Fix: Smart Captures Analyze and Re-analyze now open a populated wizard draft instead of stalling on an empty review state.",
+    "Fix: The simulator panel now matches the current telemetry action/context contract so analysis completes without type mismatches."
+  ],
   "v3.3.2": [
     "Release: Version 3.3.2 updates the app, installer, and bundled release metadata to the new release number.",
     "Reliability: Packaged builds now ship the UID seed as an installer resource so prospectors, ships, weapons, equipment, and perks can be resolved on first launch without relying on existing user data.",

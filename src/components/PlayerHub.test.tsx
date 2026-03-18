@@ -5,6 +5,7 @@ import '@testing-library/jest-dom/vitest';
 import type { Match } from '../types';
 import PlayerHub from './PlayerHub';
 import { buildRosterMergeSuggestionGroups } from '../utils/rosterMergeSuggestions';
+import { buildPlayerEncounterRoleCorrectionKey } from '../utils/playerEncounterRoles';
 
 const baseMatches: Match[] = [
     {
@@ -85,6 +86,7 @@ const gameDataState = {
 
 const uiState = {
     setActiveView: vi.fn(),
+    setSmartCapturesFocusMatchId: vi.fn(),
     setToast: vi.fn(),
     setShowSettings: vi.fn(),
 };
@@ -93,6 +95,13 @@ const appStoreState = {
     knownMappings: {},
     uidMappings: { players: {}, ships: {}, weapons: {}, equipment: {}, perks: {} },
     ocrCorrections: {},
+    playerEncounterRoleCorrections: {} as Record<string, {
+        matchId: number;
+        playerKey: string;
+        playerName: string;
+        role: 'teammate' | 'opponent';
+        updatedAt: number;
+    }>,
     ocrAliasModel: {
         version: 1 as const,
         entries: {
@@ -112,6 +121,23 @@ const appStoreState = {
     },
     recordOcrAliasCorrection: vi.fn(),
     removeOcrAliasCorrection: vi.fn(),
+    recordPlayerEncounterRoleCorrection: vi.fn((matchId: number, playerName: string, role: 'teammate' | 'opponent') => {
+        const key = buildPlayerEncounterRoleCorrectionKey(matchId, playerName);
+        appStoreState.playerEncounterRoleCorrections = {
+            ...appStoreState.playerEncounterRoleCorrections,
+            [key]: {
+                matchId,
+                playerKey: key.split(':')[1] || '',
+                playerName,
+                role,
+                updatedAt: Date.now(),
+            },
+        };
+    }),
+    getPlayerEncounterRoleCorrection: vi.fn((matchId: number, playerName: string) => {
+        const key = buildPlayerEncounterRoleCorrectionKey(matchId, playerName);
+        return appStoreState.playerEncounterRoleCorrections[key]?.role || null;
+    }),
     ocrAutoApplyMinScore: 0.83,
 };
 
@@ -185,6 +211,7 @@ describe('PlayerHub', () => {
         appStoreState.knownMappings = {};
         appStoreState.uidMappings = { players: {}, ships: {}, weapons: {}, equipment: {}, perks: {} };
         appStoreState.ocrCorrections = {};
+        appStoreState.playerEncounterRoleCorrections = {};
         appStoreState.ocrAliasModel = {
             version: 1 as const,
             entries: {
@@ -231,7 +258,7 @@ describe('PlayerHub', () => {
 
         render(<PlayerHub />);
 
-        fireEvent.click(screen.getAllByRole('button', { name: /ocr work \(1\)/i })[0]);
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
         fireEvent.click(screen.getAllByRole('button', { name: /merge into pilotone \(91%\)/i })[0]);
 
         expect(appStoreState.recordOcrAliasCorrection).toHaveBeenCalledWith('PliotOne', 'PilotOne', expect.any(Object));
@@ -623,7 +650,168 @@ describe('PlayerHub', () => {
         expect(uiState.setActiveView).toHaveBeenCalledWith('analytics');
     });
 
-    it('counts distinct matches once even if a player appears on both sides of the same match', () => {
+    it('includes matches where the selected pilot was the recorded player in the full analytics profile scope', () => {
+        gameDataState.pilotRegistry = ['Wingman'];
+        gameDataState.pilotAliases = { Wingman: ['WingmanAlias'] };
+        gameDataState.playerProfiles = {
+            Wingman: {
+                id: 'Wingman',
+                sightings: 3,
+                firstSeen: 1_700_000_000_000,
+                lastSeen: 1_700_200_000_000,
+                teamsObserved: {},
+                playedWith: { PilotOne: 2 },
+                playedAgainst: { PilotOne: 1 },
+                shipsObserved: { Hunter: 2, Scout: 1 },
+                ocrSightings: 1,
+                manualSightings: 2,
+                lastOcrConfidence: 87,
+            },
+        };
+        gameDataState.matches = [
+            {
+                id: 41,
+                timestamp: 1_700_000_000_000,
+                date: '2026-02-17',
+                mode: 'Artifact Brawl',
+                player: 'PilotOne',
+                teammates: ['Wingman'],
+                opponents: [],
+                hero: 'Hero',
+                ship: 'Hunter',
+                reachModifiers: [],
+                kills: {},
+                result: 'Win',
+                subType: 'Combat',
+            },
+            {
+                id: 42,
+                timestamp: 1_700_100_000_000,
+                date: '2026-02-18',
+                mode: 'Artifact Brawl',
+                player: 'WingmanAlias',
+                teammates: ['PilotOne'],
+                opponents: ['EnemyAce'],
+                hero: 'Hero',
+                ship: 'Scout',
+                reachModifiers: [],
+                kills: {},
+                result: 'Win',
+                subType: 'Combat',
+            },
+            {
+                id: 43,
+                timestamp: 1_700_200_000_000,
+                date: '2026-02-19',
+                mode: 'Artifact Brawl',
+                player: 'PilotOne',
+                teammates: [],
+                opponents: ['WingmanAlias'],
+                hero: 'Hero',
+                ship: 'Hunter',
+                reachModifiers: [],
+                kills: {},
+                result: 'Loss',
+                subType: 'Combat',
+            },
+        ];
+
+        render(<PlayerHub />);
+
+        fireEvent.click(screen.getByRole('button', { name: /wingman/i }));
+        fireEvent.click(screen.getByRole('button', { name: /open analytics profile/i }));
+
+        expect(gameDataState.setDrillDownTarget).toHaveBeenCalledWith({
+            name: 'Wingman',
+            type: 'Teammate',
+            matchIds: [41, 42, 43],
+            encounterScope: 'all',
+        });
+        expect(uiState.setActiveView).toHaveBeenCalledWith('analytics');
+    });
+
+    it('lists encounter matches in the player detail pane and opens a selected match in Smart Captures', () => {
+        gameDataState.pilotRegistry = ['Wingman'];
+        gameDataState.pilotAliases = { Wingman: ['WingmanAlias'] };
+        gameDataState.playerProfiles = {
+            Wingman: {
+                id: 'Wingman',
+                sightings: 2,
+                firstSeen: 1_700_000_000_000,
+                lastSeen: 1_700_100_000_000,
+                teamsObserved: {},
+                playedWith: { PilotOne: 1 },
+                playedAgainst: { PilotOne: 1 },
+                shipsObserved: { Hunter: 1, Scout: 1 },
+                ocrSightings: 1,
+                manualSightings: 1,
+                lastOcrConfidence: 87,
+            },
+        };
+        gameDataState.matches = [
+            {
+                id: 31,
+                timestamp: 1_700_000_000_000,
+                date: '2026-02-17',
+                mode: 'Artifact Brawl',
+                player: 'PilotOne',
+                teammates: ['Wingman'],
+                opponents: ['EnemyAce'],
+                hero: 'Hero',
+                ship: 'Hunter',
+                reachModifiers: [],
+                kills: {},
+                result: 'Win',
+                subType: 'Combat',
+            },
+            {
+                id: 32,
+                timestamp: 1_700_100_000_000,
+                date: '2026-02-18',
+                mode: 'Artifact Brawl',
+                player: 'PilotOne',
+                teammates: ['Ally'],
+                opponents: ['WingmanAlias'],
+                hero: 'Hero',
+                ship: 'Scout',
+                reachModifiers: [],
+                kills: {},
+                result: 'Loss',
+                subType: 'Combat',
+            },
+        ];
+
+        render(<PlayerHub />);
+
+        fireEvent.click(screen.getByRole('button', { name: /wingman/i }));
+
+        expect(screen.getByText(/encounter matches/i)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /open match #31 in smart captures/i })).toHaveTextContent('Teammate');
+        expect(screen.getByRole('button', { name: /open match #32 in smart captures/i })).toHaveTextContent('Opponent');
+
+        fireEvent.click(screen.getByRole('button', { name: /open match #32 in smart captures/i }));
+
+        expect(uiState.setSmartCapturesFocusMatchId).toHaveBeenCalledWith(32);
+        expect(uiState.setActiveView).toHaveBeenCalledWith('smart-captures');
+    });
+
+    it('preserves full-profile mode when selecting a different player from the left rail', () => {
+        render(<PlayerHub />);
+
+        fireEvent.click(screen.getByRole('button', { name: /pilotone/i }));
+        fireEvent.click(screen.getByRole('button', { name: /view full profile/i }));
+
+        expect(screen.getByRole('button', { name: /hide full profile/i })).toBeInTheDocument();
+        expect(screen.getByText('Pilot One Old')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /pilot0ne/i }));
+
+        expect(screen.getByRole('button', { name: /hide full profile/i })).toBeInTheDocument();
+        expect(screen.getByText('Possible Duplicates')).toBeInTheDocument();
+        expect(screen.queryByText('Pilot One Old')).toBeNull();
+    });
+
+    it('keeps same-player side conflicts out of role stats until reviewed, then applies the correction', () => {
         gameDataState.pilotRegistry = ['Wingman'];
         gameDataState.playerProfiles = {
             Wingman: {
@@ -658,13 +846,36 @@ describe('PlayerHub', () => {
             },
         ];
 
-        render(<PlayerHub />);
+        const { rerender } = render(<PlayerHub />);
 
         const playerButton = screen.getByRole('button', { name: /wingman/i });
         expect(playerButton).toHaveTextContent('1 encounter');
 
         fireEvent.click(playerButton);
+        fireEvent.click(screen.getByRole('button', { name: /view full profile/i }));
+
         expect(screen.getByText(/^1 encounters?$/i)).toBeInTheDocument();
+        expect(screen.getByText('No teammate data')).toBeInTheDocument();
+        expect(screen.getByText('No opponent data')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /open match #21 in smart captures/i })).toHaveTextContent('Needs review');
+
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
+
+        expect(screen.getAllByText('Role conflicts').length).toBeGreaterThan(0);
+        expect(screen.getAllByRole('button', { name: /count as teammate/i }).length).toBeGreaterThan(0);
+        expect(screen.getAllByRole('button', { name: /count as opponent/i }).length).toBeGreaterThan(0);
+
+        fireEvent.click(screen.getAllByRole('button', { name: /count as teammate/i })[0]);
+        expect(appStoreState.recordPlayerEncounterRoleCorrection).toHaveBeenCalledWith(21, 'Wingman', 'teammate');
+
+        rerender(<PlayerHub />);
+        fireEvent.click(screen.getAllByRole('button', { name: /^details$/i })[0]);
+        fireEvent.click(screen.getByRole('button', { name: /wingman/i }));
+
+        expect(screen.getByRole('button', { name: /hide full profile/i })).toBeInTheDocument();
+        expect(screen.queryByText('No teammate data')).toBeNull();
+        expect(screen.getByText(/1W \/ 0L/i)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /open match #21 in smart captures/i })).toHaveTextContent('Teammate');
     });
 
     it('shows a dismissible merge notification banner for the active merge', () => {
@@ -689,7 +900,7 @@ describe('PlayerHub', () => {
 
         render(<PlayerHub />);
 
-        fireEvent.click(screen.getAllByRole('button', { name: /^ocr work$/i })[0]);
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
 
         expect(screen.getAllByRole('button', { name: /collapse possible merges/i }).length).toBeGreaterThan(0);
         expect(screen.getAllByText(/keep ace pilot/i).length).toBeGreaterThan(0);
@@ -700,6 +911,23 @@ describe('PlayerHub', () => {
 
         fireEvent.click(screen.getAllByRole('button', { name: /dismiss possible merge suggestions for ace pilot/i })[0]);
         expect(gameDataState.dismissRosterMergeSuggestionPairs).toHaveBeenCalledWith(['ace pilot::ace squad']);
+    });
+
+    it('renders sanitized possible-merge labels while keeping raw merge targets', () => {
+        gameDataState.pilotRegistry = ['🛸 Ace Pilot', 'Ace Pliot'];
+
+        render(<PlayerHub />);
+
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
+
+        expect(screen.getAllByText(/merge into ace pilot/i).length).toBeGreaterThan(0);
+        expect(screen.getAllByText(/keep ace pilot/i).length).toBeGreaterThan(0);
+        expect(screen.getAllByText(/ace pliot/i).length).toBeGreaterThan(0);
+        expect(screen.queryByText(/merge into 🛸 ace pilot/i)).toBeNull();
+        expect(screen.queryByText(/keep 🛸 ace pilot/i)).toBeNull();
+
+        fireEvent.click(screen.getAllByRole('button', { name: /merge possible roster variants into ace pilot/i })[0]);
+        expect(gameDataState.mergePilots).toHaveBeenCalledWith('Ace Pliot', '🛸 Ace Pilot');
     });
 
     it('keeps OCR merge suggestions lazy in details mode and supports large-roster search with virtualization', async () => {
@@ -717,7 +945,7 @@ describe('PlayerHub', () => {
 
         expect(await screen.findByRole('button', { name: /pilot 399/i })).toBeInTheDocument();
 
-        fireEvent.click(screen.getAllByRole('button', { name: /^ocr work$/i })[0]);
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
 
         expect(mergeSuggestionsSpy).toHaveBeenCalled();
     });

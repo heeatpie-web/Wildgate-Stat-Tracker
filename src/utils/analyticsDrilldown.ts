@@ -8,6 +8,7 @@ import {
     getMatchShipWeapons,
     getMatchWeaponDimensions,
 } from '../components/patch/patchEntityCatalog';
+import { resolveEncounterRole, type EncounterRoleCorrection } from './playerEncounterRoles';
 
 export interface DrillDownRow {
     name: string;
@@ -90,6 +91,10 @@ export interface DrillDownModel {
     availableTabs: Array<'overview' | 'people' | 'hazards' | 'loadouts' | 'matches'>;
 }
 
+export interface DrillDownBuildOptions {
+    getPlayerEncounterRoleCorrection?: (matchId: number, playerName: string) => EncounterRoleCorrection | null;
+}
+
 const normalize = (value: unknown): string => String(value || '').trim().toLowerCase();
 const MIN_HAZARD_SAMPLE_SIZE = 3;
 
@@ -115,9 +120,48 @@ const getFriendlyNames = (match: Match): string[] => (
     Array.from(new Set((match.teammates || []).map((name) => String(name || '').trim()).filter(Boolean)))
 );
 
+const getFriendlyTargetNames = (match: Match): string[] => (
+    Array.from(new Set([
+        String(match.player || '').trim(),
+        ...getFriendlyNames(match),
+    ].filter(Boolean)))
+);
+
 const getOpponentNames = (match: Match): string[] => (
     Array.from(new Set((match.opponents || []).map((name) => String(name || '').trim()).filter(Boolean)))
 );
+
+const getPlayerEncounterOutcomeMatches = (
+    matches: Match[],
+    target: DrillDownTarget,
+    options?: DrillDownBuildOptions
+): Match[] => {
+    if (
+        target.encounterScope !== 'all'
+        || (target.type !== 'Teammate' && target.type !== 'Opponent')
+    ) {
+        return matches;
+    }
+
+    const targetName = normalize(target.name);
+    if (!targetName) return matches;
+
+    const selectedKeys = new Set([targetName]);
+    const roleMatches = matches.filter((match) => {
+        const correctedRole = options?.getPlayerEncounterRoleCorrection?.(Number(match.id), target.name) || null;
+        const resolvedRole = resolveEncounterRole({
+            selectedKeys,
+            friendlyKeys: new Set(getFriendlyTargetNames(match).map((name) => normalize(name)).filter(Boolean)),
+            opponentKeys: new Set(getOpponentNames(match).map((name) => normalize(name)).filter(Boolean)),
+            correctedRole,
+        });
+        return target.type === 'Teammate'
+            ? resolvedRole === 'teammate'
+            : resolvedRole === 'opponent';
+    });
+
+    return roleMatches.length > 0 ? roleMatches : matches;
+};
 
 const getKillTotal = (match: Match): number => (
     Object.values(match.kills || {}).reduce((sum, value) => sum + (Number(value) || 0), 0)
@@ -177,7 +221,7 @@ const matchesTarget = (match: Match, target: DrillDownTarget): boolean => {
     if (target.type === 'Weapon') return getMatchWeaponDimensions(match).some((weapon) => normalize(weapon) === targetName);
     if (target.type === 'Equipment') return getMatchEquipment(match).some((equipment) => normalize(equipment) === targetName);
     if (target.type === 'Perk') return getMatchPerks(match).some((perk) => normalize(perk) === targetName);
-    if (target.type === 'Teammate') return getFriendlyNames(match).some((name) => normalize(name) === targetName);
+    if (target.type === 'Teammate') return getFriendlyTargetNames(match).some((name) => normalize(name) === targetName);
     if (target.type === 'Opponent') return getOpponentNames(match).some((name) => normalize(name) === targetName);
     if (target.type === 'Artifact') return normalize(extractArtifactName(match)) === targetName;
     if (target.type === 'Modifier') return getHazardModifiers(match).some((modifier) => normalize(modifier) === targetName);
@@ -306,13 +350,15 @@ export const getDrillDownMatches = (
 export const buildDrillDownModel = (
     matches: Match[],
     target: DrillDownTarget,
-    activeMode?: Match['mode']
+    activeMode?: Match['mode'],
+    options?: DrillDownBuildOptions
 ): DrillDownModel => {
     const targetMatches = getDrillDownMatches(matches, target, activeMode);
-    const wins = targetMatches.filter((match) => match.result === 'Win').length;
-    const losses = targetMatches.filter((match) => match.result === 'Loss').length;
-    const winRate = targetMatches.length > 0 ? Math.round((wins / targetMatches.length) * 100) : 0;
-    const recentMatches = targetMatches.slice(-10);
+    const outcomeMatches = getPlayerEncounterOutcomeMatches(targetMatches, target, options);
+    const wins = outcomeMatches.filter((match) => match.result === 'Win').length;
+    const losses = outcomeMatches.filter((match) => match.result === 'Loss').length;
+    const winRate = outcomeMatches.length > 0 ? Math.round((wins / outcomeMatches.length) * 100) : 0;
+    const recentMatches = outcomeMatches.slice(-10);
     const recentWins = recentMatches.filter((match) => match.result === 'Win').length;
     const recentWinRate = recentMatches.length > 0 ? Math.round((recentWins / recentMatches.length) * 100) : 0;
     const placementValues = targetMatches
@@ -386,8 +432,8 @@ export const buildDrillDownModel = (
         topWeapon: weapons[0]?.name || null,
     };
 
-    const trend = targetMatches.map((match, index) => {
-        const window = targetMatches.slice(0, index + 1);
+    const trend = outcomeMatches.map((match, index) => {
+        const window = outcomeMatches.slice(0, index + 1);
         const windowWins = window.filter((entry) => entry.result === 'Win').length;
         return {
             index: index + 1,

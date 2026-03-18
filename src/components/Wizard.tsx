@@ -102,6 +102,7 @@ export const Wizard: React.FC = () => {
     const { processFinalSubmission, saveResultDraft, discardTelemetryDraft, submitting } = useMatchSubmission();
     const ocrMode = useAppStore((state) => state.ocrMode);
     const ocrRegions = useAppStore((state) => state.ocrRegions);
+    const wizardCloseOnOcrApply = useAppStore((state) => state.wizardCloseOnOcrApply);
     const setPendingDraftData = useAppStore((state) => state.setPendingMatchData);
     const pendingStoreMatch = useAppStore((state) => {
         const pendingId = Number(state.pendingMatchData?.id || 0);
@@ -1410,6 +1411,7 @@ export const Wizard: React.FC = () => {
                                     isOpen={true}
                                     embedded={true}
                                     hideFooterActions={true}
+                                    autoAcceptOnSaveAndApply={wizardCloseOnOcrApply}
                                     onEmbeddedFooterActionsChange={setEmbeddedOcrFooterActions}
                                     onClose={() => React.startTransition(() => setActiveTab('result'))}
                                     onRequestRerunOcr={() => {
@@ -1435,6 +1437,10 @@ export const Wizard: React.FC = () => {
                                                 } as Match);
                                             }
                                         }
+                                        if (wizardCloseOnOcrApply) {
+                                            setShowWizard(null);
+                                            return;
+                                        }
                                         React.startTransition(() => setActiveTab('result'));
                                     }}
                                     screenshots={deferredWizardReviewScreenshots}
@@ -1453,9 +1459,7 @@ export const Wizard: React.FC = () => {
                                         <div className="mt-2 text-label-sm text-md-sys-on-surface/65">
                                             OCR is still running in the background. Review fields will unlock automatically when processing completes.
                                         </div>
-                                        <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-md-sys-outline/20">
-                                            <div className="h-full w-2/5 rounded-full bg-md-sys-primary animate-progress-indeterminate" />
-                                        </div>
+                                        <div className="wg-indeterminate-bar mt-3" aria-hidden="true" />
                                     </div>
                                 </div>
                             )}

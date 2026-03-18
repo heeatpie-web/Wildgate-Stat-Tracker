@@ -239,4 +239,18 @@ describe('calculatePerformanceMomentum', () => {
         const result = calculatePerformanceMomentum(matches, 5);
         expect(result.timeline).toHaveLength(15);
     });
+
+    it('ignores damage taken when calculating momentum', () => {
+        const baseline = [
+            createMatch({ id: 1, timestamp: 1, result: 'Win', kills: { Hunter: 3 }, damageTaken: 120 }),
+            createMatch({ id: 2, timestamp: 2, result: 'Loss', kills: { Hunter: 1 }, damageTaken: 450 }),
+            createMatch({ id: 3, timestamp: 3, result: 'Win', kills: { Hunter: 2 }, damageTaken: 900 }),
+        ];
+        const highDamage = baseline.map((match, index) => ({
+            ...match,
+            damageTaken: 8000 + (index * 1500),
+        }));
+
+        expect(calculatePerformanceMomentum(baseline)).toEqual(calculatePerformanceMomentum(highDamage));
+    });
 });

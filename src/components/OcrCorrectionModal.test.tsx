@@ -405,6 +405,42 @@ describe('OcrCorrectionModal', () => {
         expect(onAcceptAll).not.toHaveBeenCalled();
     });
 
+    it('auto-accepts high-confidence unresolved names on save-and-apply for smart-captures OCR review', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        gameData.sessionTeams = { red: ['FreshPilot'] };
+        gameData.sessionShipTypes = { red: 'Hunter (2 Player)' };
+        gameData.pilotRegistry = [];
+        appStoreState.pendingMatchData = {
+            ocrDebug: {
+                nameConfidence: {
+                    FreshPilot: 92,
+                },
+            },
+        };
+
+        render(
+            <OcrCorrectionModal
+                isOpen
+                embedded
+                autoAcceptOnSaveAndApply
+                onClose={onClose}
+                onAcceptAll={onAcceptAll}
+            />
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: /save and apply/i }));
+
+        expect(gameData.addToRegistry).toHaveBeenCalledWith('FreshPilot', expect.objectContaining({ origin: 'ocr' }));
+        expect(appStoreState.setPendingMatchData).toHaveBeenCalledWith(expect.objectContaining({
+            teammates: ['FreshPilot'],
+            ocrState: 'saved',
+        }));
+        expect(onAcceptAll).toHaveBeenCalledTimes(1);
+    });
+
     it('shows friendly team chip in assignment board and teammate markers in review rows', async () => {
         const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
         const onClose = vi.fn();

@@ -219,6 +219,7 @@ const customStorage: PersistStorage<AppState> = {
           playerProfiles: data.playerProfiles || {},
           ocrCorrections: legacyOcrCorrections,
           teamIdentityCorrections: data.teamIdentityCorrections || {},
+          playerEncounterRoleCorrections: data.playerEncounterRoleCorrections || {},
           ocrAliasModel: persistedAliasModel || createEmptyOcrAliasModel(),
           ocrLearningEvents: Array.isArray(data.ocrLearningEvents) ? data.ocrLearningEvents : [],
           ocrLearningQueue: Array.isArray(data.ocrLearningQueue) ? data.ocrLearningQueue : [],
@@ -451,6 +452,7 @@ const customStorage: PersistStorage<AppState> = {
       timelineEvents: state.timelineEvents,
       ocrCorrections: state.ocrCorrections,
       teamIdentityCorrections: state.teamIdentityCorrections,
+      playerEncounterRoleCorrections: state.playerEncounterRoleCorrections,
       ocrAliasModel: state.ocrAliasModel,
       liveSession: {
         activeHero: state.activeHero,
@@ -563,6 +565,7 @@ export const useAppStore = create<AppState>()(
         timelineEvents: state.timelineEvents,
         ocrCorrections: state.ocrCorrections,
         teamIdentityCorrections: state.teamIdentityCorrections,
+        playerEncounterRoleCorrections: state.playerEncounterRoleCorrections,
         ocrAliasModel: state.ocrAliasModel,
         ocrLearningEvents: state.ocrLearningEvents,
         ocrLearningQueue: state.ocrLearningQueue,

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, useId } from 'react';
+import { createPortal } from 'react-dom';
 import {
     Search, Trophy, Skull,
     Clock, HeartCrack, Target, Image, Eye, X, Edit3, Check,
@@ -7,7 +8,7 @@ import {
     FlaskConical, MoreHorizontal, Settings,
 } from 'lucide-react';
 import { Match, SHIPS, getShipColor, OpponentTeam, Loadout, getTelemetryLoadoutSourceLabel } from '../types';
-import { UI_REACH_MODIFIERS, CHARACTERS, WEAPONS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT, SYSTEMS, ARTIFACT_TYPE_TO_DISPLAY } from '../utils/constants';
+import { UI_REACH_MODIFIERS, CHARACTERS, WEAPONS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT, SYSTEMS, ARTIFACT_TYPE_TO_DISPLAY, UNKNOWN_PLAYER_LABELS } from '../utils/constants';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import {
@@ -594,14 +595,43 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
 
 
     useEffect(() => {
-        if (smartCapturesFocusMatchId && matches.some(m => m.id === smartCapturesFocusMatchId)) {
-            setSelectedMatchId(smartCapturesFocusMatchId);
+        const focusMatch = smartCapturesFocusMatchId != null
+            ? matches.find((match) => match.id === smartCapturesFocusMatchId) || null
+            : null;
+
+        if (focusMatch) {
+            const focusDay = toLocalDateKey(focusMatch.timestamp);
             setQueueOnly(false);
+            if (searchQuery) setSearchQuery('');
+            if (modeFilter !== 'all' && focusMatch.mode !== modeFilter) {
+                setModeFilter('all');
+            }
+            if (focusDay) {
+                queueDayManuallySelectedRef.current = true;
+                if (queueDayFilter !== focusDay) {
+                    setQueueDayFilter(focusDay);
+                }
+            }
+            setSelectedMatchId(focusMatch.id);
             setSmartCapturesFocusMatchId(null);
-        } else if (!selectedMatchId && matches.length > 0) {
+            return;
+        }
+
+        if (!selectedMatchId && matches.length > 0) {
             setSelectedMatchId(matches[0].id);
         }
-    }, [matches, selectedMatchId, setQueueOnly, setSelectedMatchId, setSmartCapturesFocusMatchId, smartCapturesFocusMatchId]);
+    }, [
+        matches,
+        modeFilter,
+        queueDayFilter,
+        searchQuery,
+        selectedMatchId,
+        setQueueOnly,
+        setSearchQuery,
+        setSelectedMatchId,
+        setSmartCapturesFocusMatchId,
+        smartCapturesFocusMatchId,
+    ]);
 
     const availableQueueDayKeys = useMemo(() => {
         const keys = new Set<string>();
@@ -1632,9 +1662,7 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
                                         <div className="mt-2 text-label-sm text-md-sys-on-surface/65">
                                             Results are still being prepared in the background. This review view will unlock automatically when processing completes.
                                         </div>
-                                        <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-md-sys-outline/20">
-                                            <div className="h-full w-2/5 rounded-full bg-md-sys-primary animate-progress-indeterminate" />
-                                        </div>
+                                        <div className="wg-indeterminate-bar mt-3" aria-hidden="true" />
                                     </div>
                                 ) : undefined}
                                 content={selectedMatch ? (
@@ -2194,6 +2222,10 @@ export const getSmartCaptureWizardInitialTab = (
     intent === 'open' ? 'result' : 'ocr'
 );
 
+export const shouldCloseSmartCaptureWizardOnOcrApply = (
+    intent: SmartCaptureWizardEntryIntent
+): boolean => intent !== 'open';
+
 export const commitPendingMatchDataForWizard = (
     pendingData: Partial<Match>,
     writePendingMatch: PendingMatchWriter,
@@ -2285,6 +2317,179 @@ export const resolveOpenWizardSeed = ({
         preferredLoadout: cloneLoadout(preferredLoadout) || null,
         latestMatch,
     };
+};
+
+const dedupeSubmittedNames = (values: string[]): string[] => {
+    const unique: string[] = [];
+    const seen = new Set<string>();
+    for (const raw of values) {
+        const cleaned = String(raw || '').trim();
+        if (!cleaned) continue;
+        const key = cleaned.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        unique.push(cleaned);
+    }
+    return unique;
+};
+
+export const buildOcrReviewPendingMatch = (
+    baseMatch: Match,
+    reviewData: OCRExtractedData,
+    options: {
+        activeUser?: string | null;
+        existingPending?: Partial<Match> | null;
+        nameSources?: OcrNameSourceMap;
+        normalizeModifierName: (name: string) => string;
+    }
+): Partial<Match> => {
+    const existingPending: Partial<Match> = options.existingPending || {};
+    const activeUserReference = normalizeOcrName(options.activeUser || baseMatch.player || '');
+    const activeUserKey = activeUserReference.toLowerCase();
+    const isActiveUserLike = (rawName: string): boolean => {
+        const candidate = normalizeOcrName(rawName || '');
+        const key = candidate.toLowerCase();
+        if (!candidate || !key) return false;
+        if (activeUserKey && key === activeUserKey) return true;
+        if (!activeUserReference) return false;
+        return combinedNameSimilarityScore(candidate, activeUserReference) >= 90;
+    };
+    const safePlayerName = (entry: unknown): string => (
+        typeof entry === 'string' ? entry : String((entry as { name?: string } | null | undefined)?.name || '')
+    );
+
+    const nextTeammates = capTeammateNames(
+        dedupeSubmittedNames(
+            (reviewData.teammates || [])
+                .map(safePlayerName)
+                .map((name) => String(name || '').trim())
+                .filter((name) => !!name && !UNKNOWN_PLAYER_LABELS.has(name.toLowerCase()))
+                .filter((name) => !isActiveUserLike(name))
+        ),
+        String(reviewData.playerShip?.shipType || existingPending.ship || baseMatch.ship || '')
+    );
+
+    const nextOpponentTeams: OpponentTeam[] = [];
+    const seenOpponentTeamKeys = new Set<string>();
+    (reviewData.opponentTeams || []).forEach((team, index) => {
+        const teamName = String(team.teamName || `Enemy Team ${index + 1}`).trim() || `Enemy Team ${index + 1}`;
+        const shipType = String(team.shipType || '').trim();
+        const color = String(team.color || 'unknown').trim() || 'unknown';
+        const players = dedupeSubmittedNames(
+            (team.players || [])
+                .map(safePlayerName)
+                .map((name) => String(name || '').trim())
+                .filter(Boolean)
+                .filter((name) => !isActiveUserLike(name))
+        );
+        const dedupeKey = [teamName, shipType, color, players.join('|')].join('::').toLowerCase();
+        if (seenOpponentTeamKeys.has(dedupeKey)) return;
+        seenOpponentTeamKeys.add(dedupeKey);
+        nextOpponentTeams.push({
+            teamName,
+            shipType,
+            color: color as OpponentTeam['color'],
+            players,
+        });
+    });
+
+    const nextOpponents = dedupeSubmittedNames(
+        nextOpponentTeams.flatMap((team) => team.players || [])
+    );
+    const nextReachModifiers = toCanonicalModifierNames(
+        (reviewData.reachModifiers || []) as Array<string | ExtractedModifier>,
+        reviewData.hazards,
+        options.normalizeModifierName
+    );
+    const nextArtifactSource = extractArtifactSourceFromOcrData(
+        (reviewData.reachModifiers || []) as Array<string | ExtractedModifier>,
+        reviewData.hazards as Array<string | { name?: string; rawText?: string }> | undefined,
+        reviewData.artifactType
+    );
+    const nextNameConfidence = buildOcrNameConfidenceMapFromExtractedData(reviewData);
+    const nextNameSources = options.nameSources && Object.keys(options.nameSources).length > 0
+        ? options.nameSources
+        : (existingPending.ocrDebug as { nameSources?: OcrNameSourceMap } | undefined)?.nameSources;
+
+    const nextPending: Partial<Match> = {
+        ...existingPending,
+        id: baseMatch.id,
+        timestamp: baseMatch.timestamp,
+        mode: baseMatch.mode,
+        player: baseMatch.player,
+        hero: baseMatch.hero,
+        ship: String(reviewData.playerShip?.shipType || existingPending.ship || baseMatch.ship || '').trim(),
+        teammates: nextTeammates.length > 0 ? nextTeammates : (Array.isArray(existingPending.teammates) ? existingPending.teammates : [...(baseMatch.teammates || [])]),
+        opponents: nextOpponents.length > 0 ? nextOpponents : (Array.isArray(existingPending.opponents) ? existingPending.opponents : [...(baseMatch.opponents || [])]),
+        loadout: cloneLoadout((existingPending.loadout as Loadout | null | undefined) ?? baseMatch.loadout) || undefined,
+        weapons: existingPending.weapons || baseMatch.weapons || {},
+        reachModifiers: nextReachModifiers.length > 0 ? nextReachModifiers : (Array.isArray(existingPending.reachModifiers) ? existingPending.reachModifiers : [...(baseMatch.reachModifiers || [])]),
+        artifactSource: nextArtifactSource || String(existingPending.artifactSource || baseMatch.artifactSource || ''),
+        kills: existingPending.kills
+            ? { ...(baseMatch.kills || {}), ...(existingPending.kills as Record<string, number>) }
+            : { ...(baseMatch.kills || {}) },
+        time: String(existingPending.time || baseMatch.time || ''),
+        poiEasy: Number(existingPending.poiEasy ?? baseMatch.poiEasy ?? 0),
+        poiMedium: Number(existingPending.poiMedium ?? baseMatch.poiMedium ?? 0),
+        poiEpic: Number(existingPending.poiEpic ?? baseMatch.poiEpic ?? 0),
+        damageTaken: Number(existingPending.damageTaken ?? baseMatch.damageTaken ?? 0),
+        notes: String(existingPending.notes || baseMatch.notes || ''),
+        artifacts: Array.isArray(existingPending.artifacts)
+            ? [...existingPending.artifacts]
+            : [...(baseMatch.artifacts || [])],
+        opponentTeams: nextOpponentTeams.length > 0
+            ? nextOpponentTeams
+            : (Array.isArray(existingPending.opponentTeams) ? existingPending.opponentTeams : (baseMatch.opponentTeams || undefined)),
+        ocrState: 'reviewing',
+        ocrDebug: {
+            ...((baseMatch.ocrDebug || {}) as Record<string, unknown>),
+            ...((existingPending.ocrDebug || {}) as Record<string, unknown>),
+            rawText: reviewData.rawText?.substring(0, 2000) || baseMatch.ocrDebug?.rawText,
+            confidence: Number.isFinite(Number(reviewData.overallConfidence))
+                ? Number(reviewData.overallConfidence)
+                : baseMatch.ocrDebug?.confidence,
+            hazards: Array.isArray(reviewData.hazards)
+                ? Array.from(new Set(reviewData.hazards.map((hazard) => String(hazard || '').trim()).filter(Boolean)))
+                : baseMatch.ocrDebug?.hazards,
+            source: reviewData.ocrSource || baseMatch.ocrDebug?.source,
+            fallbackReason: reviewData.ocrFallbackReason || baseMatch.ocrDebug?.fallbackReason,
+            cloudError: reviewData.ocrCloudError || baseMatch.ocrDebug?.cloudError,
+            geminiError: reviewData.ocrGeminiError || baseMatch.ocrDebug?.geminiError,
+            mergeStats: reviewData.mergeStats || baseMatch.ocrDebug?.mergeStats,
+            playerTeamName: String(
+                reviewData.playerTeamName
+                || reviewData.playerShip?.teamName
+                || baseMatch.ocrDebug?.playerTeamName
+                || baseMatch.ocrDebug?.playerShipTeamName
+                || ''
+            ).trim() || undefined,
+            playerShipTeamName: String(
+                reviewData.playerShip?.teamName
+                || reviewData.playerTeamName
+                || baseMatch.ocrDebug?.playerShipTeamName
+                || baseMatch.ocrDebug?.playerTeamName
+                || ''
+            ).trim() || undefined,
+            playerShipName: String(
+                reviewData.playerShipName
+                || reviewData.playerTeamName
+                || reviewData.playerShip?.teamName
+                || baseMatch.ocrDebug?.playerShipName
+                || ''
+            ).trim() || undefined,
+            nameSources: nextNameSources,
+            nameConfidence: Object.keys(nextNameConfidence).length > 0
+                ? nextNameConfidence
+                : baseMatch.ocrDebug?.nameConfidence,
+            timestamp: Date.now(),
+        },
+        eliminatedByTeam: String(existingPending.eliminatedByTeam || baseMatch.eliminatedByTeam || '') || undefined,
+        result: existingPending.result || baseMatch.result,
+        subType: existingPending.subType || baseMatch.subType || undefined,
+        placement: existingPending.placement ?? baseMatch.placement,
+    };
+
+    return nextPending;
 };
 
 export const getRosterCandidateSuggestions = (
@@ -2746,6 +2951,9 @@ const SmartMatchDetail: React.FC<{
                 : 'Match Result';
             if (openOcrReview) {
                 useAppStore.getState().setWizardInitialTab('ocr');
+                useAppStore.getState().setWizardCloseOnOcrApply(true);
+            } else {
+                useAppStore.getState().setWizardCloseOnOcrApply(false);
             }
             setShowWizard(wizardResult);
         }, [activeUser, ensureNonCurrentWizardSnapshot, isActiveUserLike, match, setDamageTaken, setKills, setPendingKilledBy, setPendingKilledByShip, setPendingPlacement, setPoiEasy, setPoiEpic, setPoiMedium, setSelectedOpponents, setSelectedReachModifiers, setSelectedTeammates, setSessionShipTypes, setSessionTeams, setShowWizard, setTimeMin, setTimeSec, setToast]);
@@ -2789,16 +2997,51 @@ const SmartMatchDetail: React.FC<{
             readyReviewData?: OCRExtractedData | null,
             options?: { initialTab?: 'result' | 'ocr' }
         ) => {
-            if (!onApplyToSession) {
-                setToast({ message: 'Apply OCR is unavailable in this context.', type: 'warning' });
-                return;
-            }
             const dataToApply = readyReviewData || reviewData;
             if (!dataToApply) {
                 setToast({ message: 'No OCR analysis is ready yet. Run Re-analyze first.', type: 'warning' });
                 return;
             }
+            const initialTab = options?.initialTab || 'result';
             ensureNonCurrentWizardSnapshot(useAppStore.getState());
+
+            if (!onApplyToSession) {
+                const storeState = useAppStore.getState();
+                const latestMatch = getLatestMatchSnapshot();
+                const pendingDraft = buildOcrReviewPendingMatch(latestMatch, dataToApply, {
+                    activeUser,
+                    existingPending: storeState.pendingMatchData || null,
+                    nameSources: ocrNameSources,
+                    normalizeModifierName,
+                });
+                const hydratedMatch = { ...latestMatch, ...pendingDraft } as Match;
+                // Ensure the wizard can access screenshot file paths for its Re-run OCR button.
+                const artifactPaths = (latestMatch.artifacts || match.artifacts || [])
+                    .map((p) => String(p || '').trim())
+                    .filter((p) => p.length > 0 && /\.(png|jpe?g|webp|bmp|gif)$/i.test(p));
+                if (artifactPaths.length > 0) {
+                    useAppStore.getState().setPendingMatchData({
+                        ...pendingDraft,
+                        artifacts: artifactPaths,
+                    });
+                } else {
+                    useAppStore.getState().setPendingMatchData(pendingDraft);
+                }
+                onUpdate(hydratedMatch);
+                persistNameSourceHintsToPendingDraft(ocrNameSources);
+                if (initialTab === 'ocr') {
+                    window.dispatchEvent(new CustomEvent('wizard:request-ocr-review', {
+                        detail: { matchId: Number(hydratedMatch.id || match.id || 0) || null },
+                    }));
+                }
+                openWizardForMatch({
+                    matchOverride: hydratedMatch,
+                    reusePendingDraft: false,
+                    openOcrReview: initialTab === 'ocr',
+                });
+                return;
+            }
+
             const appliedMatch = onApplyToSession(dataToApply);
             // Ensure the wizard can access screenshot file paths for its Re-run OCR button
             const artifactPaths = (match.artifacts || [])
@@ -2812,7 +3055,6 @@ const SmartMatchDetail: React.FC<{
                 });
             }
             persistNameSourceHintsToPendingDraft(ocrNameSources);
-            const initialTab = options?.initialTab || 'result';
             if (initialTab === 'ocr') {
                 window.dispatchEvent(new CustomEvent('wizard:request-ocr-review', {
                     detail: { matchId: Number(appliedMatch?.id || match.id || 0) || null },
@@ -2823,7 +3065,21 @@ const SmartMatchDetail: React.FC<{
                 reusePendingDraft: false,
                 openOcrReview: initialTab === 'ocr',
             });
-        }, [ensureNonCurrentWizardSnapshot, onApplyToSession, openWizardForMatch, reviewData, setToast, match.artifacts, match.id, ocrNameSources, persistNameSourceHintsToPendingDraft]);
+        }, [
+            activeUser,
+            ensureNonCurrentWizardSnapshot,
+            getLatestMatchSnapshot,
+            match.artifacts,
+            match.id,
+            normalizeModifierName,
+            onApplyToSession,
+            onUpdate,
+            openWizardForMatch,
+            ocrNameSources,
+            persistNameSourceHintsToPendingDraft,
+            reviewData,
+            setToast,
+        ]);
 
         useEffect(() => {
             setShowSecondaryActions(false);
@@ -3540,12 +3796,10 @@ const SmartMatchDetail: React.FC<{
                 const reviewingBaseMatch = getLatestMatchSnapshot();
                 onUpdate({ ...reviewingBaseMatch, ocrState: 'reviewing' });
                 persistNameSourceHintsToPendingDraft(nextNameSources);
-                if (onApplyToSession) {
-                    applyReviewDataToSession(mergedData, {
-                        initialTab: getSmartCaptureWizardInitialTab('reanalyze-complete'),
-                    });
-                } else {
-                    openWizardForMatch({ openOcrReview: getSmartCaptureWizardInitialTab('reanalyze-complete') === 'ocr' });
+                applyReviewDataToSession(mergedData, {
+                    initialTab: getSmartCaptureWizardInitialTab('reanalyze-complete'),
+                });
+                if (!onApplyToSession) {
                     pushNotification({
                         message: `OCR analysis complete for Match ${displayNumber}.`,
                         type: 'success',
@@ -3836,6 +4090,33 @@ const SmartMatchDetail: React.FC<{
             window.addEventListener('keydown', onKeyDown);
             return () => window.removeEventListener('keydown', onKeyDown);
         }, [applyResult, applyReviewDataToSession, handleRerunAnalysis, isActive, match, onApplyToSession, onNext, onPrev, onResolve, queueOnly, rerunning]);
+
+        const screenshotViewerOverlay = activeScreenshotIndex !== null && artifacts.images[activeScreenshotIndex]
+            ? (
+                <div
+                    className="fixed inset-0 z-modal bg-md-sys-surface/96 p-4 md:p-6 flex items-center justify-center"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Match screenshots"
+                    onClick={() => setActiveScreenshotIndex(null)}
+                >
+                    <div className="max-h-full max-w-full" onClick={(event) => event.stopPropagation()}>
+                        <WorkspaceImageViewer
+                            images={artifacts.images}
+                            activeIndex={activeScreenshotIndex}
+                            onActiveIndexChange={setActiveScreenshotIndex}
+                            onClose={() => setActiveScreenshotIndex(null)}
+                            title="Match Screenshots"
+                            subtitle="Click to zoom, drag to pan while zoomed, and use the thumbnail rail to switch images."
+                            className="h-[min(88vh,920px)] w-[min(96vw,1280px)]"
+                            stageClassName="min-h-[420px]"
+                            imageAltPrefix="Match screenshot"
+                            autoFocus={true}
+                        />
+                    </div>
+                </div>
+            )
+            : null;
 
         return (
             <div className="relative px-3 lg:px-4 pb-3 lg:pb-4 sc-detail-workspace">
@@ -4923,21 +5204,10 @@ const SmartMatchDetail: React.FC<{
                         </div>
                     </div>
                 </div>
-                {activeScreenshotIndex !== null && artifacts.images[activeScreenshotIndex] && (
-                    <div className="fixed inset-0 z-modal bg-md-sys-surface/96 p-4 md:p-6 flex items-center justify-center">
-                        <WorkspaceImageViewer
-                            images={artifacts.images}
-                            activeIndex={activeScreenshotIndex}
-                            onActiveIndexChange={setActiveScreenshotIndex}
-                            onClose={() => setActiveScreenshotIndex(null)}
-                            title="Match Screenshots"
-                            subtitle="Click to zoom, drag to pan while zoomed, and use the thumbnail rail to switch images."
-                            className="h-[min(88vh,920px)] w-[min(96vw,1280px)]"
-                            stageClassName="min-h-[420px]"
-                            imageAltPrefix="Match screenshot"
-                            autoFocus={true}
-                        />
-                    </div>
+                {screenshotViewerOverlay && (
+                    typeof document === 'undefined'
+                        ? screenshotViewerOverlay
+                        : createPortal(screenshotViewerOverlay, document.body)
                 )}
             </div>
         );

@@ -24,9 +24,7 @@ const errorMessage = (error: unknown): string =>
 const SimulatorPanel: React.FC = () => {
     const {
         isSimulation, setIsSimulation,
-        setIsMatchInProgress, setMatchStartTime, setOverlayPhase, setKills, kills,
-        setTimeMin, setTimeSec, updatePlayerIdMapping, playerIdMap, pilotRegistry,
-        addTimelineEvent
+        updatePlayerIdMapping, playerIdMap, pilotRegistry,
     } = useGameData();
 
     const [events, setEvents] = useState<SimEvent[]>([]);
@@ -193,26 +191,18 @@ const SimulatorPanel: React.FC = () => {
 
             // Build Context & Actions (Same as Live Monitor)
             const actions: TelemetryActions = {
-                setTimeMin, setTimeSec,
-                setIsMatchInProgress,
-                setMatchStartTime,
-                setOverlayPhase,
                 setToast: (t) => Logger.info('Sim', t.message), // Don't spam real toasts
                 updatePlayerIdMapping,
-                setShowWizard: () => {}, // No-op for simulation
             };
 
-            const startSeconds = liveEvents[0] ? getTelemetryEventTimestamp(liveEvents[0]) : 0;
-            const currentSeconds = getTelemetryEventTimestamp(event);
-
             const context: TelemetryContext = {
-                matchStartTime: startSeconds * 1000,
-                isMatchInProgress: true, // Force true for sim usually
                 playerIdMap: playerIdMapRef.current,
-                pilotRegistry: pilotRegistryRef.current
+                pilotRegistry: pilotRegistryRef.current,
             };
 
             // Update Time Display
+            const startSeconds = liveEvents[0] ? getTelemetryEventTimestamp(liveEvents[0]) : 0;
+            const currentSeconds = getTelemetryEventTimestamp(event);
             const diff = Math.max(0, currentSeconds - startSeconds);
             const m = Math.floor(diff / 60);
             const s = Math.floor(diff % 60);
@@ -220,7 +210,7 @@ const SimulatorPanel: React.FC = () => {
 
             processTelemetryEvent(event, actions, context);
         }
-    }, [progress, setIsMatchInProgress, setMatchStartTime, setOverlayPhase, setTimeMin, setTimeSec, updatePlayerIdMapping]);
+    }, [progress, updatePlayerIdMapping]);
 
     if (!isSimulation && events.length === 0) {
         return (

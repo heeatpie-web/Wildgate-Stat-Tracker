@@ -117,7 +117,10 @@ vi.mock('../utils/artifactService', () => ({
 }));
 
 vi.mock('../utils/electronAPI', () => ({
-  getElectronAPI: vi.fn(() => ({ send: vi.fn() })),
+  getElectronAPI: vi.fn(() => ({
+    send: vi.fn(),
+    invoke: vi.fn(async () => 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WnY4nQAAAAASUVORK5CYII='),
+  })),
 }));
 
 vi.mock('./smart-captures/SmartCapturesShell', () => ({
@@ -203,7 +206,22 @@ describe('SmartCapturesPanel paused lifecycle', () => {
       missingImages: [],
       resolvedFromDisk: false,
     });
+    uiState.smartCapturesFocusMatchId = null;
+    uiState.setSmartCapturesFocusMatchId = vi.fn((id: number | null) => {
+      uiState.smartCapturesFocusMatchId = id;
+    });
     appStoreState.selectedMatchId = null;
+    appStoreState.setSelectedMatchId = vi.fn((id: number | null) => {
+      appStoreState.selectedMatchId = id;
+    });
+    appStoreState.searchQuery = '';
+    appStoreState.setSearchQuery = vi.fn((query: string) => {
+      appStoreState.searchQuery = query;
+    });
+    appStoreState.queueOnly = false;
+    appStoreState.setQueueOnly = vi.fn((value: boolean) => {
+      appStoreState.queueOnly = value;
+    });
     appStoreState.activeSection = 'tools';
     appStoreState.ocrMode = 'local';
   });
@@ -307,6 +325,101 @@ describe('SmartCapturesPanel paused lifecycle', () => {
     await waitFor(() => {
       expect(applyArtifactRepair).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('reveals a focused match by clearing filters before selecting it', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-03-17T12:00:00-06:00'));
+      appStoreState.activeSection = 'capture';
+      appStoreState.queueOnly = true;
+      appStoreState.searchQuery = 'adrian';
+      gameData.matches = [
+        {
+          id: 401,
+          timestamp: Date.parse('2026-03-17T09:15:00-06:00'),
+          date: '3/17/2026',
+          mode: 'Artifact Brawl',
+          player: 'Pilot',
+          teammates: ['Wingman'],
+          opponents: ['Enemy'],
+          hero: 'Adrian',
+          ship: 'Hunter',
+          reachModifiers: [],
+          kills: {},
+          artifacts: ['C:\\captures\\match-401.png'],
+          result: 'Win',
+          ocrState: 'queued',
+        },
+        {
+          id: 402,
+          timestamp: Date.parse('2026-03-16T22:40:00-06:00'),
+          date: '3/16/2026',
+          mode: 'Fleet Battle',
+          player: 'Pilot',
+          teammates: ['Wingman'],
+          opponents: ['Specter'],
+          hero: 'Kae',
+          ship: 'Scout',
+          reachModifiers: [],
+          kills: {},
+          artifacts: ['C:\\captures\\match-402.png'],
+          result: 'Loss',
+          ocrState: 'queued',
+        },
+      ];
+      appStoreState.matches = gameData.matches;
+      uiState.smartCapturesFocusMatchId = 402;
+
+      const { default: SmartCapturesPanel } = await import('./SmartCapturesPanel');
+      await act(async () => {
+        render(<SmartCapturesPanel />);
+        await Promise.resolve();
+      });
+
+      expect(appStoreState.setQueueOnly).toHaveBeenCalledWith(false);
+      expect(appStoreState.setSearchQuery).toHaveBeenCalledWith('');
+      expect(appStoreState.setSelectedMatchId).toHaveBeenCalledWith(402);
+      expect(uiState.setSmartCapturesFocusMatchId).toHaveBeenCalledWith(null);
+      expect(screen.getByPlaceholderText('Search players, heroes, ships...')).toHaveValue('');
+      expect(screen.getByLabelText('Match day')).toHaveValue('2026-03-16');
+      expect(
+        screen.getAllByText((_, element) => Boolean(
+          element?.textContent?.includes('Scout') && element.textContent.includes('Kae')
+        )).length
+      ).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('portals the screenshot viewer outside the clipped detail pane', async () => {
+    appStoreState.activeSection = 'capture';
+    appStoreState.selectedMatchId = 1;
+    getMatchArtifactsStructured.mockResolvedValue({
+      images: ['C:\\captures\\match-1.png'],
+      imageFiles: [],
+      telemetry: [],
+      missingImages: [],
+      resolvedFromDisk: false,
+    });
+
+    const { default: SmartCapturesPanel } = await import('./SmartCapturesPanel');
+    const { container } = render(<SmartCapturesPanel />);
+
+    await waitFor(() => {
+      expect(container.querySelector('.sc-shot-thumb button')).not.toBeNull();
+    });
+
+    const screenshotButton = container.querySelector('.sc-shot-thumb button') as HTMLButtonElement | null;
+    expect(screenshotButton).not.toBeNull();
+    fireEvent.click(screenshotButton!);
+
+    const dialog = await screen.findByRole('dialog', { name: /match screenshots/i });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+
+    const detailPane = container.querySelector('.sc-detail-pane');
+    expect(detailPane?.contains(dialog)).toBe(false);
   });
 
   it('switches the queue day to the new local day when midnight passes and a new match arrives', async () => {

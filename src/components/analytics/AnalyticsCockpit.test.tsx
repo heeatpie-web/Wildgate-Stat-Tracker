@@ -81,6 +81,11 @@ describe('AnalyticsCockpit', () => {
 
         expect(screen.getByText('Range: All Time')).toBeInTheDocument();
         expect(screen.getByText('Ship: Hunter')).toBeInTheDocument();
+        const suggested = screen.getByText(/suggested next drill-down/i);
+        const topShipCard = screen.getByText('Top Ship').closest('button');
+        expect(topShipCard).not.toBeNull();
+        expect(suggested.compareDocumentPosition(topShipCard as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect((topShipCard as Node).compareDocumentPosition(screen.getByText('Next moves')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
         const hunterButtons = screen.getAllByRole('button', { name: /hunter/i });
         fireEvent.click(hunterButtons[0]);

@@ -20,6 +20,38 @@
   text-align: left;
 }
 
+@keyframes wg-indeterminate-slide {
+  0% {
+    transform: translateX(-130%);
+  }
+
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+.wg-indeterminate-bar {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--md-sys-color-outline), transparent 80%);
+}
+
+.wg-indeterminate-bar::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 38%;
+  min-width: 56px;
+  border-radius: inherit;
+  background: var(--md-sys-color-primary);
+  animation: wg-indeterminate-slide 1.15s linear infinite;
+  will-change: transform;
+}
+
 /* Window restore/maximize animation */
 @keyframes window-restore {
   from {
@@ -1815,6 +1847,36 @@ body[data-mode='twilight'] .ocr-teammate-chip {
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 64%);
 }
 
+.ocr-workbench-role-conflicts {
+  background: color-mix(in srgb, var(--md-sys-color-error), transparent 93%);
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-error), transparent 90%);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.ocr-workbench-role-conflict-row {
+  background: color-mix(in srgb, var(--md-sys-color-surface), var(--md-sys-color-error) 2%);
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 74%);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+}
+
+body[data-mode='dark'] .ocr-workbench-role-conflicts,
+body[data-mode='twilight'] .ocr-workbench-role-conflicts {
+  border-color: color-mix(in srgb, var(--md-sys-color-error), transparent 78%);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28);
+}
+
+body[data-mode='dark'] .ocr-workbench-role-conflict-row,
+body[data-mode='twilight'] .ocr-workbench-role-conflict-row {
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), var(--md-sys-color-error) 4%);
+  border-color: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 62%);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24);
+}
+
+body.perf-lite .ocr-workbench-role-conflicts,
+body.perf-lite .ocr-workbench-role-conflict-row {
+  box-shadow: none !important;
+}
+
 .review-queue-team-select {
   min-height: 38px;
 }
@@ -1867,6 +1929,18 @@ body[data-mode='twilight'] .review-queue-assign-row {
 
 body[data-mode='twilight'] .ocr-roster-dropdown-item:hover {
   background: color-mix(in srgb, var(--md-sys-color-primary), transparent 88%);
+}
+
+body[data-mode='twilight'] .ocr-batch-threshold-surface,
+body[data-mode='twilight'] .ocr-batch-threshold-current,
+body[data-mode='twilight'] .ocr-batch-action-btn,
+body[data-mode='twilight'] .ocr-batch-action-btn:hover {
+  border-color: transparent;
+}
+
+body[data-mode='twilight'] .ocr-batch-threshold-surface,
+body[data-mode='twilight'] .ocr-batch-threshold-current {
+  box-shadow: none;
 }
 
 select,

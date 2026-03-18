@@ -116,6 +116,8 @@ const gameDataState = {
     playerProfiles: {},
     knownMappings: {} as Record<string, string>,
     ocrAliasModel: createEmptyOcrAliasModel(),
+    playerEncounterRoleCorrections: {} as Record<string, unknown>,
+    getPlayerEncounterRoleCorrection: vi.fn(() => null),
 };
 
 const uiState = {
@@ -148,6 +150,8 @@ describe('DrillDownOverlay', () => {
         gameDataState.playerProfiles = {};
         gameDataState.knownMappings = {};
         gameDataState.ocrAliasModel = createEmptyOcrAliasModel();
+        gameDataState.playerEncounterRoleCorrections = {};
+        gameDataState.getPlayerEncounterRoleCorrection = vi.fn(() => null);
     });
 
     it('renders dialog semantics and tabbed explorer content', () => {
@@ -200,7 +204,35 @@ describe('DrillDownOverlay', () => {
         expect(screen.queryByText(/match #3/i)).not.toBeInTheDocument();
     });
 
-    it('keeps full encounter scope when player hub opens a cross-role profile', () => {
+    it('matches teammate targets when the pilot is the recorded player for part of the history', () => {
+        gameDataState.pilotRegistry = ['Wingman'];
+        gameDataState.pilotAliases = { Wingman: ['WingmanAlias'] };
+        gameDataState.matches = baseMatches.map((match, index) => {
+            if (index === 0) {
+                return {
+                    ...match,
+                    player: 'WingmanAlias',
+                    teammates: ['Pilot'],
+                    opponents: [...match.opponents],
+                };
+            }
+            return {
+                ...match,
+                teammates: [...match.teammates],
+                opponents: [...match.opponents],
+            };
+        });
+        gameDataState.drillDownTarget = { type: 'Teammate', name: 'Wingman' };
+
+        render(<DrillDownOverlay />);
+        fireEvent.click(screen.getByRole('button', { name: /^Matches$/i }));
+
+        expect(screen.getByText(/match #1/i)).toBeInTheDocument();
+        expect(screen.getByText(/match #2/i)).toBeInTheDocument();
+        expect(screen.queryByText(/match #3/i)).not.toBeInTheDocument();
+    });
+
+    it('keeps full encounter scope while teammate profiles use teammate-only outcome math', () => {
         gameDataState.pilotRegistry = ['Wingman'];
         gameDataState.pilotAliases = { Wingman: ['WingmanAlias'] };
         gameDataState.matches = baseMatches.map((match, index) => {
@@ -234,6 +266,44 @@ describe('DrillDownOverlay', () => {
         expect(screen.getByText(/match #1/i)).toBeInTheDocument();
         expect(screen.getByText(/match #2/i)).toBeInTheDocument();
         expect(screen.getByText(/match #3/i)).toBeInTheDocument();
+        expect(screen.getByText('1 / 1')).toBeInTheDocument();
+    });
+
+    it('keeps full encounter scope while opponent profiles use opponent-only outcome math', () => {
+        gameDataState.pilotRegistry = ['Wingman'];
+        gameDataState.pilotAliases = { Wingman: ['WingmanAlias'] };
+        gameDataState.matches = baseMatches.map((match, index) => {
+            if (index !== 2) {
+                return {
+                    ...match,
+                    teammates: [...match.teammates],
+                    opponents: [...match.opponents],
+                    opponentTeams: match.opponentTeams?.map((team) => ({
+                        ...team,
+                        players: [...team.players],
+                    })),
+                };
+            }
+            return {
+                ...match,
+                teammates: ['OtherMate'],
+                opponents: ['WingmanAlias'],
+            };
+        });
+        gameDataState.drillDownTarget = {
+            type: 'Opponent',
+            name: 'Wingman',
+            matchIds: [1, 2, 3],
+            encounterScope: 'all',
+        };
+
+        render(<DrillDownOverlay />);
+        fireEvent.click(screen.getByRole('button', { name: /^Matches$/i }));
+
+        expect(screen.getByText(/match #1/i)).toBeInTheDocument();
+        expect(screen.getByText(/match #2/i)).toBeInTheDocument();
+        expect(screen.getByText(/match #3/i)).toBeInTheDocument();
+        expect(screen.getByText('1 / 0')).toBeInTheDocument();
     });
 
     it('closes on escape key', () => {

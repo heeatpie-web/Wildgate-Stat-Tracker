@@ -31,6 +31,11 @@ import {
     setAliasBlockStatus,
     toLearningQueueItem,
 } from '../../utils/ocrAliasEngine';
+import {
+    buildPlayerEncounterRoleCorrectionKey,
+    normalizeEncounterPlayerKey,
+    type EncounterRoleCorrection,
+} from '../../utils/playerEncounterRoles';
 
 export type PlayerRole = 'teammate' | 'opponent' | 'mixed' | 'unknown';
 
@@ -91,6 +96,14 @@ export interface TeamIdentityResolution {
     matched: boolean;
 }
 
+export interface PlayerEncounterRoleCorrection {
+    matchId: number;
+    playerKey: string;
+    playerName: string;
+    role: EncounterRoleCorrection;
+    updatedAt: number;
+}
+
 export type UidMappings = ReturnType<typeof normalizeSharedUidMappings>;
 
 export interface MappingSlice {
@@ -109,6 +122,7 @@ export interface MappingSlice {
     ocrLearningEvents: OcrLearningEvent[];
     ocrLearningQueue: OcrLearningQueueItem[];
     teamIdentityCorrections: Record<string, TeamIdentityCorrection>;
+    playerEncounterRoleCorrections: Record<string, PlayerEncounterRoleCorrection>;
 
     // Profile management
     recordPlayerSighting: (playerId: string, teamColor: string, allTeamPlayers: string[], allOpponentPlayers: string[], shipType?: string, source?: 'ocr' | 'manual', ocrOnly?: boolean) => void;
@@ -155,6 +169,12 @@ export interface MappingSlice {
         }
     ) => void;
     resolveTeamIdentity: (teamName: string, color?: string) => TeamIdentityResolution;
+    recordPlayerEncounterRoleCorrection: (
+        matchId: number,
+        playerName: string,
+        role: EncounterRoleCorrection
+    ) => void;
+    getPlayerEncounterRoleCorrection: (matchId: number, playerName: string) => EncounterRoleCorrection | null;
 
     // Legacy actions
     addMapping: (id: string, name: string) => void;
@@ -336,6 +356,7 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
     ocrLearningEvents: [],
     ocrLearningQueue: [],
     teamIdentityCorrections: {},
+    playerEncounterRoleCorrections: {},
 
     recordPlayerSighting: (playerId, teamColor, allTeamPlayers, allOpponentPlayers, shipType, source = 'manual', ocrOnly = false) => {
         set((state) => {
@@ -799,6 +820,33 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
             color: normalizedColor,
             matched: false,
         };
+    },
+
+    recordPlayerEncounterRoleCorrection: (matchId, playerName, role) => {
+        const correctionKey = buildPlayerEncounterRoleCorrectionKey(matchId, playerName);
+        const normalizedPlayerKey = normalizeEncounterPlayerKey(playerName);
+        const numericMatchId = Number(matchId);
+        const normalizedPlayerName = String(playerName || '').trim();
+        if (!correctionKey || !normalizedPlayerKey || !Number.isFinite(numericMatchId)) return;
+
+        set((state) => ({
+            playerEncounterRoleCorrections: {
+                ...state.playerEncounterRoleCorrections,
+                [correctionKey]: {
+                    matchId: numericMatchId,
+                    playerKey: normalizedPlayerKey,
+                    playerName: normalizedPlayerName || normalizedPlayerKey,
+                    role,
+                    updatedAt: Date.now(),
+                },
+            },
+        }));
+    },
+
+    getPlayerEncounterRoleCorrection: (matchId, playerName) => {
+        const correctionKey = buildPlayerEncounterRoleCorrectionKey(matchId, playerName);
+        if (!correctionKey) return null;
+        return get().playerEncounterRoleCorrections[correctionKey]?.role || null;
     },
 
     getPlayerRole: (playerId) => {

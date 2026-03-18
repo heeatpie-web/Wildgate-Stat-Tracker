@@ -183,6 +183,8 @@ export const DrillDownOverlay: React.FC = () => {
         playerProfiles,
         knownMappings,
         ocrAliasModel,
+        playerEncounterRoleCorrections,
+        getPlayerEncounterRoleCorrection,
     } = useGameData();
     const { activeMode } = useUIState();
     const isOpen = Boolean(drillDownTarget);
@@ -239,8 +241,14 @@ export const DrillDownOverlay: React.FC = () => {
     }, [currentTargetKey]);
 
     const model = useMemo(
-        () => (currentTarget ? buildDrillDownModel(canonicalMatches, currentTarget, activeMode) : null),
-        [canonicalMatches, currentTarget, activeMode]
+        () => (
+            currentTarget
+                ? buildDrillDownModel(canonicalMatches, currentTarget, activeMode, {
+                    getPlayerEncounterRoleCorrection,
+                })
+                : null
+        ),
+        [activeMode, canonicalMatches, currentTarget, getPlayerEncounterRoleCorrection, playerEncounterRoleCorrections]
     );
 
     useEffect(() => {

@@ -9,7 +9,9 @@ import {
   clearSmartCapturePlayerAssignments,
   getSmartCaptureFriendlyTeamName,
   getSmartCaptureWizardInitialTab,
+  shouldCloseSmartCaptureWizardOnOcrApply,
   getRosterCandidateSuggestions,
+  buildOcrReviewPendingMatch,
   resolveOpenWizardSeed,
   resolveSmartCaptureOpenFolderTarget,
   resolveFriendlyTeamLabel,
@@ -357,6 +359,88 @@ describe('resolveOpenWizardSeed', () => {
   });
 });
 
+describe('buildOcrReviewPendingMatch', () => {
+  it('hydrates the pending draft from OCR review data so the wizard can seed its fields', () => {
+    const baseMatch = {
+      id: 99,
+      timestamp: 1_700_000_000_000,
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: ['Old Teammate'],
+      opponents: ['Old Opponent'],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      reachModifiers: ['Old Mod'],
+      artifacts: ['capture.png'],
+      result: 'Ongoing',
+      ocrState: 'reviewing',
+      ocrDebug: {
+        playerTeamName: 'Alpha',
+      },
+    } as Match;
+
+    const reviewData: OCRExtractedData = {
+      screenshotType: 'crew_hub',
+      reachModifiers: [{ name: 'Ice Storm', confidence: 84, rawText: 'ICE STORM' }],
+      enemyShips: [],
+      teammates: [{ name: 'Wingman', confidence: 90, isTeammate: true }],
+      opponentTeams: [{
+        teamName: 'Red Team',
+        shipType: 'Scout',
+        color: 'red',
+        players: [{ name: 'EnemyOne', confidence: 82, isTeammate: false }],
+        confidence: 80,
+      }],
+      overallConfidence: 86,
+      captureTimestamp: 1_700_000_001_000,
+      rawText: 'sample',
+      playerShip: {
+        shipType: 'Bastion',
+        teamName: 'Friendly Team',
+        confidence: 88,
+      },
+      playerTeamName: 'Friendly Team',
+      playerShipName: 'Bastion',
+      hazards: ['Artifact: Ice'],
+      artifactType: 'Ice',
+      ocrSource: 'merged',
+    };
+
+    const hydrated = buildOcrReviewPendingMatch(baseMatch, reviewData, {
+      activeUser: 'Pilot',
+      existingPending: {
+        id: 99,
+        artifacts: ['capture.png'],
+      },
+      nameSources: {
+        Wingman: [{ imagePath: 'capture.png', imageIndex: 0, sourceRole: 'teammate' }],
+      } as any,
+      normalizeModifierName: (value) => value,
+    });
+
+    expect(hydrated.ship).toBe('Bastion');
+    expect(hydrated.teammates).toEqual(['Wingman']);
+    expect(hydrated.opponents).toEqual(['EnemyOne']);
+    expect(hydrated.opponentTeams).toEqual([
+      expect.objectContaining({
+        teamName: 'Red Team',
+        shipType: 'Scout',
+        color: 'red',
+        players: ['EnemyOne'],
+      }),
+    ]);
+    expect(hydrated.reachModifiers).toEqual(['Ice Storm']);
+    expect(hydrated.ocrState).toBe('reviewing');
+    expect(hydrated.ocrDebug).toMatchObject({
+      playerTeamName: 'Friendly Team',
+      playerShipName: 'Bastion',
+      nameSources: {
+        Wingman: [{ imagePath: 'capture.png', imageIndex: 0, sourceRole: 'teammate' }],
+      },
+    });
+  });
+});
+
 describe('shouldSyncOcrApplyToCurrentSession', () => {
   it('returns true only when the pending match id matches the selected match id', () => {
     expect(shouldSyncOcrApplyToCurrentSession(44, 44)).toBe(true);
@@ -382,6 +466,17 @@ describe('getSmartCaptureWizardInitialTab', () => {
   it('returns ocr for re-analyze completion and explicit OCR review entry', () => {
     expect(getSmartCaptureWizardInitialTab('reanalyze-complete')).toBe('ocr');
     expect(getSmartCaptureWizardInitialTab('ocr-review')).toBe('ocr');
+  });
+});
+
+describe('shouldCloseSmartCaptureWizardOnOcrApply', () => {
+  it('keeps the standard Open action in the wizard result flow', () => {
+    expect(shouldCloseSmartCaptureWizardOnOcrApply('open')).toBe(false);
+  });
+
+  it('enables close-on-apply for OCR-first smart-capture entry points', () => {
+    expect(shouldCloseSmartCaptureWizardOnOcrApply('reanalyze-complete')).toBe(true);
+    expect(shouldCloseSmartCaptureWizardOnOcrApply('ocr-review')).toBe(true);
   });
 });
 

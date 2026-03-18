@@ -380,6 +380,60 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
         return proTiles.filter((tile) => tile.category === proCategory);
     }, [proCategory, proTiles]);
     const isCockpitView = !isProMode && currentView === 'overview';
+    const entitySelectorControls = (
+        <>
+            <select
+                value={entityFilters.ship[0] || ''}
+                onChange={(e) => setEntityFilters((prev) => ({ ...prev, ship: e.target.value ? [e.target.value] : [] }))}
+                className={filterSelectClassName}
+            >
+                <option value="">All Ships</option>
+                {shipFilterOptions.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                ))}
+            </select>
+            <select
+                value={entityFilters.prospectorWeapon[0] || ''}
+                onChange={(e) => setEntityFilters((prev) => ({ ...prev, prospectorWeapon: e.target.value ? [e.target.value] : [] }))}
+                className={filterSelectClassName}
+            >
+                <option value="">All Weapons</option>
+                {weaponFilterOptions.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                ))}
+            </select>
+            <select
+                value={entityFilters.equipment[0] || ''}
+                onChange={(e) => setEntityFilters((prev) => ({ ...prev, equipment: e.target.value ? [e.target.value] : [] }))}
+                className={filterSelectClassName}
+            >
+                <option value="">All Equipment</option>
+                {equipmentFilterOptions.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                ))}
+            </select>
+            <select
+                value={entityFilters.perk[0] || ''}
+                onChange={(e) => setEntityFilters((prev) => ({ ...prev, perk: e.target.value ? [e.target.value] : [] }))}
+                className={filterSelectClassName}
+            >
+                <option value="">All Perk Sets</option>
+                {perkFilterOptions.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                ))}
+            </select>
+            <select
+                value={entityFilters.update[0] || ''}
+                onChange={(e) => setEntityFilters((prev) => ({ ...prev, update: e.target.value ? [e.target.value] : [] }))}
+                className={filterSelectClassName}
+            >
+                <option value="">All Updates</option>
+                {UPDATE_DEFINITIONS.map((update) => (
+                    <option key={update.key} value={update.key}>{update.label}</option>
+                ))}
+            </select>
+        </>
+    );
 
     return (
         <div className={`twilight-solid-scope twilight-soft-shadows h-full flex flex-col gap-3 overflow-hidden rounded-modal shadow-lg ${isCockpitView ? 'analytics-shell-surface' : 'analytics-shell-gradient'}`}>
@@ -456,56 +510,7 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
                         ))}
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                        <select
-                            value={entityFilters.ship[0] || ''}
-                            onChange={(e) => setEntityFilters((prev) => ({ ...prev, ship: e.target.value ? [e.target.value] : [] }))}
-                            className={filterSelectClassName}
-                        >
-                            <option value="">All Ships</option>
-                            {shipFilterOptions.map((option) => (
-                                <option key={option} value={option}>{option}</option>
-                            ))}
-                        </select>
-                        <select
-                            value={entityFilters.prospectorWeapon[0] || ''}
-                            onChange={(e) => setEntityFilters((prev) => ({ ...prev, prospectorWeapon: e.target.value ? [e.target.value] : [] }))}
-                            className={filterSelectClassName}
-                        >
-                            <option value="">All Weapons</option>
-                            {weaponFilterOptions.map((option) => (
-                                <option key={option} value={option}>{option}</option>
-                            ))}
-                        </select>
-                        <select
-                            value={entityFilters.equipment[0] || ''}
-                            onChange={(e) => setEntityFilters((prev) => ({ ...prev, equipment: e.target.value ? [e.target.value] : [] }))}
-                            className={filterSelectClassName}
-                        >
-                            <option value="">All Equipment</option>
-                            {equipmentFilterOptions.map((option) => (
-                                <option key={option} value={option}>{option}</option>
-                            ))}
-                        </select>
-                        <select
-                            value={entityFilters.perk[0] || ''}
-                            onChange={(e) => setEntityFilters((prev) => ({ ...prev, perk: e.target.value ? [e.target.value] : [] }))}
-                            className={filterSelectClassName}
-                        >
-                            <option value="">All Perk Sets</option>
-                            {perkFilterOptions.map((option) => (
-                                <option key={option} value={option}>{option}</option>
-                            ))}
-                        </select>
-                        <select
-                            value={entityFilters.update[0] || ''}
-                            onChange={(e) => setEntityFilters((prev) => ({ ...prev, update: e.target.value ? [e.target.value] : [] }))}
-                            className={filterSelectClassName}
-                        >
-                            <option value="">All Updates</option>
-                            {UPDATE_DEFINITIONS.map((update) => (
-                                <option key={update.key} value={update.key}>{update.label}</option>
-                            ))}
-                        </select>
+                        {entitySelectorControls}
                     </div>
                 </div>
             </div>
@@ -574,12 +579,12 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
                                     onNavigate={navigateTo}
                                     onDrillDown={onDrillDown}
                                     winRate={data.winRate}
-                                    totalMatches={data.filteredMatches.length}
-                                    momentum={data.momentum}
-                                    placementData={data.placementData}
-                                    filteredMatches={data.filteredMatches}
-                                    contextTags={activeContextTags}
-                                />
+                                totalMatches={data.filteredMatches.length}
+                                momentum={data.momentum}
+                                placementData={data.placementData}
+                                filteredMatches={data.filteredMatches}
+                                contextTags={activeContextTags}
+                            />
                             ) : (
                                 <>
                                     {/* Sub-Navigation for Detailed Views */}

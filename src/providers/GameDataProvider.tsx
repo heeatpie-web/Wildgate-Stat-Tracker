@@ -8,9 +8,10 @@ import React, { createContext, useContext, useEffect, useMemo, useRef } from 're
 import { useAppStore } from '../store/useAppStore';
 import { useShallow } from 'zustand/react/shallow';
 import { Match, DrillDownTarget, KillMap, Loadout, GameMode, type DetectedUnknownMapping } from '../types';
-import { PlayerProfile } from '../store/slices/createMappingSlice';
+import { PlayerEncounterRoleCorrection, PlayerProfile } from '../store/slices/createMappingSlice';
 import type { PendingReview, RosterEntryMeta, TimelineEvent } from '../store/slices/createDataSlice';
 import type { OcrAliasModel } from '../utils/ocrAliasEngine';
+import type { EncounterRoleCorrection } from '../utils/playerEncounterRoles';
 import { getElectronAPI } from '../utils/electronAPI';
 import Logger from '../utils/logger';
 
@@ -146,6 +147,8 @@ interface GameDataContextType {
     addMapping: (id: string, name: string) => void;
     setOverlayPhase: (phase: 'Setup' | 'Live' | 'Result') => void;
     playerProfiles: Record<string, PlayerProfile>;
+    playerEncounterRoleCorrections: Record<string, PlayerEncounterRoleCorrection>;
+    getPlayerEncounterRoleCorrection: (matchId: number, playerName: string) => EncounterRoleCorrection | null;
     clearTelemetryDetected: () => void;
 }
 
@@ -225,6 +228,8 @@ export const GameDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         detectedUnknowns: s.detectedUnknowns, addMapping: s.addMapping,
         setOverlayPhase: s.setOverlayPhase,
         playerProfiles: s.playerProfiles,
+        playerEncounterRoleCorrections: s.playerEncounterRoleCorrections,
+        getPlayerEncounterRoleCorrection: s.getPlayerEncounterRoleCorrection,
         clearTelemetryDetected: s.clearTelemetryDetected,
     })));
 

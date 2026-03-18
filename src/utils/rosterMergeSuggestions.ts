@@ -5,11 +5,13 @@ export const ROSTER_MERGE_REVIEW_MIN_SCORE = 70;
 
 export interface RosterMergeVariant {
     name: string;
+    displayName: string;
     score: number;
 }
 
 export interface RosterMergeSuggestionGroup {
     canonicalName: string;
+    canonicalDisplayName: string;
     variants: RosterMergeVariant[];
     pairKeys: string[];
     score: number;
@@ -40,6 +42,21 @@ const canonicalDisplayScore = (name: string): number => {
     const allUpper = hasUpper && !hasLower;
 
     return (letters * 2) - (digits * 3) + spaces + (hasLower ? 3 : 0) + (hasLower && hasUpper ? 2 : 0) - (allUpper ? 1 : 0);
+};
+
+const hasReadableNameGlyph = (value: string): boolean => /[\p{L}\p{N}]/u.test(value);
+
+const toRosterMergeDisplayName = (value: string): string => {
+    const raw = String(value || '').trim();
+    const normalized = normalizeOcrName(raw);
+
+    for (const candidate of [normalized, raw]) {
+        const trimmed = String(candidate || '').trim();
+        if (!trimmed || !hasReadableNameGlyph(trimmed)) continue;
+        return trimmed;
+    }
+
+    return '';
 };
 
 interface BuildRosterMergeSuggestionGroupsOptions {
@@ -157,23 +174,31 @@ export const buildRosterMergeSuggestionGroups = ({
         const canonicalKey = resolveCanonicalKey(componentKeys);
         const canonicalName = registryByKey.get(canonicalKey);
         if (!canonicalName) return;
+        const canonicalDisplayName = toRosterMergeDisplayName(canonicalName);
+        if (!canonicalDisplayName) return;
 
         const variants = componentKeys
             .filter((key) => key !== canonicalKey)
-            .map((key) => ({
-                name: registryByKey.get(key) || key,
-                score: (adjacency.get(canonicalKey)?.get(key)) ?? combinedNameSimilarityScore(canonicalName, registryByKey.get(key) || key),
-            }))
+            .map((key) => {
+                const name = registryByKey.get(key) || key;
+                return {
+                    name,
+                    displayName: toRosterMergeDisplayName(name),
+                    score: (adjacency.get(canonicalKey)?.get(key)) ?? combinedNameSimilarityScore(canonicalName, name),
+                };
+            })
+            .filter((variant): variant is RosterMergeVariant => Boolean(variant.displayName))
             .sort((left, right) => right.score - left.score || left.name.localeCompare(right.name));
 
         if (variants.length === 0) return;
 
+        const visibleNames = [canonicalName, ...variants.map((variant) => variant.name)];
         const pairKeys: string[] = [];
-        for (let index = 0; index < componentKeys.length; index += 1) {
-            for (let offset = index + 1; offset < componentKeys.length; offset += 1) {
+        for (let index = 0; index < visibleNames.length; index += 1) {
+            for (let offset = index + 1; offset < visibleNames.length; offset += 1) {
                 const pairKey = buildRosterMergePairKey(
-                    registryByKey.get(componentKeys[index]) || componentKeys[index],
-                    registryByKey.get(componentKeys[offset]) || componentKeys[offset],
+                    visibleNames[index],
+                    visibleNames[offset],
                 );
                 if (pairKey) pairKeys.push(pairKey);
             }
@@ -181,6 +206,7 @@ export const buildRosterMergeSuggestionGroups = ({
 
         groups.push({
             canonicalName,
+            canonicalDisplayName,
             variants,
             pairKeys,
             score: variants[0]?.score ?? 0,
@@ -190,6 +216,6 @@ export const buildRosterMergeSuggestionGroups = ({
     return groups.sort((left, right) => (
         right.score - left.score
         || right.variants.length - left.variants.length
-        || left.canonicalName.localeCompare(right.canonicalName)
+        || left.canonicalDisplayName.localeCompare(right.canonicalDisplayName)
     ));
 };

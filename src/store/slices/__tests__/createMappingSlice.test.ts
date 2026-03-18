@@ -392,6 +392,16 @@ describe('createMappingSlice', () => {
       expect(resolved.color).toBe('azure');
     });
   });
+
+  describe('player encounter role corrections', () => {
+    it('records and resolves persisted match-side corrections by match and player', () => {
+      store.getState().recordPlayerEncounterRoleCorrection(42, 'Wingman', 'opponent');
+
+      expect(store.getState().getPlayerEncounterRoleCorrection(42, 'Wingman')).toBe('opponent');
+      expect(store.getState().getPlayerEncounterRoleCorrection(42, 'wingman')).toBe('opponent');
+      expect(store.getState().getPlayerEncounterRoleCorrection(43, 'Wingman')).toBeNull();
+    });
+  });
   // ── Legacy Mapping Operations ──
 
   describe('addMapping / removeMapping', () => {

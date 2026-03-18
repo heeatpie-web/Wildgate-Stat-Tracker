@@ -93,6 +93,7 @@ export interface FormSlice {
     pendingArtifactType: string;
     showWizard: WizardResult | null;
     wizardInitialTab: 'result' | 'ocr' | null;
+    wizardCloseOnOcrApply: boolean;
 
     characterLoadouts: Record<string, Record<string, number>>;
 
@@ -119,6 +120,7 @@ export interface FormSlice {
     setPendingArtifactType: (type: string) => void;
     setShowWizard: (result: WizardResult | null) => void;
     setWizardInitialTab: (tab: 'result' | 'ocr' | null) => void;
+    setWizardCloseOnOcrApply: (value: boolean) => void;
     clearTelemetryDetected: () => void;
     resetSelectionSourcesForNewMatch: () => void;
     resetMatchTrackingForNewMatch: () => void;
@@ -154,6 +156,7 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
     pendingArtifactType: '',
     showWizard: null,
     wizardInitialTab: null,
+    wizardCloseOnOcrApply: false,
 
     setSelectedTeammates: (teammates) => set((state) => {
         const nextTeammates = sanitizeTeammates(
@@ -347,8 +350,11 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
             : state.pendingMatchData,
     })),
     setWizardInitialTab: (tab) => set(() => ({ wizardInitialTab: tab })),
+    setWizardCloseOnOcrApply: (value) => set(() => ({ wizardCloseOnOcrApply: value })),
     setShowWizard: (result) => set((state) => ({
         showWizard: result,
+        wizardInitialTab: result === null ? null : state.wizardInitialTab,
+        wizardCloseOnOcrApply: result === null ? false : state.wizardCloseOnOcrApply,
         pendingMatchData: state.pendingMatchData
             ? {
                 ...state.pendingMatchData,
@@ -432,6 +438,8 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
             pendingPlacement: null,
             pendingArtifactType: '',
             showWizard: null,
+            wizardInitialTab: null,
+            wizardCloseOnOcrApply: false,
             matchStartTime: null,
             isMatchInProgress: false,
         };
