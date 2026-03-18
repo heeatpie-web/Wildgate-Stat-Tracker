@@ -22,6 +22,7 @@
     "dev:newuser": "npm run electron:dev:newuser",
     "dev:hot": "concurrently \"vite\" \"node scripts/electron-hot-dev.cjs\"",
     "electron:build": "vite build && electron-builder",
+    "electron:publish": "vite build && electron-builder --publish always",
     "snap:views": "node scripts/visual-snapshots.mjs",
     "snap:views:real": "node scripts/visual-snapshots.mjs --real-data",
     "snap:phase2:before": "node scripts/phase2-recording-snapshots.mjs --stage=before",
