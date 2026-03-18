@@ -43,7 +43,8 @@
     "check:stream-ownership:ocr": "node scripts/check-stream-ownership.cjs --stream ocr",
     "check:stream-ownership:contract": "node scripts/check-stream-ownership.cjs --stream contract",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "release": "node scripts/release.cjs"
   },
   "dependencies": {
     "@nut-tree-fork/nut-js": "^4.2.6",
