@@ -133,3 +133,7 @@ Safety model used here:
 - `src/store/README.md` - state slice map
 - `src/utils/README.md` - utility map
 - `electron/README.md` - main/preload IPC map
+
+## For AI Agents
+
+See [`AGENTS.md`](./AGENTS.md) for instructions on how to release and key workflows.
