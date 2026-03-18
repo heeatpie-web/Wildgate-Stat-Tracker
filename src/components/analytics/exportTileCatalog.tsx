@@ -115,7 +115,7 @@ export const TILE_CATALOG: ExportTileDefinition[] = [
   },
   {
     id: 'avgDamage',
-    title: 'Avg Damage',
+    title: 'Avg Dmg Taken',
     icon: <Zap size={14} />,
     render: (data) => {
       const matches = data.filteredMatches.filter(m => m.damageTaken != null);
@@ -206,7 +206,7 @@ export const TILE_CATALOG: ExportTileDefinition[] = [
           </div>
           <AreaChart width={200} height={80} data={timeline} style={{ width: '100%' }}>
             <defs>
-              <linearGradient id="momentumExportGrad" x1="0" y1="0" x2="0" y2="1">
+              <linearGradient id="momentum-grad" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="var(--md-sys-color-primary)" stopOpacity={0.3} />
                 <stop offset="95%" stopColor="var(--md-sys-color-primary)" stopOpacity={0} />
               </linearGradient>
@@ -218,7 +218,7 @@ export const TILE_CATALOG: ExportTileDefinition[] = [
               dataKey="score"
               stroke="var(--md-sys-color-primary)"
               strokeWidth={2}
-              fill="url(#momentumExportGrad)"
+              fill="url(#momentum-grad)"
               dot={false}
               isAnimationActive={false}
             />
@@ -275,7 +275,7 @@ export const TILE_CATALOG: ExportTileDefinition[] = [
           </div>
           <AreaChart width={200} height={80} data={timeline} style={{ width: '100%' }}>
             <defs>
-              <linearGradient id="killExportGrad" x1="0" y1="0" x2="0" y2="1">
+              <linearGradient id="killEfficiency-grad" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="var(--md-sys-color-primary)" stopOpacity={0.3} />
                 <stop offset="95%" stopColor="var(--md-sys-color-primary)" stopOpacity={0} />
               </linearGradient>
@@ -287,7 +287,7 @@ export const TILE_CATALOG: ExportTileDefinition[] = [
               dataKey="avgKills"
               stroke="var(--md-sys-color-primary)"
               strokeWidth={2}
-              fill="url(#killExportGrad)"
+              fill="url(#killEfficiency-grad)"
               dot={false}
               isAnimationActive={false}
             />
