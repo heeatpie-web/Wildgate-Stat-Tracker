@@ -14,6 +14,7 @@ dist-ssr
 *.local
 _savepoint_*  
 .visual/
+.worktrees/
 
 # Editor directories and files
 .vscode/
