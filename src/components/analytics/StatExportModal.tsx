@@ -32,9 +32,15 @@ export default function StatExportModal({
   };
 
   const handleDownload = async () => {
+    if (!gridRef.current) return;
     setExporting(true);
-    await exportTilesAsImage(gridRef.current);
-    setExporting(false);
+    try {
+      await exportTilesAsImage(gridRef.current);
+    } catch (err) {
+      console.error('Export failed:', err);
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handleClearPins = () => {
