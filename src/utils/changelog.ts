@@ -1,4 +1,8 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.3.4": [
+    "Improvement: Automated release pipeline so future updates ship faster",
+    "Fix: Telemetry ID mapping for Sonic Boom, Thunder Dash, Impact Can, and Privateer now resolves correctly on new installs"
+  ],
   "v3.3.3": [
     "Release: Version 3.3.3 rolls in the Smart Captures OCR handoff fix, simulator telemetry cleanup, and refreshed release metadata.",
     "Fix: Smart Captures Analyze and Re-analyze now open a populated wizard draft instead of stalling on an empty review state.",
