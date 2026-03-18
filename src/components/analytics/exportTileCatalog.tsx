@@ -125,7 +125,7 @@ export const TILE_CATALOG: ExportTileDefinition[] = [
       const formatted = avg >= 1000 ? `${(avg / 1000).toFixed(1)}k` : String(avg);
       return (
         <div className="h-full flex flex-col gap-2">
-          <div className="text-label-xs font-bold uppercase tracking-widest text-md-sys-on-surface/50">Avg Damage</div>
+          <div className="text-label-xs font-bold uppercase tracking-widest text-md-sys-on-surface/50">Avg Dmg Taken</div>
           <div className="text-3xl font-black text-md-sys-primary">{formatted}</div>
           <div className="text-label-xs text-md-sys-on-surface/50">{matches.length} with data</div>
         </div>
@@ -195,36 +195,44 @@ export const TILE_CATALOG: ExportTileDefinition[] = [
     title: 'Momentum',
     icon: <Gauge size={14} />,
     render: (data) => {
-      const { currentMomentum, trend, timeline } = data.momentum;
-      const TrendIcon = trend === 'rising' ? TrendingUp : trend === 'falling' ? TrendingDown : Minus;
-      return (
-        <div className="h-full flex flex-col gap-2">
-          <div className="text-label-xs font-bold uppercase tracking-widest text-md-sys-on-surface/50">Momentum</div>
-          <div className="text-3xl font-black text-md-sys-primary flex items-center gap-1">
-            {currentMomentum}
-            <TrendIcon size={18} />
+      const MomentumChart = () => {
+        const gradId = React.useId();
+        const { currentMomentum, trend, timeline } = data.momentum;
+        const TrendIcon = trend === 'rising' ? TrendingUp : trend === 'falling' ? TrendingDown : Minus;
+        return (
+          <div className="h-full flex flex-col gap-2">
+            <div className="text-label-xs font-bold uppercase tracking-widest text-md-sys-on-surface/50">Momentum</div>
+            <div className="text-3xl font-black text-md-sys-primary flex items-center gap-1">
+              {currentMomentum}
+              <TrendIcon size={18} />
+            </div>
+            {timeline.length < 2 ? (
+              <div className="text-label-xs text-md-sys-on-surface/50 mt-2">Not enough data</div>
+            ) : (
+              <AreaChart width={200} height={80} data={timeline} style={{ width: '100%' }}>
+                <defs>
+                  <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--md-sys-color-primary)" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="var(--md-sys-color-primary)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="index" hide />
+                <YAxis hide />
+                <Area
+                  type="monotone"
+                  dataKey="score"
+                  stroke="var(--md-sys-color-primary)"
+                  strokeWidth={2}
+                  fill={`url(#${gradId})`}
+                  dot={false}
+                  isAnimationActive={false}
+                />
+              </AreaChart>
+            )}
           </div>
-          <AreaChart width={200} height={80} data={timeline} style={{ width: '100%' }}>
-            <defs>
-              <linearGradient id="momentum-grad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--md-sys-color-primary)" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="var(--md-sys-color-primary)" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <XAxis dataKey="index" hide />
-            <YAxis hide />
-            <Area
-              type="monotone"
-              dataKey="score"
-              stroke="var(--md-sys-color-primary)"
-              strokeWidth={2}
-              fill="url(#momentum-grad)"
-              dot={false}
-              isAnimationActive={false}
-            />
-          </AreaChart>
-        </div>
-      );
+        );
+      };
+      return <MomentumChart />;
     },
   },
   {
@@ -264,36 +272,44 @@ export const TILE_CATALOG: ExportTileDefinition[] = [
     title: 'Kill Efficiency',
     icon: <Crosshair size={14} />,
     render: (data) => {
-      const { overallAvgKills, trendDirection, timeline } = data.killEfficiency;
-      const TrendIcon = trendDirection === 'up' ? TrendingUp : trendDirection === 'down' ? TrendingDown : Minus;
-      return (
-        <div className="h-full flex flex-col gap-2">
-          <div className="text-label-xs font-bold uppercase tracking-widest text-md-sys-on-surface/50">Kill Efficiency</div>
-          <div className="text-3xl font-black text-md-sys-primary flex items-center gap-1">
-            {overallAvgKills.toFixed(1)}
-            <TrendIcon size={18} />
+      const KillEfficiencyChart = () => {
+        const gradId = React.useId();
+        const { overallAvgKills, trendDirection, timeline } = data.killEfficiency;
+        const TrendIcon = trendDirection === 'up' ? TrendingUp : trendDirection === 'down' ? TrendingDown : Minus;
+        return (
+          <div className="h-full flex flex-col gap-2">
+            <div className="text-label-xs font-bold uppercase tracking-widest text-md-sys-on-surface/50">Kill Efficiency</div>
+            <div className="text-3xl font-black text-md-sys-primary flex items-center gap-1">
+              {overallAvgKills.toFixed(1)}
+              <TrendIcon size={18} />
+            </div>
+            {timeline.length < 2 ? (
+              <div className="text-label-xs text-md-sys-on-surface/50 mt-2">Not enough data</div>
+            ) : (
+              <AreaChart width={200} height={80} data={timeline} style={{ width: '100%' }}>
+                <defs>
+                  <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--md-sys-color-primary)" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="var(--md-sys-color-primary)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="index" hide />
+                <YAxis hide />
+                <Area
+                  type="monotone"
+                  dataKey="avgKills"
+                  stroke="var(--md-sys-color-primary)"
+                  strokeWidth={2}
+                  fill={`url(#${gradId})`}
+                  dot={false}
+                  isAnimationActive={false}
+                />
+              </AreaChart>
+            )}
           </div>
-          <AreaChart width={200} height={80} data={timeline} style={{ width: '100%' }}>
-            <defs>
-              <linearGradient id="killEfficiency-grad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--md-sys-color-primary)" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="var(--md-sys-color-primary)" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <XAxis dataKey="index" hide />
-            <YAxis hide />
-            <Area
-              type="monotone"
-              dataKey="avgKills"
-              stroke="var(--md-sys-color-primary)"
-              strokeWidth={2}
-              fill="url(#killEfficiency-grad)"
-              dot={false}
-              isAnimationActive={false}
-            />
-          </AreaChart>
-        </div>
-      );
+        );
+      };
+      return <KillEfficiencyChart />;
     },
   },
   {
@@ -336,7 +352,7 @@ export const TILE_CATALOG: ExportTileDefinition[] = [
         <div className="h-full flex flex-col gap-2">
           <div className="text-label-xs font-bold uppercase tracking-widest text-md-sys-on-surface/50">Peak Time</div>
           <div className="text-3xl font-black text-md-sys-primary">
-            {peakHour}:00
+            {String(peakHour).padStart(2, '0')}:00
           </div>
           <div className="text-label-xs text-md-sys-on-surface/50">{dayName}</div>
         </div>
