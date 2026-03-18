@@ -369,6 +369,20 @@ const applyUidSeed = async (data: StorageData): Promise<StorageData> => {
       equipment: { ...seedMappings.equipment, ...merged.uidMappings.equipment },
       perks: { ...seedMappings.perks, ...merged.uidMappings.perks },
     };
+
+    // Apply relocations: remove GUIDs from the domain they were incorrectly placed in.
+    const relocations = Array.isArray(seed.relocations) ? seed.relocations : [];
+    for (const relocation of relocations) {
+      if (!isRecord(relocation)) continue;
+      const { guid, from } = relocation as { guid?: unknown; from?: unknown };
+      if (typeof guid !== 'string' || typeof from !== 'string') continue;
+      const domain = from as keyof typeof merged.uidMappings;
+      if (merged.uidMappings[domain]) {
+        const { [guid]: _removed, ...rest } = merged.uidMappings[domain];
+        merged.uidMappings[domain] = rest;
+      }
+    }
+
     merged.uidSeedState = { seedVersionApplied: seedVersion };
     return merged;
   } catch (error) {

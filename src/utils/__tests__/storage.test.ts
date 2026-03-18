@@ -196,4 +196,40 @@ describe('StorageService', () => {
     expect(loaded?.uidMappings.perks.A7291E13434D4D67CFEAD0928F4CEA69).toBe('Boarder');
     expect(loaded?.uidSeedState.seedVersionApplied).toBe(2);
   });
+
+  it('relocations in seed move a misplaced GUID from the wrong domain to the correct one', async () => {
+    const PRIVATEER_GUID = 'DBCDD50744CF05BC84F52982E6567ACB';
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'db-read') {
+        return createStorageData({
+          uidMappings: {
+            players: { [PRIVATEER_GUID]: 'Privateer' },
+            ships: {},
+            weapons: {},
+            equipment: {},
+            perks: {},
+          },
+          uidSeedState: { seedVersionApplied: 4 },
+        });
+      }
+      if (channel === 'read-uid-seed') {
+        return {
+          version: 5,
+          players: {},
+          ships: { [PRIVATEER_GUID]: 'Privateer' },
+          weapons: {},
+          equipment: {},
+          perks: {},
+          relocations: [{ guid: PRIVATEER_GUID, from: 'players', to: 'ships' }],
+        };
+      }
+      return null;
+    });
+    const { StorageService } = await loadStorageModule({ invoke });
+
+    const loaded = await StorageService.init();
+
+    expect(loaded?.uidMappings.ships[PRIVATEER_GUID]).toBe('Privateer');
+    expect(loaded?.uidMappings.players[PRIVATEER_GUID]).toBeUndefined();
+  });
 });
