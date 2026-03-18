@@ -22,8 +22,30 @@ const CHANGELOG_TS = path.join(ROOT, 'src', 'utils', 'changelog.ts');
 // Helpers
 // ---------------------------------------------------------------------------
 
-function run(cmd, opts = {}) {
-  return execSync(cmd, { cwd: ROOT, encoding: 'utf8', ...opts }).trim();
+function run(cmd) {
+  try {
+    return execSync(cmd, { cwd: ROOT, encoding: 'utf8' }).trim();
+  } catch (err) {
+    console.error(`\n❌  Command failed: ${cmd}`);
+    if (err.stderr) console.error(err.stderr.trim());
+    process.exit(1);
+  }
+}
+
+function die(msg) {
+  console.error(`Error: ${msg}`);
+  process.exit(1);
+}
+
+function semverGt(a, b) {
+  // Returns true if semver string a is strictly greater than b
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if (pa[i] > pb[i]) return true;
+    if (pa[i] < pb[i]) return false;
+  }
+  return false;
 }
 
 function bumpVersion(current, bump) {
@@ -71,6 +93,8 @@ function parseArgs(argv) {
   if (gitStatus !== '') {
     console.error('Error: Git working tree is not clean. Commit or stash changes before releasing.');
     console.error(gitStatus);
+    console.error('\nIf a previous release attempt failed mid-way, reset with:');
+    console.error('  git checkout -- package.json src/utils/constants.ts src/utils/changelog.ts');
     process.exit(1);
   }
 
@@ -91,6 +115,11 @@ function parseArgs(argv) {
       process.exit(1);
     }
     newVersion = stripped;
+  }
+
+  if (!semverGt(newVersion, currentVersion)) {
+    console.error(`Error: "v${newVersion}" is not greater than the current version "v${currentVersion}". Use patch/minor/major or pick a higher explicit version.`);
+    process.exit(1);
   }
 
   const newTag = `v${newVersion}`;
@@ -165,11 +194,14 @@ function parseArgs(argv) {
 
   // 7. Update src/utils/constants.ts
   let constantsContent = fs.readFileSync(CONSTANTS_TS, 'utf8');
-  constantsContent = constantsContent.replace(
-    /export const APP_VERSION = 'v[^']+';/,
+  const updated = constantsContent.replace(
+    /export const APP_VERSION = 'v\d+\.\d+\.\d+';/,
     `export const APP_VERSION = '${newTag}';`
   );
-  fs.writeFileSync(CONSTANTS_TS, constantsContent, 'utf8');
+  if (!updated.includes(`APP_VERSION = '${newTag}'`)) {
+    die('Could not find APP_VERSION in constants.ts — was it renamed?');
+  }
+  fs.writeFileSync(CONSTANTS_TS, updated, 'utf8');
   console.log(`Updated constants.ts → APP_VERSION = '${newTag}'`);
 
   // 8. Update src/utils/changelog.ts — prepend new entry
@@ -200,10 +232,21 @@ function parseArgs(argv) {
   run(`git commit -m "chore: release ${newTag}"`);
 
   // 11. Git tag
-  run(`git tag ${newTag}`);
+  console.log('Tagging release...');
+  const existingTag = run(`git tag -l ${newTag}`);
+  if (!existingTag) {
+    run(`git tag ${newTag}`);
+    console.log(`✅  Tagged: ${newTag}`);
+  } else {
+    console.log(`⚠️   Tag ${newTag} already exists locally — skipping tag creation`);
+  }
 
   // 12. Git push (commit + tags)
-  run('git push && git push --tags');
+  console.log('Pushing commits...');
+  run('git push');
+  console.log('Pushing tags...');
+  run('git push --tags');
+  console.log('✅  Pushed commits and tags.');
 
   // 13. Success
   console.log(`\nRelease ${newTag} complete!`);
