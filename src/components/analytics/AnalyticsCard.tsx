@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Pin } from 'lucide-react';
 import { VisualMode } from '../../types';
 
 interface AnalyticsCardProps {
@@ -11,17 +11,23 @@ interface AnalyticsCardProps {
     className?: string;
     accentColor?: string;
     variant?: 'glass' | 'solid' | 'flat';
+    pinId?: string;
+    isPinned?: boolean;
+    onTogglePin?: (id: string) => void;
 }
 
-export const AnalyticsCard: React.FC<AnalyticsCardProps> = ({ 
-    title, 
-    icon, 
-    children, 
-    onExpand, 
-    visualMode, 
-    className = '', 
+export const AnalyticsCard: React.FC<AnalyticsCardProps> = ({
+    title,
+    icon,
+    children,
+    onExpand,
+    visualMode,
+    className = '',
     accentColor,
-    variant = 'glass'
+    variant = 'glass',
+    pinId,
+    isPinned,
+    onTogglePin,
 }) => {
     const dense = visualMode === 'dense';
 
@@ -66,6 +72,19 @@ export const AnalyticsCard: React.FC<AnalyticsCardProps> = ({
                     <span className="opacity-60">{icon}</span>
                     <span>{title}</span>
                 </div>
+                {pinId && (
+                    <button
+                        data-no-pin
+                        aria-label={isPinned ? 'Unpin tile' : 'Pin tile for export'}
+                        onClick={(e) => { e.stopPropagation(); onTogglePin?.(pinId); }}
+                        className={`flex items-center justify-center transition-colors ${isPinned ? 'text-md-sys-primary' : 'text-md-sys-on-surface/30 hover:text-md-sys-on-surface/70'}`}
+                    >
+                        <Pin
+                            size={dense ? 12 : 14}
+                            fill={isPinned ? 'currentColor' : 'none'}
+                        />
+                    </button>
+                )}
                 {onExpand && <ChevronRight size={dense ? 12 : 14} className="opacity-40 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-300" />}
             </div>
 

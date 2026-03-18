@@ -30,3 +30,33 @@ export async function exportAnalyticsAsImage(containerEl: HTMLElement | null): P
         return false;
     }
 }
+
+/**
+ * Captures a subset of pinned analytics tiles as a PNG image and triggers a download.
+ */
+export async function exportTilesAsImage(containerEl: HTMLElement | null): Promise<boolean> {
+    if (!containerEl) return false;
+
+    const styles = getComputedStyle(document.body);
+    const bg = styles.getPropertyValue('--md-sys-color-background').trim() || styles.backgroundColor || 'rgb(24, 26, 34)';
+
+    try {
+        const canvas = await html2canvas(containerEl, {
+            backgroundColor: bg,
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            windowWidth: containerEl.scrollWidth,
+            windowHeight: containerEl.scrollHeight,
+        });
+
+        const link = document.createElement('a');
+        link.download = `wildgate-stats-${new Date().toISOString().slice(0, 10)}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        return true;
+    } catch (e) {
+        console.error('Analytics export failed:', e);
+        return false;
+    }
+}
