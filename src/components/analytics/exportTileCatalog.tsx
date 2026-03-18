@@ -359,4 +359,30 @@ export const TILE_CATALOG: ExportTileDefinition[] = [
       );
     },
   },
+  {
+    id: 'streaks',
+    title: 'Streak Timeline',
+    icon: <Flame size={14} />,
+    render: (data) => {
+      const { currentStreak, longestWinStreak, longestLossStreak } = data.streakHistory;
+      return (
+        <div className="h-full flex flex-col gap-2">
+          <div className="text-label-xs font-bold uppercase tracking-widest text-md-sys-on-surface/50">Current Streak</div>
+          <div className={`text-3xl font-black ${currentStreak > 0 ? 'text-success' : currentStreak < 0 ? 'text-danger' : 'text-md-sys-on-surface'}`}>
+            {currentStreak > 0 ? `+${currentStreak}W` : currentStreak < 0 ? `${Math.abs(currentStreak)}L` : '0'}
+          </div>
+          <div className="flex gap-4 mt-auto">
+            <div>
+              <div className="text-label-xs text-md-sys-on-surface/40">Best Win</div>
+              <div className="text-body font-black text-success">{longestWinStreak}</div>
+            </div>
+            <div>
+              <div className="text-label-xs text-md-sys-on-surface/40">Worst Loss</div>
+              <div className="text-body font-black text-danger">{longestLossStreak}</div>
+            </div>
+          </div>
+        </div>
+      );
+    },
+  },
 ];

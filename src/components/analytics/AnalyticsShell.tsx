@@ -46,6 +46,26 @@ const VIEW_LABELS: Record<AnalyticsView, string> = {
     reactor: 'Reactor',
 };
 
+// Maps AnalyticsView names to their tile catalog ID (only views that have a corresponding tile)
+const VIEW_TO_TILE_ID: Partial<Record<AnalyticsView, string>> = {
+    momentum: 'momentum',
+    placement: 'placement',
+    killEfficiency: 'killEfficiency',
+    period: 'periodComparison',
+    timePatterns: 'timePatterns',
+    streaks: 'streaks',
+};
+
+const STAT_TILE_CHIPS = [
+    { id: 'winRate', label: 'Win Rate' },
+    { id: 'totalMatches', label: 'Matches' },
+    { id: 'avgKills', label: 'Avg Kills' },
+    { id: 'avgDamage', label: 'Avg Dmg' },
+    { id: 'avgPlacement', label: 'Avg Place' },
+    { id: 'bestStreak', label: 'Best Streak' },
+    { id: 'currentStreak', label: 'Streak' },
+] as const;
+
 const TIME_RANGE_OPTIONS: { value: AnalyticsTimeRange; label: string }[] = [
     { value: 'today', label: 'Today' },
     { value: 'lastN', label: 'Last 20' },
@@ -596,6 +616,29 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
                     ) : (
                         <div ref={contentRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar rounded-card mg-surface-high p-3">
                             {currentView === 'overview' ? (
+                                <>
+                                {/* Stat tile pin chips — overview only */}
+                                <div className="mb-3 flex flex-wrap items-center gap-2">
+                                    <span className="text-label-xs font-bold uppercase tracking-widest text-md-sys-on-surface/40 mr-1">
+                                        Pin for export:
+                                    </span>
+                                    {STAT_TILE_CHIPS.map(chip => (
+                                        <button
+                                            key={chip.id}
+                                            type="button"
+                                            onClick={() => togglePin(chip.id)}
+                                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-control text-label-xs font-bold uppercase tracking-wide transition-all border ${
+                                                pinnedTiles.has(chip.id)
+                                                    ? 'bg-md-sys-primary/15 text-md-sys-primary border-md-sys-primary/30'
+                                                    : 'bg-transparent text-md-sys-on-surface/40 border-md-sys-outline/20 hover:text-md-sys-on-surface/70 hover:border-md-sys-outline/40'
+                                            }`}
+                                            aria-label={pinnedTiles.has(chip.id) ? `Unpin ${chip.label}` : `Pin ${chip.label} for export`}
+                                        >
+                                            <Pin size={10} fill={pinnedTiles.has(chip.id) ? 'currentColor' : 'none'} />
+                                            {chip.label}
+                                        </button>
+                                    ))}
+                                </div>
                                 <AnalyticsCockpit
                                     visualMode={visualMode}
                                     onNavigate={navigateTo}
@@ -607,6 +650,7 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
                                 filteredMatches={data.filteredMatches}
                                 contextTags={activeContextTags}
                             />
+                                </>
                             ) : (
                                 <>
                                     {/* Sub-Navigation for Detailed Views */}
@@ -624,19 +668,21 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
                                             </button>
                                         ))}
                                         {/* Pin button for current view */}
-                                        <button
-                                            type="button"
-                                            onClick={() => togglePin(currentView)}
-                                            className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-control text-label-sm font-bold uppercase tracking-wide transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary ${
-                                                pinnedTiles.has(currentView)
-                                                    ? 'bg-md-sys-primary/15 text-md-sys-primary border border-md-sys-primary/30'
-                                                    : 'text-md-sys-on-surface/40 hover:text-md-sys-on-surface/70 border border-transparent'
-                                            }`}
-                                            aria-label={pinnedTiles.has(currentView) ? 'Unpin this view' : 'Pin this view for export'}
-                                        >
-                                            <Pin size={12} fill={pinnedTiles.has(currentView) ? 'currentColor' : 'none'} />
-                                            {pinnedTiles.has(currentView) ? 'Pinned' : 'Pin'}
-                                        </button>
+                                        {!!VIEW_TO_TILE_ID[currentView] && (
+                                            <button
+                                                type="button"
+                                                onClick={() => togglePin(VIEW_TO_TILE_ID[currentView] ?? currentView)}
+                                                className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-control text-label-sm font-bold uppercase tracking-wide transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary ${
+                                                    pinnedTiles.has(VIEW_TO_TILE_ID[currentView] ?? currentView)
+                                                        ? 'bg-md-sys-primary/15 text-md-sys-primary border border-md-sys-primary/30'
+                                                        : 'text-md-sys-on-surface/40 hover:text-md-sys-on-surface/70 border border-transparent'
+                                                }`}
+                                                aria-label={pinnedTiles.has(VIEW_TO_TILE_ID[currentView] ?? currentView) ? 'Unpin this view' : 'Pin this view for export'}
+                                            >
+                                                <Pin size={12} fill={pinnedTiles.has(VIEW_TO_TILE_ID[currentView] ?? currentView) ? 'currentColor' : 'none'} />
+                                                {pinnedTiles.has(VIEW_TO_TILE_ID[currentView] ?? currentView) ? 'Pinned' : 'Pin'}
+                                            </button>
+                                        )}
                                     </div>
                                     {renderExpandedView()}
                                 </>
