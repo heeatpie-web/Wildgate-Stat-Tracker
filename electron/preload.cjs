@@ -28,6 +28,7 @@ const INVOKE_CHANNELS = [
   'scan-epic-ids',
   'read-file-base64', 'open-path',
   'pixel-monitor-sample',
+  'scan-result-screen',
 ];
 
 const SEND_CHANNELS = [

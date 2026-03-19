@@ -23,6 +23,7 @@ const dbHelpers = require('./helpers/dbHelpers.cjs');
 const { registerArtifactHandlers, saveScreenshotImage } = require('./handlers/artifactHandlers.cjs');
 const { createAutoCaptureCoordinator } = require('./autoCaptureCoordinator.cjs');
 const { startMonitor, stopMonitor, sampleRegion } = require('./pixelMonitor.cjs');
+const { extractResultScreen } = require('./resultScreenExtractor.cjs');
 const { buildAutoCaptureRequestFromStateSnapshot } = require('./autoCaptureHotkeyState.cjs');
 const { clearGameWindowCache, holdGameKeySequence, lookupGameWindowCandidate, sendGameKeySequence, setPersistentPSRunner, validateGameInputRuntime } = require('./gameInput.cjs');
 const { runPSWithEnv, startPersistentPS, killPersistentPS } = require('./persistentPowerShell.cjs');
@@ -3686,4 +3687,21 @@ ipcMain.on('pixel-monitor-start', (_event, config) => {
 });
 ipcMain.on('pixel-monitor-stop', () => stopMonitor());
 ipcMain.handle('pixel-monitor-sample', async (_event, config) => sampleRegion(config));
+
+ipcMain.handle('scan-result-screen', async (_event, { imageBase64 }) => {
+    try {
+        if (!imageBase64 || typeof imageBase64 !== 'string') {
+            return { success: false, error: 'Invalid image data' };
+        }
+        const buffer = Buffer.from(
+            imageBase64.replace(/^data:image\/\w+;base64,/, ''),
+            'base64'
+        );
+        const result = await extractResultScreen(buffer);
+        return { success: true, data: result };
+    } catch (err) {
+        console.error('[ResultScanner] Error:', err.message);
+        return { success: false, error: err.message };
+    }
+});
 
