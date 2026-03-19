@@ -1993,19 +1993,8 @@ const App: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        const onTelemetryDraftStarted = (evt: Event) => {
-            const customEvt = evt as CustomEvent<{ matchId?: number }>;
-            const matchId = Number(customEvt?.detail?.matchId || 0);
-            if (!Number.isInteger(matchId) || matchId <= 0) return;
-            setTelemetryDraftPrompt((current) => {
-                if (current?.phase === 'midmatch' || current?.phase === 'postmatch') return current;
-                if (current?.phase === 'start' && current.matchId === matchId) return current;
-                return {
-                    matchId,
-                    duration: '00:00',
-                    phase: 'start',
-                };
-            });
+        const onTelemetryDraftStarted = (_evt: Event) => {
+            // Match start popup suppressed — pixel monitor handles capture automatically.
         };
 
         const onTelemetryDraftReady = (evt: Event) => {
