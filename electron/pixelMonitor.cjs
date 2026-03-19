@@ -3,14 +3,11 @@
  * Monitors a configurable screen region for pixel changes.
  * Used to auto-detect the victory/defeat result screen and trigger smart capture.
  *
- * Detection: frame-diff change detection — samples a 4×4 grid of pixels across
- * the configured region using nut-js screen.colorAt(). When the average per-channel
- * difference between frames exceeds `changeSensitivity`, the `onTrigger` callback
- * fires (with a cooldown guard).
+ * Detection: frame-diff change detection — captures the configured region in a
+ * single native call via screen.grabRegion() and computes the average RGB across
+ * all pixels. When the average per-channel difference between frames exceeds
+ * `changeSensitivity`, the `onTrigger` callback fires (with a cooldown guard).
  */
-
-/** Number of samples per axis (4×4 = 16 total). */
-const SAMPLES = 4;
 
 /** Milliseconds to suppress re-triggering after a detection event. */
 const COOLDOWN_MS = 15000;
@@ -18,42 +15,49 @@ const COOLDOWN_MS = 15000;
 let _timer = null;
 let _cooldownUntil = 0;
 let _prevSample = null; // [avgR, avgG, avgB]
+let _busy = false;
 
-// IPC: lazy-load nut-js screen object
-let _nutScreen = null;
-function getNutScreen() {
-    if (_nutScreen) return _nutScreen;
-    _nutScreen = require('@nut-tree-fork/nut-js').screen;
-    return _nutScreen;
+// Lazy-load nut-js to avoid require() at module load time
+let _nut = null;
+function getNut() {
+    if (_nut) return _nut;
+    _nut = require('@nut-tree-fork/nut-js');
+    return _nut;
 }
 
 /**
- * Sample a 4×4 grid of pixels evenly distributed across the region.
- * Returns averaged RGB values across all 16 samples.
+ * Sample the region via a single native grabRegion() call.
+ * Returns averaged RGB values across all pixels in the region.
+ *
+ * The grabbed Image buffer uses BGRA byte ordering (4 channels, 32 bpp):
+ *   byte 0 = B, byte 1 = G, byte 2 = R, byte 3 = A
+ *
  * @param {{ x: number, y: number, width: number, height: number }} config
  * @returns {Promise<{ avgR: number, avgG: number, avgB: number } | null>}
  */
 async function sampleRegion(config) {
     try {
-        const s = getNutScreen();
-        let sumR = 0, sumG = 0, sumB = 0, count = 0;
+        const { screen, Region } = getNut();
+        const img = await screen.grabRegion(
+            new Region(config.x, config.y, config.width, config.height)
+        );
 
-        for (let row = 0; row < SAMPLES; row++) {
-            for (let col = 0; col < SAMPLES; col++) {
-                const x = Math.round(config.x + (col / (SAMPLES - 1)) * (config.width - 1));
-                const y = Math.round(config.y + (row / (SAMPLES - 1)) * (config.height - 1));
-                const c = await s.colorAt({ x, y });
-                sumR += c.red;
-                sumG += c.green;
-                sumB += c.blue;
-                count++;
-            }
+        const buf = img.data;
+        // Buffer is BGRA: channels = [B, G, R, A] per pixel
+        let sumR = 0, sumG = 0, sumB = 0;
+        const pixelCount = buf.length / 4;
+
+        for (let i = 0; i < buf.length; i += 4) {
+            sumB += buf[i];
+            sumG += buf[i + 1];
+            sumR += buf[i + 2];
+            // buf[i + 3] is alpha — ignored
         }
 
         return {
-            avgR: Math.round(sumR / count),
-            avgG: Math.round(sumG / count),
-            avgB: Math.round(sumB / count),
+            avgR: Math.round(sumR / pixelCount),
+            avgG: Math.round(sumG / pixelCount),
+            avgB: Math.round(sumB / pixelCount),
         };
     } catch {
         return null;
@@ -69,6 +73,8 @@ function startMonitor(config, onTrigger) {
     stopMonitor();
 
     _timer = setInterval(async () => {
+        if (_busy) return;
+        _busy = true;
         try {
             if (Date.now() < _cooldownUntil) return;
 
@@ -92,6 +98,8 @@ function startMonitor(config, onTrigger) {
             _prevSample = [avgR, avgG, avgB];
         } catch {
             // Silently swallow errors (e.g. nut-js unavailable mid-restart)
+        } finally {
+            _busy = false;
         }
     }, config.intervalMs);
 }
@@ -105,6 +113,7 @@ function stopMonitor() {
         _timer = null;
     }
     _prevSample = null;
+    _busy = false;
 }
 
 module.exports = { startMonitor, stopMonitor, sampleRegion };
