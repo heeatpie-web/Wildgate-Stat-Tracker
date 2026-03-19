@@ -10,6 +10,9 @@
  * This replicates the OBS Advanced Scene Switcher "video has changed" macro
  * behaviour — monitoring a small area (e.g. X:952 Y:543 W:16 H:45) every
  * 3000ms to detect the victory/defeat result screen without user interaction.
+ *
+ * When fullAutoEnabled is true and an onFullAutoTrigger callback is provided,
+ * the trigger event will call onFullAutoTrigger() instead of handleSmartScan().
  */
 
 import { useEffect, useRef } from 'react';
@@ -21,7 +24,7 @@ import { useSmartScan } from './useSmartScan';
 /** Cooldown in ms to prevent duplicate captures after a detection event. */
 const TRIGGER_COOLDOWN_MS = 15000;
 
-export function usePixelMonitor() {
+export function usePixelMonitor(onFullAutoTrigger?: () => Promise<void>) {
     const { isMatchInProgress } = useGameData();
     const { handleSmartScan, isScanning } = useSmartScan();
     const pixelMonitorEnabled = useAppStore(s => s.pixelMonitorEnabled);
@@ -31,6 +34,7 @@ export function usePixelMonitor() {
     const pixelMonitorHeight = useAppStore(s => s.pixelMonitorHeight);
     const pixelMonitorIntervalMs = useAppStore(s => s.pixelMonitorIntervalMs);
     const pixelMonitorChangeSensitivity = useAppStore(s => s.pixelMonitorChangeSensitivity);
+    const fullAutoEnabled = useAppStore(s => s.fullAutoEnabled);
 
     const cooldownRef = useRef<number>(0);
     const isScanningRef = useRef(isScanning);
@@ -38,6 +42,12 @@ export function usePixelMonitor() {
 
     const handleSmartScanRef = useRef(handleSmartScan);
     useEffect(() => { handleSmartScanRef.current = handleSmartScan; }, [handleSmartScan]);
+
+    const onFullAutoRef = useRef(onFullAutoTrigger);
+    useEffect(() => { onFullAutoRef.current = onFullAutoTrigger; }, [onFullAutoTrigger]);
+
+    const fullAutoEnabledRef = useRef(fullAutoEnabled);
+    useEffect(() => { fullAutoEnabledRef.current = fullAutoEnabled; }, [fullAutoEnabled]);
 
     // Start/stop the monitor based on match state and enabled flag.
     // Re-runs when any config value changes so the main process always has fresh config.
@@ -73,11 +83,16 @@ export function usePixelMonitor() {
         const api = getElectronAPI();
         if (!api) return;
 
-        const unsub = api.on('pixel-monitor-trigger', () => {
+        const unsub = api.on('pixel-monitor-trigger', async () => {
             if (isScanningRef.current) return;
             if (Date.now() < cooldownRef.current) return;
             cooldownRef.current = Date.now() + TRIGGER_COOLDOWN_MS;
-            handleSmartScanRef.current();
+
+            if (fullAutoEnabledRef.current && onFullAutoRef.current) {
+                await onFullAutoRef.current();
+            } else {
+                handleSmartScanRef.current();
+            }
         });
 
         return unsub;

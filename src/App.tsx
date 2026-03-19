@@ -88,7 +88,7 @@ const loadStandardDashboardChunk = (view: StandardDashboardView): Promise<Standa
 };
 const loadAnalyticsPanel = () => loadPauseableDashboardChunk('analytics');
 const AnalyticsPanel = React.lazy(loadAnalyticsPanel);
-import { APP_VERSION, Match, MatchResult, WizardResult } from './types';
+import { APP_VERSION, GameMode, Match, MatchResult, WizardResult } from './types';
 import { UNKNOWN_PLAYER_LABELS } from './utils/constants';
 import { Toast } from './components/Toast';
 const loadDevOCRPanel = () => loadStandardDashboardChunk('dev-ocr');
@@ -507,12 +507,14 @@ const App: React.FC = () => {
     const {
         matches,
         setMatches,
+        addMatch,
         players,
         sessionStartTime,
         addToRegistry,
         setPendingMatchData,
         pilotRegistry,
         setSelectedTeammates,
+        selectedTeammates,
         selectedOpponents,
         activeShip, setActiveShip,
         selectedReachModifiers, setSelectedReachModifiers,
@@ -589,7 +591,6 @@ const App: React.FC = () => {
     }, []);
 
     const { logFeed, logStatus } = useLogMonitor();
-    usePixelMonitor();
     const { discardTelemetryDraft, submitting: telemetryDraftDiscarding } = useMatchSubmission();
     const { playCapture } = useSoundEffects();
 
@@ -2124,6 +2125,91 @@ const App: React.FC = () => {
         });
         setToast({ message: `Queued roster candidate: ${normalized}`, type: 'info' });
     }, [addPendingReview, dismissedRosterCandidateKeys, pendingReviews, pilotRegistry, setToast]);
+
+    const autoSaveMatch = useCallback((
+        resultData: { result: 'Win' | 'Loss' | null; winType?: string; placement?: number },
+        artifactPath?: string | null
+    ) => {
+        const state = useAppStore.getState();
+        const pending = state.pendingMatchData ?? {};
+        const now = Date.now();
+
+        const match: Match = {
+            id: now,
+            timestamp: now,
+            date: new Date(now).toLocaleDateString('en-US', {
+                month: 'short', day: 'numeric', year: 'numeric',
+            }),
+            mode: (pending.mode as GameMode) ?? (activeMode as GameMode),
+            player: activeUser ?? '',
+            result: (resultData.result as MatchResult) ?? ('Ongoing' as MatchResult),
+            subType: resultData.winType ?? '',
+            placement: resultData.placement,
+            hero: pending.hero ?? String(state.activeHero ?? '') ?? '',
+            ship: pending.ship ?? activeShip ?? '',
+            teammates: pending.teammates ?? [...(selectedTeammates ?? [])],
+            opponents: pending.opponents ?? [...(selectedOpponents ?? [])],
+            reachModifiers: pending.reachModifiers ?? [...(selectedReachModifiers ?? [])],
+            kills: pending.kills ?? {},
+            loadout: pending.loadout ?? state.currentLoadout ?? undefined,
+            time: pending.time,
+            killedBy: pending.killedBy ?? (String(state.pendingKilledBy || '').trim() || undefined),
+            killedByShip: pending.killedByShip ?? (String(state.pendingKilledByShip || '').trim() || undefined),
+            artifacts: artifactPath ? [artifactPath] : (pending.artifacts ?? []),
+            telemetryDraftState: 'ready',
+        };
+
+        addMatch(match);
+
+        const ordinal = (n: number) => {
+            const s = ['th', 'st', 'nd', 'rd'];
+            const v = n % 100;
+            return n + (s[(v - 20) % 10] || s[v] || s[0]);
+        };
+
+        const label = resultData.result === 'Win'
+            ? `Victory${resultData.winType ? ` (${resultData.winType})` : ''}`
+            : resultData.result === 'Loss'
+            ? `Loss${resultData.placement ? ` — ${ordinal(resultData.placement)} place` : ''}`
+            : 'result unknown — edit manually';
+
+        setToast({
+            message: `Match auto-saved: ${label}`,
+            type: resultData.result ? 'success' : 'warning',
+        });
+    }, [addMatch, activeMode, activeUser, activeShip, selectedTeammates, selectedOpponents, selectedReachModifiers, setToast]);
+
+    const triggerFullAutoSave = useCallback(async () => {
+        const api = getElectronAPI();
+        if (!api) return;
+
+        try {
+            const capture = await api.invoke('capture-screen');
+            if (!capture) {
+                setToast({ message: 'Auto-capture failed: could not take screenshot', type: 'error' });
+                return;
+            }
+
+            const imageBase64 = capture as string;
+
+            const [scanResult, saveResult] = await Promise.all([
+                api.invoke('scan-result-screen', { imageBase64 }),
+                api.invoke('save-screenshot', {
+                    imageBase64: imageBase64.replace(/^data:image\/\w+;base64,/, ''),
+                }),
+            ]);
+
+            const resultData = scanResult?.data ?? { result: null };
+            const artifactPath = saveResult?.data?.filePath ?? null;
+
+            autoSaveMatch(resultData, artifactPath);
+        } catch (err) {
+            console.error('[FullAuto] Error:', err);
+            setToast({ message: 'Auto-save failed — check console', type: 'error' });
+        }
+    }, [autoSaveMatch, setToast]);
+
+    usePixelMonitor(triggerFullAutoSave);
 
     const handleApplyOCRData = useCallback((
         data: OCRExtractedData,
