@@ -237,6 +237,22 @@ export interface SettingsSlice {
   setOcrRegions: (update: OcrRegionUpdate) => void;
   resetOcrRegions: () => void;
   setTutorialCompleted: (completed: boolean) => void;
+
+  // Pixel monitor (auto-capture on result screen detection)
+  pixelMonitorEnabled: boolean;
+  pixelMonitorX: number;
+  pixelMonitorY: number;
+  pixelMonitorWidth: number;
+  pixelMonitorHeight: number;
+  pixelMonitorIntervalMs: number;
+  pixelMonitorChangeSensitivity: number;
+  setPixelMonitorEnabled: (enabled: boolean) => void;
+  setPixelMonitorX: (x: number) => void;
+  setPixelMonitorY: (y: number) => void;
+  setPixelMonitorWidth: (w: number) => void;
+  setPixelMonitorHeight: (h: number) => void;
+  setPixelMonitorIntervalMs: (ms: number) => void;
+  setPixelMonitorChangeSensitivity: (sensitivity: number) => void;
 }
 
 const defaultPreloadStats = (): Record<DashboardPreloadView, DashboardPreloadStat> => ({
@@ -315,6 +331,13 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   ocrBatchAcceptThreshold: 85,
   ocrRegions: createDefaultOcrRegions(),
   tutorialCompleted: false,
+  pixelMonitorEnabled: false,
+  pixelMonitorX: 952,
+  pixelMonitorY: 543,
+  pixelMonitorWidth: 16,
+  pixelMonitorHeight: 45,
+  pixelMonitorIntervalMs: 3000,
+  pixelMonitorChangeSensitivity: 30,
 
   setActiveMode: (mode) => set({ activeMode: mode }),
   setActiveUser: (user) => set({ activeUser: user }),
@@ -515,4 +538,11 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   })),
   resetOcrRegions: () => set({ ocrRegions: createDefaultOcrRegions() }),
   setTutorialCompleted: (completed) => set({ tutorialCompleted: completed }),
+  setPixelMonitorEnabled: (enabled) => set({ pixelMonitorEnabled: Boolean(enabled) }),
+  setPixelMonitorX: (x) => set({ pixelMonitorX: Math.max(0, Math.round(Number(x) || 0)) }),
+  setPixelMonitorY: (y) => set({ pixelMonitorY: Math.max(0, Math.round(Number(y) || 0)) }),
+  setPixelMonitorWidth: (w) => set({ pixelMonitorWidth: Math.max(1, Math.round(Number(w) || 16)) }),
+  setPixelMonitorHeight: (h) => set({ pixelMonitorHeight: Math.max(1, Math.round(Number(h) || 45)) }),
+  setPixelMonitorIntervalMs: (ms) => set({ pixelMonitorIntervalMs: Math.max(500, Math.round(Number(ms) || 3000)) }),
+  setPixelMonitorChangeSensitivity: (s) => set({ pixelMonitorChangeSensitivity: Math.max(1, Math.min(255, Math.round(Number(s) || 30))) }),
 });

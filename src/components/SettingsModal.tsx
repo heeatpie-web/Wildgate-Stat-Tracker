@@ -227,6 +227,41 @@ const SettingsModalContent: React.FC = () => {
     const ocrRegions = useAppStore(s => s.ocrRegions);
     const setOcrRegions = useAppStore(s => s.setOcrRegions);
 
+    const pixelMonitorEnabled = useAppStore(s => s.pixelMonitorEnabled);
+    const setPixelMonitorEnabled = useAppStore(s => s.setPixelMonitorEnabled);
+    const pixelMonitorX = useAppStore(s => s.pixelMonitorX);
+    const setPixelMonitorX = useAppStore(s => s.setPixelMonitorX);
+    const pixelMonitorY = useAppStore(s => s.pixelMonitorY);
+    const setPixelMonitorY = useAppStore(s => s.setPixelMonitorY);
+    const pixelMonitorWidth = useAppStore(s => s.pixelMonitorWidth);
+    const setPixelMonitorWidth = useAppStore(s => s.setPixelMonitorWidth);
+    const pixelMonitorHeight = useAppStore(s => s.pixelMonitorHeight);
+    const setPixelMonitorHeight = useAppStore(s => s.setPixelMonitorHeight);
+    const pixelMonitorIntervalMs = useAppStore(s => s.pixelMonitorIntervalMs);
+    const setPixelMonitorIntervalMs = useAppStore(s => s.setPixelMonitorIntervalMs);
+    const pixelMonitorChangeSensitivity = useAppStore(s => s.pixelMonitorChangeSensitivity);
+    const setPixelMonitorChangeSensitivity = useAppStore(s => s.setPixelMonitorChangeSensitivity);
+    const [pixelSampleResult, setPixelSampleResult] = useState<{ avgR: number; avgG: number; avgB: number } | null>(null);
+    const [pixelSampling, setPixelSampling] = useState(false);
+
+    const handleSampleRegion = useCallback(async () => {
+        const api = getElectronAPI();
+        if (!api) return;
+        setPixelSampling(true);
+        setPixelSampleResult(null);
+        try {
+            const result = await api.invoke('pixel-monitor-sample', {
+                x: pixelMonitorX,
+                y: pixelMonitorY,
+                width: pixelMonitorWidth,
+                height: pixelMonitorHeight,
+            });
+            setPixelSampleResult(result || null);
+        } finally {
+            setPixelSampling(false);
+        }
+    }, [pixelMonitorX, pixelMonitorY, pixelMonitorWidth, pixelMonitorHeight]);
+
     const handleTacticalMapKeybindKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
         const ignoredCodes = new Set([
             'ShiftLeft', 'ShiftRight',
@@ -1295,6 +1330,110 @@ const SettingsModalContent: React.FC = () => {
                         <div className="mt-4 rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-4 py-3 text-left text-label-sm leading-relaxed text-md-sys-on-surface/60">
                             Advanced thresholds, learning policy, event rollback, and preload tuning stay below if you need finer OCR control.
                         </div>
+
+                        {/* Auto-Capture Pixel Monitor */}
+                        <div className="mt-4 rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-4 py-4">
+                            <div className="flex items-center justify-between gap-3 mb-3">
+                                <div>
+                                    <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">Auto-Capture</div>
+                                    <div className="mt-1 text-label-sm text-md-sys-on-surface/60">
+                                        Monitors a screen region for pixel changes to auto-trigger smart capture when the result screen appears.
+                                    </div>
+                                </div>
+                                <label className="flex cursor-pointer items-center gap-2 shrink-0">
+                                    <input
+                                        type="checkbox"
+                                        checked={pixelMonitorEnabled}
+                                        onChange={e => setPixelMonitorEnabled(e.target.checked)}
+                                        className="h-4 w-4 accent-md-sys-primary"
+                                    />
+                                    <span className="text-label-sm text-md-sys-on-surface/70">Enabled</span>
+                                </label>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <label className="flex flex-col gap-1">
+                                    <span className="text-label-xs text-md-sys-on-surface/50">Region X</span>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        value={pixelMonitorX}
+                                        onChange={e => setPixelMonitorX(Number(e.target.value))}
+                                        className="rounded-control border border-md-sys-outline/15 bg-md-sys-surface px-3 py-1.5 text-body text-md-sys-on-surface outline-none focus:border-md-sys-primary"
+                                    />
+                                </label>
+                                <label className="flex flex-col gap-1">
+                                    <span className="text-label-xs text-md-sys-on-surface/50">Region Y</span>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        value={pixelMonitorY}
+                                        onChange={e => setPixelMonitorY(Number(e.target.value))}
+                                        className="rounded-control border border-md-sys-outline/15 bg-md-sys-surface px-3 py-1.5 text-body text-md-sys-on-surface outline-none focus:border-md-sys-primary"
+                                    />
+                                </label>
+                                <label className="flex flex-col gap-1">
+                                    <span className="text-label-xs text-md-sys-on-surface/50">Width (px)</span>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        value={pixelMonitorWidth}
+                                        onChange={e => setPixelMonitorWidth(Number(e.target.value))}
+                                        className="rounded-control border border-md-sys-outline/15 bg-md-sys-surface px-3 py-1.5 text-body text-md-sys-on-surface outline-none focus:border-md-sys-primary"
+                                    />
+                                </label>
+                                <label className="flex flex-col gap-1">
+                                    <span className="text-label-xs text-md-sys-on-surface/50">Height (px)</span>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        value={pixelMonitorHeight}
+                                        onChange={e => setPixelMonitorHeight(Number(e.target.value))}
+                                        className="rounded-control border border-md-sys-outline/15 bg-md-sys-surface px-3 py-1.5 text-body text-md-sys-on-surface outline-none focus:border-md-sys-primary"
+                                    />
+                                </label>
+                                <label className="flex flex-col gap-1">
+                                    <span className="text-label-xs text-md-sys-on-surface/50">Poll interval (ms)</span>
+                                    <input
+                                        type="number"
+                                        min={500}
+                                        step={100}
+                                        value={pixelMonitorIntervalMs}
+                                        onChange={e => setPixelMonitorIntervalMs(Number(e.target.value))}
+                                        className="rounded-control border border-md-sys-outline/15 bg-md-sys-surface px-3 py-1.5 text-body text-md-sys-on-surface outline-none focus:border-md-sys-primary"
+                                    />
+                                </label>
+                                <label className="flex flex-col gap-1">
+                                    <span className="text-label-xs text-md-sys-on-surface/50">Change sensitivity (0–255)</span>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={255}
+                                        value={pixelMonitorChangeSensitivity}
+                                        onChange={e => setPixelMonitorChangeSensitivity(Number(e.target.value))}
+                                        className="rounded-control border border-md-sys-outline/15 bg-md-sys-surface px-3 py-1.5 text-body text-md-sys-on-surface outline-none focus:border-md-sys-primary"
+                                    />
+                                </label>
+                            </div>
+                            <div className="mt-3 flex items-center gap-3">
+                                <button
+                                    onClick={handleSampleRegion}
+                                    disabled={pixelSampling}
+                                    className="rounded-control border border-md-sys-outline/20 bg-md-sys-surface px-3 py-1.5 text-label-sm text-md-sys-on-surface hover:bg-md-sys-surface-container disabled:opacity-50"
+                                >
+                                    {pixelSampling ? 'Sampling…' : 'Test region'}
+                                </button>
+                                {pixelSampleResult && (
+                                    <span className="text-label-sm text-md-sys-on-surface/70">
+                                        avg RGB: ({pixelSampleResult.avgR}, {pixelSampleResult.avgG}, {pixelSampleResult.avgB})
+                                        <span
+                                            className="ml-2 inline-block h-3 w-3 rounded-sm border border-md-sys-outline/20 align-middle"
+                                            style={{ background: `rgb(${pixelSampleResult.avgR},${pixelSampleResult.avgG},${pixelSampleResult.avgB})` }}
+                                        />
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
                         </div>
                         </section>
                     )}

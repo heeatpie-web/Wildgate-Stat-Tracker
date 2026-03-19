@@ -22,6 +22,7 @@ const {
 const dbHelpers = require('./helpers/dbHelpers.cjs');
 const { registerArtifactHandlers, saveScreenshotImage } = require('./handlers/artifactHandlers.cjs');
 const { createAutoCaptureCoordinator } = require('./autoCaptureCoordinator.cjs');
+const { startMonitor, stopMonitor, sampleRegion } = require('./pixelMonitor.cjs');
 const { buildAutoCaptureRequestFromStateSnapshot } = require('./autoCaptureHotkeyState.cjs');
 const { clearGameWindowCache, holdGameKeySequence, lookupGameWindowCandidate, sendGameKeySequence, setPersistentPSRunner, validateGameInputRuntime } = require('./gameInput.cjs');
 const { runPSWithEnv, startPersistentPS, killPersistentPS } = require('./persistentPowerShell.cjs');
@@ -3676,4 +3677,13 @@ autoUpdater.on('update-not-available', (info) => { if (win) win.webContents.send
 autoUpdater.on('update-downloaded', (info) => { if (win) win.webContents.send('update_downloaded'); });
 autoUpdater.on('error', (err) => { if (win) win.webContents.send('update_error', err.message); });
 ipcMain.on('restart_app', () => autoUpdater.quitAndInstall());
+
+// ── Pixel Monitor ──────────────────────────────────────────────────────────────
+ipcMain.on('pixel-monitor-start', (_event, config) => {
+    startMonitor(config, () => {
+        if (win) win.webContents.send('pixel-monitor-trigger');
+    });
+});
+ipcMain.on('pixel-monitor-stop', () => stopMonitor());
+ipcMain.handle('pixel-monitor-sample', async (_event, config) => sampleRegion(config));
 

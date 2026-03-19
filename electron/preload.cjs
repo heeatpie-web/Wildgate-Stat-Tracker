@@ -27,6 +27,7 @@ const INVOKE_CHANNELS = [
   'clear-ocr-preprocessed', 'get-ocr-debug-dir', 'list-ocr-debug-files', 'get-ocr-cache-stats', 'benchmark-ocr-preprocessing', 'regenerate-ocr-dictionary',
   'scan-epic-ids',
   'read-file-base64', 'open-path',
+  'pixel-monitor-sample',
 ];
 
 const SEND_CHANNELS = [
@@ -37,6 +38,7 @@ const SEND_CHANNELS = [
   'set-ignore-mouse-events',
   'toggle-overlay', 'set-overlay-style', 'set-window-bounds',
   'sync-auto-capture-hotkey-state',
+  'pixel-monitor-start', 'pixel-monitor-stop',
 ];
 
 const RECEIVE_CHANNELS = [
@@ -47,6 +49,7 @@ const RECEIVE_CHANNELS = [
   'hotkey-toggle-overlay',
   'auto-capture-status',
   'telemetry-prune-needed',
+  'pixel-monitor-trigger',
 ];
 
 contextBridge.exposeInMainWorld('electronAPI', {

@@ -4,6 +4,7 @@ import { useUIState } from './providers/UIStateProvider';
 import { useGameData } from './providers/GameDataProvider';
 import { useUserPreferences } from './providers/UserPreferencesProvider';
 import { useLogMonitor } from './hooks/useLogMonitor';
+import { usePixelMonitor } from './hooks/usePixelMonitor';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useFocusTrap } from './hooks/useFocusTrap';
 import { useMatchSubmission } from './hooks/useMatchSubmission';
@@ -588,6 +589,7 @@ const App: React.FC = () => {
     }, []);
 
     const { logFeed, logStatus } = useLogMonitor();
+    usePixelMonitor();
     const { discardTelemetryDraft, submitting: telemetryDraftDiscarding } = useMatchSubmission();
     const { playCapture } = useSoundEffects();
 
