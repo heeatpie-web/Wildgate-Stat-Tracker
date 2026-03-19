@@ -25,10 +25,12 @@ async function extractResultScreen(imageBuffer) {
     const croppedBuffer = cropped.toPNG();
 
     // Run OCR (PaddleOCR returns [{text, confidence, bbox}])
-    const lines = await paddleOcrBuffer(croppedBuffer, { lang: 'en' });
+    const lines = await paddleOcrBuffer(croppedBuffer, { allText: true });
     const text = lines.map(l => l.text || '').join('\n').toUpperCase();
 
-    return parseResultText(text);
+    const parsed = parseResultText(text);
+    console.log('[ResultScreenExtractor] text=%s result=%o', text.slice(0, 120).replace(/\n/g, ' | '), parsed);
+    return parsed;
 }
 
 /**
@@ -39,7 +41,7 @@ async function extractResultScreen(imageBuffer) {
 function parseResultText(text) {
     const isVictory = /VICTORY/.test(text);
     const isDefeat = /DEFEAT/.test(text);
-    const placementMatch = text.match(/(\d)(ST|ND|RD|TH)\s*(PLACE)?/);
+    const placementMatch = text.match(/(\d+)(ST|ND|RD|TH)\s*(PLACE)?/);
     const isArtifact = /ARTIFACT/.test(text);
     const isRivals = /RIVALS\s*ELIMINATED/.test(text);
 
@@ -51,7 +53,11 @@ function parseResultText(text) {
     }
 
     if (isDefeat) {
-        return { result: 'Loss', winType: isArtifact ? 'artifact' : undefined };
+        return {
+            result: 'Loss',
+            winType: isArtifact ? 'artifact' : undefined,
+            placement: placementMatch ? parseInt(placementMatch[1], 10) : undefined,
+        };
     }
 
     if (placementMatch) {

@@ -331,7 +331,7 @@ async function paddleOcrBuffer(imageBuffer, opts = {}) {
     const text = ctcDecode(logits);
 
     const cleaned = text.trim();
-    if (isLikelyPlayerName(cleaned)) {
+    if (opts.allText ? cleaned.length > 0 : isLikelyPlayerName(cleaned)) {
       results.push({ text: cleaned, bbox, confidence: 80 });
     }
   }
