@@ -2634,6 +2634,10 @@ function createWindow() {
 
   devMark('window created');
 
+  // Electron v40 internally registers ~11 did-stop-loading listeners on WebContents
+  // during network service recovery. Raise the limit to suppress the false-positive warning.
+  win.webContents.setMaxListeners(20);
+
   let windowShown = false;
   const showWindowOnce = () => {
     if (!win || win.isDestroyed() || windowShown) return;
