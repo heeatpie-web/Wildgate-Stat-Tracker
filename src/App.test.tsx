@@ -6,6 +6,9 @@ import '@testing-library/jest-dom/vitest';
 const loggerWarn = vi.fn();
 const getElectronAPIMock = vi.fn(() => null);
 const discardTelemetryDraftMock = vi.fn();
+const autoFinalizeResultScreenCaptureMock = vi.fn();
+const startAutoCaptureMock = vi.fn();
+const useResultFlashMonitorMock = vi.fn();
 const playCaptureMock = vi.fn();
 const playAutomationStartMock = vi.fn();
 const playAutomationCompleteMock = vi.fn();
@@ -70,6 +73,10 @@ const uiState = {
   telemetryLifecycleStage: 'idle' as 'idle' | 'loading' | 'pregame' | 'live' | 'result',
   setTelemetryLifecycleStage: vi.fn((stage: 'idle' | 'loading' | 'pregame' | 'live' | 'result') => {
     uiState.telemetryLifecycleStage = stage;
+  }),
+  telemetryLifecycleIsPracticeRange: false,
+  setTelemetryLifecycleIsPracticeRange: vi.fn((isPracticeRange: boolean) => {
+    uiState.telemetryLifecycleIsPracticeRange = isPracticeRange;
   }),
   telemetryAutomationStatus: null as any,
   setTelemetryAutomationStatus: vi.fn((status: any) => {
@@ -185,7 +192,7 @@ vi.mock('./hooks/useMatchSubmission', () => ({
     initiateSubmission: vi.fn(),
     processFinalSubmission: vi.fn(),
     saveResultDraft: vi.fn(),
-    autoFinalizeResultScreenCapture: vi.fn(),
+    autoFinalizeResultScreenCapture: (...args: unknown[]) => autoFinalizeResultScreenCaptureMock(...args),
     discardTelemetryDraft: (...args: unknown[]) => discardTelemetryDraftMock(...args),
     submitting: false,
   }),
@@ -210,6 +217,14 @@ vi.mock('./store/useAppStore', () => {
 vi.mock('./utils/electronAPI', () => ({
   getElectronAPI: () => getElectronAPIMock(),
   isElectron: () => getElectronAPIMock() !== null,
+}));
+
+vi.mock('./utils/electronBridge', () => ({
+  startAutoCapture: (...args: unknown[]) => startAutoCaptureMock(...args),
+}));
+
+vi.mock('./hooks/useResultFlashMonitor', () => ({
+  useResultFlashMonitor: (...args: unknown[]) => useResultFlashMonitorMock(...args),
 }));
 
 vi.mock('./utils/logger', () => ({
@@ -255,6 +270,11 @@ describe('App', () => {
     window.sessionStorage.clear();
     getElectronAPIMock.mockReturnValue(null);
     discardTelemetryDraftMock.mockReset();
+    autoFinalizeResultScreenCaptureMock.mockReset();
+    autoFinalizeResultScreenCaptureMock.mockResolvedValue({ success: false, reason: 'unconfirmed' });
+    startAutoCaptureMock.mockReset();
+    startAutoCaptureMock.mockResolvedValue({ started: true });
+    useResultFlashMonitorMock.mockReset();
     playCaptureMock.mockReset();
     playAutomationStartMock.mockReset();
     playAutomationCompleteMock.mockReset();
@@ -266,9 +286,11 @@ describe('App', () => {
     uiState.showSettings = false;
     uiState.showIdMapper = false;
     uiState.telemetryLifecycleStage = 'idle';
+    uiState.telemetryLifecycleIsPracticeRange = false;
     uiState.telemetryAutomationStatus = null;
     uiState.setTelemetryAutomationStatus.mockClear();
     uiState.setTelemetryLifecycleStage.mockClear();
+    uiState.setTelemetryLifecycleIsPracticeRange.mockClear();
     gameDataState.selectedOpponents = [];
     gameDataState.selectedReachModifiers = [];
     gameDataState.matches = [];
@@ -496,6 +518,148 @@ describe('App', () => {
 
     expect(screen.queryByRole('dialog', { name: /telemetry match ready/i })).not.toBeInTheDocument();
     vi.useRealTimers();
+  });
+
+  it('schedules delayed practice-range auto-capture after live entry', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
+    uiState.telemetryLifecycleStage = 'live';
+    uiState.telemetryLifecycleIsPracticeRange = true;
+    const draft = {
+      id: 321,
+      timestamp: Date.now(),
+      date: '3/19/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      artifacts: [],
+    };
+    gameDataState.matches = [draft];
+    appStoreState.matches = [draft];
+
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    expect(startAutoCaptureMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(3_999);
+      await Promise.resolve();
+    });
+    expect(startAutoCaptureMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+      await Promise.resolve();
+    });
+
+    expect(startAutoCaptureMock).toHaveBeenCalledTimes(1);
+    expect(startAutoCaptureMock).toHaveBeenCalledWith(expect.objectContaining({
+      matchId: 321,
+      telemetryLifecycleStage: 'live',
+      isMatchInProgress: true,
+    }));
+    vi.useRealTimers();
+  });
+
+  it('retries delayed practice-range auto-capture once when the draft is not ready yet', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
+    uiState.telemetryLifecycleStage = 'live';
+    uiState.telemetryLifecycleIsPracticeRange = true;
+    const draft = {
+      id: 654,
+      timestamp: Date.now(),
+      date: '3/19/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      artifacts: [],
+    };
+    gameDataState.matches = [draft];
+    appStoreState.matches = [draft];
+    startAutoCaptureMock
+      .mockResolvedValueOnce({ started: false, reason: 'no-active-match' })
+      .mockResolvedValueOnce({ started: true });
+
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(4_000);
+      await Promise.resolve();
+    });
+
+    expect(startAutoCaptureMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      vi.advanceTimersByTime(3_000);
+      await Promise.resolve();
+    });
+
+    expect(startAutoCaptureMock).toHaveBeenCalledTimes(2);
+    expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({
+      message: expect.stringContaining('active telemetry draft'),
+      type: 'warning',
+    }));
+    vi.useRealTimers();
+  });
+
+  it('surfaces tactical-map-key failures for silent live fallback capture', async () => {
+    appStoreState.fullAutoEnabled = true;
+    uiState.telemetryLifecycleStage = 'live';
+    const draft = {
+      id: 777,
+      timestamp: Date.now(),
+      date: '3/19/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      artifacts: [],
+    };
+    gameDataState.matches = [draft];
+    appStoreState.matches = [draft];
+    startAutoCaptureMock.mockResolvedValue({ started: false, reason: 'missing-tactical-map-key' });
+
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    await waitFor(() => {
+      expect(startAutoCaptureMock).toHaveBeenCalledTimes(1);
+    });
+
+    expect(uiState.setTelemetryAutomationStatus).toHaveBeenCalledWith(expect.objectContaining({
+      phase: 'failed',
+      message: expect.stringContaining('Tactical Map keybind'),
+    }));
+    expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({
+      message: expect.stringContaining('Tactical Map keybind'),
+      type: 'warning',
+    }));
   });
 
   it('renders recording view in default dashboard mode', async () => {

@@ -514,6 +514,7 @@ export const useLogMonitor = (activeUser?: string) => {
         setToast,
         setOverlayPhase,
         setTelemetryLifecycleStage,
+        setTelemetryLifecycleIsPracticeRange,
         enableAutoLogRecording,
         devMode, setTelemetryStatus, telemetryStatus
     } = useUIState();
@@ -544,6 +545,7 @@ export const useLogMonitor = (activeUser?: string) => {
     const telemetryDraftLoadoutSignatureRef = useRef<string>('');
     const telemetryLifecycleActiveRef = useRef(isMatchInProgress);
     const telemetryLifecycleStageRef = useRef<TelemetryLifecycleStage>(isMatchInProgress ? 'live' : 'idle');
+    const telemetryLifecycleIsPracticeRangeRef = useRef(false);
     const telemetryLifecycleStartedAtRef = useRef<number | null>(matchStartTime);
     const telemetryLiveStartedAtRef = useRef<number | null>(matchStartTime);
     const latestNebLoadoutSavedTimestampRef = useRef<number>(0);
@@ -841,8 +843,10 @@ export const useLogMonitor = (activeUser?: string) => {
         nextStage: Exclude<TelemetryLifecycleStage, 'idle'>,
         gameTime: number,
         durationOverrideSeconds?: number | null,
+        options?: { isPracticeRange?: boolean },
     ) => {
         const currentStage = telemetryLifecycleStageRef.current;
+        const nextPracticeRange = nextStage === 'live' && options?.isPracticeRange === true;
         const shouldRestartStaleLiveStage = currentStage === 'live'
             && nextStage === 'live'
             && telemetryLifecycleActiveRef.current
@@ -868,7 +872,9 @@ export const useLogMonitor = (activeUser?: string) => {
         }
 
         telemetryLifecycleStageRef.current = nextStage;
+        telemetryLifecycleIsPracticeRangeRef.current = nextPracticeRange;
         setTelemetryLifecycleStage(nextStage);
+        setTelemetryLifecycleIsPracticeRange(nextPracticeRange);
 
         if (nextStage === 'loading' || nextStage === 'pregame') {
             telemetryLifecycleActiveRef.current = true;
@@ -908,6 +914,7 @@ export const useLogMonitor = (activeUser?: string) => {
         setIsMatchInProgress,
         setMatchStartTime,
         setOverlayPhase,
+        setTelemetryLifecycleIsPracticeRange,
         setTelemetryLifecycleStage,
     ]);
 
@@ -920,18 +927,20 @@ export const useLogMonitor = (activeUser?: string) => {
             telemetryLifecycleStageRef.current = 'live';
             telemetryLifecycleActiveRef.current = true;
             setTelemetryLifecycleStage('live');
+            setTelemetryLifecycleIsPracticeRange(telemetryLifecycleIsPracticeRangeRef.current === true);
         } else if (!isMatchInProgressRef.current && telemetryLifecycleStageRef.current === 'live') {
             telemetryLiveStartedAtRef.current = null;
         }
-    }, [matchStartTime, setTelemetryLifecycleStage]);
+    }, [matchStartTime, setTelemetryLifecycleIsPracticeRange, setTelemetryLifecycleStage]);
     useEffect(() => {
         isMatchInProgressRef.current = isMatchInProgress;
         if (isMatchInProgress) {
             telemetryLifecycleActiveRef.current = true;
             telemetryLifecycleStageRef.current = 'live';
             setTelemetryLifecycleStage('live');
+            setTelemetryLifecycleIsPracticeRange(telemetryLifecycleIsPracticeRangeRef.current === true);
         }
-    }, [isMatchInProgress, setTelemetryLifecycleStage]);
+    }, [isMatchInProgress, setTelemetryLifecycleIsPracticeRange, setTelemetryLifecycleStage]);
     useEffect(() => { currentLoadoutRef.current = currentLoadout; }, [currentLoadout]);
     useEffect(() => { activeHeroRef.current = activeHero; }, [activeHero]);
     useEffect(() => { activeShipRef.current = activeShip; }, [activeShip]);
@@ -1049,11 +1058,13 @@ export const useLogMonitor = (activeUser?: string) => {
             if (status.exists === false) {
                 telemetryLifecycleActiveRef.current = false;
                 telemetryLifecycleStageRef.current = 'idle';
+                telemetryLifecycleIsPracticeRangeRef.current = false;
                 telemetryLifecycleStartedAtRef.current = null;
                 telemetryLiveStartedAtRef.current = null;
                 setIsMatchInProgress(false);
                 setMatchStartTime(null);
                 setTelemetryLifecycleStage('idle');
+                setTelemetryLifecycleIsPracticeRange(false);
                 setOverlayPhase('Setup');
                 clearTelemetryDetected();
                 traceTelemetryLoadout('Telemetry source closed', {
@@ -1233,7 +1244,9 @@ export const useLogMonitor = (activeUser?: string) => {
                         Logger.info('LogMonitor', `Treating practice-range map as live telemetry lifecycle stage: ${loadingMapName}`);
                     }
                     if (nextLifecycleStage) {
-                        transitionTelemetryLifecycleStage(nextLifecycleStage, gameTime, payloadDurationSeconds);
+                        transitionTelemetryLifecycleStage(nextLifecycleStage, gameTime, payloadDurationSeconds, {
+                            isPracticeRange: practiceRangeMapSignal && nextLifecycleStage === 'live',
+                        });
                     }
 
                     if (name === 'NebClientMatchmakerStateChange') {

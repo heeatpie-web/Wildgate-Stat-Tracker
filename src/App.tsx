@@ -5,6 +5,7 @@ import { useGameData } from './providers/GameDataProvider';
 import { useUserPreferences } from './providers/UserPreferencesProvider';
 import { useLogMonitor } from './hooks/useLogMonitor';
 import { usePixelMonitor } from './hooks/usePixelMonitor';
+import { useResultFlashMonitor } from './hooks/useResultFlashMonitor';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useFocusTrap } from './hooks/useFocusTrap';
 import { useMatchSubmission } from './hooks/useMatchSubmission';
@@ -135,7 +136,7 @@ import { buildActiveWeaponsFromLoadout, cloneLoadout, sanitizeUnknownLoadout } f
 import { extractArtifactSourceFromOcrData } from './utils/artifactSource';
 import { buildOcrNameConfidenceMapFromExtractedData } from './utils/ocr/nameSourceHints';
 import { buildAutoCaptureStateSnapshot } from './utils/autoCaptureState';
-import { startAutoCapture } from './utils/electronBridge';
+import { startAutoCapture, type StartAutoCaptureResult } from './utils/electronBridge';
 import {
     deriveCanonicalRosterCandidateTargetKey,
     getAutoPrunablePendingReviewIds,
@@ -277,6 +278,11 @@ type FinalMatchResult = Exclude<MatchResult, 'Ongoing'>;
 const IMAGE_ARTIFACT_PATTERN = /\.(png|jpe?g|webp|bmp|gif)$/i;
 const TELEMETRY_AUTO_CAPTURE_ARTIFACT_TARGET = 3;
 const TELEMETRY_POSTMATCH_FALLBACK_DELAY_MS = 15_000;
+const TELEMETRY_TRAINING_CAPTURE_DELAY_MS = 4_000;
+const TELEMETRY_TRAINING_CAPTURE_RETRY_DELAY_MS = 3_000;
+const FULL_AUTO_RESULT_OCR_POST_FLASH_DELAY_MS = 350;
+const FULL_AUTO_RESULT_OCR_RETRY_DELAY_MS = 300;
+const FULL_AUTO_RESULT_OCR_MAX_ATTEMPTS = 3;
 
 const isImageArtifactEntry = (value: unknown): value is string => {
     const normalized = String(value || '').trim();
@@ -350,6 +356,56 @@ const createTelemetryAutomationStatus = ({
     level,
     matchId,
     updatedAt: Date.now(),
+});
+
+const getWatchingResultStatusPhase = (fullAutoEnabled: boolean): TelemetryAutomationStatusPhase => (
+    fullAutoEnabled ? 'watching-result-flash' : 'watching-result'
+);
+
+const getWatchingResultStatusMessage = (fullAutoEnabled: boolean): string => (
+    fullAutoEnabled ? 'Watching for result flash' : 'Watching for result screen'
+);
+
+const getTelemetryAutoCaptureStartFailure = (result: StartAutoCaptureResult): {
+    message: string;
+    level: TelemetryAutomationStatusState['level'];
+    toastType: 'warning' | 'error';
+} | null => {
+    if (result.started || result.reason === 'in-progress') return null;
+
+    if (result.reason === 'no-active-match') {
+        return {
+            message: 'Auto-capture is waiting for an active telemetry draft before it can start.',
+            level: 'warning',
+            toastType: 'warning',
+        };
+    }
+
+    if (result.reason === 'missing-tactical-map-key') {
+        return {
+            message: 'Auto-capture needs a Tactical Map keybind before it can run.',
+            level: 'warning',
+            toastType: 'warning',
+        };
+    }
+
+    if (result.reason === 'invalid-tactical-map-key') {
+        return {
+            message: 'Auto-capture could not use the configured Tactical Map keybind.',
+            level: 'error',
+            toastType: 'error',
+        };
+    }
+
+    return {
+        message: String(result.error || result.reason || 'Auto-Capture failed to start.').trim(),
+        level: 'error',
+        toastType: 'error',
+    };
+};
+
+const waitForDuration = (delayMs: number) => new Promise<void>((resolve) => {
+    window.setTimeout(resolve, Math.max(0, delayMs));
 });
 
 const getOcrModifierName = (modifier: OcrModifierLike): string => String(
@@ -461,11 +517,15 @@ const App: React.FC = () => {
     const handledTelemetryDraftPostmatchPromptIdsRef = React.useRef<Set<number>>(new Set());
     const telemetryDraftFallbackTimersRef = React.useRef<Map<number, number>>(new Map());
     const telemetryLobbyCaptureAttemptedRef = React.useRef<Set<number>>(new Set());
+    const telemetryPracticeCaptureAttemptedRef = React.useRef<Set<number>>(new Set());
+    const telemetryPracticeCaptureRetryUsedRef = React.useRef<Set<number>>(new Set());
+    const telemetryPracticeCaptureTimersRef = React.useRef<Map<number, number>>(new Map());
     const telemetryLiveFallbackAttemptedRef = React.useRef<Set<number>>(new Set());
     const telemetryAutoCaptureInFlightRef = React.useRef<Set<number>>(new Set());
     const telemetryAutoCaptureCompletedRef = React.useRef<Set<number>>(new Set());
-    const telemetryAutoCaptureOriginRef = React.useRef<Map<number, 'pregame' | 'live'>>(new Map());
+    const telemetryAutoCaptureOriginRef = React.useRef<Map<number, 'pregame' | 'live' | 'practice-live'>>(new Map());
     const latestTelemetryDraftIdRef = React.useRef<number | null>(null);
+    const telemetryLiveStageMatchIdRef = React.useRef<number | null>(null);
     const telemetryPruneNotificationKeyRef = React.useRef<string | null>(null);
     const fuzzyPromptNotificationCountRef = React.useRef(0);
     const idPromptNotificationCountRef = React.useRef(0);
@@ -474,6 +534,7 @@ const App: React.FC = () => {
     /** Tracks when the changelog was last dismissed. Tips are suppressed for 10 s after this. */
     const changelogDismissedAtRef = React.useRef<number>(0);
     const [changelogEntries, setChangelogEntries] = useState<string[]>([]);
+    const [telemetryLiveStartedAt, setTelemetryLiveStartedAt] = useState<number | null>(null);
 
     const previousTipLibraryIndexRef = React.useRef<number | null>(null);
     const restorePromptCheckedRef = React.useRef(false);
@@ -529,6 +590,7 @@ const App: React.FC = () => {
         hiddenForScan,
         showReviewQueue, setShowReviewQueue,
         telemetryLifecycleStage,
+        telemetryLifecycleIsPracticeRange,
         setTelemetryAutomationStatus,
         showSettings,
         setShowSettings,
@@ -635,9 +697,26 @@ const App: React.FC = () => {
         matchesRef.current = matches;
     }, [matches]);
 
+    useEffect(() => {
+        fullAutoEnabledRef.current = fullAutoEnabled;
+    }, [fullAutoEnabled]);
+
+    useEffect(() => {
+        telemetryLifecycleStageValueRef.current = telemetryLifecycleStage;
+    }, [telemetryLifecycleStage]);
+
+    useEffect(() => {
+        telemetryPracticeRangeRef.current = telemetryLifecycleIsPracticeRange;
+    }, [telemetryLifecycleIsPracticeRange]);
+
     const activeTelemetryDraftMatch = React.useMemo(() => (
         findActiveTelemetryDraftMatch(matches, activeUser, sessionStartTime)
     ), [activeUser, matches, sessionStartTime]);
+
+    const activeTelemetryDraftMatchId = Number(activeTelemetryDraftMatch?.id || 0);
+    const normalizedActiveTelemetryDraftMatchId = Number.isInteger(activeTelemetryDraftMatchId) && activeTelemetryDraftMatchId > 0
+        ? activeTelemetryDraftMatchId
+        : null;
 
     const countTelemetryCaptureArtifacts = useCallback((matchId: number | null | undefined) => {
         const numericMatchId = Number(matchId || 0);
@@ -656,6 +735,11 @@ const App: React.FC = () => {
         if (telemetryAutoCaptureCompletedRef.current.has(numericMatchId)) return true;
         return countTelemetryCaptureArtifacts(numericMatchId) >= TELEMETRY_AUTO_CAPTURE_ARTIFACT_TARGET;
     }, [countTelemetryCaptureArtifacts]);
+    const hasCompleteTelemetryCaptureBundleRef = React.useRef(hasCompleteTelemetryCaptureBundle);
+
+    useEffect(() => {
+        hasCompleteTelemetryCaptureBundleRef.current = hasCompleteTelemetryCaptureBundle;
+    }, [hasCompleteTelemetryCaptureBundle]);
 
     useEffect(() => {
         const api = getElectronAPI();
@@ -695,6 +779,9 @@ const App: React.FC = () => {
     } = useSoundEffects();
     const [fullAutoResultLatched, setFullAutoResultLatched] = useState(false);
     const fullAutoCaptureInFlightRef = useRef(false);
+    const fullAutoEnabledRef = useRef(fullAutoEnabled);
+    const telemetryLifecycleStageValueRef = useRef<TelemetryLifecycleStage>(telemetryLifecycleStage);
+    const telemetryPracticeRangeRef = useRef(telemetryLifecycleIsPracticeRange);
 
     const fuzzyRosterCandidates = React.useMemo(() => (
         (pendingReviews || [])
@@ -1794,6 +1881,17 @@ const App: React.FC = () => {
                 ? telemetryAutoCaptureOriginRef.current.get(normalizedMatchId)
                 : null;
             const isLobbyCapture = captureOrigin === 'pregame';
+            const isTrainingCapture = captureOrigin === 'practice-live';
+            const capturePhase = isLobbyCapture
+                ? 'capturing-lobby'
+                : isTrainingCapture
+                    ? 'capturing-training'
+                    : 'capturing-live-fallback';
+            const captureLabel = isLobbyCapture
+                ? 'Lobby'
+                : isTrainingCapture
+                    ? 'Training'
+                    : 'Live fallback';
 
             if (phase === 'started') {
                 if (normalizedMatchId != null) {
@@ -1801,13 +1899,21 @@ const App: React.FC = () => {
                 }
                 playAutomationStart();
                 setTelemetryAutomationStatus(createTelemetryAutomationStatus({
-                    phase: isLobbyCapture ? 'capturing-lobby' : 'capturing-live-fallback',
-                    message: isLobbyCapture ? 'Auto-capturing lobby screenshots' : 'Running live fallback capture',
+                    phase: capturePhase,
+                    message: isLobbyCapture
+                        ? 'Auto-capturing lobby screenshots'
+                        : isTrainingCapture
+                            ? 'Auto-capturing training screenshots'
+                            : 'Running live fallback capture',
                     matchId: normalizedMatchId,
                     level: 'info',
                 }));
                 setToast({
-                    message: isLobbyCapture ? 'Lobby auto-capture running...' : 'Live fallback auto-capture running...',
+                    message: isLobbyCapture
+                        ? 'Lobby auto-capture running...'
+                        : isTrainingCapture
+                            ? 'Training auto-capture running...'
+                            : 'Live fallback auto-capture running...',
                     type: 'info',
                 });
                 return;
@@ -1825,8 +1931,8 @@ const App: React.FC = () => {
                 );
                 if (captureIndex > 0) {
                     setTelemetryAutomationStatus(createTelemetryAutomationStatus({
-                        phase: isLobbyCapture ? 'capturing-lobby' : 'capturing-live-fallback',
-                        message: `${isLobbyCapture ? 'Lobby capture' : 'Live fallback'} ${captureIndex}/${totalCaptures}`,
+                        phase: capturePhase,
+                        message: `${captureLabel} capture ${captureIndex}/${totalCaptures}`,
                         matchId: normalizedMatchId,
                         level: 'info',
                     }));
@@ -1842,9 +1948,11 @@ const App: React.FC = () => {
                 playAutomationComplete();
                 const stayWatchingResult = telemetryLifecycleStage === 'live';
                 setTelemetryAutomationStatus(createTelemetryAutomationStatus({
-                    phase: stayWatchingResult ? 'watching-result' : 'lobby-complete',
+                    phase: stayWatchingResult
+                        ? getWatchingResultStatusPhase(fullAutoEnabledRef.current)
+                        : 'lobby-complete',
                     message: stayWatchingResult
-                        ? 'Watching for result screen'
+                        ? getWatchingResultStatusMessage(fullAutoEnabledRef.current)
                         : 'Lobby capture complete',
                     matchId: normalizedMatchId,
                     level: stayWatchingResult ? 'info' : 'success',
@@ -1852,6 +1960,8 @@ const App: React.FC = () => {
                 setToast({
                     message: isLobbyCapture
                         ? 'Lobby auto-capture complete.'
+                        : isTrainingCapture
+                            ? 'Training auto-capture complete.'
                         : 'Live fallback capture complete.',
                     type: 'success',
                 });
@@ -2004,6 +2114,21 @@ const App: React.FC = () => {
         telemetryDraftFallbackTimersRef.current.clear();
     }, []);
 
+    const clearTelemetryPracticeCaptureTimer = useCallback((matchId?: number | null) => {
+        const normalizedMatchId = Number(matchId || 0);
+        if (Number.isInteger(normalizedMatchId) && normalizedMatchId > 0) {
+            const timerId = telemetryPracticeCaptureTimersRef.current.get(normalizedMatchId);
+            if (typeof timerId === 'number') {
+                window.clearTimeout(timerId);
+                telemetryPracticeCaptureTimersRef.current.delete(normalizedMatchId);
+            }
+            return;
+        }
+
+        telemetryPracticeCaptureTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+        telemetryPracticeCaptureTimersRef.current.clear();
+    }, []);
+
     const handleTelemetryDraftLater = useCallback(() => {
         if (!telemetryDraftPrompt) return;
         handledTelemetryDraftPostmatchPromptIdsRef.current.add(telemetryDraftPrompt.matchId);
@@ -2023,12 +2148,26 @@ const App: React.FC = () => {
 
     const startSilentTelemetryAutoCapture = useCallback(async (
         matchId: number,
-        origin: 'pregame' | 'live',
-    ) => {
+        origin: 'pregame' | 'live' | 'practice-live',
+    ): Promise<StartAutoCaptureResult> => {
         telemetryAutoCaptureOriginRef.current.set(matchId, origin);
+        const statusConfig = origin === 'pregame'
+            ? {
+                phase: 'capturing-lobby' as const,
+                message: 'Auto-capturing lobby screenshots',
+            }
+            : origin === 'practice-live'
+                ? {
+                    phase: 'capturing-training' as const,
+                    message: 'Auto-capturing training screenshots',
+                }
+                : {
+                    phase: 'capturing-live-fallback' as const,
+                    message: 'Running live fallback capture',
+                };
         setTelemetryAutomationStatus(createTelemetryAutomationStatus({
-            phase: origin === 'pregame' ? 'capturing-lobby' : 'capturing-live-fallback',
-            message: origin === 'pregame' ? 'Auto-capturing lobby screenshots' : 'Running live fallback capture',
+            phase: statusConfig.phase,
+            message: statusConfig.message,
             matchId,
             level: 'info',
         }));
@@ -2040,53 +2179,83 @@ const App: React.FC = () => {
             sessionStartTime,
             matchId,
             lifecycleActive: true,
-            telemetryLifecycleStage: origin,
-            isMatchInProgress: origin === 'live',
+            telemetryLifecycleStage: origin === 'pregame' ? 'pregame' : 'live',
+            isMatchInProgress: origin !== 'pregame',
         }));
 
-        if (result.started || result.reason === 'in-progress') {
-            return;
+        const startFailure = getTelemetryAutoCaptureStartFailure(result);
+        if (!startFailure) {
+            return result;
         }
 
-        if (result.reason === 'no-active-match' || result.reason === 'missing-tactical-map-key' || result.reason === 'invalid-tactical-map-key') {
-            return;
-        }
-
-        const message = String(result.error || result.reason || 'Auto-Capture failed to start.').trim();
+        playAutomationFailed();
         setTelemetryAutomationStatus(createTelemetryAutomationStatus({
             phase: 'failed',
-            message,
+            message: startFailure.message,
             matchId,
-            level: 'error',
+            level: startFailure.level,
         }));
-        setToast({ message, type: 'error' });
-    }, [activeUser, matches, pendingMatchData, sessionStartTime, setTelemetryAutomationStatus, setToast]);
+        setToast({ message: startFailure.message, type: startFailure.toastType });
+        return result;
+    }, [activeUser, matches, pendingMatchData, playAutomationFailed, sessionStartTime, setTelemetryAutomationStatus, setToast]);
+    const startSilentTelemetryAutoCaptureRef = React.useRef(startSilentTelemetryAutoCapture);
+
+    useEffect(() => {
+        startSilentTelemetryAutoCaptureRef.current = startSilentTelemetryAutoCapture;
+    }, [startSilentTelemetryAutoCapture]);
 
     useEffect(() => () => {
         clearTelemetryDraftFallbackTimer();
-    }, [clearTelemetryDraftFallbackTimer]);
+        clearTelemetryPracticeCaptureTimer();
+    }, [clearTelemetryDraftFallbackTimer, clearTelemetryPracticeCaptureTimer]);
 
     useEffect(() => {
         const nextDraftId = Number(activeTelemetryDraftMatch?.id || 0);
         if (!Number.isInteger(nextDraftId) || nextDraftId <= 0) {
             if (telemetryLifecycleStage === 'idle' || telemetryLifecycleStage === 'result') {
                 latestTelemetryDraftIdRef.current = null;
+                telemetryLiveStageMatchIdRef.current = null;
+                setTelemetryLiveStartedAt(null);
             }
             return;
         }
         if (latestTelemetryDraftIdRef.current === nextDraftId) return;
+        clearTelemetryPracticeCaptureTimer(latestTelemetryDraftIdRef.current);
         latestTelemetryDraftIdRef.current = nextDraftId;
         setFullAutoResultLatched(false);
-    }, [activeTelemetryDraftMatch?.id, telemetryLifecycleStage]);
+    }, [activeTelemetryDraftMatch?.id, clearTelemetryPracticeCaptureTimer, telemetryLifecycleStage]);
+
+    useEffect(() => {
+        if (telemetryLifecycleStage !== 'live' || normalizedActiveTelemetryDraftMatchId == null) {
+            telemetryLiveStageMatchIdRef.current = null;
+            setTelemetryLiveStartedAt(null);
+            return;
+        }
+        if (telemetryLiveStageMatchIdRef.current !== normalizedActiveTelemetryDraftMatchId) {
+            telemetryLiveStageMatchIdRef.current = normalizedActiveTelemetryDraftMatchId;
+            setTelemetryLiveStartedAt(Date.now());
+            return;
+        }
+        setTelemetryLiveStartedAt((current) => current ?? Date.now());
+    }, [normalizedActiveTelemetryDraftMatchId, telemetryLifecycleStage]);
+
+    useEffect(() => {
+        if (fullAutoEnabled && telemetryLifecycleStage === 'live') return;
+        clearTelemetryPracticeCaptureTimer();
+    }, [clearTelemetryPracticeCaptureTimer, fullAutoEnabled, telemetryLifecycleStage]);
 
     useEffect(() => {
         const currentStatus = useAppStore.getState().telemetryAutomationStatus;
-        const activeMatchId = Number(activeTelemetryDraftMatch?.id || telemetryDraftPrompt?.matchId || 0);
+        const activeMatchId = Number(normalizedActiveTelemetryDraftMatchId || telemetryDraftPrompt?.matchId || 0);
         const normalizedMatchId = Number.isInteger(activeMatchId) && activeMatchId > 0 ? activeMatchId : null;
         const shouldPreserveCurrentStatus = currentStatus && (
             currentStatus.phase === 'capturing-lobby'
+            || currentStatus.phase === 'waiting-training-capture'
+            || currentStatus.phase === 'capturing-training'
             || currentStatus.phase === 'capturing-live-fallback'
+            || currentStatus.phase === 'result-flash-detected'
             || currentStatus.phase === 'result-ocr'
+            || currentStatus.phase === 'result-ocr-burst'
             || currentStatus.phase === 'manual-result-needed'
             || currentStatus.phase === 'failed'
         );
@@ -2136,9 +2305,26 @@ const App: React.FC = () => {
         }
 
         if (telemetryLifecycleStage === 'live') {
+            if (
+                fullAutoEnabled
+                && telemetryLifecycleIsPracticeRange
+                && normalizedMatchId != null
+                && !hasCompleteTelemetryCaptureBundle(normalizedMatchId)
+            ) {
+                const trainingCaptureScheduled = telemetryPracticeCaptureAttemptedRef.current.has(normalizedMatchId);
+                applyBaselineStatus(createTelemetryAutomationStatus({
+                    phase: trainingCaptureScheduled ? 'waiting-training-capture' : 'training-detected',
+                    message: trainingCaptureScheduled
+                        ? 'Waiting to auto-capture training screenshots'
+                        : 'Training range detected',
+                    matchId: normalizedMatchId,
+                    level: 'info',
+                }));
+                return;
+            }
             applyBaselineStatus(createTelemetryAutomationStatus({
-                phase: 'watching-result',
-                message: 'Watching for result screen',
+                phase: getWatchingResultStatusPhase(fullAutoEnabled),
+                message: getWatchingResultStatusMessage(fullAutoEnabled),
                 matchId: normalizedMatchId,
                 level: 'info',
             }));
@@ -2153,12 +2339,20 @@ const App: React.FC = () => {
                 level: 'info',
             }));
         }
-    }, [activeTelemetryDraftMatch?.id, setTelemetryAutomationStatus, telemetryDraftPrompt, telemetryLifecycleStage]);
+    }, [
+        fullAutoEnabled,
+        hasCompleteTelemetryCaptureBundle,
+        normalizedActiveTelemetryDraftMatchId,
+        setTelemetryAutomationStatus,
+        telemetryDraftPrompt,
+        telemetryLifecycleIsPracticeRange,
+        telemetryLifecycleStage,
+    ]);
 
     useEffect(() => {
         if (!fullAutoEnabled) return;
-        const matchId = Number(activeTelemetryDraftMatch?.id || 0);
-        if (!Number.isInteger(matchId) || matchId <= 0) return;
+        if (normalizedActiveTelemetryDraftMatchId == null) return;
+        const matchId = normalizedActiveTelemetryDraftMatchId;
 
         if (telemetryLifecycleStage === 'pregame') {
             if (telemetryLobbyCaptureAttemptedRef.current.has(matchId)) return;
@@ -2167,17 +2361,76 @@ const App: React.FC = () => {
             return;
         }
 
-        if (telemetryLifecycleStage !== 'live') return;
+        if (telemetryLifecycleStage !== 'live') {
+            clearTelemetryPracticeCaptureTimer(matchId);
+            return;
+        }
         if (hasCompleteTelemetryCaptureBundle(matchId)) return;
         if (telemetryAutoCaptureInFlightRef.current.has(matchId)) return;
+        if (telemetryLifecycleIsPracticeRange) {
+            if (telemetryPracticeCaptureAttemptedRef.current.has(matchId)) return;
+            telemetryPracticeCaptureAttemptedRef.current.add(matchId);
+            clearTelemetryPracticeCaptureTimer(matchId);
+            setTelemetryAutomationStatus(createTelemetryAutomationStatus({
+                phase: 'waiting-training-capture',
+                message: 'Waiting to auto-capture training screenshots',
+                matchId,
+                level: 'info',
+            }));
+            const timerId = window.setTimeout(async () => {
+                clearTelemetryPracticeCaptureTimer(matchId);
+                if (
+                    !fullAutoEnabledRef.current
+                    || telemetryLifecycleStageValueRef.current !== 'live'
+                    || !telemetryPracticeRangeRef.current
+                    || latestTelemetryDraftIdRef.current !== matchId
+                    || hasCompleteTelemetryCaptureBundleRef.current(matchId)
+                ) {
+                    return;
+                }
+
+                const result = await startSilentTelemetryAutoCaptureRef.current(matchId, 'practice-live');
+                if (
+                    result.reason === 'no-active-match'
+                    && !telemetryPracticeCaptureRetryUsedRef.current.has(matchId)
+                ) {
+                    telemetryPracticeCaptureRetryUsedRef.current.add(matchId);
+                    setTelemetryAutomationStatus(createTelemetryAutomationStatus({
+                        phase: 'waiting-training-capture',
+                        message: 'Waiting to auto-capture training screenshots',
+                        matchId,
+                        level: 'info',
+                    }));
+                    const retryTimerId = window.setTimeout(async () => {
+                        clearTelemetryPracticeCaptureTimer(matchId);
+                        if (
+                            !fullAutoEnabledRef.current
+                            || telemetryLifecycleStageValueRef.current !== 'live'
+                            || !telemetryPracticeRangeRef.current
+                            || latestTelemetryDraftIdRef.current !== matchId
+                            || hasCompleteTelemetryCaptureBundleRef.current(matchId)
+                        ) {
+                            return;
+                        }
+                        await startSilentTelemetryAutoCaptureRef.current(matchId, 'practice-live');
+                    }, TELEMETRY_TRAINING_CAPTURE_RETRY_DELAY_MS);
+                    telemetryPracticeCaptureTimersRef.current.set(matchId, retryTimerId);
+                }
+            }, TELEMETRY_TRAINING_CAPTURE_DELAY_MS);
+            telemetryPracticeCaptureTimersRef.current.set(matchId, timerId);
+            return;
+        }
         if (telemetryLiveFallbackAttemptedRef.current.has(matchId)) return;
         telemetryLiveFallbackAttemptedRef.current.add(matchId);
         void startSilentTelemetryAutoCapture(matchId, 'live');
     }, [
-        activeTelemetryDraftMatch?.id,
+        clearTelemetryPracticeCaptureTimer,
         fullAutoEnabled,
         hasCompleteTelemetryCaptureBundle,
+        normalizedActiveTelemetryDraftMatchId,
+        setTelemetryAutomationStatus,
         startSilentTelemetryAutoCapture,
+        telemetryLifecycleIsPracticeRange,
         telemetryLifecycleStage,
     ]);
 
@@ -2276,6 +2529,7 @@ const App: React.FC = () => {
                 return;
             }
             clearTelemetryDraftFallbackTimer(matchId);
+            clearTelemetryPracticeCaptureTimer(matchId);
             handledTelemetryDraftPostmatchPromptIdsRef.current.add(matchId);
             telemetryAutoCaptureInFlightRef.current.delete(matchId);
             telemetryAutoCaptureOriginRef.current.delete(matchId);
@@ -2292,7 +2546,7 @@ const App: React.FC = () => {
         };
         window.addEventListener('telemetry-draft:resolved', onTelemetryDraftResolved as EventListener);
         return () => window.removeEventListener('telemetry-draft:resolved', onTelemetryDraftResolved as EventListener);
-    }, [clearTelemetryDraftFallbackTimer, setTelemetryAutomationStatus]);
+    }, [clearTelemetryDraftFallbackTimer, clearTelemetryPracticeCaptureTimer, setTelemetryAutomationStatus]);
 
     useEffect(() => {
         const onTelemetryDraftReady = (evt: Event) => {
@@ -2438,68 +2692,99 @@ const App: React.FC = () => {
         }
     }, []);
 
+    const handleFullAutoResultFlashDetected = useCallback(() => {
+        if (fullAutoResultLatched || fullAutoCaptureInFlightRef.current) return;
+        setTelemetryAutomationStatus(createTelemetryAutomationStatus({
+            phase: 'result-flash-detected',
+            message: 'Result flash detected',
+            matchId: normalizedActiveTelemetryDraftMatchId,
+            level: 'info',
+        }));
+    }, [fullAutoResultLatched, normalizedActiveTelemetryDraftMatchId, setTelemetryAutomationStatus]);
+
     const triggerFullAutoSave = useCallback(async () => {
         const api = getElectronAPI();
         if (!api || fullAutoResultLatched || fullAutoCaptureInFlightRef.current) return;
-        const activeDraftMatchId = Number(activeTelemetryDraftMatch?.id || 0);
-        const normalizedDraftMatchId = Number.isInteger(activeDraftMatchId) && activeDraftMatchId > 0
-            ? activeDraftMatchId
-            : null;
+        const normalizedDraftMatchId = normalizedActiveTelemetryDraftMatchId;
 
         fullAutoCaptureInFlightRef.current = true;
         try {
+            await waitForDuration(FULL_AUTO_RESULT_OCR_POST_FLASH_DELAY_MS);
             setTelemetryAutomationStatus(createTelemetryAutomationStatus({
-                phase: 'result-ocr',
-                message: 'Result OCR running',
+                phase: 'result-ocr-burst',
+                message: 'Result OCR burst running',
                 matchId: normalizedDraftMatchId,
                 level: 'info',
             }));
-            const capture = await api.invoke('capture-screen');
-            if (!capture) {
-                setTelemetryAutomationStatus(createTelemetryAutomationStatus({
-                    phase: 'failed',
-                    message: 'Auto-capture failed: could not take screenshot',
-                    matchId: normalizedDraftMatchId,
-                    level: 'error',
-                }));
-                setToast({ message: 'Auto-capture failed: could not take screenshot', type: 'error' });
-                return;
+
+            let shouldReturnToWatching = true;
+            let finalFailureMessage = 'Automatic result capture failed';
+
+            for (let attemptIndex = 0; attemptIndex < FULL_AUTO_RESULT_OCR_MAX_ATTEMPTS; attemptIndex += 1) {
+                if (attemptIndex > 0) {
+                    await waitForDuration(FULL_AUTO_RESULT_OCR_RETRY_DELAY_MS);
+                }
+
+                const capture = await api.invoke('capture-screen');
+                if (!capture) {
+                    shouldReturnToWatching = false;
+                    finalFailureMessage = 'Auto-capture failed: could not take screenshot';
+                    continue;
+                }
+
+                const imageBase64 = capture as string;
+                const scanResult = await api.invoke('scan-result-screen', { imageBase64 });
+                const resultData = scanResult?.data ?? { result: null };
+                const finalized = await autoFinalizeResultScreenCapture({
+                    imageBase64,
+                    resultData,
+                });
+
+                if (finalized.success) {
+                    setFullAutoResultLatched(true);
+                    setTelemetryAutomationStatus(createTelemetryAutomationStatus({
+                        phase: 'result-ocr',
+                        message: 'Automatic result saved',
+                        matchId: normalizedDraftMatchId,
+                        level: 'success',
+                    }));
+                    return;
+                }
+
+                if (finalized.reason !== 'busy' && finalized.reason !== 'ipc-unavailable') {
+                    await saveFullAutoDebugCapture(
+                        imageBase64,
+                        `${finalized.reason || 'unconfirmed'}-attempt-${attemptIndex + 1}`
+                    );
+                }
+
+                if (
+                    finalized.reason !== 'unconfirmed'
+                    && finalized.reason !== 'incomplete'
+                    && finalized.reason !== 'busy'
+                    && finalized.reason !== 'ipc-unavailable'
+                ) {
+                    shouldReturnToWatching = false;
+                    finalFailureMessage = 'Automatic result capture failed';
+                }
             }
 
-            const imageBase64 = capture as string;
-            const scanResult = await api.invoke('scan-result-screen', { imageBase64 });
-            const resultData = scanResult?.data ?? { result: null };
-            const finalized = await autoFinalizeResultScreenCapture({
-                imageBase64,
-                resultData,
-            });
-
-            if (finalized.success) {
-                setFullAutoResultLatched(true);
+            if (shouldReturnToWatching) {
                 setTelemetryAutomationStatus(createTelemetryAutomationStatus({
-                    phase: 'result-ocr',
-                    message: 'Automatic result saved',
+                    phase: getWatchingResultStatusPhase(fullAutoEnabled),
+                    message: getWatchingResultStatusMessage(fullAutoEnabled),
                     matchId: normalizedDraftMatchId,
-                    level: 'success',
+                    level: 'info',
                 }));
                 return;
-            }
-
-            if (finalized.reason !== 'busy' && finalized.reason !== 'ipc-unavailable') {
-                await saveFullAutoDebugCapture(imageBase64, finalized.reason || 'unconfirmed');
             }
             setTelemetryAutomationStatus(createTelemetryAutomationStatus({
-                phase: finalized.reason === 'unconfirmed' || finalized.reason === 'incomplete'
-                    ? 'watching-result'
-                    : 'failed',
-                message: finalized.reason === 'unconfirmed' || finalized.reason === 'incomplete'
-                    ? 'Watching for result screen'
-                    : 'Automatic result capture failed',
+                phase: 'failed',
+                message: finalFailureMessage,
                 matchId: normalizedDraftMatchId,
-                level: finalized.reason === 'unconfirmed' || finalized.reason === 'incomplete'
-                    ? 'info'
-                    : 'warning',
+                level: 'warning',
             }));
+            setToast({ message: finalFailureMessage, type: 'error' });
         } catch (err) {
             console.error('[FullAuto] Error:', err);
             setTelemetryAutomationStatus(createTelemetryAutomationStatus({
@@ -2512,9 +2797,26 @@ const App: React.FC = () => {
         } finally {
             fullAutoCaptureInFlightRef.current = false;
         }
-    }, [activeTelemetryDraftMatch?.id, autoFinalizeResultScreenCapture, fullAutoResultLatched, saveFullAutoDebugCapture, setTelemetryAutomationStatus, setToast]);
+    }, [
+        autoFinalizeResultScreenCapture,
+        fullAutoEnabled,
+        fullAutoResultLatched,
+        normalizedActiveTelemetryDraftMatchId,
+        saveFullAutoDebugCapture,
+        setTelemetryAutomationStatus,
+        setToast,
+    ]);
 
     usePixelMonitor(triggerFullAutoSave, fullAutoResultLatched);
+    useResultFlashMonitor({
+        enabled: fullAutoEnabled
+            && telemetryLifecycleStage === 'live'
+            && normalizedActiveTelemetryDraftMatchId != null,
+        liveStartedAt: telemetryLiveStartedAt,
+        triggerLatched: fullAutoResultLatched,
+        onFlashDetected: handleFullAutoResultFlashDetected,
+        onFlashResolved: triggerFullAutoSave,
+    });
 
     const handleApplyOCRData = useCallback((
         data: OCRExtractedData,

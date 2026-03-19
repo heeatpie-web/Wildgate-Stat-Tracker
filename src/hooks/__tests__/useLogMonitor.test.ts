@@ -47,6 +47,10 @@ const uiState = {
   setOverlayPhase: vi.fn(),
   telemetryLifecycleStage: 'idle',
   setTelemetryLifecycleStage: vi.fn(),
+  telemetryLifecycleIsPracticeRange: false,
+  setTelemetryLifecycleIsPracticeRange: vi.fn((isPracticeRange: boolean) => {
+    uiState.telemetryLifecycleIsPracticeRange = isPracticeRange;
+  }),
   enableAutoLogRecording: true,
   setShowWizard: vi.fn(),
   devMode: false,
@@ -157,7 +161,9 @@ describe('useLogMonitor', () => {
     uiState.setActiveMode.mockClear();
     uiState.setOverlayPhase.mockClear();
     uiState.setTelemetryLifecycleStage.mockClear();
+    uiState.setTelemetryLifecycleIsPracticeRange.mockClear();
     uiState.telemetryLifecycleStage = 'idle';
+    uiState.telemetryLifecycleIsPracticeRange = false;
     gameDataState.sessionStartTime = Date.now() - 5_000;
     gameDataState.isMatchInProgress = false;
     gameDataState.currentLoadout = null;
@@ -271,6 +277,7 @@ describe('useLogMonitor', () => {
       telemetryDraftState: 'active',
     });
     expect(uiState.setTelemetryLifecycleStage).toHaveBeenCalledWith('live');
+    expect(uiState.setTelemetryLifecycleIsPracticeRange).toHaveBeenCalledWith(false);
   });
 
   it('creates a telemetry draft when loadingMap is only present on the payload envelope', async () => {
@@ -314,6 +321,7 @@ describe('useLogMonitor', () => {
       subType: 'Telemetry Draft',
     });
     expect(uiState.setTelemetryLifecycleStage).toHaveBeenCalledWith('live');
+    expect(uiState.setTelemetryLifecycleIsPracticeRange).toHaveBeenCalledWith(true);
   });
 
   it('uses the latest active mode when creating telemetry drafts after a mode change', async () => {

@@ -106,6 +106,8 @@ interface UIStateContextType {
     setOverlayPhase: (phase: 'Setup' | 'Live' | 'Result') => void;
     telemetryLifecycleStage: TelemetryLifecycleStage;
     setTelemetryLifecycleStage: (stage: TelemetryLifecycleStage) => void;
+    telemetryLifecycleIsPracticeRange: boolean;
+    setTelemetryLifecycleIsPracticeRange: (isPracticeRange: boolean) => void;
     telemetryAutomationStatus: TelemetryAutomationStatusState | null;
     setTelemetryAutomationStatus: (status: TelemetryAutomationStatusState | null) => void;
     sidebarCollapsed: boolean;
@@ -176,6 +178,7 @@ export const UIStateProvider: React.FC<{ children: React.ReactNode }> = ({ child
         overlayTab: s.overlayTab, setOverlayTab: s.setOverlayTab,
         overlayPhase: s.overlayPhase, setOverlayPhase: s.setOverlayPhase,
         telemetryLifecycleStage: s.telemetryLifecycleStage, setTelemetryLifecycleStage: s.setTelemetryLifecycleStage,
+        telemetryLifecycleIsPracticeRange: s.telemetryLifecycleIsPracticeRange, setTelemetryLifecycleIsPracticeRange: s.setTelemetryLifecycleIsPracticeRange,
         telemetryAutomationStatus: s.telemetryAutomationStatus, setTelemetryAutomationStatus: s.setTelemetryAutomationStatus,
         sidebarCollapsed: s.sidebarCollapsed, setSidebarCollapsed: s.setSidebarCollapsed,
         enableAutoLogRecording: s.enableAutoLogRecording, setEnableAutoLogRecording: s.setEnableAutoLogRecording,

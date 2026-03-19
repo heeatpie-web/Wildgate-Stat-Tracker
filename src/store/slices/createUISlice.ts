@@ -85,12 +85,18 @@ export type TelemetryAutomationStatusPhase =
     | 'idle'
     | 'loading-match'
     | 'pregame-detected'
+    | 'training-detected'
+    | 'waiting-training-capture'
     | 'capturing-lobby'
+    | 'capturing-training'
     | 'lobby-complete'
     | 'live-match'
     | 'capturing-live-fallback'
     | 'watching-result'
+    | 'watching-result-flash'
+    | 'result-flash-detected'
     | 'result-ocr'
+    | 'result-ocr-burst'
     | 'manual-result-needed'
     | 'failed';
 export type TelemetryAutomationStatusLevel = 'info' | 'success' | 'warning' | 'error';
@@ -130,6 +136,7 @@ export interface UISlice {
     overlayTab: 'Mission' | 'Squadron' | 'Social';
     overlayPhase: 'Setup' | 'Live' | 'Result';
     telemetryLifecycleStage: TelemetryLifecycleStage;
+    telemetryLifecycleIsPracticeRange: boolean;
     telemetryAutomationStatus: TelemetryAutomationStatusState | null;
     sidebarCollapsed: boolean;
     activeView: AppView;
@@ -164,6 +171,7 @@ export interface UISlice {
     setOverlayTab: (tab: 'Mission' | 'Squadron' | 'Social') => void;
     setOverlayPhase: (phase: 'Setup' | 'Live' | 'Result') => void;
     setTelemetryLifecycleStage: (stage: TelemetryLifecycleStage) => void;
+    setTelemetryLifecycleIsPracticeRange: (isPracticeRange: boolean) => void;
     setTelemetryAutomationStatus: (status: TelemetryAutomationStatusState | null) => void;
     setSidebarCollapsed: (collapsed: boolean) => void;
     setActiveView: (view: AppView) => void;
@@ -373,6 +381,7 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
     overlayTab: 'Mission',
     overlayPhase: 'Setup',
     telemetryLifecycleStage: 'idle',
+    telemetryLifecycleIsPracticeRange: false,
     telemetryAutomationStatus: null,
     sidebarCollapsed: false,
     activeView: 'recording',
@@ -496,6 +505,7 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
     setOverlayTab: (tab) => set({ overlayTab: tab }),
     setOverlayPhase: (phase) => set({ overlayPhase: phase }),
     setTelemetryLifecycleStage: (stage) => set({ telemetryLifecycleStage: stage }),
+    setTelemetryLifecycleIsPracticeRange: (isPracticeRange) => set({ telemetryLifecycleIsPracticeRange: isPracticeRange === true }),
     setTelemetryAutomationStatus: (status) => set({
         telemetryAutomationStatus: status
             ? {

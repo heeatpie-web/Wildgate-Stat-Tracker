@@ -58,7 +58,12 @@ export function usePixelMonitor(onFullAutoTrigger?: () => Promise<void>, trigger
         const api = getElectronAPI();
         if (!api) return;
 
-        if (pixelMonitorEnabled && isMatchInProgress && !triggerLatched) {
+        const shouldUsePixelMonitor = pixelMonitorEnabled
+            && isMatchInProgress
+            && !triggerLatched
+            && !fullAutoEnabled;
+
+        if (shouldUsePixelMonitor) {
             api.send('pixel-monitor-start', {
                 x: pixelMonitorX,
                 y: pixelMonitorY,
@@ -79,6 +84,7 @@ export function usePixelMonitor(onFullAutoTrigger?: () => Promise<void>, trigger
         pixelMonitorX, pixelMonitorY,
         pixelMonitorWidth, pixelMonitorHeight,
         pixelMonitorIntervalMs, pixelMonitorChangeSensitivity,
+        fullAutoEnabled,
         triggerLatched,
     ]);
 
