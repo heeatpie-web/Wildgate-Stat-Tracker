@@ -1,4 +1,7 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.3.5": [
+    "Fix OCR processing: bundle PaddleOCR models in release package"
+  ],
   "v3.3.4": [
     "Improvement: Automated release pipeline so future updates ship faster",
     "Fix: Telemetry ID mapping for Sonic Boom, Thunder Dash, Impact Can, and Privateer now resolves correctly on new installs"
