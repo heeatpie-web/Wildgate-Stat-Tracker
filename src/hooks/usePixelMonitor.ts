@@ -24,7 +24,7 @@ import { useSmartScan } from './useSmartScan';
 /** Cooldown in ms to prevent duplicate captures after a detection event. */
 const TRIGGER_COOLDOWN_MS = 15000;
 
-export function usePixelMonitor(onFullAutoTrigger?: () => Promise<void>) {
+export function usePixelMonitor(onFullAutoTrigger?: () => Promise<void>, triggerLatched = false) {
     const { isMatchInProgress } = useGameData();
     const { handleSmartScan, isScanning } = useSmartScan();
     const pixelMonitorEnabled = useAppStore(s => s.pixelMonitorEnabled);
@@ -49,13 +49,16 @@ export function usePixelMonitor(onFullAutoTrigger?: () => Promise<void>) {
     const fullAutoEnabledRef = useRef(fullAutoEnabled);
     useEffect(() => { fullAutoEnabledRef.current = fullAutoEnabled; }, [fullAutoEnabled]);
 
+    const triggerLatchedRef = useRef(triggerLatched);
+    useEffect(() => { triggerLatchedRef.current = triggerLatched; }, [triggerLatched]);
+
     // Start/stop the monitor based on match state and enabled flag.
     // Re-runs when any config value changes so the main process always has fresh config.
     useEffect(() => {
         const api = getElectronAPI();
         if (!api) return;
 
-        if (pixelMonitorEnabled && isMatchInProgress) {
+        if (pixelMonitorEnabled && isMatchInProgress && !triggerLatched) {
             api.send('pixel-monitor-start', {
                 x: pixelMonitorX,
                 y: pixelMonitorY,
@@ -76,6 +79,7 @@ export function usePixelMonitor(onFullAutoTrigger?: () => Promise<void>) {
         pixelMonitorX, pixelMonitorY,
         pixelMonitorWidth, pixelMonitorHeight,
         pixelMonitorIntervalMs, pixelMonitorChangeSensitivity,
+        triggerLatched,
     ]);
 
     // Listen for trigger events from the main process.
@@ -85,6 +89,7 @@ export function usePixelMonitor(onFullAutoTrigger?: () => Promise<void>) {
 
         const unsub = api.on('pixel-monitor-trigger', async () => {
             if (isScanningRef.current) return;
+            if (triggerLatchedRef.current) return;
             if (Date.now() < cooldownRef.current) return;
             cooldownRef.current = Date.now() + TRIGGER_COOLDOWN_MS;
 

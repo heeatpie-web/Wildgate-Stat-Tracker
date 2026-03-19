@@ -3,18 +3,23 @@
  * Monitors a configurable screen region for pixel changes.
  * Used to auto-detect the victory/defeat result screen and trigger smart capture.
  *
- * Detection: frame-diff change detection — captures the configured region in a
- * single native call via screen.grabRegion() and computes the average RGB across
- * all pixels. When the average per-channel difference between frames exceeds
- * `changeSensitivity`, the `onTrigger` callback fires (with a cooldown guard).
+ * Detection: two-stage frame-diff confirmation. We first detect a significant
+ * change, then require the next sample to remain close to that changed state
+ * before firing. This avoids reacting to brief HUD/world motion while still
+ * triggering on persistent result-screen transitions.
  */
 
 /** Milliseconds to suppress re-triggering after a detection event. */
 const COOLDOWN_MS = 15000;
+const MIN_CONFIRM_WINDOW_MS = 4000;
+const CONFIRM_WINDOW_MULTIPLIER = 2;
+const CONFIRM_STABILITY_FACTOR = 0.55;
+const MIN_CONFIRM_DIFF = 10;
 
 let _timer = null;
 let _cooldownUntil = 0;
 let _prevSample = null; // [avgR, avgG, avgB]
+let _pendingTrigger = null; // { sample: [avgR, avgG, avgB], expiresAt: number }
 let _busy = false;
 
 // Lazy-load nut-js to avoid require() at module load time
@@ -64,6 +69,32 @@ async function sampleRegion(config) {
     }
 }
 
+function averageChannelDiff(leftSample, rightSample) {
+    if (!Array.isArray(leftSample) || !Array.isArray(rightSample)) return Infinity;
+    return (
+        Math.abs(Number(leftSample[0] || 0) - Number(rightSample[0] || 0)) +
+        Math.abs(Number(leftSample[1] || 0) - Number(rightSample[1] || 0)) +
+        Math.abs(Number(leftSample[2] || 0) - Number(rightSample[2] || 0))
+    ) / 3;
+}
+
+function buildPendingTrigger(sampleTuple, config, now) {
+    const intervalMs = Math.max(0, Number(config?.intervalMs || 0));
+    return {
+        sample: sampleTuple,
+        expiresAt: now + Math.max(MIN_CONFIRM_WINDOW_MS, intervalMs * CONFIRM_WINDOW_MULTIPLIER),
+    };
+}
+
+function shouldConfirmPendingTrigger(pendingTrigger, sampleTuple, changeSensitivity) {
+    if (!pendingTrigger || !Array.isArray(sampleTuple)) return false;
+    const confirmThreshold = Math.max(
+        MIN_CONFIRM_DIFF,
+        Number(changeSensitivity || 0) * CONFIRM_STABILITY_FACTOR
+    );
+    return averageChannelDiff(pendingTrigger.sample, sampleTuple) <= confirmThreshold;
+}
+
 /**
  * Start the pixel monitor.
  * @param {{ x: number, y: number, width: number, height: number, intervalMs: number, changeSensitivity: number }} config
@@ -76,26 +107,37 @@ function startMonitor(config, onTrigger) {
         if (_busy) return;
         _busy = true;
         try {
-            if (Date.now() < _cooldownUntil) return;
+            const now = Date.now();
+            if (now < _cooldownUntil) return;
 
             const sample = await sampleRegion(config);
             if (!sample) return;
 
-            const { avgR, avgG, avgB } = sample;
+            const sampleTuple = [sample.avgR, sample.avgG, sample.avgB];
+
+            if (_pendingTrigger && now <= _pendingTrigger.expiresAt) {
+                if (shouldConfirmPendingTrigger(_pendingTrigger, sampleTuple, config.changeSensitivity)) {
+                    _cooldownUntil = now + COOLDOWN_MS;
+                    _pendingTrigger = null;
+                    _prevSample = sampleTuple;
+                    onTrigger();
+                    return;
+                }
+            } else if (_pendingTrigger && now > _pendingTrigger.expiresAt) {
+                _pendingTrigger = null;
+            }
 
             if (_prevSample) {
-                const [pR, pG, pB] = _prevSample;
-                const diff = (Math.abs(avgR - pR) + Math.abs(avgG - pG) + Math.abs(avgB - pB)) / 3;
+                const diff = averageChannelDiff(sampleTuple, _prevSample);
 
                 if (diff >= config.changeSensitivity) {
-                    _cooldownUntil = Date.now() + COOLDOWN_MS;
-                    _prevSample = [avgR, avgG, avgB];
-                    onTrigger();
+                    _pendingTrigger = buildPendingTrigger(sampleTuple, config, now);
+                    _prevSample = sampleTuple;
                     return;
                 }
             }
 
-            _prevSample = [avgR, avgG, avgB];
+            _prevSample = sampleTuple;
         } catch {
             // Silently swallow errors (e.g. nut-js unavailable mid-restart)
         } finally {
@@ -112,8 +154,16 @@ function stopMonitor() {
         clearInterval(_timer);
         _timer = null;
     }
+    _cooldownUntil = 0;
     _prevSample = null;
+    _pendingTrigger = null;
     _busy = false;
 }
 
-module.exports = { startMonitor, stopMonitor, sampleRegion };
+const __test__ = {
+    averageChannelDiff,
+    buildPendingTrigger,
+    shouldConfirmPendingTrigger,
+};
+
+module.exports = { startMonitor, stopMonitor, sampleRegion, __test__ };

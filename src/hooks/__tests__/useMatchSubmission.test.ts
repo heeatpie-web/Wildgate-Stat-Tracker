@@ -33,6 +33,7 @@ const addMatch = vi.fn();
 const deleteMatch = vi.fn();
 const updateMatch = vi.fn();
 const dispatchEventSpy = vi.spyOn(window, 'dispatchEvent');
+const electronInvokeMock = vi.fn();
 
 vi.mock('../../providers/GameDataProvider', () => ({
   useGameData: () => ({
@@ -131,6 +132,15 @@ vi.mock('../../utils/storage', () => ({
   StorageService: { flush: vi.fn().mockResolvedValue(undefined) },
 }));
 
+vi.mock('../../utils/electronAPI', () => ({
+  getElectronAPI: () => ({
+    invoke: (...args: unknown[]) => electronInvokeMock(...args),
+    send: vi.fn(),
+    on: vi.fn(() => () => {}),
+    removeAllListeners: vi.fn(),
+  }),
+}));
+
 vi.mock('../../utils/logger', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
@@ -210,6 +220,8 @@ describe('useMatchSubmission', () => {
     vi.mocked(removeMatchArtifact).mockReset();
     vi.mocked(removeMatchArtifact).mockResolvedValue({ success: true });
     vi.mocked(StorageService.flush).mockClear();
+    electronInvokeMock.mockReset();
+    electronInvokeMock.mockResolvedValue({ success: true, data: { filePath: 'C:\\match_artifacts\\999\\capture_result.png' } });
   });
 
   it('returns initiateSubmission, processFinalSubmission, and submitting', () => {
@@ -217,12 +229,14 @@ describe('useMatchSubmission', () => {
     expect(result.current).toHaveProperty('initiateSubmission');
     expect(result.current).toHaveProperty('processFinalSubmission');
     expect(result.current).toHaveProperty('saveResultDraft');
+    expect(result.current).toHaveProperty('autoFinalizeResultScreenCapture');
     expect(result.current).toHaveProperty('discardCurrentMatch');
     expect(result.current).toHaveProperty('discardTelemetryDraft');
     expect(result.current).toHaveProperty('submitting');
     expect(typeof result.current.initiateSubmission).toBe('function');
     expect(typeof result.current.processFinalSubmission).toBe('function');
     expect(typeof result.current.saveResultDraft).toBe('function');
+    expect(typeof result.current.autoFinalizeResultScreenCapture).toBe('function');
     expect(typeof result.current.discardCurrentMatch).toBe('function');
     expect(typeof result.current.discardTelemetryDraft).toBe('function');
     expect(result.current.submitting).toBe(false);
@@ -1004,6 +1018,134 @@ describe('useMatchSubmission', () => {
     const [savedMatch] = updateMatch.mock.calls[0];
     expect(savedMatch.id).toBe(draftId);
     expect(savedMatch.artifacts).toEqual(['existing.png', 'pending.png']);
+    const resolvedEvent = dispatchEventSpy.mock.calls
+      .map(([evt]) => evt as Event)
+      .find((evt) => evt.type === 'telemetry-draft:resolved') as CustomEvent | undefined;
+    expect(resolvedEvent?.detail).toEqual({ matchId: draftId });
+  });
+
+  it('autoFinalizeResultScreenCapture refuses incomplete combat losses', async () => {
+    const { result } = renderHook(() => useMatchSubmission());
+
+    let finalized;
+    await act(async () => {
+      finalized = await result.current.autoFinalizeResultScreenCapture({
+        imageBase64: 'data:image/png;base64,ZmFrZQ==',
+        resultData: { result: 'Loss', winType: 'combat', placement: null },
+      });
+    });
+
+    expect(finalized).toEqual({ success: false, reason: 'incomplete' });
+    expect(addMatch).not.toHaveBeenCalled();
+    expect(updateMatch).not.toHaveBeenCalled();
+    expect(electronInvokeMock).not.toHaveBeenCalled();
+  });
+
+  it('autoFinalizeResultScreenCapture requires an active telemetry draft', async () => {
+    mockStoreState.activeUser = 'Tester';
+    mockStoreState.pendingMatchData = {
+      timestamp: 1_700_000_555_000,
+      player: 'Tester',
+      mode: 'Artifact Brawl',
+    };
+
+    const { result } = renderHook(() => useMatchSubmission());
+
+    let finalized;
+    await act(async () => {
+      finalized = await result.current.autoFinalizeResultScreenCapture({
+        imageBase64: 'data:image/png;base64,ZmFrZQ==',
+        resultData: { result: 'Win', winType: 'artifact', placement: 1 },
+      });
+    });
+
+    expect(finalized).toEqual({ success: false, reason: 'no-draft' });
+    expect(addMatch).not.toHaveBeenCalled();
+    expect(updateMatch).not.toHaveBeenCalled();
+    expect(electronInvokeMock).not.toHaveBeenCalled();
+  });
+
+  it('autoFinalizeResultScreenCapture updates the active telemetry draft and attaches the screenshot', async () => {
+    const draftId = 9090;
+    const draftTimestamp = 1_700_000_666_000;
+    mockStoreState.activeUser = 'Tester';
+    mockStoreState.pendingMatchData = {
+      timestamp: draftTimestamp,
+      player: 'Tester',
+      mode: 'Artifact Brawl',
+      teammates: ['Teammate One'],
+      artifacts: ['existing_capture.png'],
+      ocrState: 'reviewing',
+      damageTaken: 22,
+    };
+    mockStoreState.damageTaken = '48';
+    mockStoreState.matches = [{
+      id: draftId,
+      timestamp: draftTimestamp,
+      date: '3/19/2026',
+      mode: 'Artifact Brawl',
+      player: 'Tester',
+      teammates: ['Teammate One'],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      damageTaken: 12,
+      time: '00:00',
+      notes: '',
+      artifacts: ['existing_capture.png'],
+      telemetryDraftState: 'ready',
+      ocrState: 'queued',
+    }];
+    vi.mocked(getMatchArtifactsStructured).mockResolvedValue({
+      images: ['existing_capture.png', 'C:\\match_artifacts\\9090\\capture_result.png'],
+      imageFiles: [],
+      telemetry: [],
+    });
+    electronInvokeMock.mockResolvedValue({
+      success: true,
+      data: { filePath: 'C:\\match_artifacts\\9090\\capture_result.png' },
+    });
+
+    const { result } = renderHook(() => useMatchSubmission());
+
+    let finalized;
+    await act(async () => {
+      finalized = await result.current.autoFinalizeResultScreenCapture({
+        imageBase64: 'data:image/png;base64,ZmFrZQ==',
+        resultData: {
+          result: 'Loss',
+          winType: 'combat',
+          placement: 2,
+          damageTaken: 114,
+        },
+      });
+    });
+
+    expect(finalized).toEqual({
+      success: true,
+      matchId: draftId,
+      artifactPath: 'C:\\match_artifacts\\9090\\capture_result.png',
+    });
+    expect(addMatch).not.toHaveBeenCalled();
+    expect(electronInvokeMock).toHaveBeenCalledWith('save-screenshot', {
+      imageBase64: 'ZmFrZQ==',
+      matchId: draftId,
+    });
+    expect(updateMatch).toHaveBeenCalled();
+    const [updatedMatch] = updateMatch.mock.calls[0];
+    expect(updatedMatch.id).toBe(draftId);
+    expect(updatedMatch.result).toBe('Loss');
+    expect(updatedMatch.subType).toBe('Combat');
+    expect(updatedMatch.placement).toBe(2);
+    expect(updatedMatch.damageTaken).toBe(114);
+    expect(updatedMatch.artifacts).toEqual([
+      'existing_capture.png',
+      'C:\\match_artifacts\\9090\\capture_result.png',
+    ]);
     const resolvedEvent = dispatchEventSpy.mock.calls
       .map(([evt]) => evt as Event)
       .find((evt) => evt.type === 'telemetry-draft:resolved') as CustomEvent | undefined;

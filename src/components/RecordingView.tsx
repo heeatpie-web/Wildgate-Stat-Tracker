@@ -3,6 +3,7 @@ import { SquadronPanel } from './recording/SquadronPanel';
 import { RosterPanel } from './recording/RosterPanel';
 import { MissionPanel } from './recording/MissionPanel';
 import { ActionPanel } from './recording/ActionPanel';
+import { useUIState } from '../providers/UIStateProvider';
 // TimelinePanel archived
 
 interface RecordingViewProps {
@@ -11,6 +12,7 @@ interface RecordingViewProps {
 }
 
 export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData, isActive = true }) => {
+    const { telemetryLifecycleStage, telemetryAutomationStatus } = useUIState();
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const [viewport, setViewport] = React.useState(() => ({
         w: typeof window !== 'undefined' ? window.innerWidth : 1920,
@@ -53,6 +55,34 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
     const shouldScrollLeftPanel = !isNarrow;
     const shouldScrollWideLayout = !isNarrow && isHeightConstrained;
     const [leftTab, setLeftTab] = React.useState<'actions' | 'loadout'>('actions');
+    const shouldShowAutomationStrip = telemetryLifecycleStage !== 'idle' || !!telemetryAutomationStatus;
+    const automationLevelClass = telemetryAutomationStatus?.level === 'success'
+        ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-100'
+        : telemetryAutomationStatus?.level === 'warning'
+            ? 'border-amber-400/25 bg-amber-500/10 text-amber-50'
+            : telemetryAutomationStatus?.level === 'error'
+                ? 'border-rose-400/25 bg-rose-500/10 text-rose-100'
+                : 'border-md-sys-primary/20 bg-md-sys-primary/10 text-md-sys-on-surface';
+    const lifecycleBadgeLabel = telemetryLifecycleStage === 'loading'
+        ? 'Loading'
+        : telemetryLifecycleStage === 'pregame'
+            ? 'Pregame'
+            : telemetryLifecycleStage === 'live'
+                ? 'Live'
+                : telemetryLifecycleStage === 'result'
+                    ? 'Result'
+                    : 'Idle';
+    const automationMessage = telemetryAutomationStatus?.message || (
+        telemetryLifecycleStage === 'loading'
+            ? 'Loading match'
+            : telemetryLifecycleStage === 'pregame'
+                ? 'Pregame lobby detected'
+                : telemetryLifecycleStage === 'live'
+                    ? 'Watching for result screen'
+                    : telemetryLifecycleStage === 'result'
+                        ? 'Waiting for match wrap-up'
+                        : ''
+    );
 
     React.useEffect(() => {
         // In standard density we show both panels; keep the tab state stable for compact.
@@ -86,6 +116,23 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
 
     const LeftPanel = (
         <div className={`min-h-0 ${!isNarrow ? 'h-full' : ''} flex flex-col gap-3 ${leftShellChrome} ${shouldScrollLeftPanel ? 'overflow-y-auto custom-scrollbar pr-1' : 'overflow-hidden'}`}>
+            {shouldShowAutomationStrip ? (
+                <div className={`rounded-2xl border px-3 py-3 shadow-sm ${automationLevelClass}`}>
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <div className="text-[10px] font-black uppercase tracking-[0.28em] opacity-70">
+                                Full Auto Lifecycle
+                            </div>
+                            <div className="mt-1 text-sm font-bold leading-snug">
+                                {automationMessage}
+                            </div>
+                        </div>
+                        <div className="shrink-0 rounded-full border border-white/10 bg-white/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em]">
+                            {lifecycleBadgeLabel}
+                        </div>
+                    </div>
+                </div>
+            ) : null}
             {LeftTabBar}
             {density === 'standard' ? (
                 <>

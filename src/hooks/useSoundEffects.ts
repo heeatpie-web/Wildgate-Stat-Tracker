@@ -103,11 +103,41 @@ export const useSoundEffects = () => {
         playTone(200, 'square', 0.3, 0.15);
     }, [playTone]);
 
+    const playAutomationStart = useCallback(() => {
+        playTone(540, 'triangle', 0.09);
+        playTone(660, 'triangle', 0.11, 0.08);
+    }, [playTone]);
+
+    const playAutomationComplete = useCallback(() => {
+        playTone(620, 'triangle', 0.12);
+        playTone(820, 'triangle', 0.16, 0.08);
+        playTone(1046.5, 'triangle', 0.22, 0.18);
+    }, [playTone]);
+
+    const playAutomationFailed = useCallback(() => {
+        playTone(360, 'square', 0.12);
+        playTone(250, 'square', 0.18, 0.08);
+        playTone(180, 'square', 0.24, 0.18);
+    }, [playTone]);
+
     const playEnd = useCallback(() => {
         playTone(659, 'triangle', 0.2);
         playTone(523, 'triangle', 0.2, 0.15);
         playTone(440, 'triangle', 0.5, 0.3);
     }, [playTone]);
 
-    return { prepareAudio, playCapture, playStart, playVictory, playDefeat, playClick, playSuccess, playError, playEnd };
+    return {
+        prepareAudio,
+        playCapture,
+        playStart,
+        playVictory,
+        playDefeat,
+        playClick,
+        playSuccess,
+        playError,
+        playAutomationStart,
+        playAutomationComplete,
+        playAutomationFailed,
+        playEnd,
+    };
 };

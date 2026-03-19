@@ -7,6 +7,9 @@ const loggerWarn = vi.fn();
 const getElectronAPIMock = vi.fn(() => null);
 const discardTelemetryDraftMock = vi.fn();
 const playCaptureMock = vi.fn();
+const playAutomationStartMock = vi.fn();
+const playAutomationCompleteMock = vi.fn();
+const playAutomationFailedMock = vi.fn();
 
 const buildRestoreSessionSnapshot = () => JSON.stringify({
   version: 1,
@@ -64,6 +67,15 @@ const uiState = {
   showReviewQueue: false,
   setShowReviewQueue: vi.fn(),
   requestSmartCapture: vi.fn().mockReturnValue('req_1'),
+  telemetryLifecycleStage: 'idle' as 'idle' | 'loading' | 'pregame' | 'live' | 'result',
+  setTelemetryLifecycleStage: vi.fn((stage: 'idle' | 'loading' | 'pregame' | 'live' | 'result') => {
+    uiState.telemetryLifecycleStage = stage;
+  }),
+  telemetryAutomationStatus: null as any,
+  setTelemetryAutomationStatus: vi.fn((status: any) => {
+    uiState.telemetryAutomationStatus = status;
+    appStoreState.telemetryAutomationStatus = status;
+  }),
   showSettings: false,
   setShowSettings: vi.fn(),
   showIdMapper: false,
@@ -120,11 +132,13 @@ const appStoreState = {
    autoCaptureWaitMultiplier: 1,
    tacticalMapKeybind: 'Tab',
    holdTacticalMapKey: false,
-   ocrEnhancedNameRecoveryEnabled: true,
-   ocrNameRerouteThreshold: 78,
-   ocrRegions: {
-     crewHub: {},
-     mapScreen: {},
+    ocrEnhancedNameRecoveryEnabled: true,
+    ocrNameRerouteThreshold: 78,
+    fullAutoEnabled: false,
+    telemetryAutomationStatus: null as any,
+    ocrRegions: {
+      crewHub: {},
+      mapScreen: {},
    },
    deviceDisplayInfo: null,
    gameResolution: null,
@@ -171,6 +185,7 @@ vi.mock('./hooks/useMatchSubmission', () => ({
     initiateSubmission: vi.fn(),
     processFinalSubmission: vi.fn(),
     saveResultDraft: vi.fn(),
+    autoFinalizeResultScreenCapture: vi.fn(),
     discardTelemetryDraft: (...args: unknown[]) => discardTelemetryDraftMock(...args),
     submitting: false,
   }),
@@ -179,6 +194,9 @@ vi.mock('./hooks/useMatchSubmission', () => ({
 vi.mock('./hooks/useSoundEffects', () => ({
   useSoundEffects: () => ({
     playCapture: playCaptureMock,
+    playAutomationStart: playAutomationStartMock,
+    playAutomationComplete: playAutomationCompleteMock,
+    playAutomationFailed: playAutomationFailedMock,
   }),
 }));
 
@@ -191,6 +209,7 @@ vi.mock('./store/useAppStore', () => {
 
 vi.mock('./utils/electronAPI', () => ({
   getElectronAPI: () => getElectronAPIMock(),
+  isElectron: () => getElectronAPIMock() !== null,
 }));
 
 vi.mock('./utils/logger', () => ({
@@ -237,12 +256,19 @@ describe('App', () => {
     getElectronAPIMock.mockReturnValue(null);
     discardTelemetryDraftMock.mockReset();
     playCaptureMock.mockReset();
+    playAutomationStartMock.mockReset();
+    playAutomationCompleteMock.mockReset();
+    playAutomationFailedMock.mockReset();
     uiState.activeUser = 'Pilot';
     uiState.activeView = 'recording';
     uiState.isOverlayMode = false;
     uiState.showChangelog = false;
     uiState.showSettings = false;
     uiState.showIdMapper = false;
+    uiState.telemetryLifecycleStage = 'idle';
+    uiState.telemetryAutomationStatus = null;
+    uiState.setTelemetryAutomationStatus.mockClear();
+    uiState.setTelemetryLifecycleStage.mockClear();
     gameDataState.selectedOpponents = [];
     gameDataState.selectedReachModifiers = [];
     gameDataState.matches = [];
@@ -265,6 +291,8 @@ describe('App', () => {
     appStoreState.deviceDisplayInfo = null;
     appStoreState.gameResolution = null;
     appStoreState.isMatchInProgress = false;
+    appStoreState.fullAutoEnabled = false;
+    appStoreState.telemetryAutomationStatus = null;
   });
 
   it('uses first-launch welcome copy before the app has ever been opened', async () => {
@@ -426,61 +454,48 @@ describe('App', () => {
     confirmSpy.mockRestore();
   });
 
-  it('renders the telemetry match-start prompt as a centered dialog', async () => {
+  it('defers the telemetry-ready prompt when full auto is enabled', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
     const { default: App } = await import('./App');
     render(<App />);
 
-    await act(async () => {
-      window.dispatchEvent(new CustomEvent('telemetry:draft-started', {
-        detail: { matchId: 321 },
+    act(() => {
+      window.dispatchEvent(new CustomEvent('telemetry:draft-ready', {
+        detail: { matchId: 321, duration: '12:34' },
       }));
     });
 
-    expect(screen.getByRole('dialog', { name: /telemetry match detected/i })).toBeInTheDocument();
-    expect(screen.getByText(/telemetry detected mission start/i)).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: /telemetry match ready/i })).not.toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(15_000);
+    });
+
+    expect(screen.getByRole('dialog', { name: /telemetry match ready/i })).toBeInTheDocument();
+    expect(screen.getByText(/automatic result capture did not finish in time/i)).toBeInTheDocument();
+    vi.useRealTimers();
   });
 
-  it('starts smart capture directly from the telemetry match-start prompt', async () => {
+  it('suppresses the deferred telemetry-ready prompt when the draft resolves first', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
     const { default: App } = await import('./App');
-    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
-    uiState.activeView = 'analytics';
     render(<App />);
 
-    await act(async () => {
-      window.dispatchEvent(new CustomEvent('telemetry:draft-started', {
+    act(() => {
+      window.dispatchEvent(new CustomEvent('telemetry:draft-ready', {
+        detail: { matchId: 321, duration: '12:34' },
+      }));
+      vi.advanceTimersByTime(5_000);
+      window.dispatchEvent(new CustomEvent('telemetry-draft:resolved', {
         detail: { matchId: 321 },
       }));
+      vi.advanceTimersByTime(15_000);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /start smart capture/i }));
-
-    expect(uiState.requestSmartCapture).toHaveBeenCalledWith(expect.objectContaining({
-      activeUser: 'Pilot',
-      source: 'telemetry-draft-prompt',
-      matchId: 321,
-      requestId: expect.stringMatching(/^telemetry-draft-321-/),
-    }));
-
-    const captureEvent = dispatchSpy.mock.calls
-      .map(([evt]) => evt as Event)
-      .find((evt) => evt.type === 'smart-capture-request') as CustomEvent | undefined;
-    expect(captureEvent).toBeDefined();
-    expect(captureEvent?.detail).toEqual(expect.objectContaining({
-      activeUser: 'Pilot',
-      source: 'telemetry-draft-prompt',
-      matchId: 321,
-      requestId: 'req_1',
-    }));
-    expect(uiState.setActiveView).toHaveBeenCalledWith('recording');
-    expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({
-      message: 'Smart Capture started. Opening Recording so you can capture immediately.',
-      type: 'info',
-    }));
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: /telemetry match detected/i })).not.toBeInTheDocument();
-    });
-
-    dispatchSpy.mockRestore();
+    expect(screen.queryByRole('dialog', { name: /telemetry match ready/i })).not.toBeInTheDocument();
+    vi.useRealTimers();
   });
 
   it('renders recording view in default dashboard mode', async () => {

@@ -1,5 +1,6 @@
 import type { Match } from '../types';
 import { useAppStore } from '../store/useAppStore';
+import type { TelemetryLifecycleStage } from '../store/slices/createUISlice';
 
 export const AUTO_CAPTURE_DRAFT_LOOKBACK_MS = 6 * 60 * 60 * 1000;
 export const AUTO_CAPTURE_DRAFT_SESSION_BUFFER_MS = 60_000;
@@ -11,6 +12,8 @@ export interface AutoCaptureStateSnapshot {
     pendingMatchData: unknown;
     sessionStartTime: number | null;
     isMatchInProgress: boolean;
+    lifecycleActive: boolean;
+    telemetryLifecycleStage: TelemetryLifecycleStage;
     autoCaptureSendKeypresses: boolean;
     autoCaptureWaitMultiplier: number | undefined;
     tacticalMapKeybind: string;
@@ -61,6 +64,17 @@ export const buildAutoCaptureStateSnapshot = (
             !Object.prototype.hasOwnProperty.call(overrides, 'isMatchInProgress')
             && state.isMatchInProgress === true
         ),
+        lifecycleActive: overrides.lifecycleActive === true || (
+            !Object.prototype.hasOwnProperty.call(overrides, 'lifecycleActive')
+            && ['loading', 'pregame', 'live'].includes(String(state.telemetryLifecycleStage || '').trim())
+        ),
+        telemetryLifecycleStage: Object.prototype.hasOwnProperty.call(overrides, 'telemetryLifecycleStage')
+            ? (overrides.telemetryLifecycleStage ?? 'idle')
+            : (
+                ['loading', 'pregame', 'live', 'result'].includes(String(state.telemetryLifecycleStage || '').trim())
+                    ? state.telemetryLifecycleStage
+                    : 'idle'
+            ),
         autoCaptureSendKeypresses: Object.prototype.hasOwnProperty.call(overrides, 'autoCaptureSendKeypresses')
             ? overrides.autoCaptureSendKeypresses !== false
             : state.autoCaptureSendKeypresses !== false,

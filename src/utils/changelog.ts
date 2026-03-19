@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.3.6": [
+    "Automation: Telemetry now tracks loading, pregame, live, and result stages so full-auto capture follows the match lifecycle more reliably.",
+    "Workflow: Lobby auto-capture now runs silently in the background with a single live fallback instead of blocking telemetry prompts.",
+    "Reliability: Automatic result handling now waits before falling back to the manual result dialog and keeps passive status feedback visible in Recording."
+  ],
   "v3.3.5": [
     "Fix OCR processing: bundle PaddleOCR models in release package"
   ],

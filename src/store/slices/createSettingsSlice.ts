@@ -334,10 +334,12 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   ocrRegions: createDefaultOcrRegions(),
   tutorialCompleted: false,
   pixelMonitorEnabled: false,
-  pixelMonitorX: 952,
-  pixelMonitorY: 543,
-  pixelMonitorWidth: 16,
-  pixelMonitorHeight: 45,
+  // Default result-screen watch box centered over the top-right victory banner area on 1920x1080.
+  // This avoids the noisier mid-screen HUD region that tended to fire during gameplay.
+  pixelMonitorX: 1492,
+  pixelMonitorY: 203,
+  pixelMonitorWidth: 170,
+  pixelMonitorHeight: 56,
   pixelMonitorIntervalMs: 3000,
   pixelMonitorChangeSensitivity: 30,
   fullAutoEnabled: false,

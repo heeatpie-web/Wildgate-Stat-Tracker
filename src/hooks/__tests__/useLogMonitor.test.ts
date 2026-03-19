@@ -45,6 +45,8 @@ const uiState = {
   setActiveMode: vi.fn(),
   setToast: vi.fn(),
   setOverlayPhase: vi.fn(),
+  telemetryLifecycleStage: 'idle',
+  setTelemetryLifecycleStage: vi.fn(),
   enableAutoLogRecording: true,
   setShowWizard: vi.fn(),
   devMode: false,
@@ -76,6 +78,10 @@ const ipcMock = {
     };
   }),
 };
+
+const latestAddedMatch = <T extends Record<string, unknown> = Record<string, unknown>>() => (
+  addMatch.mock.calls.at(-1)?.[0] as T | undefined
+);
 
 vi.mock('../../providers/GameDataProvider', () => ({
   useGameData: () => gameDataState,
@@ -134,16 +140,31 @@ describe('useLogMonitor', () => {
     gameDataState.setActiveWeapons.mockClear();
     gameDataState.setActiveHero.mockClear();
     gameDataState.setActiveShip.mockClear();
+    gameDataState.setMatchStartTime.mockClear();
+    gameDataState.setIsMatchInProgress.mockClear();
+    gameDataState.setTimeMin.mockClear();
+    gameDataState.setTimeSec.mockClear();
+    gameDataState.setSelectedTeammates.mockClear();
     gameDataState.clearTelemetryDetected.mockClear();
     gameDataState.updatePlayerIdMapping.mockClear();
+    gameDataState.activeHero = 'Adrian';
+    gameDataState.activeShip = 'Hunter';
+    gameDataState.activeWeapons = {};
+    gameDataState.matchStartTime = null;
     uiState.activeMode = 'Artifact Brawl';
     uiState.devMode = false;
     uiState.setToast.mockClear();
+    uiState.setActiveMode.mockClear();
+    uiState.setOverlayPhase.mockClear();
+    uiState.setTelemetryLifecycleStage.mockClear();
+    uiState.telemetryLifecycleStage = 'idle';
     gameDataState.sessionStartTime = Date.now() - 5_000;
     gameDataState.isMatchInProgress = false;
     gameDataState.currentLoadout = null;
     appStoreState.adaptiveTelemetryPollingEnabled = false;
     appStoreState.matches = [];
+    appStoreState.knownMappings = {};
+    appStoreState.uidMappings = { players: {}, ships: {}, weapons: {}, equipment: {}, perks: {} };
     appStoreState.activeWeapons = {};
     Object.keys(ipcCallbacks).forEach((key) => {
       delete ipcCallbacks[key];
@@ -229,7 +250,6 @@ describe('useLogMonitor', () => {
 
   it('creates a telemetry draft on map-start signal', async () => {
     const { useLogMonitor } = await import('../useLogMonitor');
-    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
     renderHook(() => useLogMonitor('Pilot'));
 
     act(() => {
@@ -243,15 +263,14 @@ describe('useLogMonitor', () => {
     });
 
     expect(addMatch).toHaveBeenCalledTimes(1);
-    expect(addMatch.mock.calls[0]?.[0]).toMatchObject({
+    expect(latestAddedMatch()).toMatchObject({
       player: 'Pilot',
       result: 'Ongoing',
       subType: 'Telemetry Draft',
       ocrState: 'queued',
       telemetryDraftState: 'active',
     });
-    expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-started' }));
-    dispatchSpy.mockRestore();
+    expect(uiState.setTelemetryLifecycleStage).toHaveBeenCalledWith('live');
   });
 
   it('creates a telemetry draft when loadingMap is only present on the payload envelope', async () => {
@@ -289,11 +308,12 @@ describe('useLogMonitor', () => {
     });
 
     expect(addMatch).toHaveBeenCalledTimes(1);
-    expect(addMatch.mock.calls[0]?.[0]).toMatchObject({
+    expect(latestAddedMatch()).toMatchObject({
       player: 'Pilot',
       result: 'Ongoing',
       subType: 'Telemetry Draft',
     });
+    expect(uiState.setTelemetryLifecycleStage).toHaveBeenCalledWith('live');
   });
 
   it('uses the latest active mode when creating telemetry drafts after a mode change', async () => {
@@ -446,7 +466,8 @@ describe('useLogMonitor', () => {
     expect(addMatch).toHaveBeenCalledTimes(1);
     expect(gameDataState.setIsMatchInProgress).toHaveBeenCalledWith(true);
     expect(gameDataState.setMatchStartTime).toHaveBeenCalled();
-    expect(uiState.setOverlayPhase).toHaveBeenCalledWith('Setup');
+    expect(uiState.setOverlayPhase).toHaveBeenCalledWith('Live');
+    expect(uiState.setTelemetryLifecycleStage).toHaveBeenCalledWith('live');
   });
 
   it('starts lifecycle when matchmaker state only exposes newStatus and event session id while context session id is blank', async () => {
@@ -479,13 +500,13 @@ describe('useLogMonitor', () => {
     expect(addMatch).toHaveBeenCalledTimes(1);
     expect(gameDataState.setIsMatchInProgress).toHaveBeenCalledWith(true);
     expect(gameDataState.setMatchStartTime).toHaveBeenCalled();
-    expect(uiState.setOverlayPhase).toHaveBeenCalledWith('Setup');
+    expect(uiState.setOverlayPhase).toHaveBeenCalledWith('Live');
+    expect(uiState.setTelemetryLifecycleStage).toHaveBeenCalledWith('live');
   });
 
   it('does not restart lifecycle when a map-start event arrives after a live matchmaker start', async () => {
     const baseSec = Math.floor(Date.now() / 1000);
     const { useLogMonitor } = await import('../useLogMonitor');
-    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
     renderHook(() => useLogMonitor('Pilot'));
 
     act(() => {
@@ -505,7 +526,6 @@ describe('useLogMonitor', () => {
     expect(appStoreState.resetSelectionSourcesForNewMatch).toHaveBeenCalledTimes(1);
     expect(appStoreState.resetMatchTrackingForNewMatch).toHaveBeenCalledTimes(1);
     expect(appStoreState.resetMatchMetricsForNewMatch).toHaveBeenCalledTimes(1);
-    expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-started' }));
 
     appStoreState.resetSelectionSourcesForNewMatch.mockClear();
     appStoreState.resetMatchTrackingForNewMatch.mockClear();
@@ -513,7 +533,7 @@ describe('useLogMonitor', () => {
     gameDataState.setIsMatchInProgress.mockClear();
     gameDataState.setMatchStartTime.mockClear();
     uiState.setOverlayPhase.mockClear();
-    dispatchSpy.mockClear();
+    uiState.setTelemetryLifecycleStage.mockClear();
 
     act(() => {
       ipcCallbacks['log-data']?.([
@@ -532,8 +552,7 @@ describe('useLogMonitor', () => {
     expect(gameDataState.setIsMatchInProgress).not.toHaveBeenCalled();
     expect(gameDataState.setMatchStartTime).not.toHaveBeenCalled();
     expect(uiState.setOverlayPhase).not.toHaveBeenCalled();
-    expect(dispatchSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-started' }));
-    dispatchSpy.mockRestore();
+    expect(uiState.setTelemetryLifecycleStage).not.toHaveBeenCalled();
   });
 
   it('does not finalize a live telemetry draft when a later event omits sessionId', async () => {
@@ -552,7 +571,7 @@ describe('useLogMonitor', () => {
       ]);
     });
 
-    const createdDraft = addMatch.mock.calls[0]?.[0];
+    const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
     appStoreState.matches = [createdDraft];
 
@@ -583,6 +602,53 @@ describe('useLogMonitor', () => {
     dispatchSpy.mockRestore();
   });
 
+  it('keeps a live telemetry draft open when sessionId briefly clears before the real match settles', async () => {
+    const baseSec = Math.floor(Date.now() / 1000);
+    const { useLogMonitor } = await import('../useLogMonitor');
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: { sessionId: 'live-session-id', state: 'MM_GAME_FOUND' },
+          ClientTimestamp: baseSec,
+        },
+      ]);
+    });
+
+    const createdDraft = latestAddedMatch();
+    expect(createdDraft).toBeTruthy();
+    appStoreState.matches = [createdDraft];
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: { sessionId: '' },
+          ClientTimestamp: baseSec + 6,
+        },
+      ]);
+    });
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: { sessionId: 'live-session-id', state: 'MM_SERVER_FOUND' },
+          ClientTimestamp: baseSec + 7,
+        },
+      ]);
+    });
+
+    expect(addMatch).toHaveBeenCalledTimes(1);
+    expect(updateMatch.mock.calls.some(([match]) => (match as { telemetryDraftState?: string }).telemetryDraftState === 'ready')).toBe(false);
+    expect(uiState.setOverlayPhase).not.toHaveBeenCalledWith('Result');
+    expect(dispatchSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-ready' }));
+    dispatchSpy.mockRestore();
+  });
+
   it('finalizes a live telemetry draft when sessionId is explicitly cleared after match start', async () => {
     const baseSec = Math.floor(Date.now() / 1000);
     const { useLogMonitor } = await import('../useLogMonitor');
@@ -599,7 +665,7 @@ describe('useLogMonitor', () => {
       ]);
     });
 
-    const createdDraft = addMatch.mock.calls[0]?.[0];
+    const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
     appStoreState.matches = [createdDraft];
 
@@ -648,7 +714,7 @@ describe('useLogMonitor', () => {
       ]);
     });
 
-    const createdDraft = addMatch.mock.calls[0]?.[0];
+    const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
     appStoreState.matches = [createdDraft];
 
@@ -709,7 +775,7 @@ describe('useLogMonitor', () => {
     });
 
     expect(addMatch).toHaveBeenCalledTimes(1);
-    const createdDraft = addMatch.mock.calls[0]?.[0] as {
+    const createdDraft = latestAddedMatch<{
       id?: number;
       hero?: string;
       ship?: string;
@@ -719,7 +785,7 @@ describe('useLogMonitor', () => {
         characterWeapons?: string[];
         characterEquipment?: string[];
       };
-    } | undefined;
+    }>();
     expect(createdDraft?.hero).toBe('Adrian');
     expect(createdDraft?.ship).toBe('Hunter');
     expect(createdDraft?.loadout?.characterWeapons).toEqual(['Double Whammy']);
@@ -739,7 +805,6 @@ describe('useLogMonitor', () => {
     expect(gameDataState.setIsMatchInProgress).toHaveBeenCalledWith(false);
     expect(gameDataState.setMatchStartTime).toHaveBeenCalledWith(null);
     expect(uiState.setOverlayPhase).toHaveBeenCalledWith('Result');
-    expect(dispatchSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-started' }));
     expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-ready' }));
     dispatchSpy.mockRestore();
   });
@@ -759,7 +824,7 @@ describe('useLogMonitor', () => {
       ]);
     });
 
-    const createdDraft = addMatch.mock.calls[0]?.[0];
+    const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
     appStoreState.matches = createdDraft ? [createdDraft] : [];
 
@@ -801,7 +866,7 @@ describe('useLogMonitor', () => {
       ]);
     });
 
-    const createdDraft = addMatch.mock.calls[0]?.[0];
+    const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
     appStoreState.matches = createdDraft ? [createdDraft] : [];
 
@@ -847,7 +912,7 @@ describe('useLogMonitor', () => {
       ]);
     });
 
-    const firstDraft = addMatch.mock.calls[0]?.[0] as { id?: number; telemetryDraftState?: string } | undefined;
+    const firstDraft = latestAddedMatch<{ id?: number; telemetryDraftState?: string }>();
     expect(firstDraft?.telemetryDraftState).toBe('active');
     appStoreState.matches = firstDraft ? [firstDraft] : [];
 
@@ -887,11 +952,11 @@ describe('useLogMonitor', () => {
     });
 
     expect(addMatch).toHaveBeenCalledTimes(1);
-    expect(addMatch.mock.calls[0]?.[0]).toMatchObject({
+    expect(latestAddedMatch()).toMatchObject({
       subType: 'Telemetry Draft',
       telemetryDraftState: 'active',
     });
-    expect(addMatch.mock.calls[0]?.[0]?.id).not.toBe(firstDraft?.id);
+    expect(latestAddedMatch<{ id?: number }>()?.id).not.toBe(firstDraft?.id);
   });
 
   it('passes reduced non-lifecycle context to telemetry processor on initial map start', async () => {
@@ -1094,7 +1159,7 @@ describe('useLogMonitor', () => {
       ]);
     });
 
-    const createdDraft = addMatch.mock.calls[0]?.[0];
+    const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
     appStoreState.matches = [createdDraft];
     gameDataState.setActiveHero.mockClear();
@@ -1155,7 +1220,7 @@ describe('useLogMonitor', () => {
       ]);
     });
 
-    const createdDraft = addMatch.mock.calls[0]?.[0];
+    const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
     appStoreState.matches = [createdDraft];
     gameDataState.setActiveHero.mockClear();
@@ -1213,7 +1278,7 @@ describe('useLogMonitor', () => {
       ]);
     });
 
-    const createdDraft = addMatch.mock.calls[0]?.[0];
+    const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
     appStoreState.matches = [createdDraft];
     gameDataState.setCurrentLoadout.mockClear();
@@ -1263,7 +1328,7 @@ describe('useLogMonitor', () => {
       ]);
     });
 
-    const createdDraft = addMatch.mock.calls[0]?.[0];
+    const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
     appStoreState.matches = [createdDraft];
     gameDataState.setActiveHero.mockClear();
@@ -1579,7 +1644,7 @@ describe('useLogMonitor', () => {
       ]);
     });
 
-    const createdDraft = addMatch.mock.calls[0]?.[0];
+    const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
     appStoreState.matches = [createdDraft];
 
@@ -1629,7 +1694,7 @@ describe('useLogMonitor', () => {
       ]);
     });
 
-    const createdDraft = addMatch.mock.calls[0]?.[0];
+    const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
     appStoreState.matches = [createdDraft];
     updateMatch.mockClear();
@@ -2195,7 +2260,7 @@ describe('useLogMonitor', () => {
       ]);
     });
 
-    const createdDraft = addMatch.mock.calls[0]?.[0];
+    const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
     expect((createdDraft?.telemetryConsistency as { expectedTeammateCount?: number } | undefined)?.expectedTeammateCount).toBeUndefined();
     appStoreState.matches = [createdDraft];
@@ -2240,7 +2305,7 @@ describe('useLogMonitor', () => {
       ]);
     });
 
-    const createdDraft = addMatch.mock.calls[0]?.[0];
+    const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
     appStoreState.matches = [createdDraft];
 
@@ -2293,7 +2358,7 @@ describe('useLogMonitor', () => {
       ]);
     });
 
-    const createdDraft = addMatch.mock.calls[0]?.[0];
+    const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
     appStoreState.matches = [createdDraft];
 
@@ -2337,7 +2402,7 @@ describe('useLogMonitor', () => {
       ]);
     });
 
-    const createdDraft = addMatch.mock.calls[0]?.[0];
+    const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
     appStoreState.matches = [createdDraft];
 

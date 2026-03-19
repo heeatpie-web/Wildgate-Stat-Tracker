@@ -40,6 +40,25 @@ let charList = null;
 let paddleReadyLogged = false;
 let recShapeLogged = false;
 
+async function runRecognition(imageBuffer) {
+  const recInput = await preprocessForRec(imageBuffer);
+  const recResult = await recSession.run({ [recSession.inputNames[0]]: recInput });
+  const logits = recResult[recSession.outputNames[0]];
+  if (!recShapeLogged) {
+    const logitsCharDim = Array.isArray(logits?.dims) ? logits.dims[2] : null;
+    console.log(`[PaddleOCR] Rec dims check variant=${REC_VARIANT} dict=${charList.length} logits=${logitsCharDim}`);
+    const expectedCtcDim = charList.length + 1; // +1 for CTC blank token
+    const hasRealMismatch = typeof logitsCharDim === 'number'
+      && logitsCharDim !== charList.length
+      && logitsCharDim !== expectedCtcDim;
+    if (hasRealMismatch) {
+      console.warn(`[PaddleOCR] Dict/model mismatch for variant=${REC_VARIANT}: dict=${charList.length}, logits=${logitsCharDim}`);
+    }
+    recShapeLogged = true;
+  }
+  return ctcDecode(logits).trim();
+}
+
 async function initPaddleOCR() {
   if (detSession && recSession && charList) return;
 
@@ -281,7 +300,12 @@ function extractBboxes(detOutput, origH, origW, detH, detW, threshold = 0.2) {
  */
 async function paddleOcrBuffer(imageBuffer, opts = {}) {
   await initPaddleOCR();
-  const { threshold = 0.3 } = opts;
+  const {
+    threshold = 0.3,
+    minWidth = 40,
+    minHeight = 0,
+    minAspectRatio = 2.0,
+  } = opts;
 
   const meta = await sharp(imageBuffer).metadata();
   const origW = meta.width;
@@ -296,10 +320,12 @@ async function paddleOcrBuffer(imageBuffer, opts = {}) {
   const bboxes = extractBboxes(detOutput, origH, origW, detH, detW, threshold)
     .filter((bbox) => {
       const width = Math.max(0, (bbox.x1 || 0) - (bbox.x0 || 0));
-      const height = Math.max(1, (bbox.y1 || 0) - (bbox.y0 || 0));
-      if (width < 40) return false;
+      const height = Math.max(0, (bbox.y1 || 0) - (bbox.y0 || 0));
+      if (width < Math.max(0, Number(minWidth) || 0)) return false;
+      if (height < Math.max(0, Number(minHeight) || 0)) return false;
+      if (height <= 0) return false;
       const aspectRatio = width / height;
-      if (aspectRatio < 2.0) return false;
+      if (aspectRatio < Number(minAspectRatio || 0)) return false;
       return true;
     });
 
@@ -313,22 +339,7 @@ async function paddleOcrBuffer(imageBuffer, opts = {}) {
       .extract({ left: bbox.x0, top: bbox.y0, width: cropW, height: cropH })
       .toBuffer();
 
-    const recInput = await preprocessForRec(cropBuf);
-    const recResult = await recSession.run({ [recSession.inputNames[0]]: recInput });
-    const logits = recResult[recSession.outputNames[0]];
-    if (!recShapeLogged) {
-      const logitsCharDim = Array.isArray(logits?.dims) ? logits.dims[2] : null;
-      console.log(`[PaddleOCR] Rec dims check variant=${REC_VARIANT} dict=${charList.length} logits=${logitsCharDim}`);
-      const expectedCtcDim = charList.length + 1; // +1 for CTC blank token
-      const hasRealMismatch = typeof logitsCharDim === 'number'
-        && logitsCharDim !== charList.length
-        && logitsCharDim !== expectedCtcDim;
-      if (hasRealMismatch) {
-        console.warn(`[PaddleOCR] Dict/model mismatch for variant=${REC_VARIANT}: dict=${charList.length}, logits=${logitsCharDim}`);
-      }
-      recShapeLogged = true;
-    }
-    const text = ctcDecode(logits);
+    const text = await runRecognition(cropBuf);
 
     const cleaned = text.trim();
     if (opts.allText ? cleaned.length > 0 : isLikelyPlayerName(cleaned)) {
@@ -338,4 +349,11 @@ async function paddleOcrBuffer(imageBuffer, opts = {}) {
   return results;
 }
 
-module.exports = { paddleOcrBuffer, initPaddleOCR };
+async function paddleRecognizeBuffer(imageBuffer) {
+  await initPaddleOCR();
+  const meta = await sharp(imageBuffer).metadata();
+  if (!meta.width || !meta.height) return '';
+  return runRecognition(imageBuffer);
+}
+
+module.exports = { paddleOcrBuffer, paddleRecognizeBuffer, initPaddleOCR };

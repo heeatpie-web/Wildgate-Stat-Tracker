@@ -80,6 +80,29 @@ export interface TelemetryStatusState {
     lastEventAt?: number;
 }
 
+export type TelemetryLifecycleStage = 'idle' | 'loading' | 'pregame' | 'live' | 'result';
+export type TelemetryAutomationStatusPhase =
+    | 'idle'
+    | 'loading-match'
+    | 'pregame-detected'
+    | 'capturing-lobby'
+    | 'lobby-complete'
+    | 'live-match'
+    | 'capturing-live-fallback'
+    | 'watching-result'
+    | 'result-ocr'
+    | 'manual-result-needed'
+    | 'failed';
+export type TelemetryAutomationStatusLevel = 'info' | 'success' | 'warning' | 'error';
+
+export interface TelemetryAutomationStatusState {
+    phase: TelemetryAutomationStatusPhase;
+    message: string;
+    matchId?: number | null;
+    updatedAt: number;
+    level: TelemetryAutomationStatusLevel;
+}
+
 export interface UISlice {
     isLoading: boolean;
     showWelcome: boolean;
@@ -106,6 +129,8 @@ export interface UISlice {
     isAlwaysOnTop: boolean;
     overlayTab: 'Mission' | 'Squadron' | 'Social';
     overlayPhase: 'Setup' | 'Live' | 'Result';
+    telemetryLifecycleStage: TelemetryLifecycleStage;
+    telemetryAutomationStatus: TelemetryAutomationStatusState | null;
     sidebarCollapsed: boolean;
     activeView: AppView;
     visionStatus: 'idle' | 'capturing' | 'scanning' | 'processing';
@@ -138,6 +163,8 @@ export interface UISlice {
     setIsAlwaysOnTop: (always: boolean) => void;
     setOverlayTab: (tab: 'Mission' | 'Squadron' | 'Social') => void;
     setOverlayPhase: (phase: 'Setup' | 'Live' | 'Result') => void;
+    setTelemetryLifecycleStage: (stage: TelemetryLifecycleStage) => void;
+    setTelemetryAutomationStatus: (status: TelemetryAutomationStatusState | null) => void;
     setSidebarCollapsed: (collapsed: boolean) => void;
     setActiveView: (view: AppView) => void;
     showIdMapper: boolean;
@@ -345,6 +372,8 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
     isAlwaysOnTop: false,
     overlayTab: 'Mission',
     overlayPhase: 'Setup',
+    telemetryLifecycleStage: 'idle',
+    telemetryAutomationStatus: null,
     sidebarCollapsed: false,
     activeView: 'recording',
     visionStatus: 'idle',
@@ -466,6 +495,17 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
     setIsAlwaysOnTop: (always) => set({ isAlwaysOnTop: always }),
     setOverlayTab: (tab) => set({ overlayTab: tab }),
     setOverlayPhase: (phase) => set({ overlayPhase: phase }),
+    setTelemetryLifecycleStage: (stage) => set({ telemetryLifecycleStage: stage }),
+    setTelemetryAutomationStatus: (status) => set({
+        telemetryAutomationStatus: status
+            ? {
+                ...status,
+                updatedAt: Number.isFinite(Number(status.updatedAt))
+                    ? Number(status.updatedAt)
+                    : Date.now(),
+            }
+            : null,
+    }),
     setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
     setActiveView: (view) => set({
         activeView: view,

@@ -106,7 +106,9 @@ function buildAutoCaptureRequestFromStateSnapshot(snapshot = {}, { now = Date.no
   return {
     activeUser,
     matchId: Number.isInteger(resolvedMatchId) && resolvedMatchId > 0 ? resolvedMatchId : null,
-    lifecycleActive: snapshot.lifecycleActive === true || snapshot.isMatchInProgress === true,
+    lifecycleActive: snapshot.lifecycleActive === true
+      || snapshot.isMatchInProgress === true
+      || ['loading', 'pregame', 'live'].includes(String(snapshot.telemetryLifecycleStage || '').trim().toLowerCase()),
     autoCaptureSendKeypresses: snapshot.autoCaptureSendKeypresses !== false,
     autoCaptureWaitMultiplier: snapshot.autoCaptureWaitMultiplier,
     autoCaptureTacticalMapKey: typeof snapshot.autoCaptureTacticalMapKey === 'string'

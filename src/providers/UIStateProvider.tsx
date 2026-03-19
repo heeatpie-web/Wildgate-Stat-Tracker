@@ -11,6 +11,8 @@ import { GameMode, WizardResult } from '../types';
 import type {
     AppNotification,
     NotificationInput,
+    TelemetryAutomationStatusState,
+    TelemetryLifecycleStage,
     TelemetryStatusState,
     ToastState,
 } from '../store/slices/createUISlice';
@@ -102,6 +104,10 @@ interface UIStateContextType {
     setOverlayTab: (tab: 'Mission' | 'Squadron' | 'Social') => void;
     overlayPhase: string;
     setOverlayPhase: (phase: 'Setup' | 'Live' | 'Result') => void;
+    telemetryLifecycleStage: TelemetryLifecycleStage;
+    setTelemetryLifecycleStage: (stage: TelemetryLifecycleStage) => void;
+    telemetryAutomationStatus: TelemetryAutomationStatusState | null;
+    setTelemetryAutomationStatus: (status: TelemetryAutomationStatusState | null) => void;
     sidebarCollapsed: boolean;
     setSidebarCollapsed: (collapsed: boolean) => void;
     enableAutoLogRecording: boolean;
@@ -169,6 +175,8 @@ export const UIStateProvider: React.FC<{ children: React.ReactNode }> = ({ child
         isAlwaysOnTop: s.isAlwaysOnTop, setIsAlwaysOnTop: s.setIsAlwaysOnTop,
         overlayTab: s.overlayTab, setOverlayTab: s.setOverlayTab,
         overlayPhase: s.overlayPhase, setOverlayPhase: s.setOverlayPhase,
+        telemetryLifecycleStage: s.telemetryLifecycleStage, setTelemetryLifecycleStage: s.setTelemetryLifecycleStage,
+        telemetryAutomationStatus: s.telemetryAutomationStatus, setTelemetryAutomationStatus: s.setTelemetryAutomationStatus,
         sidebarCollapsed: s.sidebarCollapsed, setSidebarCollapsed: s.setSidebarCollapsed,
         enableAutoLogRecording: s.enableAutoLogRecording, setEnableAutoLogRecording: s.setEnableAutoLogRecording,
         showWizard: s.showWizard, setShowWizard: s.setShowWizard,

@@ -6,6 +6,7 @@ import { Match } from '../types';
 import { useSoundEffects } from '../hooks/useSoundEffects';
 import { applyArtifactRepair, bundleMatchArtifacts, getMatchArtifactsStructured, removeMatchArtifact } from '../utils/artifactService';
 import { StorageService } from '../utils/storage';
+import { getElectronAPI } from '../utils/electronAPI';
 import Logger from '../utils/logger';
 import { capTeammateNames } from '../utils/teamLimits';
 import { evaluateTelemetryConsistencyChecks, formatDurationOffset } from '../utils/telemetryConsistency';
@@ -84,6 +85,28 @@ const mergeArtifactLists = (...artifactLists: Array<Array<string | null | undefi
         });
     });
     return merged;
+};
+
+type AutoResultScreenData = {
+    result: 'Win' | 'Loss' | null;
+    winType?: string | null;
+    placement?: number | null;
+    damageTaken?: number | null;
+};
+
+type AutoFinalizeResultStatus = {
+    success: boolean;
+    reason?: 'busy' | 'unconfirmed' | 'incomplete' | 'no-draft' | 'ipc-unavailable' | 'save-failed' | 'error';
+    matchId?: number;
+    artifactPath?: string | null;
+};
+
+const normalizeResultSubType = (winType: string | null | undefined, placement?: number | null): 'Artifact' | 'Combat' | null => {
+    const normalized = String(winType || '').trim().toLowerCase();
+    if (normalized === 'artifact') return 'Artifact';
+    if (normalized === 'combat') return 'Combat';
+    if (Number.isInteger(Number(placement)) && Number(placement) >= 2 && Number(placement) <= 5) return 'Combat';
+    return null;
 };
 
 const resolveExistingSubmissionMatch = ({
@@ -947,6 +970,222 @@ export const useMatchSubmission = () => {
         }
     }, [submitting, addMatch, clearSubmissionState, setIsMatchInProgress, setMatchStartTime, notifyTelemetryDraftResolved, setToast, updateMatch, pickFirstKnown]);
 
+    const autoFinalizeResultScreenCapture = useCallback(async ({
+        imageBase64,
+        resultData,
+    }: {
+        imageBase64: string;
+        resultData: AutoResultScreenData;
+    }): Promise<AutoFinalizeResultStatus> => {
+        if (submitting) return { success: false, reason: 'busy' };
+
+        const normalizedResult = resultData?.result;
+        if (normalizedResult !== 'Win' && normalizedResult !== 'Loss') {
+            return { success: false, reason: 'unconfirmed' };
+        }
+
+        const rawPlacement = resultData?.placement;
+        const normalizedPlacement = rawPlacement != null && Number.isInteger(Number(rawPlacement))
+            ? Math.min(5, Math.max(2, Number(rawPlacement)))
+            : null;
+        const normalizedSubType = normalizeResultSubType(resultData?.winType, normalizedPlacement);
+
+        if (!normalizedSubType) {
+            return { success: false, reason: 'incomplete' };
+        }
+        if (normalizedResult === 'Loss' && normalizedSubType === 'Combat' && normalizedPlacement == null) {
+            return { success: false, reason: 'incomplete' };
+        }
+
+        const state = useAppStore.getState();
+        const {
+            pendingMatchData,
+            timeMin, timeSec,
+            activeUser, activeMode,
+            currentLoadout,
+            activeHero, activeShip,
+            selectedReachModifiers,
+            selectedTeammates, selectedOpponents,
+            kills, poiEasy, poiMedium, poiEpic,
+            damageTaken, currentNote,
+            pendingKilledBy, pendingKilledByShip,
+            matches,
+            sessionStartTime,
+        } = state;
+
+        const resolvedPendingMatchData = pendingMatchData || {};
+        const existingMatch = resolveExistingSubmissionMatch({
+            pendingMatchData: resolvedPendingMatchData,
+            matches,
+            activeUser,
+            sessionStartTime,
+        });
+        if (!existingMatch || existingMatch.subType !== 'Telemetry Draft') {
+            return { success: false, reason: 'no-draft' };
+        }
+
+        const api = getElectronAPI();
+        if (!api) {
+            return { success: false, reason: 'ipc-unavailable' };
+        }
+
+        try {
+            setSubmitting(true);
+
+            if (normalizedResult === 'Win') {
+                launchVictoryConfetti();
+                playVictory();
+            } else {
+                playDefeat();
+            }
+
+            const rawBase64 = String(imageBase64 || '').replace(/^data:image\/\w+;base64,/, '').trim();
+            let savedArtifactPath: string | null = null;
+            if (rawBase64) {
+                const saveResult = await api.invoke('save-screenshot', {
+                    imageBase64: rawBase64,
+                    matchId: existingMatch.id,
+                });
+                savedArtifactPath = String(saveResult?.data?.filePath || '').trim() || null;
+                if (!savedArtifactPath) {
+                    return { success: false, reason: 'save-failed' };
+                }
+            }
+
+            const finalTime = (timeMin || timeSec)
+                ? `${timeMin || '00'}:${timeSec || '00'}`
+                : (resolvedPendingMatchData.time || existingMatch.time || '00:00');
+            const resolvedHero = pickFirstKnown(resolvedPendingMatchData.hero, currentLoadout?.hero, activeHero, existingMatch.hero);
+            const resolvedShip = pickFirstKnown(resolvedPendingMatchData.ship, currentLoadout?.ship, activeShip, existingMatch.ship);
+            const finalTeammatesRaw = (selectedTeammates && selectedTeammates.length > 0)
+                ? selectedTeammates
+                : (resolvedPendingMatchData.teammates || existingMatch.teammates || []);
+            const finalTeammates = ensureSelfInTeam(
+                capTeammateNames(finalTeammatesRaw, resolvedShip),
+                resolvedPendingMatchData.player || existingMatch.player || activeUser
+            );
+            const finalOpponents = (selectedOpponents && selectedOpponents.length > 0)
+                ? selectedOpponents
+                : (resolvedPendingMatchData.opponents || existingMatch.opponents || []);
+            const pendingKills = resolvedPendingMatchData.kills || existingMatch.kills || {};
+            const liveKills = kills || {};
+            const finalKills = Object.entries({ ...pendingKills, ...liveKills }).reduce<Record<string, number>>((acc, [ship, value]) => {
+                const parsed = Number(value) || 0;
+                if (parsed > 0) acc[ship] = parsed;
+                return acc;
+            }, {});
+            const finalDamageTaken = Math.max(
+                Number(existingMatch.damageTaken) || 0,
+                Number(resolvedPendingMatchData.damageTaken) || 0,
+                Number.parseInt(String(damageTaken || ''), 10) || 0,
+                Number(resultData.damageTaken) || 0
+            );
+            const finalPoiEasy = Math.max(Number(existingMatch.poiEasy) || 0, Number(resolvedPendingMatchData.poiEasy) || 0, Number(poiEasy) || 0);
+            const finalPoiMedium = Math.max(Number(existingMatch.poiMedium) || 0, Number(resolvedPendingMatchData.poiMedium) || 0, Number(poiMedium) || 0);
+            const finalPoiEpic = Math.max(Number(existingMatch.poiEpic) || 0, Number(resolvedPendingMatchData.poiEpic) || 0, Number(poiEpic) || 0);
+            const finalNotes = currentNote || resolvedPendingMatchData.notes || existingMatch.notes || '';
+            const finalPlacement = normalizedResult === 'Win'
+                ? 1
+                : (normalizedSubType === 'Combat' ? (normalizedPlacement ?? undefined) : undefined);
+            const rawMergedLoadout = sanitizeLoadout(resolvedPendingMatchData.loadout || currentLoadout || existingMatch.loadout);
+            const mergedLoadout = (rawMergedLoadout && resolvedShip)
+                ? sanitizeLoadout({ ...rawMergedLoadout, ship: resolvedShip })
+                : rawMergedLoadout;
+            const baseTelemetryConsistency = resolvedPendingMatchData.telemetryConsistency || existingMatch.telemetryConsistency;
+            const finalTelemetryConsistency = baseTelemetryConsistency
+                ? (() => {
+                    const evaluated = evaluateTelemetryConsistencyChecks(baseTelemetryConsistency, {
+                        teammateCount: countComparableTeammates(finalTeammates, resolvedPendingMatchData.player || existingMatch.player || activeUser),
+                        mode: resolvedPendingMatchData.mode || existingMatch.mode || activeMode,
+                        durationSeconds: parseDurationSecs(finalTime),
+                    });
+                    return {
+                        ...baseTelemetryConsistency,
+                        checks: evaluated.checks,
+                        durationDeltaSeconds: evaluated.durationDeltaSeconds,
+                        durationToleranceSeconds: evaluated.durationToleranceSeconds,
+                    };
+                })()
+                : undefined;
+
+            const savedMatch: Match = {
+                ...existingMatch,
+                id: existingMatch.id,
+                timestamp: existingMatch.timestamp,
+                date: new Date(existingMatch.timestamp).toLocaleDateString(),
+                mode: resolvedPendingMatchData.mode || existingMatch.mode || activeMode,
+                player: resolvedPendingMatchData.player || existingMatch.player || activeUser || '',
+                teammates: finalTeammates,
+                opponents: finalOpponents,
+                hero: resolvedHero,
+                ship: resolvedShip,
+                loadout: mergedLoadout || undefined,
+                reachModifiers: (selectedReachModifiers && selectedReachModifiers.length > 0)
+                    ? selectedReachModifiers
+                    : (resolvedPendingMatchData.reachModifiers || existingMatch.reachModifiers || []),
+                kills: Object.keys(finalKills).length > 0 ? finalKills : pendingKills,
+                result: normalizedResult,
+                subType: normalizedSubType,
+                placement: finalPlacement,
+                damageTaken: finalDamageTaken,
+                time: finalTime,
+                poiEasy: finalPoiEasy,
+                poiMedium: finalPoiMedium,
+                poiEpic: finalPoiEpic,
+                killedBy: pendingKilledBy || existingMatch.killedBy || undefined,
+                killedByShip: pendingKilledByShip || existingMatch.killedByShip || undefined,
+                notes: finalNotes,
+                timelineEvents: [...(resolvedPendingMatchData.timelineEvents || existingMatch.timelineEvents || [])],
+                artifacts: mergeArtifactLists(existingMatch.artifacts, resolvedPendingMatchData.artifacts, savedArtifactPath ? [savedArtifactPath] : []),
+                ocrDebug: resolvedPendingMatchData.ocrDebug || existingMatch.ocrDebug || undefined,
+                opponentTeams: resolvedPendingMatchData.opponentTeams || existingMatch.opponentTeams || undefined,
+                eliminatedByTeam: resolvedPendingMatchData.eliminatedByTeam || existingMatch.eliminatedByTeam || undefined,
+                ocrState: resolvedPendingMatchData.ocrState || existingMatch.ocrState,
+                telemetryConsistency: finalTelemetryConsistency,
+            };
+
+            updateMatch(savedMatch);
+            applyRosterAutoPopulationForSavedMatch(savedMatch);
+            await StorageService.flush();
+
+            const structuredArtifacts = await getMatchArtifactsStructured(savedMatch.id, savedMatch.artifacts || []);
+            const diskArtifacts = Array.isArray(structuredArtifacts.images) ? structuredArtifacts.images : [];
+            const syncedArtifacts = mergeArtifactLists(savedMatch.artifacts, diskArtifacts);
+            const artifactsChanged = syncedArtifacts.length !== (savedMatch.artifacts || []).length
+                || syncedArtifacts.some((artifactPath, index) => artifactPath !== (savedMatch.artifacts || [])[index]);
+            if (artifactsChanged) {
+                updateMatch({ ...savedMatch, artifacts: syncedArtifacts });
+                await StorageService.flush();
+            }
+
+            clearSubmissionState();
+            setIsMatchInProgress(false);
+            setMatchStartTime(null);
+            notifyTelemetryDraftResolved(existingMatch.id);
+
+            const consumedArtifactPaths = mergeArtifactLists(existingMatch.artifacts, resolvedPendingMatchData.artifacts, savedArtifactPath ? [savedArtifactPath] : [], diskArtifacts);
+            notifyArtifactsConsumed(savedMatch.id, consumedArtifactPaths);
+            window.dispatchEvent(new CustomEvent('recording:match-complete', {
+                detail: { result: savedMatch.result, matchId: savedMatch.id },
+            }));
+            setToast({
+                message: `Match auto-saved: ${savedMatch.result} (${savedMatch.subType})`,
+                type: 'success',
+            });
+
+            return {
+                success: true,
+                matchId: savedMatch.id,
+                artifactPath: savedArtifactPath,
+            };
+        } catch (e) {
+            Logger.error('Submission', 'Auto result-screen finalization failed', e);
+            return { success: false, reason: 'error' };
+        } finally {
+            setSubmitting(false);
+        }
+    }, [submitting, clearSubmissionState, notifyArtifactsConsumed, notifyTelemetryDraftResolved, pickFirstKnown, playDefeat, playVictory, setIsMatchInProgress, setMatchStartTime, setToast, updateMatch]);
+
     const discardTelemetryDraft = useCallback(async (matchId: number) => {
         if (!Number.isInteger(matchId) || matchId <= 0 || submitting) return false;
 
@@ -1013,6 +1252,7 @@ export const useMatchSubmission = () => {
         initiateSubmission,
         processFinalSubmission,
         saveResultDraft,
+        autoFinalizeResultScreenCapture,
         discardCurrentMatch,
         discardTelemetryDraft,
         submitting
