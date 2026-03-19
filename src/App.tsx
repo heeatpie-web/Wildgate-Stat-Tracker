@@ -2161,6 +2161,12 @@ const App: React.FC = () => {
 
         addMatch(match);
 
+        // Reset pending state so a subsequent auto-save doesn't inherit stale data.
+        const s = useAppStore.getState();
+        s.setPendingMatchData(null);
+        s.setPendingKilledBy('');
+        s.setPendingKilledByShip('');
+
         const ordinal = (n: number) => {
             const s = ['th', 'st', 'nd', 'rd'];
             const v = n % 100;
@@ -2193,7 +2199,9 @@ const App: React.FC = () => {
             const imageBase64 = capture as string;
 
             const [scanResult, saveResult] = await Promise.all([
+                // scan-result-screen strips the data-URL prefix internally
                 api.invoke('scan-result-screen', { imageBase64 }),
+                // save-screenshot expects raw base64 (no data-URL prefix)
                 api.invoke('save-screenshot', {
                     imageBase64: imageBase64.replace(/^data:image\/\w+;base64,/, ''),
                 }),
