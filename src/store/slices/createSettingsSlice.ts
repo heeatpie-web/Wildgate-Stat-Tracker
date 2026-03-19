@@ -253,6 +253,8 @@ export interface SettingsSlice {
   setPixelMonitorHeight: (h: number) => void;
   setPixelMonitorIntervalMs: (ms: number) => void;
   setPixelMonitorChangeSensitivity: (sensitivity: number) => void;
+  fullAutoEnabled: boolean;
+  setFullAutoEnabled: (enabled: boolean) => void;
 }
 
 const defaultPreloadStats = (): Record<DashboardPreloadView, DashboardPreloadStat> => ({
@@ -338,6 +340,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   pixelMonitorHeight: 45,
   pixelMonitorIntervalMs: 3000,
   pixelMonitorChangeSensitivity: 30,
+  fullAutoEnabled: false,
 
   setActiveMode: (mode) => set({ activeMode: mode }),
   setActiveUser: (user) => set({ activeUser: user }),
@@ -545,4 +548,5 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   setPixelMonitorHeight: (h) => set({ pixelMonitorHeight: Math.max(1, Math.round(Number(h) || 45)) }),
   setPixelMonitorIntervalMs: (ms) => set({ pixelMonitorIntervalMs: Math.max(500, Math.round(Number(ms) || 3000)) }),
   setPixelMonitorChangeSensitivity: (s) => set({ pixelMonitorChangeSensitivity: Math.max(1, Math.min(255, Math.round(Number(s) || 30))) }),
+  setFullAutoEnabled: (enabled) => set({ fullAutoEnabled: Boolean(enabled) }),
 });
