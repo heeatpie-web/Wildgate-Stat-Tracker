@@ -4,7 +4,9 @@
  * Returns { result, winType, placement } from VICTORY/DEFEAT text patterns.
  */
 
-const { nativeImage } = require('electron');
+'use strict';
+
+const sharp = require('sharp');
 const { paddleOcrBuffer } = require('./paddleOcrHandler.cjs');
 
 /**
@@ -13,58 +15,66 @@ const { paddleOcrBuffer } = require('./paddleOcrHandler.cjs');
 
 /**
  * Parse match result from the top portion of a screenshot.
- * @param {Buffer} imageBuffer - PNG buffer of the full screenshot
+ * @param {Buffer} imageBuffer - PNG buffer of the full screenshot (from nativeImage.toPNG())
  * @returns {Promise<ResultScreenData>}
  */
 async function extractResultScreen(imageBuffer) {
-    // Crop to top 35% where VICTORY/DEFEAT banner appears
-    const img = nativeImage.createFromBuffer(imageBuffer);
-    const { width, height } = img.getSize();
-    const cropH = Math.round(height * 0.35);
-    const cropped = img.crop({ x: 0, y: 0, width, height: cropH });
-    const croppedBuffer = cropped.toPNG();
+  // Crop to top 35% where VICTORY/DEFEAT banner appears
+  const meta = await sharp(imageBuffer).metadata();
+  const origH = meta.height || 0;
+  const origW = meta.width || 0;
+  const cropH = Math.max(1, Math.round(origH * 0.35));
 
-    // Run OCR (PaddleOCR returns [{text, confidence, bbox}])
-    const lines = await paddleOcrBuffer(croppedBuffer, { allText: true });
-    const text = lines.map(l => l.text || '').join('\n').toUpperCase();
+  const croppedBuffer = await sharp(imageBuffer)
+    .extract({ left: 0, top: 0, width: origW, height: cropH })
+    .toBuffer();
 
-    const parsed = parseResultText(text);
-    console.log('[ResultScreenExtractor] text=%s result=%o', text.slice(0, 120).replace(/\n/g, ' | '), parsed);
-    return parsed;
+  // Run OCR with allText:true so non-player-name tokens are included
+  const lines = await paddleOcrBuffer(croppedBuffer, { allText: true });
+  const text = lines.map((l) => l.text || '').join('\n').toUpperCase();
+
+  const parsed = parseResultText(text);
+  console.log(
+    '[ResultScreenExtractor] text=%s result=%o',
+    text.slice(0, 120).replace(/\n/g, ' | '),
+    parsed
+  );
+  return parsed;
 }
 
 /**
  * Parse the OCR text to determine match result.
+ * Priority: VICTORY → placement ordinals → DEFEAT+ARTIFACT → generic DEFEAT → null
  * @param {string} text - Uppercased OCR output
  * @returns {ResultScreenData}
  */
 function parseResultText(text) {
-    const isVictory = /VICTORY/.test(text);
-    const isDefeat = /DEFEAT/.test(text);
-    const placementMatch = text.match(/(\d+)(ST|ND|RD|TH)\s*(PLACE)?/);
-    const isArtifact = /ARTIFACT/.test(text);
-    const isRivals = /RIVALS\s*ELIMINATED/.test(text);
-
-    if (isVictory) {
-        return {
-            result: 'Win',
-            winType: isArtifact ? 'artifact' : isRivals ? 'combat' : undefined,
-        };
+  // 1. Check VICTORY first
+  if (/VICTORY/.test(text)) {
+    if (/RIVALS\s*ELIMINATED/.test(text)) {
+      return { result: 'Win', winType: 'combat' };
     }
-
-    if (isDefeat) {
-        return {
-            result: 'Loss',
-            winType: isArtifact ? 'artifact' : undefined,
-            placement: placementMatch ? parseInt(placementMatch[1], 10) : undefined,
-        };
+    if (/ARTIFACT/.test(text)) {
+      return { result: 'Win', winType: 'artifact' };
     }
+    return { result: 'Win' };
+  }
 
-    if (placementMatch) {
-        return { result: 'Loss', placement: parseInt(placementMatch[1], 10) };
+  // 2. Check placement ordinals (2nd–5th placed = loss)
+  const placementMatch = text.match(/\b(\d+)(ST|ND|RD|TH)\b/);
+  if (placementMatch) {
+    return { result: 'Loss', placement: parseInt(placementMatch[1], 10) };
+  }
+
+  // 3. Check DEFEAT
+  if (/DEFEAT/.test(text)) {
+    if (/ARTIFACT/.test(text)) {
+      return { result: 'Loss', winType: 'artifact' };
     }
+    return { result: 'Loss' };
+  }
 
-    return { result: null };
+  return { result: null };
 }
 
 module.exports = { extractResultScreen, parseResultText };
