@@ -746,6 +746,8 @@ export const useMatchSubmission = () => {
                 });
             });
             clearSubmissionState();
+            setIsMatchInProgress(false);
+            setMatchStartTime(null);
             if (isTelemetryDraftSource && existingMatch) {
                 notifyTelemetryDraftResolved(existingMatch.id);
             }
@@ -772,7 +774,7 @@ export const useMatchSubmission = () => {
         } finally {
             setSubmitting(false);
         }
-    }, [submitting, addMatch, clearSubmissionState, notifyArtifactsConsumed, notifyTelemetryDraftResolved, setToast, playVictory, playDefeat, updateMatch, recordPlayerSighting, pickFirstKnown]);
+    }, [submitting, addMatch, clearSubmissionState, setIsMatchInProgress, setMatchStartTime, notifyArtifactsConsumed, notifyTelemetryDraftResolved, setToast, playVictory, playDefeat, updateMatch, recordPlayerSighting, pickFirstKnown]);
 
     const saveResultDraft = useCallback(async (subType: string) => {
         const state = useAppStore.getState();
@@ -929,6 +931,8 @@ export const useMatchSubmission = () => {
             await StorageService.flush();
 
             clearSubmissionState();
+            setIsMatchInProgress(false);
+            setMatchStartTime(null);
             if (isTelemetryDraftSource && existingMatch) {
                 notifyTelemetryDraftResolved(existingMatch.id);
             }
@@ -941,7 +945,7 @@ export const useMatchSubmission = () => {
         } finally {
             setSubmitting(false);
         }
-    }, [submitting, addMatch, clearSubmissionState, notifyTelemetryDraftResolved, setToast, updateMatch, pickFirstKnown]);
+    }, [submitting, addMatch, clearSubmissionState, setIsMatchInProgress, setMatchStartTime, notifyTelemetryDraftResolved, setToast, updateMatch, pickFirstKnown]);
 
     const discardTelemetryDraft = useCallback(async (matchId: number) => {
         if (!Number.isInteger(matchId) || matchId <= 0 || submitting) return false;

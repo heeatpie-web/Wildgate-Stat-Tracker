@@ -75,6 +75,11 @@ type ReachModifierCatalogEntry = {
 const HAZARD_ENTRIES = (HAZARD_CATALOG.hazards || []) as ReachModifierCatalogEntry[];
 const ARTIFACT_ENTRIES = (HAZARD_CATALOG.artifacts || []) as ReachModifierCatalogEntry[];
 
+/** Lowercase set of every known hazard display name from hazardCatalog.json. Used to filter legacy/removed hazard names from analytics. */
+export const KNOWN_HAZARD_NAMES: ReadonlySet<string> = new Set(
+  HAZARD_ENTRIES.map((entry) => entry.displayName.toLowerCase())
+);
+
 const buildReachModifierAliasMap = (entries: ReachModifierCatalogEntry[]): Record<string, string> => {
   const aliasMap: Record<string, string> = {};
   entries.forEach((entry) => {

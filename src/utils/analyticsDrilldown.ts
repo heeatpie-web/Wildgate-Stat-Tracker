@@ -1,5 +1,6 @@
 import type { DrillDownTarget, Match } from '../types';
 import { normalizeShipName } from '../types';
+import { KNOWN_HAZARD_NAMES } from './constants';
 import {
     getMatchEquipment,
     getMatchPerks,
@@ -113,7 +114,7 @@ const extractArtifactName = (match: Match): string | null => {
 const getHazardModifiers = (match: Match): string[] => (
     (match.reachModifiers || [])
         .map((modifier) => String(modifier || '').trim())
-        .filter((modifier) => modifier && !modifier.startsWith('Artifact:'))
+        .filter((modifier) => modifier && !modifier.startsWith('Artifact:') && KNOWN_HAZARD_NAMES.has(modifier.toLowerCase()))
 );
 
 const getFriendlyNames = (match: Match): string[] => (
@@ -138,10 +139,11 @@ const getPlayerEncounterOutcomeMatches = (
 ): Match[] => {
     if (
         target.encounterScope !== 'all'
-        || (target.type !== 'Teammate' && target.type !== 'Opponent')
+        || (target.type !== 'Teammate' && target.type !== 'Opponent' && target.type !== 'AnyPlayer')
     ) {
         return matches;
     }
+    if (target.type === 'AnyPlayer') return matches;
 
     const targetName = normalize(target.name);
     if (!targetName) return matches;
@@ -223,6 +225,10 @@ const matchesTarget = (match: Match, target: DrillDownTarget): boolean => {
     if (target.type === 'Perk') return getMatchPerks(match).some((perk) => normalize(perk) === targetName);
     if (target.type === 'Teammate') return getFriendlyTargetNames(match).some((name) => normalize(name) === targetName);
     if (target.type === 'Opponent') return getOpponentNames(match).some((name) => normalize(name) === targetName);
+    if (target.type === 'AnyPlayer') return (
+        getFriendlyTargetNames(match).some((name) => normalize(name) === targetName) ||
+        getOpponentNames(match).some((name) => normalize(name) === targetName)
+    );
     if (target.type === 'Artifact') return normalize(extractArtifactName(match)) === targetName;
     if (target.type === 'Modifier') return getHazardModifiers(match).some((modifier) => normalize(modifier) === targetName);
     if (target.type === 'Date') return toLocalYmd(match.timestamp) === target.name;

@@ -72,6 +72,7 @@ const TIME_RANGE_OPTIONS: { value: AnalyticsTimeRange; label: string }[] = [
     { value: 'week', label: 'Week' },
     { value: 'month', label: 'Month' },
     { value: 'all', label: 'All Time' },
+    { value: 'custom', label: 'Custom' },
 ];
 
 const CATEGORY_SUBVIEWS: Record<AnalyticsCategory, AnalyticsView[]> = {
@@ -105,6 +106,8 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
 
     const [currentView, setCurrentView] = useState<AnalyticsView>('overview');
     const [timeRange, setTimeRange] = useState<AnalyticsTimeRange>('all');
+    const [customDateFrom, setCustomDateFrom] = useState('');
+    const [customDateTo, setCustomDateTo] = useState('');
     const [lastN] = useState(20);
     const [exporting, setExporting] = useState(false);
     const [isProMode, setIsProMode] = useState(false);
@@ -126,7 +129,18 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
         if (isProMode && currentView === 'overview') return undefined;
         return currentView;
     }, [currentView, isProMode]);
-    const data = useAnalyticsData(timeRange, lastN, requestedDataView, entityFilters);
+
+    const customDateRange = useMemo(() => {
+        if (timeRange !== 'custom' || !customDateFrom || !customDateTo) return null;
+        const from = new Date(customDateFrom);
+        from.setHours(0, 0, 0, 0);
+        const to = new Date(customDateTo);
+        to.setHours(23, 59, 59, 999);
+        if (isNaN(from.getTime()) || isNaN(to.getTime()) || from > to) return null;
+        return { from: from.getTime(), to: to.getTime() };
+    }, [timeRange, customDateFrom, customDateTo]);
+
+    const data = useAnalyticsData(timeRange, lastN, requestedDataView, entityFilters, customDateRange);
     const filterOptionSourceMatches = data.rangeFilteredMatches ?? data.filteredMatches;
     const collectSortedUnique = (values: string[]): string[] => (
         Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)))
@@ -149,7 +163,10 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
         [filterOptionSourceMatches]
     );
     const activeContextTags = useMemo(() => {
-        const timeRangeLabel = TIME_RANGE_OPTIONS.find((option) => option.value === timeRange)?.label || 'All Time';
+        let timeRangeLabel = TIME_RANGE_OPTIONS.find((option) => option.value === timeRange)?.label || 'All Time';
+        if (timeRange === 'custom' && customDateFrom && customDateTo) {
+            timeRangeLabel = `${customDateFrom} → ${customDateTo}`;
+        }
         const tags = [`Range: ${timeRangeLabel}`];
         if (entityFilters.ship[0]) tags.push(`Ship: ${entityFilters.ship[0]}`);
         if (entityFilters.prospectorWeapon[0]) tags.push(`Weapon: ${entityFilters.prospectorWeapon[0]}`);
@@ -159,7 +176,7 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
             tags.push(`Update: ${getUpdateLabel(entityFilters.update[0])}`);
         }
         return tags;
-    }, [entityFilters, timeRange]);
+    }, [entityFilters, timeRange, customDateFrom, customDateTo]);
     const filterSelectClassName = 'px-2.5 py-1.5 rounded-control border border-md-sys-outline/20 bg-md-sys-surface text-md-sys-on-surface text-label-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary';
 
     const onDrillDown = useCallback((name: string, type: DrillDownTarget['type']) => {
@@ -550,6 +567,26 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
                                 {opt.label}
                             </button>
                         ))}
+                        {timeRange === 'custom' && (
+                            <>
+                                <input
+                                    type="date"
+                                    value={customDateFrom}
+                                    onChange={(e) => setCustomDateFrom(e.target.value)}
+                                    className={filterSelectClassName}
+                                    aria-label="Custom range start date"
+                                />
+                                <span className="text-label-sm text-md-sys-on-surface/40 font-bold">→</span>
+                                <input
+                                    type="date"
+                                    value={customDateTo}
+                                    min={customDateFrom || undefined}
+                                    onChange={(e) => setCustomDateTo(e.target.value)}
+                                    className={filterSelectClassName}
+                                    aria-label="Custom range end date"
+                                />
+                            </>
+                        )}
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                         {entitySelectorControls}

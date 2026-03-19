@@ -295,7 +295,7 @@ export const normalizeShipName = (ship: string | null | undefined): string => {
 
 /** Target for the analytics drill-down overlay — clicking a chart element sets this. */
 export type DrillDownTarget = {
-  type: 'Ship' | 'Hero' | 'Weapon' | 'Equipment' | 'Perk' | 'Teammate' | 'Opponent' | 'Artifact' | 'Modifier' | 'Date' | 'Week' | 'Month' | 'KPI';
+  type: 'Ship' | 'Hero' | 'Weapon' | 'Equipment' | 'Perk' | 'Teammate' | 'Opponent' | 'AnyPlayer' | 'Artifact' | 'Modifier' | 'Date' | 'Week' | 'Month' | 'KPI';
   name: string;
   matchIds?: number[];
   encounterScope?: 'all';
@@ -344,7 +344,7 @@ export type AnalyticsView =
   | 'reactor';
 
 /** Time range filter options for analytics. */
-export type AnalyticsTimeRange = 'all' | 'month' | 'week' | 'today' | 'lastN';
+export type AnalyticsTimeRange = 'all' | 'month' | 'week' | 'today' | 'lastN' | 'custom';
 
 // --- Analytics V2 Data Types ---
 

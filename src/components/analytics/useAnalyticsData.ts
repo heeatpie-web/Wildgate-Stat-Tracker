@@ -290,7 +290,8 @@ export const useAnalyticsData = (
     timeRange: AnalyticsTimeRange,
     lastN: number = 20,
     view?: AnalyticsView,
-    entityFilters: EntityAnalyticsFilters = EMPTY_ENTITY_FILTERS
+    entityFilters: EntityAnalyticsFilters = EMPTY_ENTITY_FILTERS,
+    customDateRange: { from: number; to: number } | null = null
 ) => {
     const {
         matches,
@@ -361,11 +362,15 @@ export const useAnalyticsData = (
             result = stableCompletedModeMatches.slice(-lastN);
         } else if (timeRange === 'today' || timeRange === 'week' || timeRange === 'month') {
             result = stableCompletedModeMatches.filter(m => m.timestamp >= rangeStart);
+        } else if (timeRange === 'custom' && customDateRange) {
+            result = stableCompletedModeMatches.filter(
+                m => m.timestamp >= customDateRange.from && m.timestamp <= customDateRange.to
+            );
         } else {
             result = stableCompletedModeMatches;
         }
         return result;
-    }, [stableCompletedModeMatches, timeRange, lastN, rangeStart]);
+    }, [stableCompletedModeMatches, timeRange, lastN, rangeStart, customDateRange]);
     const filteredMatches = useMemo(
         () => rangeFilteredMatches.filter((match) => matchPassesFilters(match, entityFilters)),
         [rangeFilteredMatches, entityFilters]

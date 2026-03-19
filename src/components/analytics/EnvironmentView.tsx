@@ -1,5 +1,6 @@
 import React from 'react';
 import { Match, PIE_COLORS, VisualMode, DrillDownTarget } from '../../types';
+import { KNOWN_HAZARD_NAMES } from '../../utils/constants';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, LabelList } from 'recharts';
 import { Zap, Trophy, TrendingUp, TrendingDown } from 'lucide-react';
 import { generateEnvironmentEditorial } from '../../utils/analyticsEditorial';
@@ -23,11 +24,14 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
     const dense = visualMode === 'dense';
     const stats: Record<string, { wins: number, total: number }> = {};
     matches.forEach(m => {
-        (m.reachModifiers || []).forEach(mod => {
-            if (!stats[mod]) stats[mod] = { wins: 0, total: 0 };
-            stats[mod].total++;
-            if (m.result === 'Win') stats[mod].wins++;
-        });
+        (m.reachModifiers || [])
+            .map((mod) => String(mod || '').trim())
+            .filter((mod) => mod && !mod.startsWith('Artifact:') && KNOWN_HAZARD_NAMES.has(mod.toLowerCase()))
+            .forEach(mod => {
+                if (!stats[mod]) stats[mod] = { wins: 0, total: 0 };
+                stats[mod].total++;
+                if (m.result === 'Win') stats[mod].wins++;
+            });
     });
 
     const overallWR = matches.length > 0 ? Math.round((matches.filter(m => m.result === 'Win').length / matches.length) * 100) : 0;

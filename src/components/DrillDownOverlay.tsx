@@ -33,6 +33,7 @@ const targetKey = (target: DrillDownTarget | null | undefined): string => {
 const formatTargetType = (type: DrillDownTarget['type']): string => {
     if (type === 'Teammate') return 'Wingman';
     if (type === 'Opponent') return 'Rival';
+    if (type === 'AnyPlayer') return 'Player';
     return type;
 };
 
@@ -193,6 +194,7 @@ export const DrillDownOverlay: React.FC = () => {
     const focusTrapRef = useFocusTrap<HTMLDivElement>(isOpen);
     const [navigationStack, setNavigationStack] = useState<DrillDownTarget[]>([]);
     const [activeTab, setActiveTab] = useState<OverlayTab>('overview');
+    const [roleFilter, setRoleFilter] = useState<'Teammate' | 'Opponent' | 'AnyPlayer'>('Teammate');
 
     const analyticsIdentity = useMemo(() => buildAnalyticsIdentityResolver({
         pilotRegistry,
@@ -238,17 +240,28 @@ export const DrillDownOverlay: React.FC = () => {
 
     useEffect(() => {
         setActiveTab('overview');
+        if (currentTarget?.type === 'Teammate' || currentTarget?.type === 'Opponent' || currentTarget?.type === 'AnyPlayer') {
+            setRoleFilter(currentTarget.type);
+        }
     }, [currentTargetKey]);
+
+    const isPlayerTarget = currentTarget?.type === 'Teammate' || currentTarget?.type === 'Opponent' || currentTarget?.type === 'AnyPlayer';
+
+    const effectiveTarget = useMemo((): DrillDownTarget | null => {
+        if (!currentTarget) return null;
+        if (!isPlayerTarget) return currentTarget;
+        return { ...currentTarget, type: roleFilter };
+    }, [currentTarget, isPlayerTarget, roleFilter]);
 
     const model = useMemo(
         () => (
-            currentTarget
-                ? buildDrillDownModel(canonicalMatches, currentTarget, activeMode, {
+            effectiveTarget
+                ? buildDrillDownModel(canonicalMatches, effectiveTarget, activeMode, {
                     getPlayerEncounterRoleCorrection,
                 })
                 : null
         ),
-        [activeMode, canonicalMatches, currentTarget, getPlayerEncounterRoleCorrection, playerEncounterRoleCorrections]
+        [activeMode, canonicalMatches, effectiveTarget, getPlayerEncounterRoleCorrection, playerEncounterRoleCorrections]
     );
 
     useEffect(() => {
@@ -594,8 +607,26 @@ export const DrillDownOverlay: React.FC = () => {
                             {currentTarget.name}
                         </h2>
                         <div className="mt-1 text-body text-md-sys-on-surface/58">
-                            {formatTargetType(currentTarget.type)} · {model.summary.totalMatches} matches in this scoped slice
+                            {formatTargetType(effectiveTarget?.type ?? currentTarget.type)} · {model.summary.totalMatches} matches in this scoped slice
                         </div>
+                        {isPlayerTarget && (
+                            <div className="mt-3 flex gap-1">
+                                {(['Teammate', 'Opponent', 'AnyPlayer'] as const).map((role) => (
+                                    <button
+                                        key={role}
+                                        type="button"
+                                        onClick={() => setRoleFilter(role)}
+                                        className={`rounded-pill px-3 py-1 text-label-sm font-bold transition-colors ${
+                                            roleFilter === role
+                                                ? 'bg-md-sys-primary text-md-sys-onPrimary'
+                                                : 'bg-md-sys-surface-container-high text-md-sys-on-surface/70 hover:bg-md-sys-surface-container-highest'
+                                        }`}
+                                    >
+                                        {role === 'Teammate' ? 'As Wingman' : role === 'Opponent' ? 'As Rival' : 'Both'}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
                     <div className="flex items-center gap-2">
                         {navigationStack.length > 1 ? (

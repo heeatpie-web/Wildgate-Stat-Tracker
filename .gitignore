@@ -49,8 +49,10 @@ dataset/
 # Large binary OCR data files (download at runtime instead)
 *.traineddata
 
-# ML models (download at runtime)
-models/
+# ML models - paddleocr models are bundled with the release build
+models/*
+!models/paddleocr/
+!models/paddleocr/**
 
 # Caziban OCR test screenshots
 *Caziban.png
