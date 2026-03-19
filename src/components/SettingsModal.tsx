@@ -229,6 +229,8 @@ const SettingsModalContent: React.FC = () => {
 
     const pixelMonitorEnabled = useAppStore(s => s.pixelMonitorEnabled);
     const setPixelMonitorEnabled = useAppStore(s => s.setPixelMonitorEnabled);
+    const fullAutoEnabled = useAppStore(s => s.fullAutoEnabled);
+    const setFullAutoEnabled = useAppStore(s => s.setFullAutoEnabled);
     const pixelMonitorX = useAppStore(s => s.pixelMonitorX);
     const setPixelMonitorX = useAppStore(s => s.setPixelMonitorX);
     const pixelMonitorY = useAppStore(s => s.pixelMonitorY);
@@ -1412,6 +1414,28 @@ const SettingsModalContent: React.FC = () => {
                                         onChange={e => setPixelMonitorChangeSensitivity(Number(e.target.value))}
                                         className="rounded-control border border-md-sys-outline/15 bg-md-sys-surface px-3 py-1.5 text-body text-md-sys-on-surface outline-none focus:border-md-sys-primary"
                                     />
+                                </label>
+                            </div>
+                            {/* Full Auto toggle */}
+                            <div className="mt-3 flex items-start justify-between gap-3">
+                                <div>
+                                    <div className="text-label-sm font-semibold text-md-sys-on-surface">Full Auto mode</div>
+                                    <div className="mt-0.5 text-label-sm text-md-sys-on-surface/60">
+                                        Auto-saves the match when the result screen is detected. No wizard required.
+                                        Requires pixel monitor to be enabled.
+                                    </div>
+                                </div>
+                                <label className="flex cursor-pointer items-center gap-2 shrink-0 mt-0.5">
+                                    <input
+                                        type="checkbox"
+                                        checked={fullAutoEnabled}
+                                        onChange={e => setFullAutoEnabled(e.target.checked)}
+                                        disabled={!pixelMonitorEnabled}
+                                        className="h-4 w-4 accent-md-sys-primary disabled:opacity-40"
+                                    />
+                                    <span className={`text-label-sm ${pixelMonitorEnabled ? 'text-md-sys-on-surface/70' : 'text-md-sys-on-surface/35'}`}>
+                                        Enabled
+                                    </span>
                                 </label>
                             </div>
                             <div className="mt-3 flex items-center gap-3">
