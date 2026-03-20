@@ -266,6 +266,7 @@ vi.mock('./components/Toast', () => ({ Toast: ({ message }: { message: string })
 vi.mock('./components/IdMapper', () => ({ IdMapper: () => <div data-testid="id-mapper" /> }));
 describe('App', () => {
   afterEach(() => {
+    vi.useRealTimers();
     cleanup();
   });
 
@@ -954,6 +955,32 @@ describe('App', () => {
     });
   });
 
+  it('keeps the auto-capture hotkey snapshot fresh with a heartbeat', async () => {
+    const { default: App } = await import('./App');
+    const api = {
+      send: vi.fn(),
+      invoke: vi.fn(() => Promise.resolve(null)),
+      on: vi.fn(() => vi.fn()),
+      removeAllListeners: vi.fn(),
+    };
+    getElectronAPIMock.mockReturnValue(api);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(api.send).toHaveBeenCalledWith('sync-auto-capture-hotkey-state', expect.any(Object));
+    });
+
+    const initialSendCount = api.send.mock.calls.length;
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 3_200));
+    });
+
+    expect(api.send.mock.calls.length).toBeGreaterThan(initialSendCount);
+    expect(api.send).toHaveBeenLastCalledWith('sync-auto-capture-hotkey-state', expect.any(Object));
+  });
+
   it('clears auto-capture hotkey state on unmount', async () => {
     const { default: App } = await import('./App');
     const api = {
@@ -1019,6 +1046,49 @@ describe('App', () => {
     expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({
       message: '2/3',
       type: 'info',
+    }));
+  });
+
+  it('surfaces detailed auto-capture failures from electron', async () => {
+    const { default: App } = await import('./App');
+    const handlers: Record<string, (...args: unknown[]) => void> = {};
+    const api = {
+      invoke: vi.fn(() => Promise.resolve(null)),
+      send: vi.fn(),
+      on: vi.fn((channel: string, cb: (...args: unknown[]) => void) => {
+        handlers[channel] = cb;
+        return vi.fn();
+      }),
+      removeAllListeners: vi.fn(),
+    };
+    getElectronAPIMock.mockReturnValue(api);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(handlers['auto-capture-status']).toBeTypeOf('function');
+    });
+
+    act(() => {
+      handlers['auto-capture-status']({
+        phase: 'failed',
+        matchId: 321,
+        message: 'Auto-Capture failed at Step 1 — Open Tactical Map',
+        detail: 'Open Tactical Map: Failed to confirm Wildgate focus before sending Open Tactical Map.',
+      });
+    });
+
+    expect(loggerWarn).toHaveBeenCalledWith(
+      'Hotkeys',
+      'Received auto-capture failure status',
+      expect.objectContaining({
+        matchId: 321,
+        detail: 'Open Tactical Map: Failed to confirm Wildgate focus before sending Open Tactical Map.',
+      })
+    );
+    expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'Auto-Capture failed at Step 1 — Open Tactical Map Open Tactical Map: Failed to confirm Wildgate focus before sending Open Tactical Map.',
+      type: 'error',
     }));
   });
 

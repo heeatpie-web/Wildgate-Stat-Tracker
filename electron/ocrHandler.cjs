@@ -15,6 +15,7 @@ const fs = require('fs');
 const fsPromises = require('fs').promises;
 const crypto = require('crypto');
 const os = require('os');
+const { requirePackagedModule } = require('./helpers/packagedModuleLoader.cjs');
 const HAZARD_CATALOG = require('./hazardCatalog.json');
 
 // Import new extraction modules
@@ -511,7 +512,7 @@ async function archiveOcrSample(buffer, ocrText, metadata = {}) {
 async function captureGameWindow() {
   try {
     if (!screenshot) {
-      screenshot = require('screenshot-desktop');
+      screenshot = requirePackagedModule('screenshot-desktop');
     }
 
     console.log('[OCR] Capturing screen...');

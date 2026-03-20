@@ -218,6 +218,7 @@ const HAS_LAUNCHED_BEFORE_STORAGE_KEY = 'wg_has_launched_before_v1';
 const WELCOME_MESSAGE_SHOWN_THIS_LAUNCH_KEY = 'wg_welcome_message_shown_this_launch_v1';
 const TACTICAL_MAP_KEY_PROMPT_SEEN_STORAGE_KEY = 'wg_tactical_map_key_prompt_seen_v1';
 const FULL_AUTO_AUTO_ENABLED_AFTER_SETUP_STORAGE_KEY = 'wg_full_auto_auto_enabled_after_setup_v1';
+const AUTO_CAPTURE_HOTKEY_HEARTBEAT_MS = 3000;
 type SessionExitState = 'clean' | 'running';
 const getOnboardingUserScope = (user: string | null | undefined): string => {
     const normalized = String(user || '').trim().toLowerCase();
@@ -753,10 +754,10 @@ const App: React.FC = () => {
         if (!api) return;
 
         let lastSerializedSnapshot = '';
-        const syncHotkeyState = () => {
+        const syncHotkeyState = (force = false) => {
             const snapshot = buildAutoCaptureStateSnapshot();
             const serializedSnapshot = JSON.stringify(snapshot);
-            if (serializedSnapshot === lastSerializedSnapshot) return;
+            if (!force && serializedSnapshot === lastSerializedSnapshot) return;
             lastSerializedSnapshot = serializedSnapshot;
             api.send('sync-auto-capture-hotkey-state', snapshot);
         };
@@ -765,9 +766,13 @@ const App: React.FC = () => {
         const unsubscribe = useAppStore.subscribe(() => {
             syncHotkeyState();
         });
+        const heartbeatId = window.setInterval(() => {
+            syncHotkeyState(true);
+        }, AUTO_CAPTURE_HOTKEY_HEARTBEAT_MS);
 
         return () => {
             unsubscribe();
+            window.clearInterval(heartbeatId);
             api.send('sync-auto-capture-hotkey-state', null);
         };
     }, []);
@@ -1921,6 +1926,7 @@ const App: React.FC = () => {
             const phase = String(payload?.phase || '');
             const matchId = Number(payload?.matchId || 0);
             const normalizedMatchId = Number.isInteger(matchId) && matchId > 0 ? matchId : null;
+            const detail = typeof payload?.detail === 'string' ? payload.detail.trim() : '';
             const captureOrigin = normalizedMatchId != null
                 ? telemetryAutoCaptureOriginRef.current.get(normalizedMatchId)
                 : null;
@@ -2015,9 +2021,18 @@ const App: React.FC = () => {
                 if (normalizedMatchId != null) {
                     telemetryAutoCaptureInFlightRef.current.delete(normalizedMatchId);
                 }
-                const message = typeof payload?.message === 'string' && payload.message.trim()
+                const baseMessage = typeof payload?.message === 'string' && payload.message.trim()
                     ? payload.message
                     : 'Auto-Capture failed.';
+                const message = detail && !baseMessage.includes(detail)
+                    ? `${baseMessage} ${detail}`
+                    : baseMessage;
+                Logger.warn('Hotkeys', 'Received auto-capture failure status', {
+                    matchId: normalizedMatchId,
+                    message: baseMessage,
+                    detail: detail || null,
+                    payload,
+                });
                 playAutomationFailed();
                 setTelemetryAutomationStatus(createTelemetryAutomationStatus({
                     phase: 'failed',

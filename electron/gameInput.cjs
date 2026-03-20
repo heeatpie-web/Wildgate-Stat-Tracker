@@ -1,4 +1,5 @@
 const { spawn } = require('child_process');
+const { requirePackagedModule } = require('./helpers/packagedModuleLoader.cjs');
 
 const DEFAULT_FOCUS_DELAY_MS = 60;
 const DEFAULT_KEY_DELAY_MS = 35;
@@ -594,7 +595,7 @@ function loadNutApi() {
   if (nutLoadError) throw nutLoadError;
 
   try {
-    const loaded = require('@nut-tree-fork/nut-js');
+    const loaded = requirePackagedModule('@nut-tree-fork/nut-js');
     loaded.keyboard.config.autoDelayMs = getKeyboardDelayMs();
     nutApi = loaded;
     return nutApi;

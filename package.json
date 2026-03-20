@@ -2,7 +2,7 @@
   "name": "wildgate-stat-tracker",
   "productName": "Wildgate Stat Tracker",
   "private": true,
-  "version": "3.3.6",
+  "version": "3.3.7",
   "type": "module",
   "main": "electron/main.cjs",
   "author": {
@@ -98,12 +98,15 @@
     "appId": "com.wildgate.tracker",
     "productName": "Wildgate Stat Tracker",
     "icon": "electron/assets/icon.ico",
+    "asar": false,
     "compression": "maximum",
     "npmRebuild": false,
     "directories": {
       "output": "dist-electron"
     },
     "files": [
+      "package.json",
+      "node_modules/**/*",
       "dist/**/*",
       "electron/**/*",
       "uid-seed.json",
@@ -115,6 +118,7 @@
       "!**/README.md"
     ],
     "asarUnpack": [
+      "node_modules/@nut-tree-fork/**/*",
       "node_modules/@nut-tree-fork/libnut-win32/**/*",
       "node_modules/screenshot-desktop/**/*"
     ],

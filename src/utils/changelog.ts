@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.3.7": [
+    "Fix: Installed builds now package the auto-capture runtime correctly so F10 and smart capture can load keyboard and screenshot dependencies in production.",
+    "Reliability: Auto-capture hotkey state now refreshes on a heartbeat so F10 does not go stale during long live matches.",
+    "Debugging: Auto-capture failures now surface richer detail in the UI so focus, runtime, and capture errors are easier to diagnose."
+  ],
   "v3.3.6": [
     "Automation: Telemetry now tracks loading, pregame, live, and result stages so full-auto capture follows the match lifecycle more reliably.",
     "Workflow: Lobby auto-capture now runs silently in the background with a single live fallback instead of blocking telemetry prompts.",
