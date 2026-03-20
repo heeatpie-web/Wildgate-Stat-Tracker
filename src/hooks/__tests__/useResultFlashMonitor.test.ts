@@ -12,36 +12,22 @@ const appStoreState = {
   gameResolution: null as { resX: number; resY: number } | null,
 };
 
-const invokeMock = vi.fn();
+const eventListeners: Record<string, Array<(...args: unknown[]) => void>> = {};
+
+const sendMock = vi.fn();
 const electronApiMock = {
-  invoke: (...args: unknown[]) => invokeMock(...args),
+  send: (...args: unknown[]) => sendMock(...args),
+  on: (channel: string, callback: (...args: unknown[]) => void) => {
+    if (!eventListeners[channel]) eventListeners[channel] = [];
+    eventListeners[channel].push(callback);
+    return () => {
+      eventListeners[channel] = eventListeners[channel].filter((listener) => listener !== callback);
+    };
+  },
 };
 
-const WHITE_SAMPLE = { avgR: 255, avgG: 255, avgB: 255 };
-const DARK_SAMPLE = { avgR: 12, avgG: 18, avgB: 24 };
-const THRESHOLD_SAMPLE = { avgR: 250, avgG: 250, avgB: 250 };
-const BELOW_THRESHOLD_SAMPLE = { avgR: 249, avgG: 249, avgB: 249 };
-const WINDOW_REGION_META = {
-  source: 'window-region',
-  absoluteRegion: { x: 64, y: 1013, width: 107, height: 21 },
-  clientRect: { left: 300, top: 180, width: 1920, height: 1080 },
-  geometryAgeMs: 144,
-  processName: 'Wildgate-Win64-Shipping.exe',
-  processId: 1234,
-  windowHandle: 5678,
-  windowTitle: 'Wildgate',
-};
-
-const flushAsyncWork = async () => {
-  await Promise.resolve();
-  await Promise.resolve();
-};
-
-const queueFlashFrame = (
-  sample: { avgR: number; avgG: number; avgB: number },
-  meta?: typeof WINDOW_REGION_META,
-) => {
-  invokeMock.mockResolvedValueOnce({ success: true, data: sample, meta });
+const fireEvent = (channel: string, ...args: unknown[]) => {
+  (eventListeners[channel] || []).forEach((listener) => listener(...args));
 };
 
 vi.mock('../../store/useAppStore', () => {
@@ -56,8 +42,9 @@ vi.mock('../../utils/electronAPI', () => ({
 describe('useResultFlashMonitor', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-03-19T12:00:00.000Z'));
-    invokeMock.mockReset();
+    vi.setSystemTime(new Date('2026-03-20T12:00:00.000Z'));
+    sendMock.mockReset();
+    Object.keys(eventListeners).forEach((channel) => delete eventListeners[channel]);
     appStoreState.gameResolution = null;
   });
 
@@ -65,93 +52,77 @@ describe('useResultFlashMonitor', () => {
     vi.useRealTimers();
   });
 
-  it('does not sample the screen until live play has lasted at least 45 seconds', async () => {
+  it('sends result-flash-start with the correct arm timestamp and normalized region', async () => {
     const { useResultFlashMonitor } = await import('../useResultFlashMonitor');
+    const liveStartedAt = Date.now() - 10_000;
+
     renderHook(() => useResultFlashMonitor({
       enabled: true,
-      liveStartedAt: Date.now(),
+      liveStartedAt,
+      armDelayMs: 45_000,
       onFlashResolved: vi.fn(),
     }));
 
-    await act(async () => {
-      vi.advanceTimersByTime(44_850);
-      await flushAsyncWork();
+    expect(sendMock).toHaveBeenCalledWith('result-flash-start', {
+      armAt: liveStartedAt + 45_000,
+      normalizedRegion: {
+        x: 64 / 1920,
+        y: 1013 / 1080,
+        width: 107 / 1920,
+        height: 21 / 1080,
+      },
     });
-
-    expect(invokeMock).not.toHaveBeenCalled();
-
-    queueFlashFrame(WHITE_SAMPLE);
-    await act(async () => {
-      vi.advanceTimersByTime(200);
-      await flushAsyncWork();
-    });
-
-    expect(invokeMock).toHaveBeenCalledTimes(1);
   });
 
-  it('polls the Eye on a 100ms cadence after the initial sample', async () => {
+  it('sends result-flash-stop when enabled becomes false', async () => {
+    const { useResultFlashMonitor } = await import('../useResultFlashMonitor');
+    const { rerender } = renderHook(
+      ({ enabled }: { enabled: boolean }) => useResultFlashMonitor({
+        enabled,
+        liveStartedAt: Date.now() - 10_000,
+        onFlashResolved: vi.fn(),
+      }),
+      { initialProps: { enabled: true } },
+    );
+
+    sendMock.mockClear();
+    rerender({ enabled: false });
+
+    expect(sendMock).toHaveBeenCalledWith('result-flash-stop');
+  });
+
+  it('sends result-flash-stop on unmount', async () => {
+    const { useResultFlashMonitor } = await import('../useResultFlashMonitor');
+    const { unmount } = renderHook(() => useResultFlashMonitor({
+      enabled: true,
+      liveStartedAt: Date.now() - 10_000,
+      onFlashResolved: vi.fn(),
+    }));
+
+    sendMock.mockClear();
+    unmount();
+
+    expect(sendMock).toHaveBeenCalledWith('result-flash-stop');
+  });
+
+  it('subscribes to the detected, resolved, and debug channels while active', async () => {
     const { useResultFlashMonitor } = await import('../useResultFlashMonitor');
 
-    invokeMock.mockResolvedValue({ success: true, data: DARK_SAMPLE });
     renderHook(() => useResultFlashMonitor({
       enabled: true,
       liveStartedAt: Date.now() - 46_000,
-      armDelayMs: 0,
       onFlashResolved: vi.fn(),
     }));
 
-    await act(async () => {
-      await flushAsyncWork();
-    });
-    expect(invokeMock).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      vi.advanceTimersByTime(99);
-      await flushAsyncWork();
-    });
-    expect(invokeMock).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      vi.advanceTimersByTime(1);
-      await flushAsyncWork();
-    });
-    expect(invokeMock).toHaveBeenCalledTimes(2);
-
-    await act(async () => {
-      vi.advanceTimersByTime(100);
-      await flushAsyncWork();
-    });
-    expect(invokeMock).toHaveBeenCalledTimes(3);
+    expect(eventListeners['result-flash-detected']).toHaveLength(1);
+    expect(eventListeners['result-flash-resolved']).toHaveLength(1);
+    expect(eventListeners['result-flash-debug']).toHaveLength(1);
   });
 
-  it('can arm immediately when the caller disables the live arm delay', async () => {
+  it('invokes onFlashDetected and onFlashResolved when main-process events arrive', async () => {
     const { useResultFlashMonitor } = await import('../useResultFlashMonitor');
-
-    queueFlashFrame(WHITE_SAMPLE, WINDOW_REGION_META);
-    renderHook(() => useResultFlashMonitor({
-      enabled: true,
-      liveStartedAt: Date.now(),
-      armDelayMs: 0,
-      onFlashResolved: vi.fn(),
-    }));
-
-    await act(async () => {
-      await flushAsyncWork();
-    });
-
-    expect(invokeMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('arms after the watched ROI stays bright for 0.20 seconds and waits for the flash to end before triggering OCR', async () => {
     const onFlashDetected = vi.fn();
     const onFlashResolved = vi.fn();
-    const { useResultFlashMonitor } = await import('../useResultFlashMonitor');
-
-    queueFlashFrame(DARK_SAMPLE);
-    queueFlashFrame(WHITE_SAMPLE);
-    queueFlashFrame(WHITE_SAMPLE);
-    queueFlashFrame(WHITE_SAMPLE);
-    queueFlashFrame(DARK_SAMPLE);
 
     renderHook(() => useResultFlashMonitor({
       enabled: true,
@@ -161,42 +132,108 @@ describe('useResultFlashMonitor', () => {
     }));
 
     await act(async () => {
-      await flushAsyncWork();
+      fireEvent('result-flash-detected');
+      fireEvent('result-flash-resolved');
     });
-    expect(onFlashDetected).not.toHaveBeenCalled();
-    expect(onFlashResolved).not.toHaveBeenCalled();
 
-    await act(async () => {
-      vi.advanceTimersByTime(100);
-      await flushAsyncWork();
-    });
-    expect(onFlashDetected).not.toHaveBeenCalled();
-
-    await act(async () => {
-      vi.advanceTimersByTime(100);
-      await flushAsyncWork();
-    });
-    expect(onFlashDetected).not.toHaveBeenCalled();
-
-    await act(async () => {
-      vi.advanceTimersByTime(100);
-      await flushAsyncWork();
-    });
     expect(onFlashDetected).toHaveBeenCalledTimes(1);
-    expect(onFlashResolved).not.toHaveBeenCalled();
+    expect(onFlashResolved).toHaveBeenCalledTimes(1);
+  });
+
+  it('normalizes debug snapshots from the main process into the existing debug contract', async () => {
+    const { useResultFlashMonitor } = await import('../useResultFlashMonitor');
+    const onDebugStateChange = vi.fn();
+
+    renderHook(() => useResultFlashMonitor({
+      enabled: true,
+      liveStartedAt: Date.now() - 46_000,
+      onFlashResolved: vi.fn(),
+      onDebugStateChange,
+    }));
 
     await act(async () => {
-      vi.advanceTimersByTime(100);
-      await flushAsyncWork();
+      fireEvent('result-flash-debug', {
+        status: 'waiting-flash-end',
+        brightSinceMs: Date.now() - 350,
+        waitingForFlashEnd: true,
+        flashNotified: true,
+        pollInFlight: false,
+        lastSampleResult: {
+          success: true,
+          data: { avgR: 255, avgG: 255, avgB: 255 },
+          meta: {
+            source: 'primary-display',
+            absoluteRegion: { x: 64, y: 1013, width: 107, height: 21 },
+          },
+        },
+        lastIsWhiteFrame: true,
+        lastUpdatedAt: Date.now(),
+      });
     });
-    expect(onFlashResolved).toHaveBeenCalledTimes(1);
+
+    expect(onDebugStateChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      status: 'waiting-flash-end',
+      enabled: true,
+      triggerLatched: false,
+      isArmed: true,
+      regions: [{ x: 64, y: 1013, width: 107, height: 21 }],
+      waitingForFlashEnd: true,
+      flashNotified: true,
+      lastSampleMeta: {
+        source: 'primary-display',
+        absoluteRegion: { x: 64, y: 1013, width: 107, height: 21 },
+      },
+      lastSampleResult: {
+        success: true,
+        data: { avgR: 255, avgG: 255, avgB: 255 },
+        meta: {
+          source: 'primary-display',
+          absoluteRegion: { x: 64, y: 1013, width: 107, height: 21 },
+        },
+      },
+      lastIsWhiteFrame: true,
+    }));
+  });
+
+  it('emits waiting-live-start debug state and does not start the monitor without a live timestamp', async () => {
+    const { useResultFlashMonitor } = await import('../useResultFlashMonitor');
+    const onDebugStateChange = vi.fn();
+
+    renderHook(() => useResultFlashMonitor({
+      enabled: true,
+      liveStartedAt: null,
+      onFlashResolved: vi.fn(),
+      onDebugStateChange,
+    }));
+
+    expect(sendMock).toHaveBeenCalledWith('result-flash-stop');
+    expect(sendMock).not.toHaveBeenCalledWith('result-flash-start', expect.anything());
+    expect(onDebugStateChange).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'waiting-live-start',
+      isArmed: false,
+      regions: [{ x: 64, y: 1013, width: 107, height: 21 }],
+    }));
+  });
+
+  it('does not start the monitor when triggerLatched is true', async () => {
+    const { useResultFlashMonitor } = await import('../useResultFlashMonitor');
+
+    renderHook(() => useResultFlashMonitor({
+      enabled: true,
+      liveStartedAt: Date.now() - 46_000,
+      triggerLatched: true,
+      onFlashResolved: vi.fn(),
+    }));
+
+    expect(sendMock).toHaveBeenCalledWith('result-flash-stop');
+    expect(sendMock).not.toHaveBeenCalledWith('result-flash-start', expect.anything());
   });
 
   it('accepts samples at the OBS-like brightness threshold and rejects samples just below it', async () => {
     const { isNearWhiteSample } = await import('../useResultFlashMonitor');
 
-    expect(isNearWhiteSample(THRESHOLD_SAMPLE)).toBe(true);
-    expect(isNearWhiteSample(BELOW_THRESHOLD_SAMPLE)).toBe(false);
+    expect(isNearWhiteSample({ avgR: 250, avgG: 250, avgB: 250 })).toBe(true);
+    expect(isNearWhiteSample({ avgR: 249, avgG: 249, avgB: 249 })).toBe(false);
   });
 
   it('builds the OBS-style bottom-left ROI from normalized 1920x1080 coordinates', async () => {
@@ -213,75 +250,5 @@ describe('useResultFlashMonitor', () => {
       { resX: 1920, resY: 1080 },
       null,
     )).toEqual([{ x: 64, y: 1013, width: 107, height: 21 }]);
-  });
-
-  it('does not trigger when the watched ROI stays below the brightness threshold', async () => {
-    const onFlashResolved = vi.fn();
-    const { useResultFlashMonitor } = await import('../useResultFlashMonitor');
-    invokeMock.mockResolvedValue({ success: true, data: DARK_SAMPLE });
-
-    renderHook(() => useResultFlashMonitor({
-      enabled: true,
-      liveStartedAt: Date.now() - 46_000,
-      onFlashResolved,
-    }));
-
-    await act(async () => {
-      vi.advanceTimersByTime(800);
-      await flushAsyncWork();
-    });
-
-    expect(onFlashResolved).not.toHaveBeenCalled();
-  });
-
-  it('publishes debug snapshots for the arm delay and sampled ROI state', async () => {
-    const onDebugStateChange = vi.fn();
-    const { useResultFlashMonitor } = await import('../useResultFlashMonitor');
-
-    const { rerender } = renderHook((props: { liveStartedAt: number | null }) => useResultFlashMonitor({
-      enabled: true,
-      liveStartedAt: props.liveStartedAt,
-      onFlashResolved: vi.fn(),
-      onDebugStateChange,
-    }), {
-      initialProps: {
-        liveStartedAt: Date.now(),
-      },
-    });
-
-    expect(onDebugStateChange).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'arming-delay',
-      isArmed: false,
-      armRemainingMs: 45_000,
-      regions: [{ x: 64, y: 1013, width: 107, height: 21 }],
-    }));
-    expect(invokeMock).not.toHaveBeenCalled();
-
-    queueFlashFrame(WHITE_SAMPLE, WINDOW_REGION_META);
-    rerender({ liveStartedAt: Date.now() - 46_000 });
-
-    await act(async () => {
-      await flushAsyncWork();
-    });
-
-    expect(invokeMock).toHaveBeenCalledWith('result-flash-sample', {
-      normalizedRegion: {
-        x: 64 / 1920,
-        y: 1013 / 1080,
-        width: 107 / 1920,
-        height: 21 / 1080,
-      },
-    });
-    expect(onDebugStateChange).toHaveBeenLastCalledWith(expect.objectContaining({
-      status: 'sampling',
-      isArmed: true,
-      lastSampleResult: {
-        success: true,
-        data: WHITE_SAMPLE,
-        meta: WINDOW_REGION_META,
-      },
-      lastSampleMeta: WINDOW_REGION_META,
-      lastIsWhiteFrame: true,
-    }));
   });
 });

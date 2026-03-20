@@ -2,7 +2,7 @@
   "name": "wildgate-stat-tracker",
   "productName": "Wildgate Stat Tracker",
   "private": true,
-  "version": "3.3.8",
+  "version": "3.3.9",
   "type": "module",
   "main": "electron/main.cjs",
   "author": {
@@ -50,6 +50,7 @@
     "@nut-tree-fork/nut-js": "^4.2.6",
     "discord-rpc": "^4.0.1",
     "electron-updater": "^6.7.3",
+    "node-screenshots": "^0.2.8",
     "onnxruntime-node": "^1.24.2",
     "screenshot-desktop": "^1.15.0",
     "sharp": "^0.33.5"

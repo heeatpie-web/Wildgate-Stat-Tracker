@@ -40,6 +40,7 @@ const SEND_CHANNELS = [
   'set-ignore-mouse-events',
   'toggle-overlay', 'set-overlay-style', 'set-window-bounds',
   'sync-auto-capture-hotkey-state',
+  'result-flash-start', 'result-flash-stop',
   'pixel-monitor-start', 'pixel-monitor-stop',
 ];
 
@@ -51,6 +52,7 @@ const RECEIVE_CHANNELS = [
   'hotkey-toggle-overlay',
   'auto-capture-status',
   'telemetry-prune-needed',
+  'result-flash-detected', 'result-flash-resolved', 'result-flash-debug',
   'pixel-monitor-trigger',
 ];
 

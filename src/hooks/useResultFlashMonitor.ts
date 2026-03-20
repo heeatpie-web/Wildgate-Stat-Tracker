@@ -3,7 +3,7 @@ import { useAppStore } from '../store/useAppStore';
 import { getElectronAPI } from '../utils/electronAPI';
 import type { DeviceDisplayInfo, GameResolution } from '../store/slices/createDataSlice';
 import {
-    extractPixelMonitorSampleData,
+    normalizePixelMonitorSampleMeta,
     normalizePixelMonitorSampleResult,
     type PixelMonitorSampleResult,
     type PixelMonitorSampleData,
@@ -14,7 +14,7 @@ const FLASH_SAMPLE_INTERVAL_MS = 100;
 export const DEFAULT_FLASH_ARM_DELAY_MS = 45_000;
 const FLASH_BRIGHT_HOLD_MS = 200;
 const FLASH_WHITE_THRESHOLD = Math.ceil(255 * 0.98);
-const RESULT_FLASH_SAMPLE_CHANNEL = 'result-flash-sample';
+
 // Mirrors the OBS macro's ROI: X:64 Y:1013 W:107 H:21 on a 1920x1080 frame.
 export const FLASH_SAMPLE_REGION = {
     x: 64 / 1920,
@@ -22,6 +22,28 @@ export const FLASH_SAMPLE_REGION = {
     width: 107 / 1920,
     height: 21 / 1080,
 };
+
+const SEND_START = 'result-flash-start';
+const SEND_STOP = 'result-flash-stop';
+const RECEIVE_DETECTED = 'result-flash-detected';
+const RECEIVE_RESOLVED = 'result-flash-resolved';
+const RECEIVE_DEBUG = 'result-flash-debug';
+
+type MainResultFlashDebugStatus = 'arming-delay' | 'sampling' | 'waiting-flash-end';
+
+interface MainResultFlashDebugSnapshot {
+    status: MainResultFlashDebugStatus;
+    armAt?: number;
+    armRemainingMs?: number;
+    brightSinceMs?: number | null;
+    waitingForFlashEnd?: boolean;
+    flashNotified?: boolean;
+    pollInFlight?: boolean;
+    lastSampleResult?: unknown;
+    lastSampleMeta?: unknown;
+    lastIsWhiteFrame?: boolean | null;
+    lastUpdatedAt?: number;
+}
 
 export type ResultFlashMonitorDebugStatus =
     | 'disabled'
@@ -65,6 +87,28 @@ export interface ResultFlashMonitorOptions {
     onFlashResolved: () => void | Promise<void>;
     onDebugStateChange?: (state: ResultFlashMonitorDebugSnapshot) => void;
 }
+
+interface RuntimeDebugState {
+    brightSinceMs: number | null;
+    waitingForFlashEnd: boolean;
+    flashNotified: boolean;
+    pollInFlight: boolean;
+    lastSampleResult: PixelMonitorSampleResult | null;
+    lastSampleMeta: PixelMonitorSampleMeta | null;
+    lastIsWhiteFrame: boolean | null;
+    lastUpdatedAt: number;
+}
+
+const createEmptyRuntimeDebugState = (): RuntimeDebugState => ({
+    brightSinceMs: null,
+    waitingForFlashEnd: false,
+    flashNotified: false,
+    pollInFlight: false,
+    lastSampleResult: null,
+    lastSampleMeta: null,
+    lastIsWhiteFrame: null,
+    lastUpdatedAt: Date.now(),
+});
 
 const toPositiveDimension = (value: unknown): number | null => {
     const parsed = Number(value);
@@ -167,13 +211,8 @@ export function useResultFlashMonitor({
     const onFlashDetectedRef = useRef(onFlashDetected);
     const onFlashResolvedRef = useRef(onFlashResolved);
     const onDebugStateChangeRef = useRef(onDebugStateChange);
-    const brightSinceMsRef = useRef<number | null>(null);
-    const waitingForFlashEndRef = useRef(false);
-    const flashNotifiedRef = useRef(false);
-    const pollInFlightRef = useRef(false);
-    const lastSampleResultRef = useRef<PixelMonitorSampleResult | null>(null);
-    const lastSampleMetaRef = useRef<PixelMonitorSampleMeta | null>(null);
-    const lastIsWhiteFrameRef = useRef<boolean | null>(null);
+    const regionsRef = useRef(regions);
+    const runtimeDebugStateRef = useRef<RuntimeDebugState>(createEmptyRuntimeDebugState());
 
     useEffect(() => {
         onFlashDetectedRef.current = onFlashDetected;
@@ -188,9 +227,22 @@ export function useResultFlashMonitor({
     }, [onDebugStateChange]);
 
     useEffect(() => {
-        const emitDebugState = (status: ResultFlashMonitorDebugStatus) => {
+        regionsRef.current = regions;
+    }, [regions]);
+
+    useEffect(() => {
+        const emitDebugState = (
+            status: ResultFlashMonitorDebugStatus,
+            overrides: Partial<RuntimeDebugState> = {},
+        ) => {
             const callback = onDebugStateChangeRef.current;
             if (!callback) return;
+
+            const nextRuntimeState = {
+                ...runtimeDebugStateRef.current,
+                ...overrides,
+            };
+            runtimeDebugStateRef.current = nextRuntimeState;
 
             const normalizedLiveStartedAt = Number.isFinite(Number(liveStartedAt)) && Number(liveStartedAt) > 0
                 ? Number(liveStartedAt)
@@ -198,7 +250,11 @@ export function useResultFlashMonitor({
             const liveElapsedMs = normalizedLiveStartedAt == null
                 ? null
                 : Math.max(0, Date.now() - normalizedLiveStartedAt);
-            const isArmed = liveElapsedMs != null && liveElapsedMs >= normalizedArmDelayMs;
+            const armRemainingMs = normalizedLiveStartedAt == null
+                ? normalizedArmDelayMs
+                : Math.max(0, (normalizedLiveStartedAt + normalizedArmDelayMs) - Date.now());
+            const isArmed = normalizedLiveStartedAt != null && armRemainingMs <= 0;
+
             callback({
                 status,
                 enabled,
@@ -206,148 +262,104 @@ export function useResultFlashMonitor({
                 liveStartedAt: normalizedLiveStartedAt,
                 liveElapsedMs,
                 armDelayMs: normalizedArmDelayMs,
-                armRemainingMs: liveElapsedMs == null
-                    ? normalizedArmDelayMs
-                    : Math.max(0, normalizedArmDelayMs - liveElapsedMs),
+                armRemainingMs,
                 isArmed,
-                regions,
+                regions: regionsRef.current,
                 sampleIntervalMs: FLASH_SAMPLE_INTERVAL_MS,
                 brightHoldMs: FLASH_BRIGHT_HOLD_MS,
                 whiteThreshold: FLASH_WHITE_THRESHOLD,
-                brightSinceMs: brightSinceMsRef.current,
-                waitingForFlashEnd: waitingForFlashEndRef.current,
-                flashNotified: flashNotifiedRef.current,
-                pollInFlight: pollInFlightRef.current,
-                lastSampleResult: lastSampleResultRef.current,
-                lastSampleMeta: lastSampleMetaRef.current,
-                lastIsWhiteFrame: lastIsWhiteFrameRef.current,
-                lastUpdatedAt: Date.now(),
+                brightSinceMs: nextRuntimeState.brightSinceMs,
+                waitingForFlashEnd: nextRuntimeState.waitingForFlashEnd,
+                flashNotified: nextRuntimeState.flashNotified,
+                pollInFlight: nextRuntimeState.pollInFlight,
+                lastSampleResult: nextRuntimeState.lastSampleResult,
+                lastSampleMeta: nextRuntimeState.lastSampleMeta,
+                lastIsWhiteFrame: nextRuntimeState.lastIsWhiteFrame,
+                lastUpdatedAt: nextRuntimeState.lastUpdatedAt,
             });
         };
 
-        if (!enabled || triggerLatched || regions.length === 0) {
-            brightSinceMsRef.current = null;
-            waitingForFlashEndRef.current = false;
-            flashNotifiedRef.current = false;
-            pollInFlightRef.current = false;
-            lastSampleResultRef.current = null;
-            lastSampleMetaRef.current = null;
-            lastIsWhiteFrameRef.current = null;
-            emitDebugState(!enabled ? 'disabled' : triggerLatched ? 'latched' : 'no-regions');
+        const resetRuntimeState = () => {
+            runtimeDebugStateRef.current = createEmptyRuntimeDebugState();
+        };
+
+        if (!enabled) {
+            getElectronAPI()?.send(SEND_STOP);
+            resetRuntimeState();
+            emitDebugState('disabled');
+            return;
+        }
+
+        if (triggerLatched) {
+            getElectronAPI()?.send(SEND_STOP);
+            resetRuntimeState();
+            emitDebugState('latched');
             return;
         }
 
         const api = getElectronAPI();
         if (!api) {
+            resetRuntimeState();
             emitDebugState('no-api');
             return;
         }
 
-        let cancelled = false;
-        const resetSamplingState = () => {
-            brightSinceMsRef.current = null;
-            waitingForFlashEndRef.current = false;
-            flashNotifiedRef.current = false;
-            lastIsWhiteFrameRef.current = null;
-        };
+        const normalizedLiveStartedAt = Number.isFinite(Number(liveStartedAt)) && Number(liveStartedAt) > 0
+            ? Number(liveStartedAt)
+            : null;
+        if (normalizedLiveStartedAt == null) {
+            api.send(SEND_STOP);
+            resetRuntimeState();
+            emitDebugState('waiting-live-start');
+            return;
+        }
 
-        const pollForFlash = async () => {
-            if (cancelled || pollInFlightRef.current) return;
-            if (triggerLatched) {
-                resetSamplingState();
-                emitDebugState('latched');
-                return;
-            }
-            if (!Number.isFinite(Number(liveStartedAt)) || Number(liveStartedAt) <= 0) {
-                resetSamplingState();
-                emitDebugState('waiting-live-start');
-                return;
-            }
-            if ((Date.now() - Number(liveStartedAt)) < normalizedArmDelayMs) {
-                resetSamplingState();
-                emitDebugState('arming-delay');
-                return;
-            }
+        const armAt = normalizedLiveStartedAt + normalizedArmDelayMs;
 
-            pollInFlightRef.current = true;
-            emitDebugState(waitingForFlashEndRef.current ? 'waiting-flash-end' : 'sampling');
-            try {
-                const sampleResults = await Promise.all(
-                    regions.map(async () => {
-                        try {
-                            return normalizePixelMonitorSampleResult(
-                                await api.invoke(RESULT_FLASH_SAMPLE_CHANNEL, {
-                                    normalizedRegion: FLASH_SAMPLE_REGION,
-                                })
-                            );
-                        } catch (error) {
-                            return {
-                                success: false as const,
-                                error: error instanceof Error && error.message
-                                    ? error.message
-                                    : 'Pixel monitor sample failed',
-                            };
-                        }
-                    })
-                );
-                const samples = sampleResults.map((result) => extractPixelMonitorSampleData(result));
-                lastSampleResultRef.current = sampleResults.find((result) => !result.success) ?? sampleResults[0] ?? null;
-                if (lastSampleResultRef.current?.meta) {
-                    lastSampleMetaRef.current = lastSampleResultRef.current.meta;
-                }
-                if (cancelled) return;
+        const unsubDetected = api.on(RECEIVE_DETECTED, () => {
+            void onFlashDetectedRef.current?.();
+        });
 
-                const isWhiteFrame = areResultFlashSamplesWhite(samples);
-                lastIsWhiteFrameRef.current = isWhiteFrame;
-                if (waitingForFlashEndRef.current) {
-                    if (isWhiteFrame) {
-                        emitDebugState('waiting-flash-end');
-                        return;
-                    }
-                    waitingForFlashEndRef.current = false;
-                    brightSinceMsRef.current = null;
-                    flashNotifiedRef.current = false;
-                    await onFlashResolvedRef.current?.();
-                    emitDebugState('sampling');
-                    return;
-                }
+        const unsubResolved = api.on(RECEIVE_RESOLVED, () => {
+            void onFlashResolvedRef.current?.();
+        });
 
-                if (isWhiteFrame) {
-                    if (brightSinceMsRef.current == null) {
-                        brightSinceMsRef.current = Date.now();
-                    }
-                    if ((Date.now() - brightSinceMsRef.current) >= FLASH_BRIGHT_HOLD_MS) {
-                        waitingForFlashEndRef.current = true;
-                        if (!flashNotifiedRef.current) {
-                            flashNotifiedRef.current = true;
-                            await onFlashDetectedRef.current?.();
-                        }
-                        emitDebugState('waiting-flash-end');
-                    }
-                    emitDebugState(waitingForFlashEndRef.current ? 'waiting-flash-end' : 'sampling');
-                    return;
-                }
+        const unsubDebug = api.on(RECEIVE_DEBUG, (snapshot: MainResultFlashDebugSnapshot) => {
+            const lastSampleResult = snapshot.lastSampleResult == null
+                ? null
+                : normalizePixelMonitorSampleResult(snapshot.lastSampleResult);
+            const lastSampleMeta = snapshot.lastSampleMeta == null
+                ? (lastSampleResult?.meta ?? null)
+                : (normalizePixelMonitorSampleMeta(snapshot.lastSampleMeta) ?? null);
+            const lastUpdatedAt = Number.isFinite(Number(snapshot.lastUpdatedAt))
+                ? Number(snapshot.lastUpdatedAt)
+                : Date.now();
 
-                brightSinceMsRef.current = null;
-                flashNotifiedRef.current = false;
-                emitDebugState('sampling');
-            } finally {
-                pollInFlightRef.current = false;
-                emitDebugState(waitingForFlashEndRef.current ? 'waiting-flash-end' : 'sampling');
-            }
-        };
+            emitDebugState(snapshot.status, {
+                brightSinceMs: snapshot.brightSinceMs == null ? null : Number(snapshot.brightSinceMs),
+                waitingForFlashEnd: snapshot.waitingForFlashEnd === true,
+                flashNotified: snapshot.flashNotified === true,
+                pollInFlight: snapshot.pollInFlight === true,
+                lastSampleResult,
+                lastSampleMeta,
+                lastIsWhiteFrame: snapshot.lastIsWhiteFrame == null ? null : snapshot.lastIsWhiteFrame === true,
+                lastUpdatedAt,
+            });
+        });
 
-        const timerId = window.setInterval(() => {
-            void pollForFlash();
-        }, FLASH_SAMPLE_INTERVAL_MS);
+        api.send(SEND_START, {
+            armAt,
+            normalizedRegion: FLASH_SAMPLE_REGION,
+        });
 
-        void pollForFlash();
+        emitDebugState(Date.now() < armAt ? 'arming-delay' : 'sampling');
 
         return () => {
-            cancelled = true;
-            window.clearInterval(timerId);
-            resetSamplingState();
-            pollInFlightRef.current = false;
+            api.send(SEND_STOP);
+            unsubDetected?.();
+            unsubResolved?.();
+            unsubDebug?.();
+            resetRuntimeState();
         };
-    }, [enabled, liveStartedAt, normalizedArmDelayMs, regions, triggerLatched]);
+    }, [enabled, liveStartedAt, normalizedArmDelayMs, triggerLatched]);
 }

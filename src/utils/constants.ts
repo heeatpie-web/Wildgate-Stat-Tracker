@@ -8,7 +8,7 @@ import { EQUIPMENT_DB } from './equipmentDb';
 import HAZARD_CATALOG from '../../electron/hazardCatalog.json';
 
 export const APP_NAME = 'Wildgate Stat Tracker';
-export const APP_VERSION = 'v3.3.8';
+export const APP_VERSION = 'v3.3.9';
 
 /** Prefix used for unnamed players discovered via telemetry (e.g. "Member 1"). */
 export const UNNAMED_PLAYER_PREFIX = 'Member ';

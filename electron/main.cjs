@@ -22,8 +22,10 @@ const {
 const dbHelpers = require('./helpers/dbHelpers.cjs');
 const { registerArtifactHandlers, saveScreenshotImage } = require('./handlers/artifactHandlers.cjs');
 const { createAutoCaptureCoordinator } = require('./autoCaptureCoordinator.cjs');
+const { sampleRegion: sampleDxgiRegion } = require('./dxgiSampler.cjs');
 const { startMonitor, stopMonitor, sampleRegion } = require('./pixelMonitor.cjs');
 const { extractResultScreen } = require('./resultScreenExtractor.cjs');
+const { startResultFlashMonitor, stopResultFlashMonitor } = require('./resultFlashMonitor.cjs');
 const { buildAutoCaptureRequestFromStateSnapshot } = require('./autoCaptureHotkeyState.cjs');
 const { clearGameWindowCache, holdGameKeySequence, lookupGameWindowCandidate, lookupGameWindowGeometry, sendGameKeySequence, setPersistentPSRunner, validateGameInputRuntime } = require('./gameInput.cjs');
 const { runPSWithEnv, startPersistentPS, killPersistentPS } = require('./persistentPowerShell.cjs');
@@ -607,6 +609,7 @@ let resultFlashSampleLogWindow = {
   startedAt: 0,
   sampleCount: 0,
 };
+let cachedPrimaryDisplayPhysicalMetrics = null;
 
 const RESULT_FLASH_SAMPLE_LOG_INTERVAL_MS = 5000;
 
@@ -633,6 +636,34 @@ function formatResultFlashClientRect(clientRect) {
     + `${Math.round(Number(clientRect.width) || 0)}x${Math.round(Number(clientRect.height) || 0)})`;
 }
 
+function formatPrimaryDisplayPhysicalMetrics(metrics) {
+  if (!metrics) return 'screen=unavailable';
+  return `physX=${metrics.x} physY=${metrics.y} physW=${metrics.width} physH=${metrics.height} scaleFactor=${metrics.scaleFactor}`;
+}
+
+function getPrimaryDisplayPhysicalMetrics() {
+  if (cachedPrimaryDisplayPhysicalMetrics) return cachedPrimaryDisplayPhysicalMetrics;
+
+  const display = screen.getPrimaryDisplay();
+  if (!display?.bounds) return null;
+
+  const scaleFactor = Math.max(1, Number(display.scaleFactor) || 1);
+  cachedPrimaryDisplayPhysicalMetrics = {
+    x: Math.round((Number(display.bounds.x) || 0) * scaleFactor),
+    y: Math.round((Number(display.bounds.y) || 0) * scaleFactor),
+    width: Math.max(1, Math.round((Number(display.bounds.width) || 0) * scaleFactor)),
+    height: Math.max(1, Math.round((Number(display.bounds.height) || 0) * scaleFactor)),
+    scaleFactor,
+  };
+  return cachedPrimaryDisplayPhysicalMetrics;
+}
+
+function clearPrimaryDisplayPhysicalMetricsCache(reason) {
+  cachedPrimaryDisplayPhysicalMetrics = null;
+  const metrics = getPrimaryDisplayPhysicalMetrics();
+  console.log(`[ResultFlash] ${reason} ${formatPrimaryDisplayPhysicalMetrics(metrics)}`);
+}
+
 function normalizeResultFlashNormalizedRegion(config) {
   const source = config?.normalizedRegion && typeof config.normalizedRegion === 'object'
     ? config.normalizedRegion
@@ -648,6 +679,9 @@ function normalizeResultFlashNormalizedRegion(config) {
 }
 
 function buildResultFlashSampleMeta(sampleContext = {}) {
+  const source = typeof sampleContext.source === 'string' && sampleContext.source.trim()
+    ? sampleContext.source
+    : 'primary-display';
   const clientRect = sampleContext?.clientRect && typeof sampleContext.clientRect === 'object'
     ? {
       left: Math.round(Number(sampleContext.clientRect.left) || 0),
@@ -666,7 +700,7 @@ function buildResultFlashSampleMeta(sampleContext = {}) {
     : undefined;
 
   return {
-    source: 'window-region',
+    source,
     absoluteRegion,
     clientRect,
     geometryAgeMs: Number.isFinite(Number(sampleContext.geometryAgeMs))
@@ -694,40 +728,24 @@ function buildResultFlashSampleError(error, sampleContext = {}) {
   };
 }
 
-function convertResultFlashRegionToAbsoluteRegion(normalizedRegion, clientRect) {
+function convertResultFlashRegionToPrimaryDisplayAbsoluteRegion(normalizedRegion) {
   const normalized = normalizeResultFlashNormalizedRegion({ normalizedRegion });
-  const normalizedClientRect = sampleContextClientRect(clientRect);
-  if (!normalized || !normalizedClientRect) return null;
+  const displayMetrics = getPrimaryDisplayPhysicalMetrics();
+  if (!normalized || !displayMetrics) return null;
 
-  const clientRight = normalizedClientRect.left + normalizedClientRect.width;
-  const clientBottom = normalizedClientRect.top + normalizedClientRect.height;
-  const left = normalizedClientRect.left + Math.round(normalizedClientRect.width * normalized.x);
-  const top = normalizedClientRect.top + Math.round(normalizedClientRect.height * normalized.y);
-  const right = normalizedClientRect.left + Math.round(normalizedClientRect.width * (normalized.x + normalized.width));
-  const bottom = normalizedClientRect.top + Math.round(normalizedClientRect.height * (normalized.y + normalized.height));
+  const displayRight = displayMetrics.x + displayMetrics.width;
+  const displayBottom = displayMetrics.y + displayMetrics.height;
+  const left = displayMetrics.x + Math.round(displayMetrics.width * normalized.x);
+  const top = displayMetrics.y + Math.round(displayMetrics.height * normalized.y);
+  const right = displayMetrics.x + Math.round(displayMetrics.width * (normalized.x + normalized.width));
+  const bottom = displayMetrics.y + Math.round(displayMetrics.height * (normalized.y + normalized.height));
   const width = right - left;
   const height = bottom - top;
   if (width <= 0 || height <= 0) return null;
-  if (left < normalizedClientRect.left || top < normalizedClientRect.top) return null;
-  if (right > clientRight || bottom > clientBottom) return null;
+  if (left < displayMetrics.x || top < displayMetrics.y) return null;
+  if (right > displayRight || bottom > displayBottom) return null;
 
   return { x: left, y: top, width, height };
-}
-
-function sampleContextClientRect(clientRect) {
-  if (!clientRect || typeof clientRect !== 'object') return null;
-  const left = Number(clientRect.left);
-  const top = Number(clientRect.top);
-  const width = Number(clientRect.width);
-  const height = Number(clientRect.height);
-  if (![left, top, width, height].every(Number.isFinite)) return null;
-  if (width <= 0 || height <= 0) return null;
-  return {
-    left: Math.round(left),
-    top: Math.round(top),
-    width: Math.round(width),
-    height: Math.round(height),
-  };
 }
 
 function formatResultFlashSample(result) {
@@ -845,53 +863,38 @@ async function sampleResultFlashRegion(config) {
     return buildResultFlashSampleError('Invalid normalized result flash region');
   }
 
-  const geometryStartedAt = Date.now();
+  const resolveStartedAt = Date.now();
   try {
-    const trackedWindow = await lookupGameWindowGeometry({
-      processNames: GAME_WINDOW_PROCESS_NAMES,
-      titleHint: GAME_WINDOW_TITLE_HINT,
-      focusDelayMs: GAME_UI_FOCUS_DELAY_MS,
-    });
-    if (!trackedWindow?.success || !trackedWindow?.clientRect) {
-      return buildResultFlashSampleError(
-        trackedWindow?.error || 'Game window geometry unavailable',
-        trackedWindow
-      );
-    }
-
-    const absoluteRegion = convertResultFlashRegionToAbsoluteRegion(
-      normalizedRegion,
-      trackedWindow.clientRect
-    );
+    const absoluteRegion = convertResultFlashRegionToPrimaryDisplayAbsoluteRegion(normalizedRegion);
     if (!absoluteRegion) {
       return buildResultFlashSampleError(
-        'Result flash ROI is outside the tracked game window',
-        trackedWindow
+        'Result flash ROI is outside the primary display',
+        { source: 'primary-display' }
       );
     }
 
     const sampleStartedAt = Date.now();
-    const sample = await sampleRegion(absoluteRegion);
+    const sample = await sampleDxgiRegion(absoluteRegion);
     const meta = buildResultFlashSampleMeta({
-      ...trackedWindow,
+      source: 'primary-display',
       absoluteRegion,
     });
     const result = sample.success
       ? { ...sample, meta }
       : buildResultFlashSampleError(sample.error, {
-        ...trackedWindow,
+        source: 'primary-display',
         absoluteRegion,
       });
 
     maybeLogResultFlashSample({
       normalizedRegion,
       result,
-      resolveMs: Date.now() - geometryStartedAt,
+      resolveMs: sampleStartedAt - resolveStartedAt,
       sampleMs: Date.now() - sampleStartedAt,
     });
     return result;
   } catch (error) {
-    return buildResultFlashSampleError(error);
+    return buildResultFlashSampleError(error, { source: 'primary-display' });
   }
 }
 
@@ -3068,6 +3071,16 @@ app.whenReady().then(async () => {
   }
   createWindow();
   createTray();
+  console.log(`[ResultFlash] Screen metrics: ${formatPrimaryDisplayPhysicalMetrics(getPrimaryDisplayPhysicalMetrics())}`);
+  screen.on('display-metrics-changed', () => {
+    clearPrimaryDisplayPhysicalMetricsCache('Display metrics changed -');
+  });
+  screen.on('display-added', () => {
+    clearPrimaryDisplayPhysicalMetricsCache('Display added -');
+  });
+  screen.on('display-removed', () => {
+    clearPrimaryDisplayPhysicalMetricsCache('Display removed -');
+  });
   if (isDev) setSplashProgress(win, 90, 'Registering hotkeys...', 'Almost there');
   registerGlobalHotkeys();
   void validateGameInputRuntime()
@@ -3956,6 +3969,39 @@ ipcMain.on('pixel-monitor-start', (_event, config) => {
 ipcMain.on('pixel-monitor-stop', () => stopMonitor());
 ipcMain.handle('pixel-monitor-sample', async (_event, config) => sampleRegion(config));
 ipcMain.handle('result-flash-sample', async (_event, config) => sampleResultFlashRegion(config));
+ipcMain.on('result-flash-start', (event, config) => {
+    const normalizedRegion = normalizeResultFlashNormalizedRegion(config);
+    const absoluteRegion = convertResultFlashRegionToPrimaryDisplayAbsoluteRegion(normalizedRegion);
+    if (!normalizedRegion || !absoluteRegion) {
+        console.warn('[ResultFlash] Refusing to start DXGI monitor: invalid normalized region');
+        stopResultFlashMonitor();
+        return;
+    }
+
+    const armAt = Number.isFinite(Number(config?.armAt)) ? Math.round(Number(config.armAt)) : 0;
+    const sender = event.sender;
+    console.log(`[ResultFlash] Starting DXGI monitor armAt=${armAt} region=${JSON.stringify(absoluteRegion)}`);
+
+    startResultFlashMonitor({
+        armAt,
+        absoluteRegion,
+        onDetected: () => {
+            console.log('[ResultFlash] Flash detected - notifying renderer');
+            if (!sender.isDestroyed()) sender.send('result-flash-detected');
+        },
+        onResolved: () => {
+            console.log('[ResultFlash] Flash resolved - notifying renderer');
+            if (!sender.isDestroyed()) sender.send('result-flash-resolved');
+        },
+        onDebug: (snapshot) => {
+            if (!sender.isDestroyed()) sender.send('result-flash-debug', snapshot);
+        },
+    });
+});
+ipcMain.on('result-flash-stop', () => {
+    console.log('[ResultFlash] Stopping DXGI monitor');
+    stopResultFlashMonitor();
+});
 
 ipcMain.handle('scan-result-screen', async (_event, { imageBase64 }) => {
     try {

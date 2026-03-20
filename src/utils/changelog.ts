@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.3.9": [
+    "Performance: Result flash monitoring now uses DXGI sampling in the Electron main process instead of renderer-driven IPC polling.",
+    "Reliability: Flash detection no longer depends on repeated PowerShell game-window lookups and now resolves cleanly after the flash ends.",
+    "Debugging: DevTools manual ROI sampling now uses the same DXGI-backed primary-display path as the live monitor."
+  ],
   "v3.3.8": [
     "Relax full-auto flash detection to 10 percent below white",
     "Remove live OCR gating from F10 auto-capture",
