@@ -19,6 +19,8 @@ const electronApiMock = {
 
 const WHITE_SAMPLE = { avgR: 255, avgG: 255, avgB: 255 };
 const DARK_SAMPLE = { avgR: 12, avgG: 18, avgB: 24 };
+const THRESHOLD_SAMPLE = { avgR: 230, avgG: 230, avgB: 230 };
+const BELOW_THRESHOLD_SAMPLE = { avgR: 229, avgG: 229, avgB: 229 };
 
 const flushAsyncWork = async () => {
   await Promise.resolve();
@@ -126,6 +128,36 @@ describe('useResultFlashMonitor', () => {
     expect(onFlashResolved).toHaveBeenCalledTimes(1);
   });
 
+  it('accepts samples at the relaxed white threshold and rejects samples just below it', async () => {
+    const { isNearWhiteSample } = await import('../useResultFlashMonitor');
+
+    expect(isNearWhiteSample(THRESHOLD_SAMPLE)).toBe(true);
+    expect(isNearWhiteSample(BELOW_THRESHOLD_SAMPLE)).toBe(false);
+  });
+
+  it('builds the five 6x6 sample boxes around the documented normalized centers', async () => {
+    const { buildResultFlashSampleRegions, FLASH_SAMPLE_POINTS } = await import('../useResultFlashMonitor');
+
+    expect(FLASH_SAMPLE_POINTS).toEqual([
+      { x: 0.5, y: 0.5 },
+      { x: 0.2, y: 0.2 },
+      { x: 0.8, y: 0.2 },
+      { x: 0.2, y: 0.8 },
+      { x: 0.8, y: 0.8 },
+    ]);
+
+    expect(buildResultFlashSampleRegions(
+      { resX: 1920, resY: 1080 },
+      null,
+    )).toEqual([
+      { x: 957, y: 537, width: 6, height: 6 },
+      { x: 381, y: 213, width: 6, height: 6 },
+      { x: 1533, y: 213, width: 6, height: 6 },
+      { x: 381, y: 861, width: 6, height: 6 },
+      { x: 1533, y: 861, width: 6, height: 6 },
+    ]);
+  });
+
   it('does not trigger when bright gameplay leaves at least one sampled point below white', async () => {
     const onFlashResolved = vi.fn();
     const { useResultFlashMonitor } = await import('../useResultFlashMonitor');
@@ -149,4 +181,3 @@ describe('useResultFlashMonitor', () => {
     expect(onFlashResolved).not.toHaveBeenCalled();
   });
 });
-

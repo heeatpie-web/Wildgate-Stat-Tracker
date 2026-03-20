@@ -6,9 +6,12 @@ import type { DeviceDisplayInfo, GameResolution } from '../store/slices/createDa
 const FLASH_SAMPLE_INTERVAL_MS = 150;
 const FLASH_ARM_DELAY_MS = 45_000;
 const FLASH_CONSECUTIVE_WHITE_SAMPLES = 2;
-const FLASH_WHITE_THRESHOLD = 245;
+const FLASH_WHITE_THRESHOLD = 230;
 const FLASH_SAMPLE_BOX_SIZE = 6;
-const FLASH_SAMPLE_POINTS = [
+// Full-auto samples the center and four quadrants of the result screen.
+// On a 1920x1080 display, these map to roughly (960,540), (384,216), (1536,216),
+// (384,864), and (1536,864).
+export const FLASH_SAMPLE_POINTS = [
     { x: 0.5, y: 0.5 },
     { x: 0.2, y: 0.2 },
     { x: 0.8, y: 0.2 },
