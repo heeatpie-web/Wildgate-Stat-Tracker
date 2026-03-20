@@ -7,21 +7,17 @@ import {
     type PixelMonitorSampleData,
 } from '../utils/pixelMonitorSample';
 
-const FLASH_SAMPLE_INTERVAL_MS = 150;
+const FLASH_SAMPLE_INTERVAL_MS = 100;
 const FLASH_ARM_DELAY_MS = 45_000;
-const FLASH_CONSECUTIVE_WHITE_SAMPLES = 2;
-const FLASH_WHITE_THRESHOLD = 230;
-const FLASH_SAMPLE_BOX_SIZE = 6;
-// Full-auto samples the center and four quadrants of the result screen.
-// On a 1920x1080 display, these map to roughly (960,540), (384,216), (1536,216),
-// (384,864), and (1536,864).
-export const FLASH_SAMPLE_POINTS = [
-    { x: 0.5, y: 0.5 },
-    { x: 0.2, y: 0.2 },
-    { x: 0.8, y: 0.2 },
-    { x: 0.2, y: 0.8 },
-    { x: 0.8, y: 0.8 },
-];
+const FLASH_BRIGHT_HOLD_MS = 200;
+const FLASH_WHITE_THRESHOLD = Math.ceil(255 * 0.98);
+// Mirrors the OBS macro's ROI: X:64 Y:1013 W:107 H:21 on a 1920x1080 frame.
+export const FLASH_SAMPLE_REGION = {
+    x: 64 / 1920,
+    y: 1013 / 1080,
+    width: 107 / 1920,
+    height: 21 / 1080,
+};
 
 export interface ResultFlashMonitorOptions {
     enabled: boolean;
@@ -78,20 +74,16 @@ export const buildResultFlashSampleRegions = (
     const dimensions = resolveFlashMonitorDimensions(gameResolution, deviceDisplayInfo);
     if (!dimensions) return [];
 
-    const halfBox = Math.floor(FLASH_SAMPLE_BOX_SIZE / 2);
-    const maxX = Math.max(0, dimensions.width - FLASH_SAMPLE_BOX_SIZE);
-    const maxY = Math.max(0, dimensions.height - FLASH_SAMPLE_BOX_SIZE);
-
-    return FLASH_SAMPLE_POINTS.map((point) => {
-        const centerX = Math.round(dimensions.width * point.x);
-        const centerY = Math.round(dimensions.height * point.y);
-        return {
-            x: Math.min(maxX, Math.max(0, centerX - halfBox)),
-            y: Math.min(maxY, Math.max(0, centerY - halfBox)),
-            width: FLASH_SAMPLE_BOX_SIZE,
-            height: FLASH_SAMPLE_BOX_SIZE,
-        };
-    });
+    const regionWidth = Math.max(1, Math.round(dimensions.width * FLASH_SAMPLE_REGION.width));
+    const regionHeight = Math.max(1, Math.round(dimensions.height * FLASH_SAMPLE_REGION.height));
+    const maxX = Math.max(0, dimensions.width - regionWidth);
+    const maxY = Math.max(0, dimensions.height - regionHeight);
+    return [{
+        x: Math.min(maxX, Math.max(0, Math.round(dimensions.width * FLASH_SAMPLE_REGION.x))),
+        y: Math.min(maxY, Math.max(0, Math.round(dimensions.height * FLASH_SAMPLE_REGION.y))),
+        width: regionWidth,
+        height: regionHeight,
+    }];
 };
 
 export const isNearWhiteSample = (
@@ -111,7 +103,7 @@ export const areResultFlashSamplesWhite = (
     threshold = FLASH_WHITE_THRESHOLD,
 ): boolean => (
     Array.isArray(samples)
-    && samples.length === FLASH_SAMPLE_POINTS.length
+    && samples.length === 1
     && samples.every((sample) => isNearWhiteSample(sample, threshold))
 );
 
@@ -132,7 +124,7 @@ export function useResultFlashMonitor({
 
     const onFlashDetectedRef = useRef(onFlashDetected);
     const onFlashResolvedRef = useRef(onFlashResolved);
-    const consecutiveWhiteSamplesRef = useRef(0);
+    const brightSinceMsRef = useRef<number | null>(null);
     const waitingForFlashEndRef = useRef(false);
     const flashNotifiedRef = useRef(false);
     const pollInFlightRef = useRef(false);
@@ -147,7 +139,7 @@ export function useResultFlashMonitor({
 
     useEffect(() => {
         if (!enabled || triggerLatched || regions.length === 0) {
-            consecutiveWhiteSamplesRef.current = 0;
+            brightSinceMsRef.current = null;
             waitingForFlashEndRef.current = false;
             flashNotifiedRef.current = false;
             pollInFlightRef.current = false;
@@ -159,7 +151,7 @@ export function useResultFlashMonitor({
 
         let cancelled = false;
         const resetSamplingState = () => {
-            consecutiveWhiteSamplesRef.current = 0;
+            brightSinceMsRef.current = null;
             waitingForFlashEndRef.current = false;
             flashNotifiedRef.current = false;
         };
@@ -192,18 +184,17 @@ export function useResultFlashMonitor({
                 if (waitingForFlashEndRef.current) {
                     if (isWhiteFrame) return;
                     waitingForFlashEndRef.current = false;
-                    consecutiveWhiteSamplesRef.current = 0;
+                    brightSinceMsRef.current = null;
                     flashNotifiedRef.current = false;
                     await onFlashResolvedRef.current?.();
                     return;
                 }
 
                 if (isWhiteFrame) {
-                    consecutiveWhiteSamplesRef.current += 1;
-                    if (
-                        consecutiveWhiteSamplesRef.current >= FLASH_CONSECUTIVE_WHITE_SAMPLES
-                        && !waitingForFlashEndRef.current
-                    ) {
+                    if (brightSinceMsRef.current == null) {
+                        brightSinceMsRef.current = Date.now();
+                    }
+                    if ((Date.now() - brightSinceMsRef.current) >= FLASH_BRIGHT_HOLD_MS) {
                         waitingForFlashEndRef.current = true;
                         if (!flashNotifiedRef.current) {
                             flashNotifiedRef.current = true;
@@ -213,7 +204,7 @@ export function useResultFlashMonitor({
                     return;
                 }
 
-                consecutiveWhiteSamplesRef.current = 0;
+                brightSinceMsRef.current = null;
                 flashNotifiedRef.current = false;
             } finally {
                 pollInFlightRef.current = false;

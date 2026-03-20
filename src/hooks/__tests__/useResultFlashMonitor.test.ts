@@ -19,8 +19,8 @@ const electronApiMock = {
 
 const WHITE_SAMPLE = { avgR: 255, avgG: 255, avgB: 255 };
 const DARK_SAMPLE = { avgR: 12, avgG: 18, avgB: 24 };
-const THRESHOLD_SAMPLE = { avgR: 230, avgG: 230, avgB: 230 };
-const BELOW_THRESHOLD_SAMPLE = { avgR: 229, avgG: 229, avgB: 229 };
+const THRESHOLD_SAMPLE = { avgR: 250, avgG: 250, avgB: 250 };
+const BELOW_THRESHOLD_SAMPLE = { avgR: 249, avgG: 249, avgB: 249 };
 
 const flushAsyncWork = async () => {
   await Promise.resolve();
@@ -28,9 +28,7 @@ const flushAsyncWork = async () => {
 };
 
 const queueFlashFrame = (sample: { avgR: number; avgG: number; avgB: number }) => {
-  for (let index = 0; index < 5; index += 1) {
-    invokeMock.mockResolvedValueOnce({ success: true, data: sample });
-  }
+  invokeMock.mockResolvedValueOnce({ success: true, data: sample });
 };
 
 vi.mock('../../store/useAppStore', () => {
@@ -71,14 +69,14 @@ describe('useResultFlashMonitor', () => {
 
     queueFlashFrame(WHITE_SAMPLE);
     await act(async () => {
-      vi.advanceTimersByTime(300);
+      vi.advanceTimersByTime(200);
       await flushAsyncWork();
     });
 
-    expect(invokeMock).toHaveBeenCalledTimes(5);
+    expect(invokeMock).toHaveBeenCalledTimes(1);
   });
 
-  it('arms on consecutive white frames and waits for the flash to end before triggering OCR', async () => {
+  it('arms after the watched ROI stays bright for 0.20 seconds and waits for the flash to end before triggering OCR', async () => {
     const onFlashDetected = vi.fn();
     const onFlashResolved = vi.fn();
     const { useResultFlashMonitor } = await import('../useResultFlashMonitor');
@@ -103,72 +101,58 @@ describe('useResultFlashMonitor', () => {
     expect(onFlashResolved).not.toHaveBeenCalled();
 
     await act(async () => {
-      vi.advanceTimersByTime(150);
+      vi.advanceTimersByTime(100);
       await flushAsyncWork();
     });
     expect(onFlashDetected).not.toHaveBeenCalled();
 
     await act(async () => {
-      vi.advanceTimersByTime(150);
+      vi.advanceTimersByTime(100);
+      await flushAsyncWork();
+    });
+    expect(onFlashDetected).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(100);
       await flushAsyncWork();
     });
     expect(onFlashDetected).toHaveBeenCalledTimes(1);
     expect(onFlashResolved).not.toHaveBeenCalled();
 
     await act(async () => {
-      vi.advanceTimersByTime(150);
-      await flushAsyncWork();
-    });
-    expect(onFlashResolved).not.toHaveBeenCalled();
-
-    await act(async () => {
-      vi.advanceTimersByTime(150);
+      vi.advanceTimersByTime(100);
       await flushAsyncWork();
     });
     expect(onFlashResolved).toHaveBeenCalledTimes(1);
   });
 
-  it('accepts samples at the relaxed white threshold and rejects samples just below it', async () => {
+  it('accepts samples at the OBS-like brightness threshold and rejects samples just below it', async () => {
     const { isNearWhiteSample } = await import('../useResultFlashMonitor');
 
     expect(isNearWhiteSample(THRESHOLD_SAMPLE)).toBe(true);
     expect(isNearWhiteSample(BELOW_THRESHOLD_SAMPLE)).toBe(false);
   });
 
-  it('builds the five 6x6 sample boxes around the documented normalized centers', async () => {
-    const { buildResultFlashSampleRegions, FLASH_SAMPLE_POINTS } = await import('../useResultFlashMonitor');
+  it('builds the OBS-style bottom-left ROI from normalized 1920x1080 coordinates', async () => {
+    const { buildResultFlashSampleRegions, FLASH_SAMPLE_REGION } = await import('../useResultFlashMonitor');
 
-    expect(FLASH_SAMPLE_POINTS).toEqual([
-      { x: 0.5, y: 0.5 },
-      { x: 0.2, y: 0.2 },
-      { x: 0.8, y: 0.2 },
-      { x: 0.2, y: 0.8 },
-      { x: 0.8, y: 0.8 },
-    ]);
+    expect(FLASH_SAMPLE_REGION).toEqual({
+      x: 64 / 1920,
+      y: 1013 / 1080,
+      width: 107 / 1920,
+      height: 21 / 1080,
+    });
 
     expect(buildResultFlashSampleRegions(
       { resX: 1920, resY: 1080 },
       null,
-    )).toEqual([
-      { x: 957, y: 537, width: 6, height: 6 },
-      { x: 381, y: 213, width: 6, height: 6 },
-      { x: 1533, y: 213, width: 6, height: 6 },
-      { x: 381, y: 861, width: 6, height: 6 },
-      { x: 1533, y: 861, width: 6, height: 6 },
-    ]);
+    )).toEqual([{ x: 64, y: 1013, width: 107, height: 21 }]);
   });
 
-  it('does not trigger when bright gameplay leaves at least one sampled point below white', async () => {
+  it('does not trigger when the watched ROI stays below the brightness threshold', async () => {
     const onFlashResolved = vi.fn();
     const { useResultFlashMonitor } = await import('../useResultFlashMonitor');
-    let sampleIndex = 0;
-    invokeMock.mockImplementation(() => {
-      sampleIndex += 1;
-      return Promise.resolve({
-        success: true,
-        data: sampleIndex % 5 === 0 ? DARK_SAMPLE : WHITE_SAMPLE,
-      });
-    });
+    invokeMock.mockResolvedValue({ success: true, data: DARK_SAMPLE });
 
     renderHook(() => useResultFlashMonitor({
       enabled: true,
@@ -177,7 +161,7 @@ describe('useResultFlashMonitor', () => {
     }));
 
     await act(async () => {
-      vi.advanceTimersByTime(1_200);
+      vi.advanceTimersByTime(800);
       await flushAsyncWork();
     });
 
