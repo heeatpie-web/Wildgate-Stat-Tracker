@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.3.8": [
+    "Relax full-auto flash detection to 10 percent below white",
+    "Remove live OCR gating from F10 auto-capture",
+    "Improve pixel-monitor diagnostics and settings clarity"
+  ],
   "v3.3.7": [
     "Fix: Installed builds now package the auto-capture runtime correctly so F10 and smart capture can load keyboard and screenshot dependencies in production.",
     "Reliability: Auto-capture hotkey state now refreshes on a heartbeat so F10 does not go stale during long live matches.",
