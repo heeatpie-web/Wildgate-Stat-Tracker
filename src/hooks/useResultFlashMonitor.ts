@@ -12,8 +12,10 @@ import {
 
 const FLASH_SAMPLE_INTERVAL_MS = 100;
 export const DEFAULT_FLASH_ARM_DELAY_MS = 45_000;
-const FLASH_BRIGHT_HOLD_MS = 200;
-const FLASH_WHITE_THRESHOLD = Math.ceil(255 * 0.98);
+// The end-game flash fades into and out of white, so we accept two consecutive
+// samples at roughly 90% brightness instead of requiring a longer pure-white plateau.
+const FLASH_BRIGHT_HOLD_MS = 100;
+const FLASH_WHITE_THRESHOLD = Math.ceil(255 * 0.9);
 
 // Mirrors the OBS macro's ROI: X:64 Y:1013 W:107 H:21 on a 1920x1080 frame.
 export const FLASH_SAMPLE_REGION = {

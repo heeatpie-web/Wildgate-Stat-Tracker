@@ -8,6 +8,8 @@ const {
 } = require('./resultFlashMonitor.cjs');
 
 const WHITE = { success: true, data: { avgR: 255, avgG: 255, avgB: 255 } };
+const NEAR_WHITE = { success: true, data: { avgR: 232, avgG: 231, avgB: 230 } };
+const BRIGHT_FADE = { success: true, data: { avgR: 228, avgG: 228, avgB: 228 } };
 const DARK = { success: true, data: { avgR: 12, avgG: 18, avgB: 24 } };
 
 const flushAsyncWork = async () => {
@@ -51,10 +53,10 @@ describe('resultFlashMonitor', () => {
     }));
   });
 
-  it('fires onDetected after the white frame holds for 200ms and resolves on the next dark frame', async () => {
+  it('fires onDetected for a fade-style white flash and resolves on the next dim frame', async () => {
     const onDetected = vi.fn();
     const onResolved = vi.fn();
-    const frames = [DARK, WHITE, WHITE, WHITE, DARK];
+    const frames = [DARK, BRIGHT_FADE, NEAR_WHITE, WHITE, BRIGHT_FADE, DARK];
     const sampler = vi.fn().mockImplementation(() => Promise.resolve(frames.shift() || DARK));
 
     startResultFlashMonitor({

@@ -229,11 +229,11 @@ describe('useResultFlashMonitor', () => {
     expect(sendMock).not.toHaveBeenCalledWith('result-flash-start', expect.anything());
   });
 
-  it('accepts samples at the OBS-like brightness threshold and rejects samples just below it', async () => {
+  it('accepts fade-transition samples at the relaxed brightness threshold and rejects samples just below it', async () => {
     const { isNearWhiteSample } = await import('../useResultFlashMonitor');
 
-    expect(isNearWhiteSample({ avgR: 250, avgG: 250, avgB: 250 })).toBe(true);
-    expect(isNearWhiteSample({ avgR: 249, avgG: 249, avgB: 249 })).toBe(false);
+    expect(isNearWhiteSample({ avgR: 230, avgG: 230, avgB: 230 })).toBe(true);
+    expect(isNearWhiteSample({ avgR: 229, avgG: 229, avgB: 229 })).toBe(false);
   });
 
   it('builds the OBS-style bottom-left ROI from normalized 1920x1080 coordinates', async () => {

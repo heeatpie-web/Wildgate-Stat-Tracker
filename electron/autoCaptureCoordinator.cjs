@@ -16,12 +16,12 @@ const STEP_DEFINITIONS = Object.freeze({
 
 const AUTO_CAPTURE_WAIT_PROFILES = Object.freeze({
   fast: Object.freeze({
-    tacticalMapOpenMs: 80,
+    tacticalMapOpenMs: 70,
     tacticalMapCloseMs: 10,
-    heldMapOpenMs: 90,
+    heldMapOpenMs: 80,
     heldMapCloseMs: 20,
     escMenuOpenMs: 25,
-    crewHubOpenMs: 35,
+    crewHubOpenMs: 30,
     crewHubPanelStepMs: 10,
     crewHubPanelEndMs: 8,
     exitMs: 10,

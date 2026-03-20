@@ -693,6 +693,45 @@ describe('App', () => {
     vi.useRealTimers();
   });
 
+  it('arms the flash watcher immediately when the active draft is tagged as practice range', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
+    uiState.telemetryLifecycleStage = 'live';
+    uiState.telemetryLifecycleIsPracticeRange = false;
+    const draft = {
+      id: 654,
+      timestamp: Date.now(),
+      date: '3/20/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      artifacts: [],
+      isPracticeRange: true,
+    };
+    gameDataState.matches = [draft];
+    appStoreState.matches = [draft];
+
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    expect(useResultFlashMonitorMock).toHaveBeenCalledWith(expect.objectContaining({
+      enabled: true,
+      armDelayMs: 0,
+      liveStartedAt: expect.any(Number),
+    }));
+
+    expect(startAutoCaptureMock).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
   it('starts the result screenshot burst 1 second after flash detection', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;

@@ -109,7 +109,7 @@ describe('autoCaptureCoordinator sequencing', () => {
     expect(sendMenuKeySequence).toHaveBeenNthCalledWith(4, '{END}', 'Navigate to Crew Hub Panel End');
     expect(sendMenuKeySequence).toHaveBeenNthCalledWith(5, '{ESC}', 'Exit');
     expect(captureAndProcess).toHaveBeenCalledTimes(3);
-    expect(waits).toEqual([160, 20, 50, 70, 20, 16, 20]);
+    expect(waits).toEqual([140, 20, 50, 60, 20, 16, 20]);
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({
       phase: 'capture-progress',
       captureIndex: 1,

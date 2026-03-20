@@ -698,6 +698,7 @@ const App: React.FC = () => {
     const normalizedActiveTelemetryDraftMatchId = Number.isInteger(activeTelemetryDraftMatchId) && activeTelemetryDraftMatchId > 0
         ? activeTelemetryDraftMatchId
         : null;
+    const isTelemetryPracticeRange = telemetryLifecycleIsPracticeRange || activeTelemetryDraftMatch?.isPracticeRange === true;
 
     const countTelemetryCaptureArtifacts = useCallback((matchId: number | null | undefined) => {
         const numericMatchId = Number(matchId || 0);
@@ -2339,7 +2340,7 @@ const App: React.FC = () => {
         normalizedActiveTelemetryDraftMatchId,
         setTelemetryAutomationStatus,
         telemetryDraftPrompt,
-        telemetryLifecycleIsPracticeRange,
+        isTelemetryPracticeRange,
         telemetryLifecycleStage,
     ]);
 
@@ -2358,7 +2359,7 @@ const App: React.FC = () => {
         if (telemetryLifecycleStage !== 'live') return;
         if (hasCompleteTelemetryCaptureBundle(matchId)) return;
         if (telemetryAutoCaptureInFlightRef.current.has(matchId)) return;
-        if (telemetryLifecycleIsPracticeRange) return;
+        if (isTelemetryPracticeRange) return;
         if (telemetryLiveFallbackAttemptedRef.current.has(matchId)) return;
         telemetryLiveFallbackAttemptedRef.current.add(matchId);
         void startSilentTelemetryAutoCapture(matchId, 'live');
@@ -2368,7 +2369,7 @@ const App: React.FC = () => {
         normalizedActiveTelemetryDraftMatchId,
         setTelemetryAutomationStatus,
         startSilentTelemetryAutoCapture,
-        telemetryLifecycleIsPracticeRange,
+        isTelemetryPracticeRange,
         telemetryLifecycleStage,
     ]);
 
@@ -2886,7 +2887,7 @@ const App: React.FC = () => {
             && telemetryLifecycleStage === 'live'
             && normalizedActiveTelemetryDraftMatchId != null,
         liveStartedAt: telemetryLiveStartedAt,
-        armDelayMs: telemetryLifecycleIsPracticeRange ? 0 : undefined,
+        armDelayMs: isTelemetryPracticeRange ? 0 : undefined,
         triggerLatched: fullAutoResultLatched,
         onFlashDetected: handleResultFlashDetectedWithDebug,
         onFlashResolved: handleResultFlashResolvedWithDebug,

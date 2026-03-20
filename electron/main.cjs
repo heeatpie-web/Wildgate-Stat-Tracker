@@ -3979,8 +3979,9 @@ ipcMain.on('result-flash-start', (event, config) => {
     }
 
     const armAt = Number.isFinite(Number(config?.armAt)) ? Math.round(Number(config.armAt)) : 0;
+    const armDelayMs = Math.max(0, armAt - Date.now());
     const sender = event.sender;
-    console.log(`[ResultFlash] Starting DXGI monitor armAt=${armAt} region=${JSON.stringify(absoluteRegion)}`);
+    console.log(`[ResultFlash] Starting DXGI monitor armAt=${armAt} armDelayMs=${armDelayMs} region=${JSON.stringify(absoluteRegion)}`);
 
     startResultFlashMonitor({
         armAt,
