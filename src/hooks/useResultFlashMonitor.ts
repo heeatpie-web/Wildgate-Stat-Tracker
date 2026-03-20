@@ -7,6 +7,7 @@ import {
     normalizePixelMonitorSampleResult,
     type PixelMonitorSampleResult,
     type PixelMonitorSampleData,
+    type PixelMonitorSampleMeta,
 } from '../utils/pixelMonitorSample';
 
 const FLASH_SAMPLE_INTERVAL_MS = 100;
@@ -50,6 +51,7 @@ export interface ResultFlashMonitorDebugSnapshot {
     flashNotified: boolean;
     pollInFlight: boolean;
     lastSampleResult: PixelMonitorSampleResult | null;
+    lastSampleMeta?: PixelMonitorSampleMeta | null;
     lastIsWhiteFrame: boolean | null;
     lastUpdatedAt: number;
 }
@@ -170,6 +172,7 @@ export function useResultFlashMonitor({
     const flashNotifiedRef = useRef(false);
     const pollInFlightRef = useRef(false);
     const lastSampleResultRef = useRef<PixelMonitorSampleResult | null>(null);
+    const lastSampleMetaRef = useRef<PixelMonitorSampleMeta | null>(null);
     const lastIsWhiteFrameRef = useRef<boolean | null>(null);
 
     useEffect(() => {
@@ -216,6 +219,7 @@ export function useResultFlashMonitor({
                 flashNotified: flashNotifiedRef.current,
                 pollInFlight: pollInFlightRef.current,
                 lastSampleResult: lastSampleResultRef.current,
+                lastSampleMeta: lastSampleMetaRef.current,
                 lastIsWhiteFrame: lastIsWhiteFrameRef.current,
                 lastUpdatedAt: Date.now(),
             });
@@ -227,6 +231,7 @@ export function useResultFlashMonitor({
             flashNotifiedRef.current = false;
             pollInFlightRef.current = false;
             lastSampleResultRef.current = null;
+            lastSampleMetaRef.current = null;
             lastIsWhiteFrameRef.current = null;
             emitDebugState(!enabled ? 'disabled' : triggerLatched ? 'latched' : 'no-regions');
             return;
@@ -268,10 +273,12 @@ export function useResultFlashMonitor({
             emitDebugState(waitingForFlashEndRef.current ? 'waiting-flash-end' : 'sampling');
             try {
                 const sampleResults = await Promise.all(
-                    regions.map(async (region) => {
+                    regions.map(async () => {
                         try {
                             return normalizePixelMonitorSampleResult(
-                                await api.invoke(RESULT_FLASH_SAMPLE_CHANNEL, region)
+                                await api.invoke(RESULT_FLASH_SAMPLE_CHANNEL, {
+                                    normalizedRegion: FLASH_SAMPLE_REGION,
+                                })
                             );
                         } catch (error) {
                             return {
@@ -285,6 +292,9 @@ export function useResultFlashMonitor({
                 );
                 const samples = sampleResults.map((result) => extractPixelMonitorSampleData(result));
                 lastSampleResultRef.current = sampleResults.find((result) => !result.success) ?? sampleResults[0] ?? null;
+                if (lastSampleResultRef.current?.meta) {
+                    lastSampleMetaRef.current = lastSampleResultRef.current.meta;
+                }
                 if (cancelled) return;
 
                 const isWhiteFrame = areResultFlashSamplesWhite(samples);

@@ -12,7 +12,6 @@ const { registerOCRHandlers, captureGameWindow, captureGameWindowBuffer, process
 const { mergeCaptures, isSameMatch } = require('./ocrMerger.cjs');
 const artifactHelpers = require('./helpers/artifactHelpers.cjs');
 const { runArtifactCanonicalMigration } = require('./helpers/artifactCanonicalMigration.cjs');
-const { requirePackagedModule } = require('./helpers/packagedModuleLoader.cjs');
 const telemetryArchiveHelpers = require('./helpers/telemetryArchiveHelpers.cjs');
 const {
   buildUsableTelemetryEvent,
@@ -23,10 +22,10 @@ const {
 const dbHelpers = require('./helpers/dbHelpers.cjs');
 const { registerArtifactHandlers, saveScreenshotImage } = require('./handlers/artifactHandlers.cjs');
 const { createAutoCaptureCoordinator } = require('./autoCaptureCoordinator.cjs');
-const { startMonitor, stopMonitor, sampleRegion, sampleImageBufferRegion } = require('./pixelMonitor.cjs');
+const { startMonitor, stopMonitor, sampleRegion } = require('./pixelMonitor.cjs');
 const { extractResultScreen } = require('./resultScreenExtractor.cjs');
 const { buildAutoCaptureRequestFromStateSnapshot } = require('./autoCaptureHotkeyState.cjs');
-const { clearGameWindowCache, holdGameKeySequence, lookupGameWindowCandidate, sendGameKeySequence, setPersistentPSRunner, validateGameInputRuntime } = require('./gameInput.cjs');
+const { clearGameWindowCache, holdGameKeySequence, lookupGameWindowCandidate, lookupGameWindowGeometry, sendGameKeySequence, setPersistentPSRunner, validateGameInputRuntime } = require('./gameInput.cjs');
 const { runPSWithEnv, startPersistentPS, killPersistentPS } = require('./persistentPowerShell.cjs');
 if (process.platform === 'win32') {
   setPersistentPSRunner(runPSWithEnv);
@@ -604,28 +603,131 @@ function delay(ms) {
 }
 
 let autoCaptureHiddenWindow = null;
-let resultFlashScreenshot = null;
 let resultFlashSampleLogWindow = {
   startedAt: 0,
   sampleCount: 0,
 };
 
 const RESULT_FLASH_SAMPLE_LOG_INTERVAL_MS = 5000;
-const RESULT_FLASH_HIDE_SETTLE_TIMEOUT_MS = 40;
-const RESULT_FLASH_HIDE_SETTLE_POLL_MS = 5;
-
-function getResultFlashScreenshotModule() {
-  if (resultFlashScreenshot) return resultFlashScreenshot;
-  resultFlashScreenshot = requirePackagedModule('screenshot-desktop');
-  return resultFlashScreenshot;
-}
 
 function formatResultFlashRegion(config) {
-  const x = Math.round(Number(config?.x) || 0);
-  const y = Math.round(Number(config?.y) || 0);
-  const width = Math.round(Number(config?.width) || 0);
-  const height = Math.round(Number(config?.height) || 0);
+  const x = Number.isFinite(Number(config?.x)) ? Math.round(Number(config.x)) : Number(config?.x || 0).toFixed?.(4) || '0';
+  const y = Number.isFinite(Number(config?.y)) ? Math.round(Number(config.y)) : Number(config?.y || 0).toFixed?.(4) || '0';
+  const width = Number.isFinite(Number(config?.width)) ? Math.round(Number(config.width)) : Number(config?.width || 0).toFixed?.(4) || '0';
+  const height = Number.isFinite(Number(config?.height)) ? Math.round(Number(config.height)) : Number(config?.height || 0).toFixed?.(4) || '0';
   return `x=${x} y=${y} w=${width} h=${height}`;
+}
+
+function formatNormalizedResultFlashRegion(config) {
+  const x = Number(config?.x);
+  const y = Number(config?.y);
+  const width = Number(config?.width);
+  const height = Number(config?.height);
+  return `x=${Number.isFinite(x) ? x.toFixed(4) : 'n/a'} y=${Number.isFinite(y) ? y.toFixed(4) : 'n/a'} `
+    + `w=${Number.isFinite(width) ? width.toFixed(4) : 'n/a'} h=${Number.isFinite(height) ? height.toFixed(4) : 'n/a'}`;
+}
+
+function formatResultFlashClientRect(clientRect) {
+  if (!clientRect) return 'clientRect=missing';
+  return `clientRect=(${Math.round(Number(clientRect.left) || 0)}, ${Math.round(Number(clientRect.top) || 0)}, `
+    + `${Math.round(Number(clientRect.width) || 0)}x${Math.round(Number(clientRect.height) || 0)})`;
+}
+
+function normalizeResultFlashNormalizedRegion(config) {
+  const source = config?.normalizedRegion && typeof config.normalizedRegion === 'object'
+    ? config.normalizedRegion
+    : null;
+  const x = Number(source?.x);
+  const y = Number(source?.y);
+  const width = Number(source?.width);
+  const height = Number(source?.height);
+  if (![x, y, width, height].every(Number.isFinite)) return null;
+  if (x < 0 || y < 0 || width <= 0 || height <= 0) return null;
+  if ((x + width) > 1 || (y + height) > 1) return null;
+  return { x, y, width, height };
+}
+
+function buildResultFlashSampleMeta(sampleContext = {}) {
+  const clientRect = sampleContext?.clientRect && typeof sampleContext.clientRect === 'object'
+    ? {
+      left: Math.round(Number(sampleContext.clientRect.left) || 0),
+      top: Math.round(Number(sampleContext.clientRect.top) || 0),
+      width: Math.round(Number(sampleContext.clientRect.width) || 0),
+      height: Math.round(Number(sampleContext.clientRect.height) || 0),
+    }
+    : undefined;
+  const absoluteRegion = sampleContext?.absoluteRegion && typeof sampleContext.absoluteRegion === 'object'
+    ? {
+      x: Math.round(Number(sampleContext.absoluteRegion.x) || 0),
+      y: Math.round(Number(sampleContext.absoluteRegion.y) || 0),
+      width: Math.round(Number(sampleContext.absoluteRegion.width) || 0),
+      height: Math.round(Number(sampleContext.absoluteRegion.height) || 0),
+    }
+    : undefined;
+
+  return {
+    source: 'window-region',
+    absoluteRegion,
+    clientRect,
+    geometryAgeMs: Number.isFinite(Number(sampleContext.geometryAgeMs))
+      ? Math.max(0, Math.round(Number(sampleContext.geometryAgeMs)))
+      : undefined,
+    processName: typeof sampleContext.processName === 'string' && sampleContext.processName.trim()
+      ? sampleContext.processName
+      : undefined,
+    processId: Number.isFinite(Number(sampleContext.processId)) ? Number(sampleContext.processId) : null,
+    windowHandle: Number.isFinite(Number(sampleContext.windowHandle)) ? Number(sampleContext.windowHandle) : null,
+    windowTitle: typeof sampleContext.windowTitle === 'string' && sampleContext.windowTitle.trim()
+      ? sampleContext.windowTitle
+      : undefined,
+  };
+}
+
+function buildResultFlashSampleError(error, sampleContext = {}) {
+  const message = typeof error === 'string' && error.trim()
+    ? error.trim()
+    : (error?.message || 'Result flash sample failed');
+  return {
+    success: false,
+    error: message,
+    meta: buildResultFlashSampleMeta(sampleContext),
+  };
+}
+
+function convertResultFlashRegionToAbsoluteRegion(normalizedRegion, clientRect) {
+  const normalized = normalizeResultFlashNormalizedRegion({ normalizedRegion });
+  const normalizedClientRect = sampleContextClientRect(clientRect);
+  if (!normalized || !normalizedClientRect) return null;
+
+  const clientRight = normalizedClientRect.left + normalizedClientRect.width;
+  const clientBottom = normalizedClientRect.top + normalizedClientRect.height;
+  const left = normalizedClientRect.left + Math.round(normalizedClientRect.width * normalized.x);
+  const top = normalizedClientRect.top + Math.round(normalizedClientRect.height * normalized.y);
+  const right = normalizedClientRect.left + Math.round(normalizedClientRect.width * (normalized.x + normalized.width));
+  const bottom = normalizedClientRect.top + Math.round(normalizedClientRect.height * (normalized.y + normalized.height));
+  const width = right - left;
+  const height = bottom - top;
+  if (width <= 0 || height <= 0) return null;
+  if (left < normalizedClientRect.left || top < normalizedClientRect.top) return null;
+  if (right > clientRight || bottom > clientBottom) return null;
+
+  return { x: left, y: top, width, height };
+}
+
+function sampleContextClientRect(clientRect) {
+  if (!clientRect || typeof clientRect !== 'object') return null;
+  const left = Number(clientRect.left);
+  const top = Number(clientRect.top);
+  const width = Number(clientRect.width);
+  const height = Number(clientRect.height);
+  if (![left, top, width, height].every(Number.isFinite)) return null;
+  if (width <= 0 || height <= 0) return null;
+  return {
+    left: Math.round(left),
+    top: Math.round(top),
+    width: Math.round(width),
+    height: Math.round(height),
+  };
 }
 
 function formatResultFlashSample(result) {
@@ -637,32 +739,18 @@ function formatResultFlashSample(result) {
   const avgG = Math.round(Number(result?.data?.avgG) || 0);
   const avgB = Math.round(Number(result?.data?.avgB) || 0);
   const brightness = Math.round((avgR + avgG + avgB) / 3);
-  return `result=success rgb=(${avgR}, ${avgG}, ${avgB}) brightness=${brightness}`;
-}
-
-async function waitForWindowToHide(mainWindow, timeoutMs = RESULT_FLASH_HIDE_SETTLE_TIMEOUT_MS) {
-  if (!mainWindow || mainWindow.isDestroyed()) {
-    return { waitedMs: 0, stillVisible: false };
-  }
-
-  const startedAt = Date.now();
-  while (mainWindow.isVisible() && (Date.now() - startedAt) < timeoutMs) {
-    await delay(RESULT_FLASH_HIDE_SETTLE_POLL_MS);
-  }
-
-  return {
-    waitedMs: Date.now() - startedAt,
-    stillVisible: mainWindow.isVisible(),
-  };
+  const meta = result?.meta;
+  const absoluteRegion = meta?.absoluteRegion ? ` ${formatResultFlashRegion(meta.absoluteRegion)}` : '';
+  const clientRect = meta?.clientRect ? ` ${formatResultFlashClientRect(meta.clientRect)}` : '';
+  const geometryAge = Number.isFinite(Number(meta?.geometryAgeMs)) ? ` geometryAge=${Math.round(Number(meta.geometryAgeMs))}ms` : '';
+  return `result=success rgb=(${avgR}, ${avgG}, ${avgB}) brightness=${brightness}${geometryAge}${absoluteRegion}${clientRect}`;
 }
 
 function maybeLogResultFlashSample({
-  region,
+  normalizedRegion,
   result,
-  shouldHideWindow,
-  hideWaitMs,
-  stillVisible,
-  captureMs,
+  resolveMs,
+  sampleMs,
 }) {
   const now = Date.now();
   if (resultFlashSampleLogWindow.startedAt === 0) {
@@ -677,8 +765,8 @@ function maybeLogResultFlashSample({
   const avgIntervalMs = sampleCount > 0 ? (elapsedMs / sampleCount) : 0;
   console.log(
     `[ResultFlash][IPC] samples=${sampleCount} elapsed=${elapsedMs}ms avgInterval=${avgIntervalMs.toFixed(1)}ms `
-    + `hidden=${shouldHideWindow ? 'yes' : 'no'} hideWait=${hideWaitMs}ms stillVisible=${stillVisible ? 'yes' : 'no'} `
-    + `captureMs=${captureMs} region=${formatResultFlashRegion(region)} ${formatResultFlashSample(result)}`
+    + `resolveMs=${resolveMs}ms sampleMs=${sampleMs}ms normalizedRegion=${formatNormalizedResultFlashRegion(normalizedRegion)} `
+    + `${formatResultFlashSample(result)}`
   );
 
   resultFlashSampleLogWindow = {
@@ -752,55 +840,58 @@ async function captureGameWindowBufferForAutomation(options = {}) {
 }
 
 async function sampleResultFlashRegion(config) {
-  const mainWindow = win;
-  const shouldHideWindow = Boolean(
-    mainWindow
-    && !mainWindow.isDestroyed()
-    && mainWindow.isVisible()
-  );
-  let hideWaitMs = 0;
-  let stillVisible = false;
+  const normalizedRegion = normalizeResultFlashNormalizedRegion(config);
+  if (!normalizedRegion) {
+    return buildResultFlashSampleError('Invalid normalized result flash region');
+  }
 
+  const geometryStartedAt = Date.now();
   try {
-    if (shouldHideWindow) {
-      mainWindow.hide();
-      const hideState = await waitForWindowToHide(mainWindow);
-      hideWaitMs = hideState.waitedMs;
-      stillVisible = hideState.stillVisible;
-      if (hideState.stillVisible) {
-        console.warn(
-          `[ResultFlash][IPC] main window remained visible after hide() wait (${hideState.waitedMs}ms); `
-          + 'capture may include the overlay'
-        );
-      }
+    const trackedWindow = await lookupGameWindowGeometry({
+      processNames: GAME_WINDOW_PROCESS_NAMES,
+      titleHint: GAME_WINDOW_TITLE_HINT,
+      focusDelayMs: GAME_UI_FOCUS_DELAY_MS,
+    });
+    if (!trackedWindow?.success || !trackedWindow?.clientRect) {
+      return buildResultFlashSampleError(
+        trackedWindow?.error || 'Game window geometry unavailable',
+        trackedWindow
+      );
     }
 
-    const screenshotDesktop = getResultFlashScreenshotModule();
-    const captureStartedAt = Date.now();
-    const imageBuffer = await screenshotDesktop({ format: 'png' });
-    const result = await sampleImageBufferRegion(imageBuffer, config);
+    const absoluteRegion = convertResultFlashRegionToAbsoluteRegion(
+      normalizedRegion,
+      trackedWindow.clientRect
+    );
+    if (!absoluteRegion) {
+      return buildResultFlashSampleError(
+        'Result flash ROI is outside the tracked game window',
+        trackedWindow
+      );
+    }
+
+    const sampleStartedAt = Date.now();
+    const sample = await sampleRegion(absoluteRegion);
+    const meta = buildResultFlashSampleMeta({
+      ...trackedWindow,
+      absoluteRegion,
+    });
+    const result = sample.success
+      ? { ...sample, meta }
+      : buildResultFlashSampleError(sample.error, {
+        ...trackedWindow,
+        absoluteRegion,
+      });
+
     maybeLogResultFlashSample({
-      region: config,
+      normalizedRegion,
       result,
-      shouldHideWindow,
-      hideWaitMs,
-      stillVisible,
-      captureMs: Date.now() - captureStartedAt,
+      resolveMs: Date.now() - geometryStartedAt,
+      sampleMs: Date.now() - sampleStartedAt,
     });
     return result;
   } catch (error) {
-    return {
-      success: false,
-      error: error?.message || 'Result flash sample failed',
-    };
-  } finally {
-    if (shouldHideWindow && mainWindow && !mainWindow.isDestroyed()) {
-      if (typeof mainWindow.showInactive === 'function') {
-        mainWindow.showInactive();
-      } else {
-        mainWindow.show();
-      }
-    }
+    return buildResultFlashSampleError(error);
   }
 }
 

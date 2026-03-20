@@ -48,6 +48,9 @@ function setPersistentPSRunner(runner) {
 let cachedCandidate = null;
 let cachedCandidateExpiry = 0;
 const CANDIDATE_CACHE_TTL_MS = 30_000;
+const GEOMETRY_CACHE_TTL_MS = 1_000;
+const GEOMETRY_STALE_GRACE_MS = 2_000;
+const cachedGeometryByHandle = new Map();
 
 function isProcessAlive(pid) {
   if (!Number.isFinite(pid) || pid <= 0) return false;
@@ -73,11 +76,75 @@ function setCachedCandidate(candidate) {
     cachedCandidate = { ...candidate };
     cachedCandidateExpiry = Date.now() + CANDIDATE_CACHE_TTL_MS;
   }
+  if (candidate?.success && candidate?.windowHandle && candidate?.clientRect) {
+    setCachedGeometry(candidate);
+  }
 }
 
 function clearGameWindowCache() {
   cachedCandidate = null;
   cachedCandidateExpiry = 0;
+  cachedGeometryByHandle.clear();
+}
+
+function normalizeClientRect(value) {
+  if (!value || typeof value !== 'object') return null;
+  const left = Number(value.left);
+  const top = Number(value.top);
+  const width = Number(value.width);
+  const height = Number(value.height);
+  if (![left, top, width, height].every(Number.isFinite)) return null;
+  if (width <= 0 || height <= 0) return null;
+  return {
+    left: Math.round(left),
+    top: Math.round(top),
+    width: Math.round(width),
+    height: Math.round(height),
+  };
+}
+
+function getCachedGeometry(windowHandle, {
+  allowStale = false,
+} = {}) {
+  const normalizedWindowHandle = Number(windowHandle);
+  if (!Number.isFinite(normalizedWindowHandle) || normalizedWindowHandle <= 0) {
+    return null;
+  }
+
+  const cachedGeometry = cachedGeometryByHandle.get(normalizedWindowHandle);
+  if (!cachedGeometry) return null;
+
+  const ageMs = Math.max(0, Date.now() - Number(cachedGeometry.capturedAt || 0));
+  if (ageMs <= GEOMETRY_CACHE_TTL_MS || (allowStale && ageMs <= GEOMETRY_STALE_GRACE_MS)) {
+    return {
+      ...cachedGeometry,
+      geometryAgeMs: ageMs,
+      stale: ageMs > GEOMETRY_CACHE_TTL_MS,
+    };
+  }
+
+  if (ageMs <= GEOMETRY_STALE_GRACE_MS) {
+    return null;
+  }
+
+  cachedGeometryByHandle.delete(normalizedWindowHandle);
+  return null;
+}
+
+function setCachedGeometry(geometry) {
+  const normalizedWindowHandle = Number(geometry?.windowHandle);
+  if (!Number.isFinite(normalizedWindowHandle) || normalizedWindowHandle <= 0) {
+    return;
+  }
+
+  const clientRect = normalizeClientRect(geometry?.clientRect);
+  if (!clientRect) return;
+
+  cachedGeometryByHandle.set(normalizedWindowHandle, {
+    windowHandle: normalizedWindowHandle,
+    clientRect,
+    capturedAt: Date.now(),
+  });
 }
 
 function delay(ms) {
@@ -160,9 +227,80 @@ function runPowerShellScript(script, {
   });
 }
 
+function buildWindowGeometryTypePowerShellScript() {
+  return `
+if (-not ('Wildgate.WindowGeometry' -as [type])) {
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+namespace Wildgate {
+  [StructLayout(LayoutKind.Sequential)]
+  public struct RECT {
+    public int Left;
+    public int Top;
+    public int Right;
+    public int Bottom;
+  }
+
+  [StructLayout(LayoutKind.Sequential)]
+  public struct POINT {
+    public int X;
+    public int Y;
+  }
+
+  public static class WindowGeometry {
+    [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr hWnd, out RECT lpRect);
+    [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr hWnd, ref POINT lpPoint);
+  }
+}
+"@
+}
+`;
+}
+
+function buildWindowClientRectPowerShellFunctionScript() {
+  return `
+function Get-WindowClientRect([Int64]$windowHandleValue) {
+  if ($windowHandleValue -le 0) { return $null }
+  $windowHandle = [IntPtr]$windowHandleValue
+  if (-not [Wildgate.WindowGeometry]::IsWindow($windowHandle)) {
+    return $null
+  }
+
+  $clientRect = New-Object Wildgate.RECT
+  if (-not [Wildgate.WindowGeometry]::GetClientRect($windowHandle, [ref]$clientRect)) {
+    return $null
+  }
+
+  $screenPoint = New-Object Wildgate.POINT
+  $screenPoint.X = $clientRect.Left
+  $screenPoint.Y = $clientRect.Top
+  if (-not [Wildgate.WindowGeometry]::ClientToScreen($windowHandle, [ref]$screenPoint)) {
+    return $null
+  }
+
+  $width = [int]($clientRect.Right - $clientRect.Left)
+  $height = [int]($clientRect.Bottom - $clientRect.Top)
+  if ($width -le 0 -or $height -le 0) {
+    return $null
+  }
+
+  return [pscustomobject]@{
+    left = [int]$screenPoint.X
+    top = [int]$screenPoint.Y
+    width = $width
+    height = $height
+  }
+}
+`;
+}
+
 function buildGameWindowLookupPowerShellScript() {
   return `
 $ErrorActionPreference = 'Stop'
+${buildWindowGeometryTypePowerShellScript()}
+${buildWindowClientRectPowerShellFunctionScript()}
 $titleHints = @(
   [string]$env:WILDGATE_GAME_WINDOW_TITLE_HINT -split '[;,]' |
     ForEach-Object { $_.Trim() } |
@@ -242,7 +380,32 @@ if (-not $target) {
   processId = $target.Id
   windowTitle = $target.MainWindowTitle
   windowHandle = [Int64]$target.MainWindowHandle
+  clientRect = Get-WindowClientRect([Int64]$target.MainWindowHandle)
   candidateSummary = $candidateSummary
+} | ConvertTo-Json -Compress
+`;
+}
+
+function buildGameWindowGeometryPowerShellScript() {
+  return `
+$ErrorActionPreference = 'Stop'
+${buildWindowGeometryTypePowerShellScript()}
+${buildWindowClientRectPowerShellFunctionScript()}
+$windowHandleValue = [Int64]($env:WILDGATE_GAME_WINDOW_HANDLE)
+$clientRect = Get-WindowClientRect($windowHandleValue)
+
+if (-not $clientRect) {
+  [pscustomobject]@{
+    success = $false
+    error = 'Game window geometry unavailable'
+  } | ConvertTo-Json -Compress
+  exit 0
+}
+
+[pscustomobject]@{
+  success = $true
+  windowHandle = $windowHandleValue
+  clientRect = $clientRect
 } | ConvertTo-Json -Compress
 `;
 }
@@ -391,7 +554,57 @@ async function performGameWindowLookup({
     processId: Number.isFinite(Number(parsed.processId)) ? Number(parsed.processId) : null,
     windowTitle: typeof parsed.windowTitle === 'string' ? parsed.windowTitle : '',
     windowHandle: Number.isFinite(Number(parsed.windowHandle)) ? Number(parsed.windowHandle) : null,
+    clientRect: normalizeClientRect(parsed.clientRect),
     candidateSummary: typeof parsed.candidateSummary === 'string' ? parsed.candidateSummary : '',
+  };
+}
+
+async function performGameWindowGeometryLookup(windowHandle, timeoutMs) {
+  const result = await runPowerShellScript(buildGameWindowGeometryPowerShellScript(), {
+    env: {
+      WILDGATE_GAME_WINDOW_HANDLE: String(windowHandle || ''),
+    },
+    timeoutMs,
+  });
+
+  const stdout = String(result?.stdout || '').trim();
+  const stderr = String(result?.stderr || '').trim();
+  if (result?.code !== 0) {
+    return {
+      success: false,
+      error: stderr || stdout || `PowerShell geometry lookup exited with code ${result?.code}`,
+    };
+  }
+
+  const parsed = parseJsonSafely(stdout);
+  if (!parsed || typeof parsed !== 'object') {
+    return {
+      success: false,
+      error: stdout || 'Game window geometry lookup returned an unexpected response.',
+    };
+  }
+
+  if (parsed.success === false) {
+    return {
+      success: false,
+      error: typeof parsed.error === 'string' && parsed.error.trim()
+        ? parsed.error
+        : 'Game window geometry unavailable',
+    };
+  }
+
+  const clientRect = normalizeClientRect(parsed.clientRect);
+  if (!clientRect) {
+    return {
+      success: false,
+      error: 'Game window geometry lookup returned invalid client geometry.',
+    };
+  }
+
+  return {
+    success: true,
+    windowHandle: Number.isFinite(Number(parsed.windowHandle)) ? Number(parsed.windowHandle) : null,
+    clientRect,
   };
 }
 
@@ -434,6 +647,65 @@ async function lookupGameWindowCandidate({
 
   setCachedCandidate(lookupResult);
   return lookupResult;
+}
+
+async function lookupGameWindowGeometry({
+  processNames = [],
+  titleHint = '',
+  focusDelayMs = DEFAULT_FOCUS_DELAY_MS,
+  skipCache = false,
+} = {}) {
+  const candidate = await lookupGameWindowCandidate({
+    processNames,
+    titleHint,
+    focusDelayMs,
+    skipCache,
+  });
+  if (!candidate?.success || !candidate.windowHandle) {
+    return candidate;
+  }
+
+  const cachedGeometry = getCachedGeometry(candidate.windowHandle);
+  if (cachedGeometry?.clientRect) {
+    return {
+      ...candidate,
+      clientRect: cachedGeometry.clientRect,
+      geometryAgeMs: cachedGeometry.geometryAgeMs,
+    };
+  }
+
+  const timeoutMs = Math.max(
+    2500,
+    Math.min(6000, (Math.max(50, Number(focusDelayMs) || DEFAULT_FOCUS_DELAY_MS) * 4) + 1000)
+  );
+  const geometryResult = await performGameWindowGeometryLookup(candidate.windowHandle, timeoutMs);
+  if (geometryResult.success) {
+    setCachedGeometry({
+      windowHandle: candidate.windowHandle,
+      clientRect: geometryResult.clientRect,
+    });
+    return {
+      ...candidate,
+      clientRect: geometryResult.clientRect,
+      geometryAgeMs: 0,
+    };
+  }
+
+  const staleGeometry = getCachedGeometry(candidate.windowHandle, { allowStale: true });
+  if (staleGeometry?.clientRect) {
+    return {
+      ...candidate,
+      clientRect: staleGeometry.clientRect,
+      geometryAgeMs: staleGeometry.geometryAgeMs,
+      geometryStale: true,
+    };
+  }
+
+  return {
+    ...candidate,
+    success: false,
+    error: geometryResult.error || 'Game window geometry unavailable',
+  };
 }
 
 async function focusWindowWithPowerShell(candidate, focusDelayMs) {
@@ -935,6 +1207,7 @@ module.exports = {
   clearGameWindowCache,
   holdGameKeySequence,
   lookupGameWindowCandidate,
+  lookupGameWindowGeometry,
   sendGameKeySequence,
   sendGameKeySequenceViaPowerShell,
   setPersistentPSRunner,

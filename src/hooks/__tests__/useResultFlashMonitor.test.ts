@@ -21,14 +21,27 @@ const WHITE_SAMPLE = { avgR: 255, avgG: 255, avgB: 255 };
 const DARK_SAMPLE = { avgR: 12, avgG: 18, avgB: 24 };
 const THRESHOLD_SAMPLE = { avgR: 250, avgG: 250, avgB: 250 };
 const BELOW_THRESHOLD_SAMPLE = { avgR: 249, avgG: 249, avgB: 249 };
+const WINDOW_REGION_META = {
+  source: 'window-region',
+  absoluteRegion: { x: 64, y: 1013, width: 107, height: 21 },
+  clientRect: { left: 300, top: 180, width: 1920, height: 1080 },
+  geometryAgeMs: 144,
+  processName: 'Wildgate-Win64-Shipping.exe',
+  processId: 1234,
+  windowHandle: 5678,
+  windowTitle: 'Wildgate',
+};
 
 const flushAsyncWork = async () => {
   await Promise.resolve();
   await Promise.resolve();
 };
 
-const queueFlashFrame = (sample: { avgR: number; avgG: number; avgB: number }) => {
-  invokeMock.mockResolvedValueOnce({ success: true, data: sample });
+const queueFlashFrame = (
+  sample: { avgR: number; avgG: number; avgB: number },
+  meta?: typeof WINDOW_REGION_META,
+) => {
+  invokeMock.mockResolvedValueOnce({ success: true, data: sample, meta });
 };
 
 vi.mock('../../store/useAppStore', () => {
@@ -114,7 +127,7 @@ describe('useResultFlashMonitor', () => {
   it('can arm immediately when the caller disables the live arm delay', async () => {
     const { useResultFlashMonitor } = await import('../useResultFlashMonitor');
 
-    queueFlashFrame(WHITE_SAMPLE);
+    queueFlashFrame(WHITE_SAMPLE, WINDOW_REGION_META);
     renderHook(() => useResultFlashMonitor({
       enabled: true,
       liveStartedAt: Date.now(),
@@ -244,21 +257,30 @@ describe('useResultFlashMonitor', () => {
     }));
     expect(invokeMock).not.toHaveBeenCalled();
 
-    queueFlashFrame(WHITE_SAMPLE);
+    queueFlashFrame(WHITE_SAMPLE, WINDOW_REGION_META);
     rerender({ liveStartedAt: Date.now() - 46_000 });
 
     await act(async () => {
       await flushAsyncWork();
     });
 
-    expect(invokeMock).toHaveBeenCalledWith('result-flash-sample', { x: 64, y: 1013, width: 107, height: 21 });
+    expect(invokeMock).toHaveBeenCalledWith('result-flash-sample', {
+      normalizedRegion: {
+        x: 64 / 1920,
+        y: 1013 / 1080,
+        width: 107 / 1920,
+        height: 21 / 1080,
+      },
+    });
     expect(onDebugStateChange).toHaveBeenLastCalledWith(expect.objectContaining({
       status: 'sampling',
       isArmed: true,
       lastSampleResult: {
         success: true,
         data: WHITE_SAMPLE,
+        meta: WINDOW_REGION_META,
       },
+      lastSampleMeta: WINDOW_REGION_META,
       lastIsWhiteFrame: true,
     }));
   });

@@ -7,12 +7,14 @@ import type { DeviceDisplayInfo, GameResolution } from '../store/slices/createDa
 import { Match, SHIPS, CHARACTERS, UI_REACH_MODIFIERS } from '../types';
 import { getElectronAPI } from '../utils/electronAPI';
 import {
+    FLASH_SAMPLE_REGION,
     buildResultFlashSampleRegions,
     isNearWhiteSample,
     type ResultFlashMonitorDebugSnapshot,
 } from '../hooks/useResultFlashMonitor';
 import {
     normalizePixelMonitorSampleResult,
+    type PixelMonitorSampleMeta,
     type PixelMonitorSampleResult,
 } from '../utils/pixelMonitorSample';
 import { findActiveTelemetryDraftMatch } from '../utils/smartCaptureScope';
@@ -44,6 +46,27 @@ const formatDurationMs = (value: number | null | undefined) => {
     if (!Number.isFinite(Number(value))) return 'n/a';
     const ms = Math.max(0, Math.round(Number(value)));
     return `${(ms / 1000).toFixed(ms >= 1000 ? 1 : 2)}s`;
+};
+
+const formatRect = (
+    rect: { x?: number; y?: number; left?: number; top?: number; width: number; height: number } | null | undefined,
+) => {
+    if (!rect) return 'Unavailable';
+    if ('left' in rect || 'top' in rect) {
+        return `left:${rect.left ?? 'n/a'} top:${rect.top ?? 'n/a'} w:${rect.width} h:${rect.height}`;
+    }
+    return `x:${rect.x ?? 'n/a'} y:${rect.y ?? 'n/a'} w:${rect.width} h:${rect.height}`;
+};
+
+const formatWindowIdentity = (meta: PixelMonitorSampleMeta | null) => {
+    if (!meta) return 'Unavailable';
+    const segments = [
+        meta.processName ? `Process: ${meta.processName}` : null,
+        meta.processId != null ? `PID: ${meta.processId}` : null,
+        meta.windowHandle != null ? `HWND: ${meta.windowHandle}` : null,
+        meta.windowTitle ? `Title: ${meta.windowTitle}` : null,
+    ].filter((value): value is string => Boolean(value));
+    return segments.length > 0 ? segments.join(' | ') : 'Unavailable';
 };
 
 const formatTimestamp = (value: number) => new Date(value).toLocaleTimeString();
@@ -131,14 +154,22 @@ export const DevTools: React.FC<DevToolsProps> = ({
         alert(`Generated ${matchCount} matches.`);
     };
 
-    const resultFlashRegions = useMemo(() => {
+    const predictedResultFlashRegions = useMemo(() => {
         if (Array.isArray(resultFlashDebug?.regions) && resultFlashDebug.regions.length > 0) {
             return resultFlashDebug.regions;
         }
         return buildResultFlashSampleRegions(gameResolution, deviceDisplayInfo);
     }, [deviceDisplayInfo, gameResolution, resultFlashDebug]);
 
-    const resultFlashRegion = resultFlashRegions[0] ?? null;
+    const predictedResultFlashRegion = predictedResultFlashRegions[0] ?? null;
+    const activeResultFlashMeta = resultFlashDebug?.lastSampleMeta ?? resultFlashSampleResult?.meta ?? null;
+    const displayedResultFlashRegion = activeResultFlashMeta?.absoluteRegion ?? predictedResultFlashRegion;
+    const resultFlashRegionLabel = activeResultFlashMeta?.absoluteRegion ? 'Actual ROI' : 'Predicted ROI';
+    const lastSamplerError = resultFlashSampleResult?.success === false
+        ? resultFlashSampleResult.error
+        : resultFlashDebug?.lastSampleResult?.success === false
+            ? resultFlashDebug.lastSampleResult.error
+            : null;
     const activeTelemetryDraftMatch = useMemo(() => findActiveTelemetryDraftMatch({
         activeUser,
         matches,
@@ -185,14 +216,6 @@ export const DevTools: React.FC<DevToolsProps> = ({
     ].filter((reason): reason is string => Boolean(reason));
 
     const handleSampleResultFlashRegion = useCallback(async () => {
-        if (!resultFlashRegion) {
-            setResultFlashSampleResult({
-                success: false,
-                error: 'Result flash ROI is unavailable',
-            });
-            return;
-        }
-
         const api = getElectronAPI();
         if (!api) {
             setResultFlashSampleResult({
@@ -205,7 +228,9 @@ export const DevTools: React.FC<DevToolsProps> = ({
         setResultFlashSampling(true);
         setResultFlashSampleResult(null);
         try {
-            const result = await api.invoke(RESULT_FLASH_SAMPLE_CHANNEL, resultFlashRegion);
+            const result = await api.invoke(RESULT_FLASH_SAMPLE_CHANNEL, {
+                normalizedRegion: FLASH_SAMPLE_REGION,
+            });
             setResultFlashSampleResult(normalizePixelMonitorSampleResult(result));
         } catch (error) {
             setResultFlashSampleResult({
@@ -217,7 +242,7 @@ export const DevTools: React.FC<DevToolsProps> = ({
         } finally {
             setResultFlashSampling(false);
         }
-    }, [resultFlashRegion]);
+    }, []);
 
     if (!devMode) return null;
 
@@ -322,12 +347,29 @@ export const DevTools: React.FC<DevToolsProps> = ({
                             </div>
 
                             <div className="rounded-lg bg-md-sys-surface1 px-3 py-2 text-xs space-y-1">
-                                <div className="font-bold uppercase opacity-60">ROI</div>
+                                <div className="font-bold uppercase opacity-60">Sampler</div>
                                 <div>
-                                    {resultFlashRegion
-                                        ? `x:${resultFlashRegion.x} y:${resultFlashRegion.y} w:${resultFlashRegion.width} h:${resultFlashRegion.height}`
-                                        : 'Unavailable'}
+                                    {displayedResultFlashRegion
+                                        ? `${resultFlashRegionLabel}: ${formatRect(displayedResultFlashRegion)}`
+                                        : 'Predicted ROI unavailable'}
                                 </div>
+                                {activeResultFlashMeta?.absoluteRegion && predictedResultFlashRegion && (
+                                    <div className="opacity-70">Predicted ROI: {formatRect(predictedResultFlashRegion)}</div>
+                                )}
+                                <div className="opacity-70">
+                                    Source: {activeResultFlashMeta?.source ?? 'predicted-only'}
+                                    {' | '}
+                                    Geometry age: {formatDurationMs(activeResultFlashMeta?.geometryAgeMs ?? null)}
+                                </div>
+                                <div className="opacity-70">
+                                    Client rect: {formatRect(activeResultFlashMeta?.clientRect)}
+                                </div>
+                                <div className="opacity-70">
+                                    Window: {formatWindowIdentity(activeResultFlashMeta)}
+                                </div>
+                                {lastSamplerError && (
+                                    <div className="text-md-sys-error">Last sampler error: {lastSamplerError}</div>
+                                )}
                                 <div className="opacity-70">
                                     Enabled: {resultFlashDebug?.enabled ? 'yes' : 'no'} | Latched: {resultFlashDebug?.triggerLatched ? 'yes' : 'no'} | Waiting end: {resultFlashDebug?.waitingForFlashEnd ? 'yes' : 'no'}
                                 </div>
@@ -365,12 +407,12 @@ export const DevTools: React.FC<DevToolsProps> = ({
                                     type="button"
                                     onClick={() => void handleSampleResultFlashRegion()}
                                     className="px-3 py-2 rounded-lg bg-md-sys-primary text-md-sys-onPrimary text-xs font-bold inline-flex items-center gap-2 disabled:opacity-60"
-                                    disabled={resultFlashSampling || !resultFlashRegion}
+                                    disabled={resultFlashSampling}
                                 >
                                     <RefreshCw size={14} className={resultFlashSampling ? 'animate-spin' : ''} />
                                     {resultFlashSampling ? 'Sampling ROI...' : 'Sample ROI Now'}
                                 </button>
-                                {!resultFlashRegion && (
+                                {!predictedResultFlashRegion && (
                                     <div className="text-xs opacity-70">ROI unavailable</div>
                                 )}
                             </div>
@@ -388,6 +430,9 @@ export const DevTools: React.FC<DevToolsProps> = ({
                                                     resultFlashSampleResult.data,
                                                     resultFlashDebug?.whiteThreshold
                                                 ) ? 'yes' : 'no'}
+                                            </div>
+                                            <div>
+                                                Source: {resultFlashSampleResult.meta?.source ?? 'unknown'}
                                             </div>
                                         </div>
                                     ) : (
