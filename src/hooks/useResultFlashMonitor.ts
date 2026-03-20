@@ -2,6 +2,10 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { getElectronAPI } from '../utils/electronAPI';
 import type { DeviceDisplayInfo, GameResolution } from '../store/slices/createDataSlice';
+import {
+    extractPixelMonitorSampleData,
+    type PixelMonitorSampleData,
+} from '../utils/pixelMonitorSample';
 
 const FLASH_SAMPLE_INTERVAL_MS = 150;
 const FLASH_ARM_DELAY_MS = 45_000;
@@ -18,12 +22,6 @@ export const FLASH_SAMPLE_POINTS = [
     { x: 0.2, y: 0.8 },
     { x: 0.8, y: 0.8 },
 ];
-
-interface PixelSample {
-    avgR?: number;
-    avgG?: number;
-    avgB?: number;
-}
 
 export interface ResultFlashMonitorOptions {
     enabled: boolean;
@@ -97,7 +95,7 @@ export const buildResultFlashSampleRegions = (
 };
 
 export const isNearWhiteSample = (
-    sample: PixelSample | null | undefined,
+    sample: PixelMonitorSampleData | null | undefined,
     threshold = FLASH_WHITE_THRESHOLD,
 ): boolean => {
     if (!sample) return false;
@@ -109,7 +107,7 @@ export const isNearWhiteSample = (
 };
 
 export const areResultFlashSamplesWhite = (
-    samples: Array<PixelSample | null | undefined>,
+    samples: Array<PixelMonitorSampleData | null | undefined>,
     threshold = FLASH_WHITE_THRESHOLD,
 ): boolean => (
     Array.isArray(samples)
@@ -184,7 +182,9 @@ export function useResultFlashMonitor({
             pollInFlightRef.current = true;
             try {
                 const samples = await Promise.all(
-                    regions.map((region) => api.invoke('pixel-monitor-sample', region))
+                    regions.map(async (region) => extractPixelMonitorSampleData(
+                        await api.invoke('pixel-monitor-sample', region)
+                    ))
                 );
                 if (cancelled) return;
 

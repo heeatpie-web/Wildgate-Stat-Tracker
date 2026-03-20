@@ -10,9 +10,6 @@
  * This replicates the OBS Advanced Scene Switcher "video has changed" macro
  * behaviour — monitoring a small area (e.g. X:952 Y:543 W:16 H:45) every
  * 3000ms to detect the victory/defeat result screen without user interaction.
- *
- * When fullAutoEnabled is true and an onFullAutoTrigger callback is provided,
- * the trigger event will call onFullAutoTrigger() instead of handleSmartScan().
  */
 
 import { useEffect, useRef } from 'react';
@@ -24,7 +21,7 @@ import { useSmartScan } from './useSmartScan';
 /** Cooldown in ms to prevent duplicate captures after a detection event. */
 const TRIGGER_COOLDOWN_MS = 15000;
 
-export function usePixelMonitor(onFullAutoTrigger?: () => Promise<void>, triggerLatched = false) {
+export function usePixelMonitor(triggerLatched = false) {
     const { isMatchInProgress } = useGameData();
     const { handleSmartScan, isScanning } = useSmartScan();
     const pixelMonitorEnabled = useAppStore(s => s.pixelMonitorEnabled);
@@ -42,12 +39,6 @@ export function usePixelMonitor(onFullAutoTrigger?: () => Promise<void>, trigger
 
     const handleSmartScanRef = useRef(handleSmartScan);
     useEffect(() => { handleSmartScanRef.current = handleSmartScan; }, [handleSmartScan]);
-
-    const onFullAutoRef = useRef(onFullAutoTrigger);
-    useEffect(() => { onFullAutoRef.current = onFullAutoTrigger; }, [onFullAutoTrigger]);
-
-    const fullAutoEnabledRef = useRef(fullAutoEnabled);
-    useEffect(() => { fullAutoEnabledRef.current = fullAutoEnabled; }, [fullAutoEnabled]);
 
     const triggerLatchedRef = useRef(triggerLatched);
     useEffect(() => { triggerLatchedRef.current = triggerLatched; }, [triggerLatched]);
@@ -98,12 +89,7 @@ export function usePixelMonitor(onFullAutoTrigger?: () => Promise<void>, trigger
             if (triggerLatchedRef.current) return;
             if (Date.now() < cooldownRef.current) return;
             cooldownRef.current = Date.now() + TRIGGER_COOLDOWN_MS;
-
-            if (fullAutoEnabledRef.current && onFullAutoRef.current) {
-                await onFullAutoRef.current();
-            } else {
-                handleSmartScanRef.current();
-            }
+            handleSmartScanRef.current();
         });
 
         return unsub;

@@ -7,6 +7,10 @@
  * change, then require the next sample to remain close to that changed state
  * before firing. This avoids reacting to brief HUD/world motion while still
  * triggering on persistent result-screen transitions.
+ *
+ * sampleRegion() returns a structured payload:
+ *   { success: true, data: { avgR, avgG, avgB } }
+ *   { success: false, error: '...' }
  */
 
 /** Milliseconds to suppress re-triggering after a detection event. */
@@ -30,6 +34,37 @@ function getNut() {
     return _nut;
 }
 
+function createSampleSuccess(data) {
+    return { success: true, data };
+}
+
+function createSampleError(error, fallbackMessage = 'Pixel monitor sample failed') {
+    const message = typeof error === 'string'
+        ? error.trim()
+        : error?.message;
+    return {
+        success: false,
+        error: message || fallbackMessage,
+    };
+}
+
+function normalizeRegionConfig(config) {
+    const x = Number(config?.x);
+    const y = Number(config?.y);
+    const width = Number(config?.width);
+    const height = Number(config?.height);
+
+    if (![x, y, width, height].every(Number.isFinite)) return null;
+    if (width <= 0 || height <= 0) return null;
+
+    return {
+        x: Math.round(x),
+        y: Math.round(y),
+        width: Math.round(width),
+        height: Math.round(height),
+    };
+}
+
 /**
  * Sample the region via a single native grabRegion() call.
  * Returns averaged RGB values across all pixels in the region.
@@ -38,19 +73,26 @@ function getNut() {
  *   byte 0 = B, byte 1 = G, byte 2 = R, byte 3 = A
  *
  * @param {{ x: number, y: number, width: number, height: number }} config
- * @returns {Promise<{ avgR: number, avgG: number, avgB: number } | null>}
+ * @returns {Promise<{ success: true, data: { avgR: number, avgG: number, avgB: number } } | { success: false, error: string }>}
  */
 async function sampleRegion(config) {
     try {
+        const regionConfig = normalizeRegionConfig(config);
+        if (!regionConfig) {
+            return createSampleError('Invalid pixel monitor region configuration');
+        }
         const { screen, Region } = getNut();
         const img = await screen.grabRegion(
-            new Region(config.x, config.y, config.width, config.height)
+            new Region(regionConfig.x, regionConfig.y, regionConfig.width, regionConfig.height)
         );
 
         const buf = img.data;
         // Buffer is BGRA: channels = [B, G, R, A] per pixel
         let sumR = 0, sumG = 0, sumB = 0;
         const pixelCount = buf.length / 4;
+        if (!pixelCount) {
+            return createSampleError('Pixel monitor sample returned empty image data');
+        }
 
         for (let i = 0; i < buf.length; i += 4) {
             sumB += buf[i];
@@ -59,13 +101,13 @@ async function sampleRegion(config) {
             // buf[i + 3] is alpha — ignored
         }
 
-        return {
+        return createSampleSuccess({
             avgR: Math.round(sumR / pixelCount),
             avgG: Math.round(sumG / pixelCount),
             avgB: Math.round(sumB / pixelCount),
-        };
-    } catch {
-        return null;
+        });
+    } catch (error) {
+        return createSampleError(error);
     }
 }
 
@@ -111,9 +153,9 @@ function startMonitor(config, onTrigger) {
             if (now < _cooldownUntil) return;
 
             const sample = await sampleRegion(config);
-            if (!sample) return;
+            if (!sample.success) return;
 
-            const sampleTuple = [sample.avgR, sample.avgG, sample.avgB];
+            const sampleTuple = [sample.data.avgR, sample.data.avgG, sample.data.avgB];
 
             if (_pendingTrigger && now <= _pendingTrigger.expiresAt) {
                 if (shouldConfirmPendingTrigger(_pendingTrigger, sampleTuple, config.changeSensitivity)) {
@@ -163,6 +205,9 @@ function stopMonitor() {
 const __test__ = {
     averageChannelDiff,
     buildPendingTrigger,
+    createSampleError,
+    createSampleSuccess,
+    normalizeRegionConfig,
     shouldConfirmPendingTrigger,
 };
 

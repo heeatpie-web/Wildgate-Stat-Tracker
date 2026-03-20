@@ -19,6 +19,10 @@ import {
     OCR_NAME_REROUTE_THRESHOLD_MIN,
 } from '../store/slices/createSettingsSlice';
 import { normalizeOcrName, similarityScore } from '../utils/stringUtils';
+import {
+    normalizePixelMonitorSampleResult,
+    type PixelMonitorSampleResult,
+} from '../utils/pixelMonitorSample';
 import { DEFAULT_OCR_BEST_GUESS_THRESHOLDS, getPreset, detectSensitivityLevel } from './settings/ocrThresholdPresets';
 import { Button, Input } from './ui';
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -243,12 +247,18 @@ const SettingsModalContent: React.FC = () => {
     const setPixelMonitorIntervalMs = useAppStore(s => s.setPixelMonitorIntervalMs);
     const pixelMonitorChangeSensitivity = useAppStore(s => s.pixelMonitorChangeSensitivity);
     const setPixelMonitorChangeSensitivity = useAppStore(s => s.setPixelMonitorChangeSensitivity);
-    const [pixelSampleResult, setPixelSampleResult] = useState<{ avgR: number; avgG: number; avgB: number } | null>(null);
+    const [pixelSampleResult, setPixelSampleResult] = useState<PixelMonitorSampleResult | null>(null);
     const [pixelSampling, setPixelSampling] = useState(false);
 
     const handleSampleRegion = useCallback(async () => {
         const api = getElectronAPI();
-        if (!api) return;
+        if (!api) {
+            setPixelSampleResult({
+                success: false,
+                error: 'Pixel monitor sample unavailable outside the desktop app',
+            });
+            return;
+        }
         setPixelSampling(true);
         setPixelSampleResult(null);
         try {
@@ -258,7 +268,12 @@ const SettingsModalContent: React.FC = () => {
                 width: pixelMonitorWidth,
                 height: pixelMonitorHeight,
             });
-            setPixelSampleResult(result || null);
+            setPixelSampleResult(normalizePixelMonitorSampleResult(result));
+        } catch (error) {
+            setPixelSampleResult({
+                success: false,
+                error: error instanceof Error && error.message ? error.message : 'Pixel monitor sample failed',
+            });
         } finally {
             setPixelSampling(false);
         }
@@ -1342,6 +1357,11 @@ const SettingsModalContent: React.FC = () => {
                                         Monitors a screen region for pixel changes to auto-trigger manual or non-full-auto result capture.
                                         Full Auto uses a separate full-screen result-flash watcher.
                                     </div>
+                                    {fullAutoEnabled && (
+                                        <div className="mt-2 text-label-sm text-md-sys-warning">
+                                            Pixel monitoring is inactive while Full Auto is enabled. The controls below remain available for the manual path.
+                                        </div>
+                                    )}
                                 </div>
                                 <label className="flex cursor-pointer items-center gap-2 shrink-0">
                                     <input
@@ -1447,13 +1467,19 @@ const SettingsModalContent: React.FC = () => {
                                     {pixelSampling ? 'Sampling…' : 'Test region'}
                                 </button>
                                 {pixelSampleResult && (
-                                    <span className="text-label-sm text-md-sys-on-surface/70">
-                                        avg RGB: ({pixelSampleResult.avgR}, {pixelSampleResult.avgG}, {pixelSampleResult.avgB})
-                                        <span
-                                            className="ml-2 inline-block h-3 w-3 rounded-sm border border-md-sys-outline/20 align-middle"
-                                            style={{ background: `rgb(${pixelSampleResult.avgR},${pixelSampleResult.avgG},${pixelSampleResult.avgB})` }}
-                                        />
-                                    </span>
+                                    pixelSampleResult.success ? (
+                                        <span className="text-label-sm text-md-sys-on-surface/70">
+                                            avg RGB: ({pixelSampleResult.data.avgR}, {pixelSampleResult.data.avgG}, {pixelSampleResult.data.avgB})
+                                            <span
+                                                className="ml-2 inline-block h-3 w-3 rounded-sm border border-md-sys-outline/20 align-middle"
+                                                style={{ background: `rgb(${pixelSampleResult.data.avgR},${pixelSampleResult.data.avgG},${pixelSampleResult.data.avgB})` }}
+                                            />
+                                        </span>
+                                    ) : (
+                                        <span className="text-label-sm text-md-sys-error">
+                                            Test region failed: {pixelSampleResult.error}
+                                        </span>
+                                    )
                                 )}
                             </div>
                         </div>

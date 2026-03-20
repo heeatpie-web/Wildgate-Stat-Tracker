@@ -18,4 +18,13 @@ describe('pixelMonitor confirmation helpers', () => {
     const pending = __test__.buildPendingTrigger([200, 210, 220], { intervalMs: 3000 }, 1_000);
     expect(__test__.shouldConfirmPendingTrigger(pending, [240, 160, 120], 30)).toBe(false);
   });
+
+  it('returns a structured error payload for invalid sample regions', async () => {
+    const { sampleRegion } = require('./pixelMonitor.cjs');
+
+    await expect(sampleRegion({})).resolves.toEqual({
+      success: false,
+      error: 'Invalid pixel monitor region configuration',
+    });
+  });
 });

@@ -122,6 +122,22 @@ const storeState = {
   tutorialCompleted: false,
   enableAutoBackup: true,
   setEnableAutoBackup: vi.fn(),
+  pixelMonitorEnabled: false,
+  setPixelMonitorEnabled: vi.fn(),
+  fullAutoEnabled: false,
+  setFullAutoEnabled: vi.fn(),
+  pixelMonitorX: 1492,
+  setPixelMonitorX: vi.fn(),
+  pixelMonitorY: 203,
+  setPixelMonitorY: vi.fn(),
+  pixelMonitorWidth: 170,
+  setPixelMonitorWidth: vi.fn(),
+  pixelMonitorHeight: 56,
+  setPixelMonitorHeight: vi.fn(),
+  pixelMonitorIntervalMs: 3000,
+  setPixelMonitorIntervalMs: vi.fn(),
+  pixelMonitorChangeSensitivity: 30,
+  setPixelMonitorChangeSensitivity: vi.fn(),
   ocrRegions: {
     crewHub: {
       leftPanel: { xMin: 0, xMax: 0.48, yMin: 0.05, yMax: 0.85 },
@@ -141,6 +157,8 @@ const storeState = {
   },
   setOcrRegions: vi.fn(),
 };
+
+const getElectronAPIMock = vi.fn(() => null);
 
 vi.mock('../providers/UserPreferencesProvider', () => ({
   useUserPreferences: () => userPrefs,
@@ -167,7 +185,7 @@ vi.mock('../hooks/useKeyboardShortcuts', () => ({
 }));
 
 vi.mock('../utils/electronAPI', () => ({
-  getElectronAPI: () => null,
+  getElectronAPI: () => getElectronAPIMock(),
 }));
 
 vi.mock('../utils/storage', () => ({
@@ -183,6 +201,7 @@ vi.mock('./OcrRegionEditorModal', () => ({
 describe('SettingsModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getElectronAPIMock.mockReturnValue(null);
     userPrefs.customBgUrl = '';
     uiState.showSettings = true;
     uiState.isOverlayMode = false;
@@ -190,6 +209,7 @@ describe('SettingsModal', () => {
     storeState.resultOcrFlowMode = 'prompt';
     storeState.autoSequenceOnCapture = false;
     storeState.tacticalMapKeybind = '';
+    storeState.fullAutoEnabled = false;
   });
 
   it('renders appearance settings with workspace background in the default section', async () => {
@@ -299,6 +319,67 @@ describe('SettingsModal', () => {
 
     expect(storeState.setTacticalMapKeybind).toHaveBeenNthCalledWith(1, 'KeyM');
     expect(storeState.setTacticalMapKeybind).toHaveBeenNthCalledWith(2, '');
+  });
+
+  it('shows sampled RGB values for the pixel monitor test region', async () => {
+    const invokeMock = vi.fn().mockResolvedValue({
+      success: true,
+      data: { avgR: 231, avgG: 230, avgB: 229 },
+    });
+    getElectronAPIMock.mockReturnValue({ invoke: invokeMock });
+
+    const { SettingsModal } = await import('./SettingsModal');
+    render(<SettingsModal />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^capture$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /test region/i }));
+
+    expect(await screen.findByText(/avg rgb: \(231, 230, 229\)/i)).toBeInTheDocument();
+    expect(invokeMock).toHaveBeenCalledWith('pixel-monitor-sample', expect.objectContaining({
+      x: expect.any(Number),
+      y: expect.any(Number),
+      width: expect.any(Number),
+      height: expect.any(Number),
+    }));
+  });
+
+  it('surfaces sampling errors in the pixel monitor test region flow', async () => {
+    const invokeMock = vi.fn().mockResolvedValue({
+      success: false,
+      error: 'Pixel monitor sample failed: window capture blocked',
+    });
+    getElectronAPIMock.mockReturnValue({ invoke: invokeMock });
+
+    const { SettingsModal } = await import('./SettingsModal');
+    render(<SettingsModal />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^capture$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /test region/i }));
+
+    expect(await screen.findByText(/test region failed: pixel monitor sample failed: window capture blocked/i)).toBeInTheDocument();
+  });
+
+  it('surfaces when pixel monitor sampling is unavailable outside Electron', async () => {
+    getElectronAPIMock.mockReturnValue(null);
+
+    const { SettingsModal } = await import('./SettingsModal');
+    render(<SettingsModal />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^capture$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /test region/i }));
+
+    expect(await screen.findByText(/test region failed: pixel monitor sample unavailable outside the desktop app/i)).toBeInTheDocument();
+  });
+
+  it('explains that pixel monitoring is inactive while Full Auto is enabled', async () => {
+    storeState.fullAutoEnabled = true;
+
+    const { SettingsModal } = await import('./SettingsModal');
+    render(<SettingsModal />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^capture$/i }));
+
+    expect(screen.getByText(/pixel monitoring is inactive while full auto is enabled/i)).toBeInTheDocument();
   });
 });
 

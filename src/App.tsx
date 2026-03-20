@@ -2974,7 +2974,7 @@ const App: React.FC = () => {
         triggerFullAutoSaveRef.current = triggerFullAutoSave;
     }, [triggerFullAutoSave]);
 
-    usePixelMonitor(triggerFullAutoSave, fullAutoResultLatched);
+    usePixelMonitor(fullAutoResultLatched);
     useResultFlashMonitor({
         enabled: fullAutoEnabled
             && telemetryLifecycleStage === 'live'

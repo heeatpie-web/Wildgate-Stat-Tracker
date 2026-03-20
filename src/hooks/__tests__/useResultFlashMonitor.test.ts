@@ -29,7 +29,7 @@ const flushAsyncWork = async () => {
 
 const queueFlashFrame = (sample: { avgR: number; avgG: number; avgB: number }) => {
   for (let index = 0; index < 5; index += 1) {
-    invokeMock.mockResolvedValueOnce(sample);
+    invokeMock.mockResolvedValueOnce({ success: true, data: sample });
   }
 };
 
@@ -164,7 +164,10 @@ describe('useResultFlashMonitor', () => {
     let sampleIndex = 0;
     invokeMock.mockImplementation(() => {
       sampleIndex += 1;
-      return Promise.resolve(sampleIndex % 5 === 0 ? DARK_SAMPLE : WHITE_SAMPLE);
+      return Promise.resolve({
+        success: true,
+        data: sampleIndex % 5 === 0 ? DARK_SAMPLE : WHITE_SAMPLE,
+      });
     });
 
     renderHook(() => useResultFlashMonitor({
