@@ -1271,6 +1271,17 @@ export const useLogMonitor = (activeUser?: string) => {
                         Logger.info('LogMonitor', `Treating practice-range telemetry as live lifecycle stage: ${loadingMapName || String(matchPoolValue || '')}`);
                     }
                     if (nextLifecycleStage) {
+                        // When leaving practice range (live → loading/pregame), finalize the
+                        // draft first. The rank guard normally blocks backward transitions, but
+                        // practice range has no result/frontend screen so we must synthesize it.
+                        if (
+                            telemetryLifecycleIsPracticeRangeRef.current
+                            && telemetryLifecycleStageRef.current === 'live'
+                            && (nextLifecycleStage === 'loading' || nextLifecycleStage === 'pregame')
+                        ) {
+                            Logger.info('LogMonitor', `Practice range exiting to ${nextLifecycleStage} — finalizing draft as result`);
+                            transitionTelemetryLifecycleStage('result', gameTime, payloadDurationSeconds);
+                        }
                         transitionTelemetryLifecycleStage(nextLifecycleStage, gameTime, payloadDurationSeconds, {
                             isPracticeRange: practiceRangeSignal && nextLifecycleStage === 'live',
                         });

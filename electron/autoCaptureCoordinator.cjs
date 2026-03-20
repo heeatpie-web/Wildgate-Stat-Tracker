@@ -214,9 +214,10 @@ function getRequestedTacticalMapKeybind(request = {}) {
     ? request.autoCaptureTacticalMapKey
     : request.tacticalMapKeybind;
 
+  const raw = typeof rawValue === 'string' ? rawValue.trim() : '';
   return {
-    provided: hasAutoCaptureKey || hasLegacyKey,
-    raw: typeof rawValue === 'string' ? rawValue.trim() : '',
+    provided: (hasAutoCaptureKey || hasLegacyKey) && raw !== '',
+    raw,
   };
 }
 
