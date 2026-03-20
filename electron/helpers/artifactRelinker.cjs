@@ -12,6 +12,7 @@ const DEFAULT_MAX_DELTA_MS = Number(process.env.WILDGATE_ARTIFACT_REPAIR_MAX_DEL
 const DEFAULT_FALLBACK_MAX_DELTA_MS = Number(process.env.WILDGATE_ARTIFACT_REPAIR_FALLBACK_MAX_DELTA_MS || (12 * 60 * 60 * 1000));
 const MAX_CANDIDATES = Number(process.env.WILDGATE_ARTIFACT_REPAIR_MAX_RESULTS || 2000);
 const AUTO_CAPTURE_FILENAME_PATTERN = /^capture_/i;
+const RELINKED_SUFFIX_PATTERN = /(?:__relinked_\d+)+(?=\.[^.]+$)/ig;
 
 function toPathKey(inputPath) {
   return path.resolve(inputPath).replace(/[\\/]+/g, '\\').toLowerCase();
@@ -95,6 +96,25 @@ function isAutoCaptureArtifact(value) {
   return AUTO_CAPTURE_FILENAME_PATTERN.test(path.basename(String(value || '')).trim());
 }
 
+function stripRelinkSuffixes(value) {
+  const baseName = path.basename(String(value || '').trim());
+  if (!baseName) return '';
+  return baseName.replace(RELINKED_SUFFIX_PATTERN, '');
+}
+
+function isRelinkedAutoCaptureArtifact(value) {
+  const baseName = path.basename(String(value || '').trim());
+  if (!isAutoCaptureArtifact(baseName)) return false;
+  return stripRelinkSuffixes(baseName).toLowerCase() !== baseName.toLowerCase();
+}
+
+function getAutoCaptureCanonicalFilename(value) {
+  const baseName = path.basename(String(value || '').trim());
+  if (!baseName) return '';
+  if (!isAutoCaptureArtifact(baseName)) return baseName.toLowerCase();
+  return stripRelinkSuffixes(baseName).toLowerCase();
+}
+
 function safeStat(filePath) {
   try {
     return fs.statSync(filePath);
@@ -173,6 +193,7 @@ function collectCandidates(userData, mappingContext = {}) {
     const files = walkFiles(source.root);
     for (const filePath of files) {
       if (!isImageFile(filePath)) continue;
+      if (source.kind === 'match_artifacts' && isRelinkedAutoCaptureArtifact(filePath)) continue;
       const stat = safeStat(filePath);
       if (!stat || !stat.isFile()) continue;
       const key = toPathKey(filePath);
@@ -433,8 +454,9 @@ function buildRepairPlan(db, userData, scopeOptions) {
     if (autoCaptureCandidate) {
       const targetMatch = byId.get(Number(target.id));
       const existingArtifacts = Array.isArray(targetMatch?.artifacts) ? targetMatch.artifacts : [];
+      const candidateCanonicalFilename = getAutoCaptureCanonicalFilename(candidate.filename);
       const existingFilenameMatch = existingArtifacts.some((artifactPath) => (
-        path.basename(String(artifactPath || '')).toLowerCase() === String(candidate.filename || '').toLowerCase()
+        getAutoCaptureCanonicalFilename(artifactPath) === candidateCanonicalFilename
       ));
       if (existingFilenameMatch) continue;
     }

@@ -324,6 +324,36 @@ describe('useLogMonitor', () => {
     expect(uiState.setTelemetryLifecycleIsPracticeRange).toHaveBeenCalledWith(true);
   });
 
+  it('treats firingrange matchmaker sessions as practice-range live matches', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: {
+            event: {
+              newStatus: 'MM_SERVER_FOUND',
+              sESSIONId: 'practice-session-id',
+              ticketMatchPool: 'firingrange',
+            },
+          },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    expect(addMatch).toHaveBeenCalledTimes(1);
+    expect(latestAddedMatch()).toMatchObject({
+      player: 'Pilot',
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+    });
+    expect(uiState.setTelemetryLifecycleStage).toHaveBeenCalledWith('live');
+    expect(uiState.setTelemetryLifecycleIsPracticeRange).toHaveBeenCalledWith(true);
+  });
+
   it('uses the latest active mode when creating telemetry drafts after a mode change', async () => {
     const { useLogMonitor } = await import('../useLogMonitor');
     const { rerender } = renderHook(() => useLogMonitor('Pilot'));
@@ -2009,6 +2039,79 @@ describe('useLogMonitor', () => {
     expect(latestLoadout?.characterWeapons || []).toEqual(['Double Whammy']);
     expect(latestLoadout?.characterEquipment || []).toEqual(['Repair Drone']);
     expect(gameDataState.setActiveHero).not.toHaveBeenCalled();
+  });
+
+  it('prefers direct telemetry ship loadouts over stale shared ship-selection labels', async () => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    gameDataState.currentLoadout = {
+      hero: 'Adrian',
+      ship: 'Hunter',
+      weapons: [],
+      equipment: [],
+      characterWeapons: ['Double Whammy'],
+      characterEquipment: ['Repair Drone'],
+    };
+
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebCloudSaveRecordSize',
+          Payload: {
+            recordKey: 'GameModeShipSelection_v2',
+            event: {
+              actorId: 'lobby-leader-id',
+              selection: {
+                selectedShipGuid: 'NebShipAsset:238FE96442789BC0C2E416BBDFDBCC52',
+              },
+            },
+          },
+          ClientTimestamp: nowSec,
+        },
+      ]);
+    });
+
+    gameDataState.setActiveShip.mockClear();
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'DesolationReach' },
+          ClientTimestamp: nowSec + 1,
+        },
+      ]);
+    });
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'CharacterLoadoutChanged',
+          Payload: {
+            isLocalPlayer: true,
+            payload: {
+              snapshot: {
+                currentLoadout: {
+                  hero: 'Adrian',
+                  guidShip: 'NebShipAsset:9299137344DC982A469564BDAD18711C',
+                  characterWeapons: ['The Doctor'],
+                  characterEquipment: ['Repair Drone'],
+                },
+              },
+            },
+          },
+          ClientTimestamp: nowSec + 2,
+        },
+      ]);
+    });
+
+    expect(gameDataState.setActiveShip).toHaveBeenCalledWith('Solo Outlaw', 'telemetry');
+    const latestLoadout = gameDataState.setCurrentLoadout.mock.calls.at(-1)?.[0] as {
+      ship?: string | null;
+    };
+    expect(latestLoadout?.ship).toBe('Solo Outlaw');
   });
 
   it('ignores shared ship-selection labels when no ship GUID is present', async () => {

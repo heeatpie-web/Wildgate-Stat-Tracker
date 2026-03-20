@@ -63,4 +63,45 @@ describe('artifactRelinker.applyArtifactRepair', () => {
     expect(updatedDb.matches[1].artifacts).toEqual([]);
     expect(fs.existsSync(matchTwoCapture)).toBe(false);
   });
+
+  it('ignores relinked auto-capture variants so one capture only links once', () => {
+    const userData = makeTempDir();
+    tempDirs.push(userData);
+    const dbPath = path.join(userData, 'wildgate_db.json');
+    const captureName = 'capture_2026-03-08T10-00-00-000Z.png';
+    const relinkedCapture = 'capture_2026-03-08T10-00-00-000Z__relinked_1.png';
+    const nestedRelinkedCapture = 'capture_2026-03-08T10-00-00-000Z__relinked_1__relinked_1.png';
+    const sourceMatchDir = path.join(userData, 'match_artifacts', '202');
+
+    writeFile(path.join(sourceMatchDir, captureName), 'same-image');
+    writeFile(path.join(sourceMatchDir, relinkedCapture), 'same-image');
+    writeFile(path.join(sourceMatchDir, nestedRelinkedCapture), 'same-image');
+
+    const db = {
+      matches: [
+        {
+          id: 201,
+          timestamp: Date.parse('2026-03-08T10:00:00.000Z'),
+          time: '10:00',
+          artifacts: [],
+        },
+        {
+          id: 202,
+          timestamp: Date.parse('2026-03-08T10:20:00.000Z'),
+          time: '10:00',
+          artifacts: [],
+        },
+      ],
+      storageMeta: { nextCanonicalMatchNumber: 203 },
+    };
+    fs.writeFileSync(dbPath, `${JSON.stringify(db, null, 2)}\n`, 'utf8');
+
+    const result = applyArtifactRepair({ dbPath, userData });
+    const updatedDb = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+
+    expect(result.summary.appliedLinks).toBe(1);
+    expect(updatedDb.matches[0].artifacts).toHaveLength(1);
+    expect(path.basename(updatedDb.matches[0].artifacts[0])).toBe(captureName);
+    expect(updatedDb.matches[0].artifacts.some((artifactPath) => artifactPath.includes('__relinked_'))).toBe(false);
+  });
 });

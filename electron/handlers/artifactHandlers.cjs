@@ -28,6 +28,8 @@ const artifactTokenRegistry = createScopedTokenRegistry({
 });
 const blockedSecurityCounters = new Map();
 const MATCH_ARTIFACT_REL_PATTERN = /match_artifacts[\\/](\d+)[\\/](.+)$/i;
+const AUTO_CAPTURE_FILENAME_PATTERN = /^capture_/i;
+const RELINKED_SUFFIX_PATTERN = /(?:__relinked_\d+)+(?=\.[^.]+$)/ig;
 
 function recordSecurityBlock(channel, code, message) {
   const key = `${channel}:${code}`;
@@ -105,10 +107,45 @@ const buildFallbackArtifactCandidates = ({ fallbackImages, matchArtifactsRoot, m
   return candidates;
 };
 
-const AUTO_CAPTURE_FILENAME_PATTERN = /^capture_/i;
-
 function isAutoCaptureFilename(value) {
   return AUTO_CAPTURE_FILENAME_PATTERN.test(String(value || '').trim());
+}
+
+function stripRelinkSuffixes(value) {
+  const baseName = path.basename(String(value || '').trim());
+  if (!baseName) return '';
+  return baseName.replace(RELINKED_SUFFIX_PATTERN, '');
+}
+
+function getArtifactCanonicalFilename(value) {
+  const baseName = path.basename(String(value || '').trim());
+  if (!baseName) return '';
+  if (!isAutoCaptureFilename(baseName)) return baseName.toLowerCase();
+  return stripRelinkSuffixes(baseName).toLowerCase();
+}
+
+function countRelinkSuffixes(value) {
+  const matches = path.basename(String(value || '').trim()).match(/__relinked_\d+/ig);
+  return Array.isArray(matches) ? matches.length : 0;
+}
+
+function pickPreferredArtifactPath(currentPath, candidatePath) {
+  if (!currentPath) return candidatePath;
+  if (!candidatePath) return currentPath;
+
+  const currentDepth = countRelinkSuffixes(currentPath);
+  const candidateDepth = countRelinkSuffixes(candidatePath);
+  if (candidateDepth !== currentDepth) {
+    return candidateDepth < currentDepth ? candidatePath : currentPath;
+  }
+
+  const currentName = path.basename(currentPath).toLowerCase();
+  const candidateName = path.basename(candidatePath).toLowerCase();
+  if (candidateName.length !== currentName.length) {
+    return candidateName.length < currentName.length ? candidatePath : currentPath;
+  }
+
+  return candidateName < currentName ? candidatePath : currentPath;
 }
 
 async function saveScreenshotImage({ app, artifactHelpers }, { imageBase64, matchId, channel = 'save-screenshot' }) {
@@ -275,9 +312,8 @@ async function collectMatchArtifacts(app, artifactHelpers, parsedPayload) {
   const files = fs.existsSync(matchDir)
     ? await fsPromises.readdir(matchDir)
     : [];
-  const images = [];
+  const imageByCanonicalFilename = new Map();
   const telemetry = [];
-  const imageByFilename = new Map();
 
   for (const f of files) {
     const fullPath = path.join(matchDir, f);
@@ -288,19 +324,27 @@ async function collectMatchArtifacts(app, artifactHelpers, parsedPayload) {
         telemetry.push(content);
       } catch (e) { /* skip unparseable */ }
     } else if (IMAGE_EXTENSIONS.has(ext)) {
-      images.push(fullPath);
-      imageByFilename.set(toArtifactFilenameKey(fullPath), fullPath);
+      const canonicalFilenameKey = getArtifactCanonicalFilename(fullPath);
+      const existingPath = imageByCanonicalFilename.get(canonicalFilenameKey);
+      imageByCanonicalFilename.set(
+        canonicalFilenameKey,
+        pickPreferredArtifactPath(existingPath, fullPath)
+      );
     }
   }
 
   for (const fallbackPath of fallbackCandidates) {
-    const filenameKey = toArtifactFilenameKey(fallbackPath);
-    if (!filenameKey) continue;
-    if (imageByFilename.has(filenameKey)) continue;
+    const canonicalFilenameKey = getArtifactCanonicalFilename(fallbackPath);
+    if (!canonicalFilenameKey) continue;
     if (!fs.existsSync(fallbackPath)) continue;
-    images.push(fallbackPath);
-    imageByFilename.set(filenameKey, fallbackPath);
+    const existingPath = imageByCanonicalFilename.get(canonicalFilenameKey);
+    imageByCanonicalFilename.set(
+      canonicalFilenameKey,
+      pickPreferredArtifactPath(existingPath, fallbackPath)
+    );
   }
+
+  const images = Array.from(imageByCanonicalFilename.values());
 
   return ok({
     matchDir,

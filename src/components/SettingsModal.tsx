@@ -1339,7 +1339,8 @@ const SettingsModalContent: React.FC = () => {
                                 <div>
                                     <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">Auto-Capture</div>
                                     <div className="mt-1 text-label-sm text-md-sys-on-surface/60">
-                                        Monitors a screen region for pixel changes to auto-trigger smart capture when the result screen appears.
+                                        Monitors a screen region for pixel changes to auto-trigger manual or non-full-auto result capture.
+                                        Full Auto uses a separate full-screen result-flash watcher.
                                     </div>
                                 </div>
                                 <label className="flex cursor-pointer items-center gap-2 shrink-0">
@@ -1421,8 +1422,8 @@ const SettingsModalContent: React.FC = () => {
                                 <div>
                                     <div className="text-label-sm font-semibold text-md-sys-on-surface">Full Auto mode</div>
                                     <div className="mt-0.5 text-label-sm text-md-sys-on-surface/60">
-                                        Auto-saves the match when the result screen is detected. No wizard required.
-                                        Requires pixel monitor to be enabled.
+                                        Auto-saves the match when the result flash and result screen are detected. No wizard required.
+                                        The region and polling controls above only apply when Full Auto is off.
                                     </div>
                                 </div>
                                 <label className="flex cursor-pointer items-center gap-2 shrink-0 mt-0.5">
@@ -1430,10 +1431,9 @@ const SettingsModalContent: React.FC = () => {
                                         type="checkbox"
                                         checked={fullAutoEnabled}
                                         onChange={e => setFullAutoEnabled(e.target.checked)}
-                                        disabled={!pixelMonitorEnabled}
-                                        className="h-4 w-4 accent-md-sys-primary disabled:opacity-40"
+                                        className="h-4 w-4 accent-md-sys-primary"
                                     />
-                                    <span className={`text-label-sm ${pixelMonitorEnabled ? 'text-md-sys-on-surface/70' : 'text-md-sys-on-surface/35'}`}>
+                                    <span className="text-label-sm text-md-sys-on-surface/70">
                                         Enabled
                                     </span>
                                 </label>

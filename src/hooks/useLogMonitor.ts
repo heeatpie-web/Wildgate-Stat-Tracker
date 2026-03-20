@@ -328,6 +328,12 @@ const isPracticeRangeMap = (mapName: unknown): boolean => {
     return /(practice|training|range)/.test(normalized);
 };
 
+const isPracticeRangeMatchPool = (poolValue: unknown): boolean => {
+    const normalized = String(poolValue || '').trim().toLowerCase();
+    if (!normalized) return false;
+    return /(firingrange|practice|training|range)/.test(normalized);
+};
+
 const TELEMETRY_LIFECYCLE_STAGE_RANK: Record<TelemetryLifecycleStage, number> = {
     idle: 0,
     loading: 1,
@@ -546,6 +552,7 @@ export const useLogMonitor = (activeUser?: string) => {
     const telemetryLifecycleActiveRef = useRef(isMatchInProgress);
     const telemetryLifecycleStageRef = useRef<TelemetryLifecycleStage>(isMatchInProgress ? 'live' : 'idle');
     const telemetryLifecycleIsPracticeRangeRef = useRef(false);
+    const telemetryPracticeRangeSessionIdsRef = useRef<Set<string>>(new Set());
     const telemetryLifecycleStartedAtRef = useRef<number | null>(matchStartTime);
     const telemetryLiveStartedAtRef = useRef<number | null>(matchStartTime);
     const latestNebLoadoutSavedTimestampRef = useRef<number>(0);
@@ -828,6 +835,7 @@ export const useLogMonitor = (activeUser?: string) => {
         latestNebLoadoutSavedTimestampRef.current = 0;
         latestNebLoadoutSavedSignatureRef.current = '';
         localTelemetryShipSelectionRef.current = '';
+        telemetryPracticeRangeSessionIdsRef.current.clear();
         pendingTelemetryConsistencyRef.current = {
             durationToleranceSeconds: DEFAULT_DURATION_TOLERANCE_SECONDS,
         };
@@ -1059,6 +1067,7 @@ export const useLogMonitor = (activeUser?: string) => {
                 telemetryLifecycleActiveRef.current = false;
                 telemetryLifecycleStageRef.current = 'idle';
                 telemetryLifecycleIsPracticeRangeRef.current = false;
+                telemetryPracticeRangeSessionIdsRef.current.clear();
                 telemetryLifecycleStartedAtRef.current = null;
                 telemetryLiveStartedAtRef.current = null;
                 setIsMatchInProgress(false);
@@ -1135,15 +1144,30 @@ export const useLogMonitor = (activeUser?: string) => {
                     const matchmakerState = typeof matchmakerStateRaw === 'string'
                         ? matchmakerStateRaw.trim()
                         : toStringOrEmpty(matchmakerStateRaw).trim();
+                    const matchPoolValue = pickTelemetryValueCaseInsensitive(
+                        payloadSources,
+                        ['ticketMatchPool', 'ticket_match_pool', 'matchPool', 'match_pool'],
+                    );
                     const loadingMapRaw = pickTelemetryValueCaseInsensitive(payloadSources, TELEMETRY_MAP_NAME_KEYS);
                     const loadingMapName = typeof loadingMapRaw === 'string' ? loadingMapRaw : '';
                     const loadingMapNameLower = loadingMapName.toLowerCase();
                     const practiceRangeMapSignal = !!loadingMapName && isPracticeRangeMap(loadingMapName);
+                    const practiceRangeMatchPoolSignal = isPracticeRangeMatchPool(matchPoolValue);
+                    if (practiceRangeMatchPoolSignal && currentMatchSessionId) {
+                        telemetryPracticeRangeSessionIdsRef.current.add(currentMatchSessionId);
+                    }
+                    const practiceRangeSessionSignal = !!currentMatchSessionId
+                        && telemetryPracticeRangeSessionIdsRef.current.has(currentMatchSessionId);
+                    const practiceRangeSignal = (
+                        practiceRangeMapSignal
+                        || practiceRangeMatchPoolSignal
+                        || practiceRangeSessionSignal
+                    );
                     if (
                         name === 'NebLoadingScreen'
                         && !!loadingMapName
                         && isNonMatchMap(loadingMapName)
-                        && !practiceRangeMapSignal
+                        && !practiceRangeSignal
                         && !loadingMapNameLower.includes('frontend')
                     ) {
                         Logger.debug('LogMonitor', `Skipping non-match map load: ${loadingMapName}`);
@@ -1225,7 +1249,10 @@ export const useLogMonitor = (activeUser?: string) => {
                             currentMatchSessionId: currentMatchSessionId || null,
                             previousMatchSessionId: previousMatchSessionId || null,
                             matchmakerState: matchmakerState || null,
+                            matchPool: typeof matchPoolValue === 'string' ? matchPoolValue : null,
                             practiceRangeMapSignal,
+                            practiceRangeMatchPoolSignal,
+                            practiceRangeSessionSignal,
                             hasExplicitMatchSessionIdSignal,
                             loadingScreenStageSignal,
                             nextLifecycleStage,
@@ -1240,12 +1267,12 @@ export const useLogMonitor = (activeUser?: string) => {
                             hasDraft: !!telemetryDraftMatchIdRef.current,
                         })}`);
                     }
-                    if (loadingScreenStageSignal === 'live' && practiceRangeMapSignal) {
-                        Logger.info('LogMonitor', `Treating practice-range map as live telemetry lifecycle stage: ${loadingMapName}`);
+                    if (loadingScreenStageSignal === 'live' && practiceRangeSignal) {
+                        Logger.info('LogMonitor', `Treating practice-range telemetry as live lifecycle stage: ${loadingMapName || String(matchPoolValue || '')}`);
                     }
                     if (nextLifecycleStage) {
                         transitionTelemetryLifecycleStage(nextLifecycleStage, gameTime, payloadDurationSeconds, {
-                            isPracticeRange: practiceRangeMapSignal && nextLifecycleStage === 'live',
+                            isPracticeRange: practiceRangeSignal && nextLifecycleStage === 'live',
                         });
                     }
 
@@ -1784,12 +1811,14 @@ export const useLogMonitor = (activeUser?: string) => {
                             if (shouldApplySharedShipSelection) {
                                 localTelemetryShipSelectionRef.current = shipName;
                             }
-                            const authoritativeShipName = (
-                                !shouldApplySharedShipSelection
-                                && hasTelemetrySelection(localTelemetryShipSelectionRef.current)
-                            )
+                            const fallbackSharedShipName = hasTelemetrySelection(localTelemetryShipSelectionRef.current)
                                 ? localTelemetryShipSelectionRef.current
-                                : shipName;
+                                : '';
+                            const authoritativeShipName = (
+                                shipName && !shipName.startsWith('Unknown')
+                            )
+                                ? shipName
+                                : (fallbackSharedShipName || shipName);
                             traceTelemetryLoadout('Apply telemetry ship', {
                                 eventName: name,
                                 ship: authoritativeShipName,

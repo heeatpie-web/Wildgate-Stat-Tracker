@@ -171,4 +171,26 @@ describe('artifactHandlers token-backed fallback artifacts', () => {
     }));
     expect(fs.existsSync(fallbackPath)).toBe(false);
   });
+
+  it('dedupes relinked auto-capture variants when listing match artifacts', async () => {
+    const rootDir = makeTempDir();
+    tempDirs.push(rootDir);
+    const matchDir = path.join(rootDir, 'match_artifacts', '345');
+    writeImage(path.join(matchDir, 'capture_2026-03-19T20-28-32-675Z.png'), 'base-image');
+    writeImage(path.join(matchDir, 'capture_2026-03-19T20-28-32-675Z__relinked_1.png'), 'base-image');
+    writeImage(path.join(matchDir, 'capture_2026-03-19T20-28-32-675Z__relinked_1__relinked_1.png'), 'base-image');
+
+    const ipcMain = createIpcMainHarness();
+    registerArtifactHandlers(ipcMain, createArtifactContext(rootDir));
+    const getArtifacts = ipcMain.handlers.get('get-match-artifacts');
+
+    const listed = await getArtifacts({ sender: { id: 505 } }, { matchId: 345 });
+
+    expect(listed.success).toBe(true);
+    expect(listed.data.images).toEqual([
+      path.join(matchDir, 'capture_2026-03-19T20-28-32-675Z.png'),
+    ]);
+    expect(listed.data.imageFiles).toHaveLength(1);
+    expect(listed.data.imageFiles[0].filename).toBe('capture_2026-03-19T20-28-32-675Z.png');
+  });
 });

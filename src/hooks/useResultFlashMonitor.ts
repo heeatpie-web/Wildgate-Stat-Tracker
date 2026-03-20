@@ -58,6 +58,15 @@ const resolveFlashMonitorDimensions = (
         return { width: displayWidth, height: displayHeight };
     }
 
+    if (typeof window !== 'undefined' && typeof window.screen !== 'undefined') {
+        const scaleFactor = Math.max(1, Number(window.devicePixelRatio) || 1);
+        const screenWidth = toPositiveDimension(window.screen.width * scaleFactor);
+        const screenHeight = toPositiveDimension(window.screen.height * scaleFactor);
+        if (screenWidth && screenHeight) {
+            return { width: screenWidth, height: screenHeight };
+        }
+    }
+
     return null;
 };
 
@@ -222,4 +231,3 @@ export function useResultFlashMonitor({
         };
     }, [enabled, liveStartedAt, regions, triggerLatched]);
 }
-
