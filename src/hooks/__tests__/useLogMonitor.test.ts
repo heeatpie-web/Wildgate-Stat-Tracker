@@ -358,6 +358,38 @@ describe('useLogMonitor', () => {
     expect(uiState.setTelemetryLifecycleIsPracticeRange).toHaveBeenCalledWith(true);
   });
 
+  it('treats firingrange queue states as practice-range live matches before server-found', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: {
+            event: {
+              newStatus: 'MM_LOOKING_4_GAME',
+              sESSIONId: 'practice-queue-session-id',
+              ticketMatchPool: 'firingrange',
+            },
+          },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    expect(addMatch).toHaveBeenCalledTimes(1);
+    expect(latestAddedMatch()).toMatchObject({
+      isPracticeRange: true,
+      player: 'Pilot',
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+    });
+    expect(gameDataState.setIsMatchInProgress).toHaveBeenCalledWith(true);
+    expect(uiState.setTelemetryLifecycleStage).toHaveBeenCalledWith('live');
+    expect(uiState.setTelemetryLifecycleIsPracticeRange).toHaveBeenCalledWith(true);
+  });
+
   it('uses the latest active mode when creating telemetry drafts after a mode change', async () => {
     const { useLogMonitor } = await import('../useLogMonitor');
     const { rerender } = renderHook(() => useLogMonitor('Pilot'));
@@ -398,6 +430,63 @@ describe('useLogMonitor', () => {
     expect(addMatch).not.toHaveBeenCalled();
     expect(appStoreState.resetSelectionSourcesForNewMatch).not.toHaveBeenCalled();
     expect(processTelemetryEvent).not.toHaveBeenCalled();
+  });
+
+  it('replays a recent stale firingrange bootstrap event when the app starts mid-practice-range', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    gameDataState.sessionStartTime = Date.now();
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: {
+            event: {
+              newStatus: 'MM_WAITING_4_SERVER',
+              sESSIONId: 'practice-recovery-session-id',
+              ticketMatchPool: 'firingrange',
+            },
+          },
+          ClientTimestamp: Math.floor((Date.now() - 120_000) / 1000),
+        },
+      ]);
+    });
+
+    expect(addMatch).toHaveBeenCalledTimes(1);
+    expect(latestAddedMatch()).toMatchObject({
+      isPracticeRange: true,
+      telemetryDraftState: 'active',
+    });
+    expect(gameDataState.setIsMatchInProgress).toHaveBeenCalledWith(true);
+    expect(uiState.setTelemetryLifecycleStage).toHaveBeenCalledWith('live');
+    expect(uiState.setTelemetryLifecycleIsPracticeRange).toHaveBeenCalledWith(true);
+  });
+
+  it('still ignores stale firingrange bootstrap events that are far too old', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    gameDataState.sessionStartTime = Date.now();
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: {
+            event: {
+              newStatus: 'MM_WAITING_4_SERVER',
+              sESSIONId: 'practice-old-session-id',
+              ticketMatchPool: 'firingrange',
+            },
+          },
+          ClientTimestamp: Math.floor((Date.now() - (20 * 60 * 1000)) / 1000),
+        },
+      ]);
+    });
+
+    expect(addMatch).not.toHaveBeenCalled();
+    expect(gameDataState.setIsMatchInProgress).not.toHaveBeenCalled();
+    expect(uiState.setTelemetryLifecycleStage).not.toHaveBeenCalled();
   });
 
   it('clears a stale active-match flag when the next mission start is detected', async () => {

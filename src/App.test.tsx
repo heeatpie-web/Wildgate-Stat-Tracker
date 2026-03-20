@@ -655,7 +655,7 @@ describe('App', () => {
     vi.useRealTimers();
   });
 
-  it('schedules delayed practice-range auto-capture after live entry', async () => {
+  it('arms the flash watcher immediately in practice range', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
     uiState.telemetryLifecycleStage = 'live';
@@ -683,29 +683,108 @@ describe('App', () => {
     const { default: App } = await import('./App');
     render(<App />);
 
-    expect(startAutoCaptureMock).not.toHaveBeenCalled();
-
-    await act(async () => {
-      vi.advanceTimersByTime(11_999);
-      await Promise.resolve();
-    });
-    expect(startAutoCaptureMock).not.toHaveBeenCalled();
-
-    await act(async () => {
-      vi.advanceTimersByTime(1);
-      await Promise.resolve();
-    });
-
-    expect(startAutoCaptureMock).toHaveBeenCalledTimes(1);
-    expect(startAutoCaptureMock).toHaveBeenCalledWith(expect.objectContaining({
-      matchId: 321,
-      telemetryLifecycleStage: 'live',
-      isMatchInProgress: true,
+    expect(useResultFlashMonitorMock).toHaveBeenCalledWith(expect.objectContaining({
+      enabled: true,
+      armDelayMs: 0,
+      liveStartedAt: expect.any(Number),
     }));
+
+    expect(startAutoCaptureMock).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
 
-  it('retries delayed practice-range auto-capture once when the draft is not ready yet', async () => {
+  it('starts the result screenshot burst 1 second after flash detection', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
+    uiState.telemetryLifecycleStage = 'live';
+    const draft = {
+      id: 4321,
+      timestamp: Date.now(),
+      date: '3/20/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      artifacts: [],
+    };
+    gameDataState.matches = [draft];
+    appStoreState.matches = [draft];
+    autoFinalizeResultScreenCaptureMock.mockResolvedValue({ success: true });
+
+    const api = {
+      invoke: vi.fn((channel: string) => {
+        if (channel === 'capture-screen') {
+          return Promise.resolve('image-base64');
+        }
+        if (channel === 'scan-result-screen') {
+          return Promise.resolve({ data: { result: 'Win' } });
+        }
+        if (channel === 'telemetry-retention-status') {
+          return Promise.resolve(null);
+        }
+        return Promise.resolve(null);
+      }),
+      send: vi.fn(),
+      on: vi.fn(() => () => {}),
+      removeAllListeners: vi.fn(),
+    };
+    getElectronAPIMock.mockReturnValue(api);
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    try {
+      const { default: App } = await import('./App');
+      render(<App />);
+
+      const flashOptions = useResultFlashMonitorMock.mock.calls.at(-1)?.[0] as {
+        onFlashDetected?: () => Promise<void>;
+      };
+      expect(flashOptions?.onFlashDetected).toBeTypeOf('function');
+
+      let triggerPromise: Promise<void> | undefined;
+      await act(async () => {
+        triggerPromise = flashOptions.onFlashDetected?.();
+        await Promise.resolve();
+      });
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        '[Brain] Flash signal received - scheduling result capture in 1000ms',
+        expect.objectContaining({ matchId: 4321, delayMs: 1_000 }),
+      );
+      expect(api.invoke).not.toHaveBeenCalledWith('capture-screen');
+
+      await act(async () => {
+        vi.advanceTimersByTime(999);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(api.invoke).not.toHaveBeenCalledWith('capture-screen');
+
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+        await triggerPromise;
+      });
+
+      expect(api.invoke).toHaveBeenCalledWith('capture-screen');
+      expect(autoFinalizeResultScreenCaptureMock).toHaveBeenCalledWith(expect.objectContaining({
+        imageBase64: 'image-base64',
+        resultData: { result: 'Win' },
+        matchId: 4321,
+      }));
+    } finally {
+      consoleLogSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not launch the old delayed practice-range auto-capture path', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
     uiState.telemetryLifecycleStage = 'live';
@@ -729,30 +808,16 @@ describe('App', () => {
     };
     gameDataState.matches = [draft];
     appStoreState.matches = [draft];
-    startAutoCaptureMock
-      .mockResolvedValueOnce({ started: false, reason: 'no-active-match' })
-      .mockResolvedValueOnce({ started: true });
 
     const { default: App } = await import('./App');
     render(<App />);
 
     await act(async () => {
-      vi.advanceTimersByTime(12_000);
+      vi.advanceTimersByTime(20_000);
       await Promise.resolve();
     });
 
-    expect(startAutoCaptureMock).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      vi.advanceTimersByTime(5_000);
-      await Promise.resolve();
-    });
-
-    expect(startAutoCaptureMock).toHaveBeenCalledTimes(2);
-    expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({
-      message: expect.stringContaining('active telemetry draft'),
-      type: 'warning',
-    }));
+    expect(startAutoCaptureMock).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
 

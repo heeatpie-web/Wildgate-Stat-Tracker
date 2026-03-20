@@ -8,10 +8,11 @@ const crypto = require('crypto');
 const http = require('http');
 const https = require('https');
 const fsPromises = require('fs').promises;
-const { registerOCRHandlers, captureGameWindow, processCapture, runOCR } = require('./ocrHandler.cjs');
+const { registerOCRHandlers, captureGameWindow, captureGameWindowBuffer, processCapture, runOCR } = require('./ocrHandler.cjs');
 const { mergeCaptures, isSameMatch } = require('./ocrMerger.cjs');
 const artifactHelpers = require('./helpers/artifactHelpers.cjs');
 const { runArtifactCanonicalMigration } = require('./helpers/artifactCanonicalMigration.cjs');
+const { requirePackagedModule } = require('./helpers/packagedModuleLoader.cjs');
 const telemetryArchiveHelpers = require('./helpers/telemetryArchiveHelpers.cjs');
 const {
   buildUsableTelemetryEvent,
@@ -22,7 +23,7 @@ const {
 const dbHelpers = require('./helpers/dbHelpers.cjs');
 const { registerArtifactHandlers, saveScreenshotImage } = require('./handlers/artifactHandlers.cjs');
 const { createAutoCaptureCoordinator } = require('./autoCaptureCoordinator.cjs');
-const { startMonitor, stopMonitor, sampleRegion } = require('./pixelMonitor.cjs');
+const { startMonitor, stopMonitor, sampleRegion, sampleImageBufferRegion } = require('./pixelMonitor.cjs');
 const { extractResultScreen } = require('./resultScreenExtractor.cjs');
 const { buildAutoCaptureRequestFromStateSnapshot } = require('./autoCaptureHotkeyState.cjs');
 const { clearGameWindowCache, holdGameKeySequence, lookupGameWindowCandidate, sendGameKeySequence, setPersistentPSRunner, validateGameInputRuntime } = require('./gameInput.cjs');
@@ -603,6 +604,88 @@ function delay(ms) {
 }
 
 let autoCaptureHiddenWindow = null;
+let resultFlashScreenshot = null;
+let resultFlashSampleLogWindow = {
+  startedAt: 0,
+  sampleCount: 0,
+};
+
+const RESULT_FLASH_SAMPLE_LOG_INTERVAL_MS = 5000;
+const RESULT_FLASH_HIDE_SETTLE_TIMEOUT_MS = 40;
+const RESULT_FLASH_HIDE_SETTLE_POLL_MS = 5;
+
+function getResultFlashScreenshotModule() {
+  if (resultFlashScreenshot) return resultFlashScreenshot;
+  resultFlashScreenshot = requirePackagedModule('screenshot-desktop');
+  return resultFlashScreenshot;
+}
+
+function formatResultFlashRegion(config) {
+  const x = Math.round(Number(config?.x) || 0);
+  const y = Math.round(Number(config?.y) || 0);
+  const width = Math.round(Number(config?.width) || 0);
+  const height = Math.round(Number(config?.height) || 0);
+  return `x=${x} y=${y} w=${width} h=${height}`;
+}
+
+function formatResultFlashSample(result) {
+  if (!result) return 'result=missing';
+  if (result.success === false) {
+    return `result=error error=${JSON.stringify(result.error || 'unknown')}`;
+  }
+  const avgR = Math.round(Number(result?.data?.avgR) || 0);
+  const avgG = Math.round(Number(result?.data?.avgG) || 0);
+  const avgB = Math.round(Number(result?.data?.avgB) || 0);
+  const brightness = Math.round((avgR + avgG + avgB) / 3);
+  return `result=success rgb=(${avgR}, ${avgG}, ${avgB}) brightness=${brightness}`;
+}
+
+async function waitForWindowToHide(mainWindow, timeoutMs = RESULT_FLASH_HIDE_SETTLE_TIMEOUT_MS) {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return { waitedMs: 0, stillVisible: false };
+  }
+
+  const startedAt = Date.now();
+  while (mainWindow.isVisible() && (Date.now() - startedAt) < timeoutMs) {
+    await delay(RESULT_FLASH_HIDE_SETTLE_POLL_MS);
+  }
+
+  return {
+    waitedMs: Date.now() - startedAt,
+    stillVisible: mainWindow.isVisible(),
+  };
+}
+
+function maybeLogResultFlashSample({
+  region,
+  result,
+  shouldHideWindow,
+  hideWaitMs,
+  stillVisible,
+  captureMs,
+}) {
+  const now = Date.now();
+  if (resultFlashSampleLogWindow.startedAt === 0) {
+    resultFlashSampleLogWindow.startedAt = now;
+  }
+  resultFlashSampleLogWindow.sampleCount += 1;
+
+  const elapsedMs = now - resultFlashSampleLogWindow.startedAt;
+  if (elapsedMs < RESULT_FLASH_SAMPLE_LOG_INTERVAL_MS) return;
+
+  const sampleCount = resultFlashSampleLogWindow.sampleCount;
+  const avgIntervalMs = sampleCount > 0 ? (elapsedMs / sampleCount) : 0;
+  console.log(
+    `[ResultFlash][IPC] samples=${sampleCount} elapsed=${elapsedMs}ms avgInterval=${avgIntervalMs.toFixed(1)}ms `
+    + `hidden=${shouldHideWindow ? 'yes' : 'no'} hideWait=${hideWaitMs}ms stillVisible=${stillVisible ? 'yes' : 'no'} `
+    + `captureMs=${captureMs} region=${formatResultFlashRegion(region)} ${formatResultFlashSample(result)}`
+  );
+
+  resultFlashSampleLogWindow = {
+    startedAt: now,
+    sampleCount: 0,
+  };
+}
 
 async function beginAutoCaptureWindowSession() {
   const mainWindow = win;
@@ -633,6 +716,16 @@ async function endAutoCaptureWindowSession() {
 }
 
 async function captureGameWindowForAutomation(options = {}) {
+  const imageBuffer = await captureGameWindowBufferForAutomation(options);
+  return {
+    success: true,
+    imageBase64: imageBuffer.toString('base64'),
+    width: 0,
+    height: 0,
+  };
+}
+
+async function captureGameWindowBufferForAutomation(options = {}) {
   const keepWindowHidden = options.keepWindowHidden === true;
   const mainWindow = win;
   const shouldHideWindow = !keepWindowHidden && Boolean(
@@ -646,7 +739,60 @@ async function captureGameWindowForAutomation(options = {}) {
       mainWindow.hide();
       await delay(20);
     }
-    return await captureGameWindow();
+    return await captureGameWindowBuffer();
+  } finally {
+    if (shouldHideWindow && mainWindow && !mainWindow.isDestroyed()) {
+      if (typeof mainWindow.showInactive === 'function') {
+        mainWindow.showInactive();
+      } else {
+        mainWindow.show();
+      }
+    }
+  }
+}
+
+async function sampleResultFlashRegion(config) {
+  const mainWindow = win;
+  const shouldHideWindow = Boolean(
+    mainWindow
+    && !mainWindow.isDestroyed()
+    && mainWindow.isVisible()
+  );
+  let hideWaitMs = 0;
+  let stillVisible = false;
+
+  try {
+    if (shouldHideWindow) {
+      mainWindow.hide();
+      const hideState = await waitForWindowToHide(mainWindow);
+      hideWaitMs = hideState.waitedMs;
+      stillVisible = hideState.stillVisible;
+      if (hideState.stillVisible) {
+        console.warn(
+          `[ResultFlash][IPC] main window remained visible after hide() wait (${hideState.waitedMs}ms); `
+          + 'capture may include the overlay'
+        );
+      }
+    }
+
+    const screenshotDesktop = getResultFlashScreenshotModule();
+    const captureStartedAt = Date.now();
+    const imageBuffer = await screenshotDesktop({ format: 'png' });
+    const result = await sampleImageBufferRegion(imageBuffer, config);
+    maybeLogResultFlashSample({
+      region: config,
+      result,
+      shouldHideWindow,
+      hideWaitMs,
+      stillVisible,
+      captureMs: Date.now() - captureStartedAt,
+    });
+    return result;
+  } catch (error) {
+    return {
+      success: false,
+      error: error?.message || 'Result flash sample failed',
+    };
   } finally {
     if (shouldHideWindow && mainWindow && !mainWindow.isDestroyed()) {
       if (typeof mainWindow.showInactive === 'function') {
@@ -3718,6 +3864,7 @@ ipcMain.on('pixel-monitor-start', (_event, config) => {
 });
 ipcMain.on('pixel-monitor-stop', () => stopMonitor());
 ipcMain.handle('pixel-monitor-sample', async (_event, config) => sampleRegion(config));
+ipcMain.handle('result-flash-sample', async (_event, config) => sampleResultFlashRegion(config));
 
 ipcMain.handle('scan-result-screen', async (_event, { imageBase64 }) => {
     try {

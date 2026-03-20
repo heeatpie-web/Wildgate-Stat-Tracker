@@ -50,6 +50,16 @@ const isReadyTelemetryDraft = (match: Match | null | undefined): match is Match 
     && (match.telemetryDraftState === 'ready' || match.telemetryDraftState == null)
 );
 
+const isFinalizableTelemetryDraft = (match: Match | null | undefined): match is Match => (
+    Boolean(match)
+    && match?.subType === 'Telemetry Draft'
+    && (
+        match.telemetryDraftState === 'active'
+        || match.telemetryDraftState === 'ready'
+        || match.telemetryDraftState == null
+    )
+);
+
 const toArtifactKey = (value: string) => value.replace(/[\\/]+/g, '\\').toLowerCase();
 
 const normalizeNameKey = (value: string | null | undefined): string =>
@@ -1013,9 +1023,11 @@ export const useMatchSubmission = () => {
     const autoFinalizeResultScreenCapture = useCallback(async ({
         imageBase64,
         resultData,
+        matchId,
     }: {
         imageBase64: string;
         resultData: AutoResultScreenData;
+        matchId?: number | null;
     }): Promise<AutoFinalizeResultStatus> => {
         if (submitting) return { success: false, reason: 'busy' };
 
@@ -1054,12 +1066,18 @@ export const useMatchSubmission = () => {
         } = state;
 
         const resolvedPendingMatchData = pendingMatchData || {};
-        const existingMatch = resolveExistingSubmissionMatch({
-            pendingMatchData: resolvedPendingMatchData,
-            matches,
-            activeUser,
-            sessionStartTime,
-        });
+        const requestedMatchId = Number(matchId || 0);
+        const hasRequestedMatchId = Number.isInteger(requestedMatchId) && requestedMatchId > 0;
+        const existingMatch = hasRequestedMatchId
+            ? (Array.isArray(matches)
+                ? matches.find((entry) => entry.id === requestedMatchId && isFinalizableTelemetryDraft(entry))
+                : undefined)
+            : resolveExistingSubmissionMatch({
+                pendingMatchData: resolvedPendingMatchData,
+                matches,
+                activeUser,
+                sessionStartTime,
+            });
         if (!existingMatch || existingMatch.subType !== 'Telemetry Draft') {
             return { success: false, reason: 'no-draft' };
         }

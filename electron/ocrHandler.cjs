@@ -509,19 +509,20 @@ async function archiveOcrSample(buffer, ocrText, metadata = {}) {
 /**
  * Capture the game window (primary display)
  */
+async function captureGameWindowBuffer() {
+  if (!screenshot) {
+    screenshot = requirePackagedModule('screenshot-desktop');
+  }
+
+  console.log('[OCR] Capturing screen...');
+  const imgBuffer = await screenshot({ format: 'png' });
+  console.log('[OCR] Screen captured, size:', imgBuffer.length);
+  return imgBuffer;
+}
+
 async function captureGameWindow() {
   try {
-    if (!screenshot) {
-      screenshot = requirePackagedModule('screenshot-desktop');
-    }
-
-    console.log('[OCR] Capturing screen...');
-
-    const imgBuffer = await screenshot({ format: 'png' });
-
-    // Debug save is handled by processCapture to avoid duplicates
-    console.log('[OCR] Screen captured, size:', imgBuffer.length);
-
+    const imgBuffer = await captureGameWindowBuffer();
     return {
       success: true,
       imageBase64: imgBuffer.toString('base64'),
@@ -3003,6 +3004,7 @@ function registerOCRHandlers(mainWindow) {
 module.exports = {
   registerOCRHandlers,
   captureGameWindow,
+  captureGameWindowBuffer,
   processCapture,
   preprocessImage,
   runOCR,

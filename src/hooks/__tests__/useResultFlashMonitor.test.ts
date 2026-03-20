@@ -76,6 +76,59 @@ describe('useResultFlashMonitor', () => {
     expect(invokeMock).toHaveBeenCalledTimes(1);
   });
 
+  it('polls the Eye on a 100ms cadence after the initial sample', async () => {
+    const { useResultFlashMonitor } = await import('../useResultFlashMonitor');
+
+    invokeMock.mockResolvedValue({ success: true, data: DARK_SAMPLE });
+    renderHook(() => useResultFlashMonitor({
+      enabled: true,
+      liveStartedAt: Date.now() - 46_000,
+      armDelayMs: 0,
+      onFlashResolved: vi.fn(),
+    }));
+
+    await act(async () => {
+      await flushAsyncWork();
+    });
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      vi.advanceTimersByTime(99);
+      await flushAsyncWork();
+    });
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+      await flushAsyncWork();
+    });
+    expect(invokeMock).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+      await flushAsyncWork();
+    });
+    expect(invokeMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('can arm immediately when the caller disables the live arm delay', async () => {
+    const { useResultFlashMonitor } = await import('../useResultFlashMonitor');
+
+    queueFlashFrame(WHITE_SAMPLE);
+    renderHook(() => useResultFlashMonitor({
+      enabled: true,
+      liveStartedAt: Date.now(),
+      armDelayMs: 0,
+      onFlashResolved: vi.fn(),
+    }));
+
+    await act(async () => {
+      await flushAsyncWork();
+    });
+
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+  });
+
   it('arms after the watched ROI stays bright for 0.20 seconds and waits for the flash to end before triggering OCR', async () => {
     const onFlashDetected = vi.fn();
     const onFlashResolved = vi.fn();
@@ -166,5 +219,47 @@ describe('useResultFlashMonitor', () => {
     });
 
     expect(onFlashResolved).not.toHaveBeenCalled();
+  });
+
+  it('publishes debug snapshots for the arm delay and sampled ROI state', async () => {
+    const onDebugStateChange = vi.fn();
+    const { useResultFlashMonitor } = await import('../useResultFlashMonitor');
+
+    const { rerender } = renderHook((props: { liveStartedAt: number | null }) => useResultFlashMonitor({
+      enabled: true,
+      liveStartedAt: props.liveStartedAt,
+      onFlashResolved: vi.fn(),
+      onDebugStateChange,
+    }), {
+      initialProps: {
+        liveStartedAt: Date.now(),
+      },
+    });
+
+    expect(onDebugStateChange).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'arming-delay',
+      isArmed: false,
+      armRemainingMs: 45_000,
+      regions: [{ x: 64, y: 1013, width: 107, height: 21 }],
+    }));
+    expect(invokeMock).not.toHaveBeenCalled();
+
+    queueFlashFrame(WHITE_SAMPLE);
+    rerender({ liveStartedAt: Date.now() - 46_000 });
+
+    await act(async () => {
+      await flushAsyncWork();
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith('result-flash-sample', { x: 64, y: 1013, width: 107, height: 21 });
+    expect(onDebugStateChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      status: 'sampling',
+      isArmed: true,
+      lastSampleResult: {
+        success: true,
+        data: WHITE_SAMPLE,
+      },
+      lastIsWhiteFrame: true,
+    }));
   });
 });

@@ -25,6 +25,7 @@ let _cooldownUntil = 0;
 let _prevSample = null; // [avgR, avgG, avgB]
 let _pendingTrigger = null; // { sample: [avgR, avgG, avgB], expiresAt: number }
 let _busy = false;
+let _sharp = null;
 
 // Lazy-load nut-js to avoid require() at module load time
 let _nut = null;
@@ -32,6 +33,12 @@ function getNut() {
     if (_nut) return _nut;
     _nut = require('@nut-tree-fork/nut-js');
     return _nut;
+}
+
+function getSharp() {
+    if (_sharp) return _sharp;
+    _sharp = require('sharp');
+    return _sharp;
 }
 
 function createSampleSuccess(data) {
@@ -63,6 +70,20 @@ function normalizeRegionConfig(config) {
         width: Math.round(width),
         height: Math.round(height),
     };
+}
+
+function clampRegionToBounds(regionConfig, imageWidth, imageHeight) {
+    const safeImageWidth = Math.max(0, Math.round(Number(imageWidth) || 0));
+    const safeImageHeight = Math.max(0, Math.round(Number(imageHeight) || 0));
+    if (safeImageWidth <= 0 || safeImageHeight <= 0) return null;
+
+    const x = Math.min(Math.max(0, regionConfig.x), safeImageWidth - 1);
+    const y = Math.min(Math.max(0, regionConfig.y), safeImageHeight - 1);
+    const width = Math.min(regionConfig.width, safeImageWidth - x);
+    const height = Math.min(regionConfig.height, safeImageHeight - y);
+    if (width <= 0 || height <= 0) return null;
+
+    return { x, y, width, height };
 }
 
 /**
@@ -99,6 +120,62 @@ async function sampleRegion(config) {
             sumG += buf[i + 1];
             sumR += buf[i + 2];
             // buf[i + 3] is alpha — ignored
+        }
+
+        return createSampleSuccess({
+            avgR: Math.round(sumR / pixelCount),
+            avgG: Math.round(sumG / pixelCount),
+            avgB: Math.round(sumB / pixelCount),
+        });
+    } catch (error) {
+        return createSampleError(error);
+    }
+}
+
+async function sampleImageBufferRegion(imageBuffer, config) {
+    try {
+        const regionConfig = normalizeRegionConfig(config);
+        if (!regionConfig) {
+            return createSampleError('Invalid pixel monitor region configuration');
+        }
+        if (!Buffer.isBuffer(imageBuffer) || imageBuffer.length === 0) {
+            return createSampleError('Pixel monitor image buffer is unavailable');
+        }
+
+        const sharp = getSharp();
+        const image = sharp(imageBuffer, { failOn: 'none' });
+        const metadata = await image.metadata();
+        const imageWidth = Number(metadata.width || 0);
+        const imageHeight = Number(metadata.height || 0);
+        const boundedRegion = clampRegionToBounds(regionConfig, imageWidth, imageHeight);
+        if (!boundedRegion) {
+            return createSampleError('Pixel monitor region falls outside the captured image');
+        }
+
+        const { data, info } = await image
+            .extract({
+                left: boundedRegion.x,
+                top: boundedRegion.y,
+                width: boundedRegion.width,
+                height: boundedRegion.height,
+            })
+            .ensureAlpha()
+            .raw()
+            .toBuffer({ resolveWithObject: true });
+
+        const channels = Number(info?.channels || 0);
+        const pixelCount = boundedRegion.width * boundedRegion.height;
+        if (!pixelCount || channels < 3) {
+            return createSampleError('Pixel monitor sample returned empty image data');
+        }
+
+        let sumR = 0;
+        let sumG = 0;
+        let sumB = 0;
+        for (let i = 0; i < data.length; i += channels) {
+            sumR += data[i];
+            sumG += data[i + 1];
+            sumB += data[i + 2];
         }
 
         return createSampleSuccess({
@@ -205,10 +282,12 @@ function stopMonitor() {
 const __test__ = {
     averageChannelDiff,
     buildPendingTrigger,
+    clampRegionToBounds,
     createSampleError,
     createSampleSuccess,
     normalizeRegionConfig,
+    sampleImageBufferRegion,
     shouldConfirmPendingTrigger,
 };
 
-module.exports = { startMonitor, stopMonitor, sampleRegion, __test__ };
+module.exports = { startMonitor, stopMonitor, sampleRegion, sampleImageBufferRegion, __test__ };

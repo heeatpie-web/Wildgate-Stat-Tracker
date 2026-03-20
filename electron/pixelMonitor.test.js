@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
+const sharp = require('sharp');
 const { __test__ } = require('./pixelMonitor.cjs');
 
 describe('pixelMonitor confirmation helpers', () => {
@@ -25,6 +26,31 @@ describe('pixelMonitor confirmation helpers', () => {
     await expect(sampleRegion({})).resolves.toEqual({
       success: false,
       error: 'Invalid pixel monitor region configuration',
+    });
+  });
+
+  it('samples averaged RGB values from a captured image buffer', async () => {
+    const { sampleImageBufferRegion } = require('./pixelMonitor.cjs');
+    const imageBuffer = await sharp(
+      Buffer.from([
+        255, 0, 0,
+        0, 255, 0,
+      ]),
+      { raw: { width: 2, height: 1, channels: 3 } }
+    ).png().toBuffer();
+
+    await expect(sampleImageBufferRegion(imageBuffer, {
+      x: 0,
+      y: 0,
+      width: 2,
+      height: 1,
+    })).resolves.toEqual({
+      success: true,
+      data: {
+        avgR: 128,
+        avgG: 128,
+        avgB: 0,
+      },
     });
   });
 });
