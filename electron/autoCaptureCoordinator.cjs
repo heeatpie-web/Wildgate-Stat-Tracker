@@ -14,12 +14,6 @@ const STEP_DEFINITIONS = Object.freeze({
   exit: { number: 9, label: 'Exit' },
 });
 
-const EXPECTED_SCREEN_TYPES = Object.freeze({
-  [STEP_DEFINITIONS.captureMap.label]: 'tactical_map',
-  [STEP_DEFINITIONS.captureCrewHubA.label]: 'crew_hub',
-  [STEP_DEFINITIONS.captureCrewHubB.label]: 'crew_hub',
-});
-
 const AUTO_CAPTURE_WAIT_PROFILES = Object.freeze({
   fast: Object.freeze({
     tacticalMapOpenMs: 80,
@@ -233,7 +227,6 @@ function createAutoCaptureCoordinator({
   sendKeySequence,
   sendMenuKeySequence = null,
   captureAndProcess,
-  waitForScreenType = null,
   lookupMapKeybind = lookupTacticalMapKeybind,
   delayFn = delay,
   beforeSequence = null,
@@ -279,38 +272,6 @@ function createAutoCaptureCoordinator({
       }
     };
 
-    const verifyScreenType = async (step, expectedType) => {
-      if (typeof waitForScreenType !== 'function' || !expectedType) {
-        return null;
-      }
-
-      const verification = await withTimeout(
-        () => waitForScreenType(expectedType, {
-          activeUser,
-          matchId,
-          ocrMode,
-          ocrRegions,
-          runtimeOptions,
-          stepLabel: step.label,
-          stepNumber: step.number,
-        }),
-        AUTO_CAPTURE_CAPTURE_TIMEOUT_MS,
-        `${step.label} screen verification`,
-      );
-
-      if (!verification?.success) {
-        const reason = verification?.error || `expected ${expectedType}`;
-        throw new Error(`${step.label}: ${reason}`);
-      }
-
-      const detectedType = String(verification?.detectedType || verification?.screenshotType || '').trim();
-      if (detectedType && detectedType !== expectedType) {
-        throw new Error(`${step.label}: expected ${expectedType}, detected ${detectedType}`);
-      }
-
-      return verification;
-    };
-
     const emitCommittedCaptureProgress = (captures = []) => {
       captures.forEach((capture) => {
         notify({
@@ -344,10 +305,6 @@ function createAutoCaptureCoordinator({
       // Fire sound immediately so the user hears it when the capture begins,
       // not after the PNG encode + file save completes.
       notify({ phase: 'capture-started', captureIndex, totalCaptures: 3, matchId });
-      const expectedType = EXPECTED_SCREEN_TYPES[step.label];
-      if (expectedType) {
-        await verifyScreenType(step, expectedType);
-      }
       const result = await withTimeout(() => captureAndProcess({
         matchId,
         activeUser,
@@ -369,10 +326,6 @@ function createAutoCaptureCoordinator({
         screenshotType: detectedType || null,
       };
       attemptCaptures.push(captureMeta);
-
-      if (expectedType && detectedType && detectedType !== expectedType) {
-        throw new Error(`${step.label}: expected ${expectedType}, detected ${detectedType}`);
-      }
 
       return captureMeta;
     };

@@ -796,7 +796,6 @@ const autoCaptureCoordinator = createAutoCaptureCoordinator({
   runWithHeldKeySequence: (sendKeys, action, runWhileHeld) => runHeldGameKeySequenceInternal(sendKeys, action, runWhileHeld),
   sendKeySequence: (sendKeys, action) => sendGameKeySequenceInternal(sendKeys, action),
   sendMenuKeySequence: (sendKeys, action) => sendMenuKeySequenceInternal(sendKeys, action),
-  waitForScreenType: (expectedType, options) => waitForGameScreenInternal(expectedType, options),
   beforeSequence: async () => beginAutoCaptureWindowSession(),
   afterSequence: async () => endAutoCaptureWindowSession(),
   captureAndProcess: async ({ matchId, activeUser = null, ocrMode = 'local', ocrRegions = null, runtimeOptions = {} }) => {
