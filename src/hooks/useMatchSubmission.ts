@@ -4,7 +4,7 @@ import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
 import { Match } from '../types';
 import { useSoundEffects } from '../hooks/useSoundEffects';
-import { applyArtifactRepair, bundleMatchArtifacts, getMatchArtifactsStructured, removeMatchArtifact } from '../utils/artifactService';
+import { applyArtifactRepair, bundleMatchArtifacts, getMatchArtifactsStructured, removeAllMatchArtifacts } from '../utils/artifactService';
 import { StorageService } from '../utils/storage';
 import { getElectronAPI } from '../utils/electronAPI';
 import Logger from '../utils/logger';
@@ -85,6 +85,37 @@ const mergeArtifactLists = (...artifactLists: Array<Array<string | null | undefi
         });
     });
     return merged;
+};
+
+type DeleteMatchArtifactsParams = {
+    matchId: number;
+    artifacts?: string[] | null;
+    deleteMatch: (matchId: number) => void;
+    notifyArtifactsConsumed?: (matchId: number, artifactPaths: string[]) => void;
+};
+
+export const removeMatchArtifactsThenDelete = async ({
+    matchId,
+    artifacts,
+    deleteMatch,
+    notifyArtifactsConsumed,
+}: DeleteMatchArtifactsParams) => {
+    const normalizedMatchId = Number(matchId);
+    if (!Number.isInteger(normalizedMatchId) || normalizedMatchId <= 0) {
+        return { removedPaths: [], failedPaths: [] };
+    }
+
+    const fallbackArtifacts = Array.isArray(artifacts)
+        ? artifacts.filter((artifactPath) => typeof artifactPath === 'string' && artifactPath.trim().length > 0)
+        : [];
+    const cleanup = await removeAllMatchArtifacts(normalizedMatchId, fallbackArtifacts);
+
+    if (cleanup.removedPaths.length > 0) {
+        notifyArtifactsConsumed?.(normalizedMatchId, cleanup.removedPaths);
+    }
+
+    deleteMatch(normalizedMatchId);
+    return cleanup;
 };
 
 type AutoResultScreenData = {
@@ -332,14 +363,6 @@ export const useMatchSubmission = () => {
         setTimelineEvents,
     ]);
 
-    const discardCurrentMatch = useCallback((matchId?: number | null) => {
-        const normalizedMatchId = Number(matchId);
-        if (Number.isInteger(normalizedMatchId) && normalizedMatchId > 0) {
-            deleteMatch(normalizedMatchId);
-        }
-        clearSubmissionState();
-    }, [clearSubmissionState, deleteMatch]);
-
     const notifyTelemetryDraftResolved = useCallback((matchId: number) => {
         window.dispatchEvent(new CustomEvent('telemetry-draft:resolved', {
             detail: { matchId },
@@ -354,6 +377,23 @@ export const useMatchSubmission = () => {
             },
         }));
     }, []);
+
+    const discardCurrentMatch = useCallback(async (matchId?: number | null) => {
+        const normalizedMatchId = Number(matchId);
+        if (Number.isInteger(normalizedMatchId) && normalizedMatchId > 0) {
+            const state = useAppStore.getState();
+            const match = Array.isArray(state.matches)
+                ? state.matches.find((entry: Match) => entry.id === normalizedMatchId)
+                : undefined;
+            await removeMatchArtifactsThenDelete({
+                matchId: normalizedMatchId,
+                artifacts: match?.artifacts || [],
+                deleteMatch,
+                notifyArtifactsConsumed,
+            });
+        }
+        clearSubmissionState();
+    }, [clearSubmissionState, deleteMatch, notifyArtifactsConsumed]);
 
     const initiateSubmission = useCallback((result: 'Win' | 'Loss' | 'Draw') => {
         const state = useAppStore.getState();
@@ -1204,34 +1244,25 @@ export const useMatchSubmission = () => {
         try {
             setSubmitting(true);
 
-            const structuredArtifacts = await getMatchArtifactsStructured(draft.id, draft.artifacts || []);
-            const artifactFiles = Array.isArray(structuredArtifacts?.imageFiles) ? structuredArtifacts.imageFiles : [];
-            const consumedArtifactPaths = mergeArtifactLists(
-                draft.artifacts,
-                Array.isArray(structuredArtifacts?.images) ? structuredArtifacts.images : [],
-            );
-
-            let failedRemovals = 0;
-            for (const artifactFile of artifactFiles) {
-                if (!artifactFile?.artifactId) continue;
-                const removal = await removeMatchArtifact(draft.id, artifactFile.artifactId);
-                if (!removal.success) failedRemovals += 1;
-            }
-
-            discardCurrentMatch(draft.id);
+            const cleanup = await removeMatchArtifactsThenDelete({
+                matchId: draft.id,
+                artifacts: draft.artifacts || [],
+                deleteMatch,
+                notifyArtifactsConsumed,
+            });
+            clearSubmissionState();
             await StorageService.flush();
             notifyTelemetryDraftResolved(draft.id);
-            notifyArtifactsConsumed(draft.id, consumedArtifactPaths);
 
-            if (failedRemovals > 0) {
-                const removedCount = Math.max(0, consumedArtifactPaths.length - failedRemovals);
+            if (cleanup.failedPaths.length > 0) {
+                const removedCount = Math.max(0, cleanup.removedPaths.length);
                 setToast({
-                    message: `Match discarded. Removed ${removedCount} screenshot${removedCount === 1 ? '' : 's'}; ${failedRemovals} could not be deleted.`,
+                    message: `Match discarded. Removed ${removedCount} screenshot${removedCount === 1 ? '' : 's'}; ${cleanup.failedPaths.length} could not be deleted.`,
                     type: 'warning',
                 });
-            } else if (consumedArtifactPaths.length > 0) {
+            } else if (cleanup.removedPaths.length > 0) {
                 setToast({
-                    message: `Match discarded. Removed ${consumedArtifactPaths.length} recorded screenshot${consumedArtifactPaths.length === 1 ? '' : 's'}.`,
+                    message: `Match discarded. Removed ${cleanup.removedPaths.length} recorded screenshot${cleanup.removedPaths.length === 1 ? '' : 's'}.`,
                     type: 'info',
                 });
             } else {
@@ -1246,7 +1277,7 @@ export const useMatchSubmission = () => {
         } finally {
             setSubmitting(false);
         }
-    }, [clearSubmissionState, discardCurrentMatch, notifyArtifactsConsumed, notifyTelemetryDraftResolved, setToast, submitting]);
+    }, [clearSubmissionState, deleteMatch, notifyArtifactsConsumed, notifyTelemetryDraftResolved, setToast, submitting]);
 
     return {
         initiateSubmission,

@@ -336,50 +336,6 @@ function scoreCandidate(sourceKind, reason, deltaMs) {
   return score;
 }
 
-function buildAutoCaptureCleanupPlans(matches, matchWindows, scope, userData) {
-  const plans = [];
-  const seen = new Set();
-  const matchArtifactsRoot = path.join(userData, 'match_artifacts');
-  const scopedMatches = scope?.matchId
-    ? matches.filter((match) => Number(match.id) === Number(scope.matchId))
-    : matches;
-
-  for (const match of scopedMatches) {
-    const matchId = Number(match.id || 0);
-    if (!Number.isInteger(matchId) || matchId <= 0) continue;
-    const artifacts = Array.isArray(match.artifacts) ? match.artifacts : [];
-    for (const artifactPath of artifacts) {
-      if (typeof artifactPath !== 'string' || !artifactPath.trim()) continue;
-      if (!isImageFile(artifactPath) || !isAutoCaptureArtifact(artifactPath)) continue;
-      const stat = safeStat(artifactPath);
-      const timestampMs = parseCaptureTimestampMs(path.basename(artifactPath))
-        || Number(stat?.birthtimeMs || stat?.mtimeMs || 0)
-        || null;
-      if (!Number.isFinite(timestampMs)) continue;
-      if (scope?.startTimeMs && Number(timestampMs) < scope.startTimeMs) continue;
-      if (scope?.endTimeMs && Number(timestampMs) > scope.endTimeMs) continue;
-
-      const owner = findBestWindowMatch(matchWindows, Number(timestampMs), DEFAULT_FALLBACK_MAX_DELTA_MS);
-      if (owner && Number(owner.id) === matchId) continue;
-
-      const pathKey = toPathKey(artifactPath);
-      if (seen.has(pathKey)) continue;
-      seen.add(pathKey);
-      const relativeToArtifacts = path.relative(matchArtifactsRoot, artifactPath);
-      plans.push({
-        matchId,
-        ownerMatchId: owner?.id || null,
-        artifactPath,
-        pathKey,
-        timestamp: Number(timestampMs),
-        deleteFile: relativeToArtifacts && !relativeToArtifacts.startsWith('..'),
-      });
-    }
-  }
-
-  return plans;
-}
-
 function buildRepairPlan(db, userData, scopeOptions) {
   const scope = normalizeRepairScope(scopeOptions);
   const matches = Array.isArray(db?.matches) ? db.matches : [];
@@ -400,7 +356,6 @@ function buildRepairPlan(db, userData, scopeOptions) {
     ? sorted.filter((match) => Number(match.id) === Number(scope.matchId))
     : sorted;
   const targetMatchWindows = buildMatchWindows(targetMatches, fallbackMaxDeltaMs);
-  const allMatchWindows = buildMatchWindows(sorted, fallbackMaxDeltaMs);
 
   const candidates = collectCandidates(userData, {
     matchIdSet: new Set(Array.from(byId.keys())),
@@ -416,7 +371,7 @@ function buildRepairPlan(db, userData, scopeOptions) {
     }
     const sourceKey = toPathKey(candidate.sourcePath);
     const autoCaptureCandidate = isAutoCaptureArtifact(candidate.filename);
-    if (globalPaths.has(sourceKey) && !autoCaptureCandidate) continue;
+    if (globalPaths.has(sourceKey)) continue;
 
     let target = null;
     let reason = 'timestamp';
@@ -495,7 +450,6 @@ function buildRepairPlan(db, userData, scopeOptions) {
     perMatch.get(target.id).add(targetKey);
   }
 
-  const cleanupPlans = buildAutoCaptureCleanupPlans(matches, allMatchWindows, scope, userData);
   const plans = Array.from(plansByKey.values()).sort((a, b) => b.score - a.score);
   const candidatesOut = plans.slice(0, Math.max(1, MAX_CANDIDATES)).map(plan => ({
     filename: plan.filename,
@@ -507,15 +461,15 @@ function buildRepairPlan(db, userData, scopeOptions) {
 
   return {
     plans,
-    cleanupPlans,
+    cleanupPlans: [],
     candidatesOut,
     summary: {
       matches: getMatchCount(db),
       candidatesScanned: candidates.length,
-      candidatesEligible: plans.length + cleanupPlans.length,
-      plannedLinks: plans.length + cleanupPlans.length,
+      candidatesEligible: plans.length,
+      plannedLinks: plans.length,
       plannedAdds: plans.length,
-      plannedRemovals: cleanupPlans.length,
+      plannedRemovals: 0,
       scopeMatchId: scope?.matchId || null,
       scopeStartTime: scope?.startTimeMs || null,
       scopeEndTime: scope?.endTimeMs || null,
@@ -569,7 +523,7 @@ function applyArtifactRepair({ dbPath, userData, scope } = {}) {
   try {
     const db = readJsonSafe(dbPath);
     const plan = buildRepairPlan(db, userData, scope);
-    const hasPlannedChanges = plan.plans.length > 0 || plan.cleanupPlans.length > 0;
+    const hasPlannedChanges = plan.plans.length > 0;
     if (!hasPlannedChanges) {
       return {
         summary: {
@@ -600,8 +554,6 @@ function applyArtifactRepair({ dbPath, userData, scope } = {}) {
     const failures = [];
     const hashCache = new Map();
     let appliedLinks = 0;
-    let removedLinks = 0;
-    let deletedFiles = 0;
 
     const ensureAppliedEntry = (matchId) => {
       const normalizedMatchId = Number(matchId || 0);
@@ -689,31 +641,7 @@ function applyArtifactRepair({ dbPath, userData, scope } = {}) {
       }
     }
 
-    for (const cleanupItem of plan.cleanupPlans) {
-      try {
-        const match = matchById.get(Number(cleanupItem.matchId));
-        if (!match) continue;
-        const artifacts = ensureArtifactsArray(match);
-        const nextArtifacts = artifacts.filter((artifactPath) => toPathKey(artifactPath) !== cleanupItem.pathKey);
-        if (nextArtifacts.length === artifacts.length) continue;
-        match.artifacts = nextArtifacts;
-        ensureAppliedEntry(Number(match.id)).removedPaths.push(cleanupItem.artifactPath);
-        removedLinks += 1;
-        if (cleanupItem.deleteFile && fs.existsSync(cleanupItem.artifactPath)) {
-          fs.unlinkSync(cleanupItem.artifactPath);
-          deletedFiles += 1;
-        }
-      } catch (error) {
-        failures.push({
-          matchId: cleanupItem.matchId,
-          sourcePath: cleanupItem.artifactPath,
-          targetPath: cleanupItem.ownerMatchId != null ? String(cleanupItem.ownerMatchId) : null,
-          error: error?.message || 'Failed to remove stale artifact link',
-        });
-      }
-    }
-
-    if (appliedLinks > 0 || removedLinks > 0) {
+    if (appliedLinks > 0) {
       writeJsonPretty(dbPath, db);
     }
 
@@ -729,8 +657,8 @@ function applyArtifactRepair({ dbPath, userData, scope } = {}) {
         plannedAdds: plan.summary.plannedAdds,
         plannedRemovals: plan.summary.plannedRemovals,
         appliedLinks,
-        removedLinks,
-        deletedFiles,
+        removedLinks: 0,
+        deletedFiles: 0,
         updatedMatches: applied.length,
         failedLinks: failures.length,
         backupPath,

@@ -1075,9 +1075,15 @@ let latestAutoCaptureHotkeyStateAt = 0;
 let pendingAutoCaptureHotkeyAt = 0;
 let pendingAutoCaptureHotkeyTimer = null;
 const AUTO_CAPTURE_HOTKEY_SYNC_GRACE_MS = 5000;
+const AUTO_CAPTURE_HOTKEY_STATE_MAX_AGE_MS = 10000;
 const AUTO_CAPTURE_HOTKEY_REPEAT_DEBOUNCE_MS = 350;
 let lastAutoCaptureHotkeyAcceptedAt = 0;
 let autoCaptureHotkeyStartInFlight = false;
+
+function isAutoCaptureHotkeySnapshotStale(snapshotAgeMs, maxAgeMs = AUTO_CAPTURE_HOTKEY_STATE_MAX_AGE_MS) {
+  return Number.isFinite(snapshotAgeMs) && snapshotAgeMs > maxAgeMs;
+}
+
 function resolveAppIconPath() {
   const candidates = [
     path.join(process.resourcesPath || '', 'icon.ico'),
@@ -1208,8 +1214,21 @@ function sendAutoCaptureFailureStatus(message, detail = null) {
   });
 }
 
-async function startAutoCaptureFromHotkey(snapshot, { source = 'hotkey', queuedMs = null } = {}) {
+async function startAutoCaptureFromHotkey(snapshot, { source = 'hotkey', queuedMs = null, snapshotAgeMs = null } = {}) {
   const liveWindow = ensureMainWindow();
+  if (isAutoCaptureHotkeySnapshotStale(snapshotAgeMs)) {
+    const ageLabel = Number.isFinite(snapshotAgeMs) ? `${snapshotAgeMs}ms` : 'unknown';
+    const message = `Auto-Capture state is stale (${ageLabel}). Wait for the renderer to resync and try again.`;
+    console.warn(`[Hotkey] Rejecting stale auto-capture snapshot source=${source} ageMs=${ageLabel}`);
+    if (liveWindow && !liveWindow.isDestroyed()) {
+      sendAutoCaptureFailureStatus('Auto-Capture state is stale. Wait for the renderer to resync and try again.', ageLabel);
+    }
+    return {
+      started: false,
+      reason: 'stale-snapshot',
+      error: message,
+    };
+  }
   const request = buildAutoCaptureRequestFromStateSnapshot(snapshot);
   try {
     const result = await autoCaptureCoordinator.start(request);
@@ -1278,6 +1297,14 @@ function registerGlobalHotkeys() {
       return;
     }
     const stateAgeMs = latestAutoCaptureHotkeyStateAt > 0 ? (Date.now() - latestAutoCaptureHotkeyStateAt) : null;
+    if (isAutoCaptureHotkeySnapshotStale(stateAgeMs)) {
+      console.warn(`[Hotkey] F10 rejected stale renderer snapshot ageMs=${stateAgeMs}`);
+      sendAutoCaptureFailureStatus(
+        'Auto-Capture state is stale. Wait for the renderer to resync and try again.',
+        stateAgeMs == null ? 'unknown' : `${stateAgeMs}ms`
+      );
+      return;
+    }
     console.log(
       `[Hotkey] F10 fired — starting auto-capture sequence. hasLiveWindow=${Boolean(liveWindow)} `
       + `stateAgeMs=${stateAgeMs == null ? 'unknown' : stateAgeMs}`
@@ -1301,7 +1328,7 @@ function registerGlobalHotkeys() {
     clearPendingAutoCaptureHotkey();
     lastAutoCaptureHotkeyAcceptedAt = invokedAt;
     autoCaptureHotkeyStartInFlight = true;
-    void startAutoCaptureFromHotkey(latestAutoCaptureHotkeyState).finally(() => {
+    void startAutoCaptureFromHotkey(latestAutoCaptureHotkeyState, { snapshotAgeMs: stateAgeMs }).finally(() => {
       autoCaptureHotkeyStartInFlight = false;
     });
   });
@@ -2124,6 +2151,7 @@ ipcMain.on('sync-auto-capture-hotkey-state', (_event, snapshot = null) => {
         void startAutoCaptureFromHotkey(snapshot, {
           source: 'queued-hotkey',
           queuedMs,
+          snapshotAgeMs: Date.now() - latestAutoCaptureHotkeyStateAt,
         }).finally(() => {
           autoCaptureHotkeyStartInFlight = false;
         });
@@ -3708,4 +3736,9 @@ ipcMain.handle('scan-result-screen', async (_event, { imageBase64 }) => {
         return { success: false, error: err.message };
     }
 });
+
+module.exports = {
+  AUTO_CAPTURE_HOTKEY_STATE_MAX_AGE_MS,
+  isAutoCaptureHotkeySnapshotStale,
+};
 

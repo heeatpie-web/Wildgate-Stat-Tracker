@@ -626,6 +626,7 @@ export const useLogMonitor = (activeUser?: string) => {
         artifacts: [],
         ocrState: 'queued',
         telemetryDraftState: 'active',
+        isPracticeRange: telemetryLifecycleIsPracticeRangeRef.current === true,
         telemetryConsistency: {
             durationToleranceSeconds: DEFAULT_DURATION_TOLERANCE_SECONDS,
             ...(pendingTelemetryConsistencyRef.current || {}),
@@ -690,6 +691,13 @@ export const useLogMonitor = (activeUser?: string) => {
             })
             .sort((a: Match, b: Match) => Number(b.timestamp || 0) - Number(a.timestamp || 0))[0];
         if (existingDraft) {
+            if (telemetryLifecycleIsPracticeRangeRef.current === true && existingDraft.isPracticeRange !== true) {
+                updateMatch({
+                    ...existingDraft,
+                    timestamp: Number(existingDraft.timestamp || gameTime) || gameTime,
+                    isPracticeRange: true,
+                });
+            }
             telemetryDraftMatchIdRef.current = existingDraft.id;
             telemetryDraftStartedAtRef.current = Number(existingDraft.timestamp || gameTime) || gameTime;
             telemetryDraftLoadoutSignatureRef.current = buildLoadoutSignature(existingDraft.loadout || loadout || currentLoadoutRef.current || null);
@@ -703,6 +711,7 @@ export const useLogMonitor = (activeUser?: string) => {
         const baselineLoadout = loadout || currentLoadoutRef.current || null;
         const draftStartedAt = telemetryLifecycleStartedAtRef.current || gameTime;
         const draft = buildTelemetryDraft(matchId, draftStartedAt, baselineLoadout);
+        console.trace('Telemetry draft creation trace');
         addMatch(draft);
         telemetryDraftMatchIdRef.current = matchId;
         telemetryDraftStartedAtRef.current = draftStartedAt;
@@ -788,6 +797,7 @@ export const useLogMonitor = (activeUser?: string) => {
     }, [updateMatch, updatePendingTelemetryConsistency]);
 
     const finalizeTelemetryDraft = useCallback((gameTime: number, durationOverrideSeconds?: number | null) => {
+        console.trace('Telemetry draft finalization trace');
         const draftId = telemetryDraftMatchIdRef.current;
         if (!draftId) {
             return { duration: '00:00', hasTrustedDuration: false, totalSeconds: 0, matchId: null };
@@ -1207,15 +1217,23 @@ export const useLogMonitor = (activeUser?: string) => {
                         || loadingScreenStageSignal === 'pregame'
                         || loadingScreenStageSignal === 'live';
                     const mapEndSignal = loadingScreenStageSignal === 'result';
+                    const explicitEmptySessionIdSignal = hasExplicitMatchSessionIdSignal && !currentMatchSessionId;
+                    const currentLifecycleStage = telemetryLifecycleStageRef.current;
+                    if (explicitEmptySessionIdSignal && (currentLifecycleStage === 'loading' || currentLifecycleStage === 'pregame')) {
+                        Logger.debug(
+                            'LogMonitor',
+                            `Ignoring blank sessionId during ${currentLifecycleStage} lifecycle stage.`,
+                        );
+                    }
                     const sessionEndSignal = hasExplicitMatchSessionIdSignal
                         && !currentMatchSessionId
                         && !!previousMatchSessionId
-                        && loadingScreenStageSignal == null
+                        && currentLifecycleStage === 'live'
                         && (telemetryLifecycleActiveRef.current || !!telemetryDraftMatchIdRef.current)
-                        // Brief session-id drops can happen while matchmaker is still settling.
+                        // Brief session-id drops can happen while the live matchmaker state is still settling.
                         && (
-                            telemetryLifecycleStartedAtRef.current == null
-                            || Math.max(0, Math.floor((gameTime - telemetryLifecycleStartedAtRef.current) / 1000)) >= MIN_SESSION_END_GRACE_SECONDS
+                            telemetryLiveStartedAtRef.current == null
+                            || Math.max(0, Math.floor((gameTime - telemetryLiveStartedAtRef.current) / 1000)) >= MIN_SESSION_END_GRACE_SECONDS
                         );
                     const matchmakerStartSignal = name === 'NebClientMatchmakerStateChange'
                         && !!currentMatchSessionId
@@ -1271,17 +1289,6 @@ export const useLogMonitor = (activeUser?: string) => {
                         Logger.info('LogMonitor', `Treating practice-range telemetry as live lifecycle stage: ${loadingMapName || String(matchPoolValue || '')}`);
                     }
                     if (nextLifecycleStage) {
-                        // When leaving practice range (live → loading/pregame), finalize the
-                        // draft first. The rank guard normally blocks backward transitions, but
-                        // practice range has no result/frontend screen so we must synthesize it.
-                        if (
-                            telemetryLifecycleIsPracticeRangeRef.current
-                            && telemetryLifecycleStageRef.current === 'live'
-                            && (nextLifecycleStage === 'loading' || nextLifecycleStage === 'pregame')
-                        ) {
-                            Logger.info('LogMonitor', `Practice range exiting to ${nextLifecycleStage} — finalizing draft as result`);
-                            transitionTelemetryLifecycleStage('result', gameTime, payloadDurationSeconds);
-                        }
                         transitionTelemetryLifecycleStage(nextLifecycleStage, gameTime, payloadDurationSeconds, {
                             isPracticeRange: practiceRangeSignal && nextLifecycleStage === 'live',
                         });

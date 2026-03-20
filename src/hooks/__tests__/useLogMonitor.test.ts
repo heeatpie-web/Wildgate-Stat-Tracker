@@ -127,6 +127,8 @@ vi.mock('../../utils/logger', () => ({
 
 describe('useLogMonitor', () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(console, 'trace').mockImplementation(() => undefined);
     vi.resetModules();
     addMatch.mockClear();
     updateMatch.mockClear();
@@ -316,6 +318,7 @@ describe('useLogMonitor', () => {
 
     expect(addMatch).toHaveBeenCalledTimes(1);
     expect(latestAddedMatch()).toMatchObject({
+      isPracticeRange: true,
       player: 'Pilot',
       result: 'Ongoing',
       subType: 'Telemetry Draft',
@@ -346,6 +349,7 @@ describe('useLogMonitor', () => {
 
     expect(addMatch).toHaveBeenCalledTimes(1);
     expect(latestAddedMatch()).toMatchObject({
+      isPracticeRange: true,
       player: 'Pilot',
       result: 'Ongoing',
       subType: 'Telemetry Draft',
@@ -687,6 +691,78 @@ describe('useLogMonitor', () => {
     dispatchSpy.mockRestore();
   });
 
+  it('ignores a blank sessionId during loading and keeps a single telemetry draft', async () => {
+    const baseSec = Math.floor(Date.now() / 1000);
+    const { useLogMonitor } = await import('../useLogMonitor');
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'GameEntryPoint', sessionId: 'boot-session-id' },
+          ClientTimestamp: baseSec,
+        },
+      ]);
+    });
+
+    const createdDraft = latestAddedMatch();
+    expect(createdDraft).toBeTruthy();
+    appStoreState.matches = createdDraft ? [createdDraft] : [];
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: { sessionId: '' },
+          ClientTimestamp: baseSec + 14,
+        },
+      ]);
+    });
+
+    expect(addMatch).toHaveBeenCalledTimes(1);
+    expect(updateMatch.mock.calls.some(([match]) => (match as { telemetryDraftState?: string }).telemetryDraftState === 'ready')).toBe(false);
+    expect(dispatchSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-ready' }));
+    dispatchSpy.mockRestore();
+  });
+
+  it('ignores a blank sessionId during pregame and keeps a single telemetry draft', async () => {
+    const baseSec = Math.floor(Date.now() / 1000);
+    const { useLogMonitor } = await import('../useLogMonitor');
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'LobbyMap', sessionId: 'boot-session-id' },
+          ClientTimestamp: baseSec,
+        },
+      ]);
+    });
+
+    const createdDraft = latestAddedMatch();
+    expect(createdDraft).toBeTruthy();
+    appStoreState.matches = createdDraft ? [createdDraft] : [];
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: { sessionId: '' },
+          ClientTimestamp: baseSec + 14,
+        },
+      ]);
+    });
+
+    expect(addMatch).toHaveBeenCalledTimes(1);
+    expect(updateMatch.mock.calls.some(([match]) => (match as { telemetryDraftState?: string }).telemetryDraftState === 'ready')).toBe(false);
+    expect(dispatchSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-ready' }));
+    dispatchSpy.mockRestore();
+  });
+
   it('finalizes a live telemetry draft when sessionId is explicitly cleared after match start', async () => {
     const baseSec = Math.floor(Date.now() / 1000);
     const { useLogMonitor } = await import('../useLogMonitor');
@@ -779,6 +855,63 @@ describe('useLogMonitor', () => {
     const finalizedDraft = updateMatch.mock.calls
       .map(([match]) => match as { time?: string })
       .find((match) => typeof match?.time === 'string');
+
+    expect(finalizedDraft).toBeTruthy();
+    expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-ready' }));
+    dispatchSpy.mockRestore();
+  });
+
+  it('waits for a real frontend result before finalizing a practice-range draft after a loading hop', async () => {
+    const baseSec = Math.floor(Date.now() / 1000);
+    const { useLogMonitor } = await import('../useLogMonitor');
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'PracticeRange_LobbyMap' },
+          ClientTimestamp: baseSec,
+        },
+      ]);
+    });
+
+    const createdDraft = latestAddedMatch();
+    expect(createdDraft).toBeTruthy();
+    appStoreState.matches = [createdDraft];
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'GameEntryPoint' },
+          ClientTimestamp: baseSec + 30,
+        },
+      ]);
+    });
+
+    const finalizedBeforeFrontend = updateMatch.mock.calls
+      .map(([match]) => match as { id?: number; time?: string })
+      .find((match) => match.id === createdDraft?.id && typeof match.time === 'string');
+    expect(finalizedBeforeFrontend).toBeUndefined();
+    expect(
+      dispatchSpy.mock.calls.some(([event]) => (event as Event)?.type === 'telemetry:draft-ready')
+    ).toBe(false);
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'Frontend_MainMenu' },
+          ClientTimestamp: baseSec + 90,
+        },
+      ]);
+    });
+
+    const finalizedDraft = updateMatch.mock.calls
+      .map(([match]) => match as { id?: number; time?: string })
+      .find((match) => match.id === createdDraft?.id && typeof match.time === 'string');
 
     expect(finalizedDraft).toBeTruthy();
     expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-ready' }));

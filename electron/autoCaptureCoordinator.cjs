@@ -279,6 +279,38 @@ function createAutoCaptureCoordinator({
       }
     };
 
+    const verifyScreenType = async (step, expectedType) => {
+      if (typeof waitForScreenType !== 'function' || !expectedType) {
+        return null;
+      }
+
+      const verification = await withTimeout(
+        () => waitForScreenType(expectedType, {
+          activeUser,
+          matchId,
+          ocrMode,
+          ocrRegions,
+          runtimeOptions,
+          stepLabel: step.label,
+          stepNumber: step.number,
+        }),
+        AUTO_CAPTURE_CAPTURE_TIMEOUT_MS,
+        `${step.label} screen verification`,
+      );
+
+      if (!verification?.success) {
+        const reason = verification?.error || `expected ${expectedType}`;
+        throw new Error(`${step.label}: ${reason}`);
+      }
+
+      const detectedType = String(verification?.detectedType || verification?.screenshotType || '').trim();
+      if (detectedType && detectedType !== expectedType) {
+        throw new Error(`${step.label}: expected ${expectedType}, detected ${detectedType}`);
+      }
+
+      return verification;
+    };
+
     const emitCommittedCaptureProgress = (captures = []) => {
       captures.forEach((capture) => {
         notify({
@@ -312,6 +344,10 @@ function createAutoCaptureCoordinator({
       // Fire sound immediately so the user hears it when the capture begins,
       // not after the PNG encode + file save completes.
       notify({ phase: 'capture-started', captureIndex, totalCaptures: 3, matchId });
+      const expectedType = EXPECTED_SCREEN_TYPES[step.label];
+      if (expectedType) {
+        await verifyScreenType(step, expectedType);
+      }
       const result = await withTimeout(() => captureAndProcess({
         matchId,
         activeUser,
@@ -334,7 +370,6 @@ function createAutoCaptureCoordinator({
       };
       attemptCaptures.push(captureMeta);
 
-      const expectedType = EXPECTED_SCREEN_TYPES[step.label];
       if (expectedType && detectedType && detectedType !== expectedType) {
         throw new Error(`${step.label}: expected ${expectedType}, detected ${detectedType}`);
       }
@@ -346,6 +381,11 @@ function createAutoCaptureCoordinator({
       const attemptCaptures = [];
       try {
         const captureTacticalMapStep = async () => {
+          if (!sendKeypresses) {
+            await captureStep(STEP_DEFINITIONS.captureMap, 1, attemptCaptures);
+            return;
+          }
+
           if (holdTacticalMapKey && typeof runWithHeldKeySequence === 'function') {
             logAutoCaptureStep(STEP_DEFINITIONS.openMap, '(hold)');
             const heldResult = await runWithHeldKeySequence(
@@ -440,34 +480,35 @@ function createAutoCaptureCoordinator({
         return { started: false, reason: 'no-active-match' };
       }
 
-      const requestedTacticalMapKeybind = getRequestedTacticalMapKeybind(request);
-      const requestedMapKeybindRaw = requestedTacticalMapKeybind.raw;
-      let tacticalMapKeybind = null;
-      if (requestedMapKeybindRaw) {
-        const requestedMapKeybindNormalized = normalizeKeybindToSendKeys(requestedMapKeybindRaw);
-        if (requestedMapKeybindNormalized) {
-          tacticalMapKeybind = {
-            raw: requestedMapKeybindRaw,
-            sendKeys: requestedMapKeybindNormalized,
-            source: 'settings',
-          };
-        } else {
-          const message = `Unsupported tactical map key configured: "${requestedMapKeybindRaw}"`;
-          notify(buildFailedPayload(message));
-          return { started: false, reason: 'invalid-tactical-map-key' };
-        }
-      }
+      const sendKeypresses = request.autoCaptureSendKeypresses !== false;
+      const holdTacticalMapKey = sendKeypresses && request.holdTacticalMapKey === true;
 
-      if (!tacticalMapKeybind?.sendKeys) {
-        if (requestedTacticalMapKeybind.provided) {
+      let tacticalMapKeybind = null;
+      if (sendKeypresses) {
+        const requestedTacticalMapKeybind = getRequestedTacticalMapKeybind(request);
+        const requestedMapKeybindRaw = requestedTacticalMapKeybind.raw;
+        if (requestedMapKeybindRaw) {
+          const requestedMapKeybindNormalized = normalizeKeybindToSendKeys(requestedMapKeybindRaw);
+          if (requestedMapKeybindNormalized) {
+            tacticalMapKeybind = {
+              raw: requestedMapKeybindRaw,
+              sendKeys: requestedMapKeybindNormalized,
+              source: 'settings',
+            };
+          } else {
+            const message = `Unsupported tactical map key configured: "${requestedMapKeybindRaw}"`;
+            notify(buildFailedPayload(message));
+            return { started: false, reason: 'invalid-tactical-map-key' };
+          }
+        }
+
+        if (!tacticalMapKeybind?.sendKeys) {
+          tacticalMapKeybind = await lookupMapKeybind?.({ request, sendKeypresses });
+        }
+        if (!tacticalMapKeybind?.sendKeys) {
           notify(buildFailedPayload('No tactical map key configured. Set it in Settings.'));
           return { started: false, reason: 'missing-tactical-map-key' };
         }
-        tacticalMapKeybind = await lookupMapKeybind();
-      }
-      if (!tacticalMapKeybind?.sendKeys) {
-        notify(buildFailedPayload('No tactical map key configured. Set it in Settings.'));
-        return { started: false, reason: 'missing-tactical-map-key' };
       }
 
       const payload = {
@@ -475,7 +516,7 @@ function createAutoCaptureCoordinator({
         activeUser: typeof request.activeUser === 'string' && request.activeUser.trim()
           ? request.activeUser.trim()
           : null,
-        sendKeypresses: request.autoCaptureSendKeypresses !== false,
+        sendKeypresses,
         waitMultiplier: clampWaitMultiplier(request.autoCaptureWaitMultiplier),
         ocrMode: typeof request.ocrMode === 'string' && request.ocrMode.trim()
           ? request.ocrMode.trim()
@@ -487,7 +528,7 @@ function createAutoCaptureCoordinator({
           ? request.runtimeOptions
           : {},
         tacticalMapKeybind,
-        holdTacticalMapKey: request.holdTacticalMapKey === true,
+        holdTacticalMapKey,
       };
 
       inProgress = true;
@@ -535,7 +576,7 @@ function createAutoCaptureCoordinator({
       return {
         started: true,
         matchId,
-        tacticalMapKeybind: tacticalMapKeybind.raw,
+        tacticalMapKeybind: tacticalMapKeybind?.raw || null,
       };
     },
     __test__: {

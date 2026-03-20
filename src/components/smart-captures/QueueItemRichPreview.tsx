@@ -5,6 +5,7 @@ import {
   Check,
   CheckCircle2,
   Clock3,
+  Crosshair,
   ShieldAlert,
   Skull,
   Trophy,
@@ -122,6 +123,15 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
   const dropTargetClass = isDropTarget ? 'ring-2 ring-md-sys-primary/55 bg-md-sys-primary/12' : '';
 
   const collapsedGlyph = getCollapsedQueueGlyph(match);
+  const practiceRangeIndicator = match.isPracticeRange === true ? (
+    <span
+      aria-label="Practice Range"
+      title="Practice Range"
+      className="inline-flex items-center justify-center rounded-full border border-info/25 bg-info/10 text-info/80"
+    >
+      <Crosshair size={11} />
+    </span>
+  ) : null;
   const collapsedIcon = (() => {
     if (collapsedGlyph === 'win') return <Trophy size={14} />;
     if (collapsedGlyph === 'loss') return <Skull size={14} />;
@@ -155,6 +165,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
           <span className={`rounded-pill px-1.5 py-0.5 text-[10px] font-black tracking-wider ${STATUS_PILL_BY_TONE[statusMeta.tone]}`}>
             {getCompactStatusLabel(statusMeta.label)}
           </span>
+          {practiceRangeIndicator ? <span className="h-4 w-4">{practiceRangeIndicator}</span> : null}
         </div>
       </button>
     );
@@ -206,6 +217,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
             >
               {statusMeta.label}
             </span>
+            {practiceRangeIndicator ? <span className="h-5 w-5">{practiceRangeIndicator}</span> : null}
           </div>
         </div>
 

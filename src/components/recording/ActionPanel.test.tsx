@@ -77,6 +77,7 @@ const appStoreState = {
   resultOcrFlowMode: 'prompt',
   ocrAutoOpenAfterRerun: false,
   showSmartCaptureInHeader: false,
+  autoSequenceOnCapture: false,
   lifecycleTrackingPaused: false,
   setLifecycleTrackingPaused: vi.fn(),
   selectedMatchId: null as string | number | null,
@@ -230,6 +231,7 @@ describe('ActionPanel', () => {
     discardCurrentMatch.mockReset();
     appStoreState.activeUser = 'TestPilot';
     appStoreState.sessionStartTime = Date.now() - 1_000;
+    appStoreState.autoSequenceOnCapture = false;
     appStoreState.autoCaptureSendKeypresses = true;
     appStoreState.autoCaptureWaitMultiplier = 1;
     appStoreState.tacticalMapKeybind = 'Tab';
@@ -403,6 +405,32 @@ describe('ActionPanel', () => {
     expect(smartScan.handleSmartScan).not.toHaveBeenCalled();
   });
 
+  it('runs the auto-sequence coordinator for manual smart capture when sequence mode is enabled', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    const onSmartCaptureData = vi.fn();
+    appStoreState.autoSequenceOnCapture = true;
+    appStoreState.isMatchInProgress = true;
+    appStoreState.matches = [{
+      id: 42,
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      timestamp: Date.now(),
+      player: 'TestPilot',
+    }];
+    gameData.matches = appStoreState.matches;
+
+    render(<ActionPanel variant="transparent" onSmartCaptureData={onSmartCaptureData} />);
+    fireEvent.click(screen.getByRole('button', { name: /smart capture/i }));
+
+    await waitFor(() => {
+      expect(startAutoCaptureMock).toHaveBeenCalledWith(expect.objectContaining({
+        activeUser: 'TestPilot',
+        matchId: 42,
+      }));
+    });
+    expect(smartCaptureActions.capture).not.toHaveBeenCalled();
+  });
+
   it('routes smart capture to the active telemetry draft instead of stale pending data', async () => {
     const { ActionPanel } = await import('./ActionPanel');
     const now = Date.now();
@@ -528,6 +556,38 @@ describe('ActionPanel', () => {
     expect(uiState.clearSmartCaptureRequest).toHaveBeenCalledWith('auto_1');
     expect(smartCaptureActions.captureOnly).not.toHaveBeenCalled();
     expect(smartCaptureActions.processStoredImage).not.toHaveBeenCalled();
+  });
+
+  it('defaults behavior-less smart capture requests to the stored manual capture mode', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    appStoreState.autoSequenceOnCapture = true;
+    appStoreState.isMatchInProgress = true;
+    appStoreState.matches = [{
+      id: 77,
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      timestamp: Date.now(),
+      player: 'TestPilot',
+    }];
+    gameData.matches = appStoreState.matches;
+
+    render(<ActionPanel />);
+    window.dispatchEvent(new CustomEvent('smart-capture-request', {
+      detail: {
+        requestId: 'event_sequence_default',
+        activeUser: 'TestPilot',
+        matchId: 77,
+        source: 'header',
+      },
+    }));
+
+    await waitFor(() => {
+      expect(startAutoCaptureMock).toHaveBeenCalledWith(expect.objectContaining({
+        activeUser: 'TestPilot',
+        matchId: 77,
+      }));
+    });
+    expect(smartCaptureActions.capture).not.toHaveBeenCalled();
   });
 
   it('clears failed auto-sequence requests and surfaces the start error', async () => {

@@ -74,6 +74,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     const resultOcrFlowMode = useAppStore(s => s.resultOcrFlowMode);
     const ocrAutoOpenAfterRerun = useAppStore(s => s.ocrAutoOpenAfterRerun);
     const showSmartCaptureInHeader = useAppStore(s => s.showSmartCaptureInHeader);
+    const autoSequenceOnCapture = useAppStore(s => s.autoSequenceOnCapture);
     const lifecycleTrackingPaused = useAppStore(s => s.lifecycleTrackingPaused);
     const setLifecycleTrackingPaused = useAppStore(s => s.setLifecycleTrackingPaused);
     const selectedSmartCapturesMatchId = useAppStore(s => s.selectedMatchId);
@@ -369,10 +370,19 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
 
     const handleNewSmartCapture = async () => {
         if (onSmartCaptureData) {
-            if (submissionMatchId != null) {
-                await triggerSmartCapture(activeUser || null, submissionMatchId);
+            const requestedUser = activeUser || null;
+            const resolvedMatchId = resolveRequestedCaptureMatchId(submissionMatchId);
+            if (autoSequenceOnCapture) {
+                await runAutoSequenceCapture(requestedUser, resolvedMatchId, {
+                    source: 'action-panel-button',
+                });
+                return;
+            }
+
+            if (resolvedMatchId != null && resolvedMatchId !== '') {
+                await triggerSmartCapture(requestedUser, resolvedMatchId);
             } else {
-                await triggerSmartCapture(activeUser || null);
+                await triggerSmartCapture(requestedUser);
             }
         } else {
             handleSmartScan();
@@ -490,7 +500,11 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     }, [activeUser, resolveRequestedCaptureMatchId, setToast]);
 
     const handleSmartCaptureRequest = React.useCallback(async (request: SmartCaptureRequestPayload) => {
-        const requestBehavior = request.behavior === 'auto-sequence' ? 'auto-sequence' : 'single';
+        const requestBehavior = request.behavior === 'auto-sequence'
+            ? 'auto-sequence'
+            : (request.behavior === 'single'
+                ? 'single'
+                : (autoSequenceOnCapture ? 'auto-sequence' : 'single'));
         const requestedUser = request.activeUser;
         const requestedMatchId = request.matchId;
         const requestSource = typeof request.source === 'string' ? request.source : null;
@@ -532,7 +546,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
             });
             setToast({ message: `Smart Capture request failed: ${message}`, type: 'error' });
         }
-    }, [activeUser, isActive, processAllStored, resolveRequestedCaptureMatchId, runAutoSequenceCapture, setToast, triggerSmartCapture]);
+    }, [activeUser, autoSequenceOnCapture, isActive, processAllStored, resolveRequestedCaptureMatchId, runAutoSequenceCapture, setToast, triggerSmartCapture]);
 
     React.useEffect(() => {
         if (!isActive) return;

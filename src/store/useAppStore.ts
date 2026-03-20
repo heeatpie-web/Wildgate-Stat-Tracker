@@ -61,6 +61,25 @@ const resolvePersistedTacticalMapKeybind = (settings: Record<string, unknown>): 
   return '';
 };
 
+const resolvePersistedNumber = (
+  value: unknown,
+  fallback: number,
+  {
+    min = Number.NEGATIVE_INFINITY,
+    max = Number.POSITIVE_INFINITY,
+    round = false,
+  }: {
+    min?: number;
+    max?: number;
+    round?: boolean;
+  } = {},
+): number => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  const next = round ? Math.round(numeric) : numeric;
+  return Math.max(min, Math.min(max, next));
+};
+
 const mergeNumberRecord = <T extends object>(base: T, incoming: unknown): T => {
   const next = { ...base } as T;
   if (!isRecord(incoming)) return next;
@@ -267,6 +286,14 @@ const customStorage: PersistStorage<AppState> = {
           tacticalMapKeybind: resolvePersistedTacticalMapKeybind(settings),
           holdTacticalMapKey: settings.holdTacticalMapKey === true,
           autoPopulateRosterOnSave: settings.autoPopulateRosterOnSave ?? true,
+          pixelMonitorEnabled: settings.pixelMonitorEnabled === true,
+          pixelMonitorX: resolvePersistedNumber(settings.pixelMonitorX, 1492, { min: 0, round: true }),
+          pixelMonitorY: resolvePersistedNumber(settings.pixelMonitorY, 203, { min: 0, round: true }),
+          pixelMonitorWidth: resolvePersistedNumber(settings.pixelMonitorWidth, 170, { min: 1, round: true }),
+          pixelMonitorHeight: resolvePersistedNumber(settings.pixelMonitorHeight, 56, { min: 1, round: true }),
+          pixelMonitorIntervalMs: resolvePersistedNumber(settings.pixelMonitorIntervalMs, 3000, { min: 500, round: true }),
+          pixelMonitorChangeSensitivity: resolvePersistedNumber(settings.pixelMonitorChangeSensitivity, 30, { min: 1, max: 255, round: true }),
+          fullAutoEnabled: settings.fullAutoEnabled === true,
           lockOcrTeams: settings.lockOcrTeams || false,
           ocrEnhancedNameRecoveryEnabled: settings.ocrEnhancedNameRecoveryEnabled ?? true,
           ocrNameRerouteThreshold: normalizeOcrNameRerouteThreshold(settings.ocrNameRerouteThreshold),
@@ -414,6 +441,14 @@ const customStorage: PersistStorage<AppState> = {
                 tacticalMapKeybind: state.tacticalMapKeybind,
                 holdTacticalMapKey: state.holdTacticalMapKey,
                 autoPopulateRosterOnSave: state.autoPopulateRosterOnSave,
+                pixelMonitorEnabled: state.pixelMonitorEnabled,
+                pixelMonitorX: state.pixelMonitorX,
+                pixelMonitorY: state.pixelMonitorY,
+                pixelMonitorWidth: state.pixelMonitorWidth,
+                pixelMonitorHeight: state.pixelMonitorHeight,
+                pixelMonitorIntervalMs: state.pixelMonitorIntervalMs,
+                pixelMonitorChangeSensitivity: state.pixelMonitorChangeSensitivity,
+                fullAutoEnabled: state.fullAutoEnabled,
                 lockOcrTeams: state.lockOcrTeams,
                 ocrEnhancedNameRecoveryEnabled: state.ocrEnhancedNameRecoveryEnabled,
                 ocrNameRerouteThreshold: state.ocrNameRerouteThreshold,
@@ -528,6 +563,14 @@ export const useAppStore = create<AppState>()(
         tacticalMapKeybind: state.tacticalMapKeybind,
         holdTacticalMapKey: state.holdTacticalMapKey,
         autoPopulateRosterOnSave: state.autoPopulateRosterOnSave,
+        pixelMonitorEnabled: state.pixelMonitorEnabled,
+        pixelMonitorX: state.pixelMonitorX,
+        pixelMonitorY: state.pixelMonitorY,
+        pixelMonitorWidth: state.pixelMonitorWidth,
+        pixelMonitorHeight: state.pixelMonitorHeight,
+        pixelMonitorIntervalMs: state.pixelMonitorIntervalMs,
+        pixelMonitorChangeSensitivity: state.pixelMonitorChangeSensitivity,
+        fullAutoEnabled: state.fullAutoEnabled,
         lockOcrTeams: state.lockOcrTeams,
         ocrEnhancedNameRecoveryEnabled: state.ocrEnhancedNameRecoveryEnabled,
         ocrNameRerouteThreshold: state.ocrNameRerouteThreshold,

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Match, Language, DrillDownTarget } from '../types';
 import { TRANSLATIONS } from '../utils/translations';
-import { Trash2, Edit2, Pin, Clock, Image as ImageIcon, Download, ArrowUpDown, Swords, X, FileText, Save, Ghost, Trophy, TrendingUp, Flame, Search, ChevronLeft, ChevronRight, Zap, ScanEye, AlertTriangle, RefreshCw, Filter, ChevronDown, Check } from 'lucide-react';
+import { Trash2, Edit2, Pin, Clock, Image as ImageIcon, Download, ArrowUpDown, Swords, X, FileText, Save, Ghost, Trophy, TrendingUp, Flame, Search, ChevronLeft, ChevronRight, Zap, ScanEye, AlertTriangle, RefreshCw, Filter, ChevronDown, Check, Crosshair } from 'lucide-react';
 import { EditMatchModal } from './EditMatchModal';
 import { exportMatchesAsImage } from './history/historyExport';
 import { timeAgo, formatDayHeader, getRowBg } from './history/historyUtils';
@@ -15,6 +15,7 @@ import { getMatchArtifactsStructured, rerunOCROnArtifact } from '../utils/artifa
 import { runtimeConfig } from '../config/runtimeConfig';
 import { useAppStore } from '../store/useAppStore';
 import { Button } from './ui';
+import { removeMatchArtifactsThenDelete } from '../hooks/useMatchSubmission';
 
 interface HistoryTableProps {
     isActive?: boolean;
@@ -232,13 +233,36 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
     };
 
     const handleDelete = (id: number) => {
-        if (window.confirm("Are you sure you want to delete this match record? This cannot be undone.")) {
-            onDelete(id);
-        }
+        if (!window.confirm("Are you sure you want to delete this match record? This cannot be undone.")) return;
+        const targetMatch = matches.find((match) => match.id === id);
+        void removeMatchArtifactsThenDelete({
+            matchId: id,
+            artifacts: targetMatch?.artifacts || [],
+            deleteMatch: onDelete,
+            notifyArtifactsConsumed: (matchId, artifactPaths) => {
+                window.dispatchEvent(new CustomEvent('smart-capture:artifacts-consumed', {
+                    detail: { matchId, artifactPaths },
+                }));
+            },
+        });
     };
 
     const handleBulkDelete = () => {
-        selectedMatches.forEach(id => onDelete(id));
+        void (async () => {
+            for (const id of selectedMatches) {
+                const targetMatch = matches.find((match) => match.id === id);
+                await removeMatchArtifactsThenDelete({
+                    matchId: id,
+                    artifacts: targetMatch?.artifacts || [],
+                    deleteMatch: onDelete,
+                    notifyArtifactsConsumed: (matchId, artifactPaths) => {
+                        window.dispatchEvent(new CustomEvent('smart-capture:artifacts-consumed', {
+                            detail: { matchId, artifactPaths },
+                        }));
+                    },
+                });
+            }
+        })();
         setSelectedMatches([]);
         setBulkDeleteConfirm(false);
         pushNotification({
@@ -724,7 +748,18 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                                                                 }`}>
                                                                     {m.result}
                                                                 </span>
-                                                                <div className="text-label-sm text-md-sys-on-surface/40 font-medium">{m.subType || 'Combat'}</div>
+                                                                <div className="flex items-center gap-1.5 text-label-sm text-md-sys-on-surface/40 font-medium">
+                                                                    <span>{m.subType || 'Combat'}</span>
+                                                                    {m.isPracticeRange === true ? (
+                                                                        <span
+                                                                            aria-label="Practice Range"
+                                                                            title="Practice Range"
+                                                                            className="inline-flex items-center justify-center rounded-full border border-info/25 bg-info/10 p-1 text-info/80"
+                                                                        >
+                                                                            <Crosshair size={10} />
+                                                                        </span>
+                                                                    ) : null}
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </td>

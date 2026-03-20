@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useMatchSubmission } from '../useMatchSubmission';
-import { applyArtifactRepair, bundleMatchArtifacts, getMatchArtifactsStructured, removeMatchArtifact } from '../../utils/artifactService';
+import { applyArtifactRepair, bundleMatchArtifacts, getMatchArtifactsStructured, removeAllMatchArtifacts } from '../../utils/artifactService';
 import { StorageService } from '../../utils/storage';
 
 const setToast = vi.fn();
@@ -125,7 +125,7 @@ vi.mock('../../utils/artifactService', () => ({
   applyArtifactRepair: vi.fn().mockResolvedValue({ summary: { mode: 'apply', matches: 0, candidatesScanned: 0, candidatesEligible: 0, plannedLinks: 0, appliedLinks: 0, updatedMatches: 0 }, candidates: [], applied: [] }),
   bundleMatchArtifacts: vi.fn().mockResolvedValue([]),
   getMatchArtifactsStructured: vi.fn().mockResolvedValue({ images: [], imageFiles: [], telemetry: [] }),
-  removeMatchArtifact: vi.fn().mockResolvedValue({ success: true }),
+  removeAllMatchArtifacts: vi.fn().mockResolvedValue({ removedPaths: [], failedPaths: [] }),
 }));
 
 vi.mock('../../utils/storage', () => ({
@@ -217,8 +217,8 @@ describe('useMatchSubmission', () => {
     vi.mocked(applyArtifactRepair).mockResolvedValue({ summary: { mode: 'apply', matches: 0, candidatesScanned: 0, candidatesEligible: 0, plannedLinks: 0, appliedLinks: 0, updatedMatches: 0 }, candidates: [], applied: [] });
     vi.mocked(getMatchArtifactsStructured).mockReset();
     vi.mocked(getMatchArtifactsStructured).mockResolvedValue({ images: [], imageFiles: [], telemetry: [] });
-    vi.mocked(removeMatchArtifact).mockReset();
-    vi.mocked(removeMatchArtifact).mockResolvedValue({ success: true });
+    vi.mocked(removeAllMatchArtifacts).mockReset();
+    vi.mocked(removeAllMatchArtifacts).mockResolvedValue({ removedPaths: [], failedPaths: [] });
     vi.mocked(StorageService.flush).mockClear();
     electronInvokeMock.mockReset();
     electronInvokeMock.mockResolvedValue({ success: true, data: { filePath: 'C:\\match_artifacts\\999\\capture_result.png' } });
@@ -1179,6 +1179,10 @@ describe('useMatchSubmission', () => {
       missingImages: [],
       resolvedFromDisk: true,
     });
+    vi.mocked(removeAllMatchArtifacts).mockResolvedValue({
+      removedPaths: ['C:\\match_artifacts\\4242\\capture_a.png', 'C:\\match_artifacts\\4242\\capture_b.png'],
+      failedPaths: [],
+    });
 
     const { result } = renderHook(() => useMatchSubmission());
 
@@ -1186,13 +1190,10 @@ describe('useMatchSubmission', () => {
       await result.current.discardTelemetryDraft(4242);
     });
 
-    expect(getMatchArtifactsStructured).toHaveBeenCalledWith(4242, [
+    expect(removeAllMatchArtifacts).toHaveBeenCalledWith(4242, [
       'C:\\match_artifacts\\4242\\capture_a.png',
       'C:\\match_artifacts\\4242\\capture_b.png',
     ]);
-    expect(removeMatchArtifact).toHaveBeenCalledTimes(2);
-    expect(removeMatchArtifact).toHaveBeenNthCalledWith(1, 4242, 'artifact-a');
-    expect(removeMatchArtifact).toHaveBeenNthCalledWith(2, 4242, 'artifact-b');
     expect(deleteMatch).toHaveBeenCalledWith(4242);
     expect(mockStoreState.discardMatch).toHaveBeenCalledTimes(1);
     expect(setPendingKilledBy).toHaveBeenCalledWith('');
@@ -1225,13 +1226,34 @@ describe('useMatchSubmission', () => {
     });
   });
 
-  it('discardCurrentMatch deletes the draft and clears submission state through the store helper', () => {
+  it('discardCurrentMatch deletes the draft and clears submission state through the store helper', async () => {
+    mockStoreState.matches = [{
+      id: 31337,
+      timestamp: 1_700_000_333_000,
+      date: '1/1/2024',
+      mode: 'Artifact Brawl',
+      player: 'Tester',
+      teammates: [],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      artifacts: ['C:\\match_artifacts\\31337\\capture_a.png'],
+    }];
+    vi.mocked(removeAllMatchArtifacts).mockResolvedValue({
+      removedPaths: ['C:\\match_artifacts\\31337\\capture_a.png'],
+      failedPaths: [],
+    });
     const { result } = renderHook(() => useMatchSubmission());
 
-    act(() => {
-      result.current.discardCurrentMatch(31337);
+    await act(async () => {
+      await result.current.discardCurrentMatch(31337);
     });
 
+    expect(removeAllMatchArtifacts).toHaveBeenCalledWith(31337, ['C:\\match_artifacts\\31337\\capture_a.png']);
     expect(deleteMatch).toHaveBeenCalledWith(31337);
     expect(mockStoreState.discardMatch).toHaveBeenCalledTimes(1);
     expect(setPendingKilledBy).toHaveBeenCalledWith('');
@@ -1242,6 +1264,13 @@ describe('useMatchSubmission', () => {
     expect(setTimeMin).toHaveBeenCalledWith('');
     expect(setTimeSec).toHaveBeenCalledWith('');
     expect(setDamageTaken).toHaveBeenCalledWith('');
+    const consumedEvent = dispatchEventSpy.mock.calls
+      .map(([evt]) => evt as Event)
+      .find((evt) => evt.type === 'smart-capture:artifacts-consumed') as CustomEvent | undefined;
+    expect(consumedEvent?.detail).toEqual({
+      matchId: 31337,
+      artifactPaths: ['C:\\match_artifacts\\31337\\capture_a.png'],
+    });
   });
 });
 

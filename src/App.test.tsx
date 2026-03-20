@@ -51,6 +51,8 @@ const uiState = {
   setIsOverlayMode: vi.fn(),
   showTutorial: false,
   setShowTutorial: vi.fn(),
+  showSetupWizard: false,
+  setShowSetupWizard: vi.fn(),
   setNotificationsSuspended: vi.fn(),
   showChangelog: false,
   setShowChangelog: vi.fn(),
@@ -113,6 +115,9 @@ const gameDataState = {
 
 const appStoreState = {
   setTutorialCompleted: vi.fn(),
+  setFullAutoEnabled: vi.fn((enabled: boolean) => {
+    appStoreState.fullAutoEnabled = enabled;
+  }),
   isLoading: false,
   activeUser: 'Pilot',
   sessionStartTime: Date.now() - 1_000,
@@ -315,6 +320,7 @@ describe('App', () => {
     appStoreState.isMatchInProgress = false;
     appStoreState.fullAutoEnabled = false;
     appStoreState.telemetryAutomationStatus = null;
+    uiState.showSetupWizard = false;
   });
 
   it('uses first-launch welcome copy before the app has ever been opened', async () => {
@@ -403,6 +409,40 @@ describe('App', () => {
       message: expect.stringContaining('Set your Tactical Map key before using auto-sequence.'),
       popup: true,
     }));
+  });
+
+  it('auto-enables full auto once setup is complete and the tactical map key is configured', async () => {
+    const { default: App } = await import('./App');
+    appStoreState.fullAutoEnabled = false;
+    appStoreState.activeUser = 'Pilot';
+    appStoreState.tacticalMapKeybind = 'Tab';
+    uiState.showSetupWizard = false;
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(appStoreState.setFullAutoEnabled).toHaveBeenCalledWith(true);
+    });
+    expect(window.localStorage.getItem('wg_full_auto_auto_enabled_after_setup_v1')).toBe('1');
+  });
+
+  it('does not auto-enable full auto again after the setup-triggered activation has already happened', async () => {
+    window.localStorage.setItem('wg_full_auto_auto_enabled_after_setup_v1', '1');
+    const { default: App } = await import('./App');
+    appStoreState.fullAutoEnabled = false;
+    appStoreState.activeUser = 'Pilot';
+    appStoreState.tacticalMapKeybind = 'Tab';
+    uiState.showSetupWizard = false;
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Welcome, Pilot! Tracking is ready.',
+        type: 'success',
+      }));
+    });
+    expect(appStoreState.setFullAutoEnabled).not.toHaveBeenCalled();
   });
 
   it('shows restore session only after an unclean shutdown', async () => {
@@ -645,7 +685,7 @@ describe('App', () => {
     expect(startAutoCaptureMock).not.toHaveBeenCalled();
 
     await act(async () => {
-      vi.advanceTimersByTime(3_999);
+      vi.advanceTimersByTime(11_999);
       await Promise.resolve();
     });
     expect(startAutoCaptureMock).not.toHaveBeenCalled();
@@ -696,14 +736,14 @@ describe('App', () => {
     render(<App />);
 
     await act(async () => {
-      vi.advanceTimersByTime(4_000);
+      vi.advanceTimersByTime(12_000);
       await Promise.resolve();
     });
 
     expect(startAutoCaptureMock).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      vi.advanceTimersByTime(3_000);
+      vi.advanceTimersByTime(5_000);
       await Promise.resolve();
     });
 

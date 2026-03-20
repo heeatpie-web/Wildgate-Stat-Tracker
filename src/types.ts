@@ -238,6 +238,8 @@ export interface Match {
   telemetryConsistency?: TelemetryConsistency;
   /** Explicit lifecycle state for telemetry drafts. */
   telemetryDraftState?: TelemetryDraftState;
+  /** Marks telemetry matches that originated from practice/training range sessions. */
+  isPracticeRange?: boolean;
 }
 
 /** Returns crew capacity (1-4) based on the ship display name. */

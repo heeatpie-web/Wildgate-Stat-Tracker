@@ -138,30 +138,6 @@ const formatQueueDayLabel = (dayKey: string, todayKey: string): string => {
     return parsed.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 };
 
-const buildAutoRepairSignature = (matches: Match[]): string => matches
-    .map((match) => {
-        const artifactKeys = Array.isArray(match.artifacts)
-            ? match.artifacts
-                .map((artifact) => toArtifactKey(String(artifact || '').trim()))
-                .filter(Boolean)
-                .sort()
-                .join(',')
-            : '';
-        const timestamp = Number.isFinite(Number(match.timestamp)) ? String(Number(match.timestamp)) : '';
-        const reviewedAt = Number.isFinite(Number(match.ocrReviewedAt)) ? String(Number(match.ocrReviewedAt)) : '';
-        return [
-            String(match.id || ''),
-            timestamp,
-            String(match.date || '').trim(),
-            String(match.ocrState || '').trim(),
-            String(match.result || '').trim(),
-            reviewedAt,
-            artifactKeys,
-        ].join(':');
-    })
-    .sort()
-    .join('|');
-
 const normalizeModifierEntries = (
     entries: Array<string | ExtractedModifier>,
     normalizeModifierName: (name: string) => string
@@ -475,7 +451,6 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
     const [showRoiEditor, setShowRoiEditor] = useState(false);
     const [draggingArtifact, setDraggingArtifact] = useState<{ sourceMatchId: number; artifactId: string; imagePath: string; filename: string } | null>(null);
     const [artifactDropMatchId, setArtifactDropMatchId] = useState<number | null>(null);
-    const autoRepairAttemptSignaturesRef = useRef<Set<string>>(new Set());
     const normalizeModifierName = useCallback((name: string) => {
         const match = UI_REACH_MODIFIERS.find(m => m.toLowerCase() === name.toLowerCase());
         return match || name;
@@ -563,36 +538,6 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
             window.removeEventListener('mouseup', onUp);
         };
     }, [isActive, isResizing]);
-
-    useEffect(() => {
-        if (!isActive) return;
-        const repairSignature = buildAutoRepairSignature(matches);
-        if (!repairSignature) return;
-        if (autoRepairAttemptSignaturesRef.current.has(repairSignature)) return;
-        autoRepairAttemptSignaturesRef.current.add(repairSignature);
-        let cancelled = false;
-        const runAutoRepair = async () => {
-            try {
-                const preview = await previewArtifactRepair();
-                if (cancelled) return;
-                const planned = preview.summary?.plannedLinks || 0;
-                if (planned <= 0) return;
-                const applied = await applyArtifactRepair();
-                if (cancelled) return;
-                const linked = applied.summary?.appliedLinks || 0;
-                if (linked > 0) {
-                    setRepairResult(applied);
-                }
-            } catch {
-                // Non-blocking background attempt.
-            }
-        };
-        void runAutoRepair();
-        return () => {
-            cancelled = true;
-        };
-    }, [isActive, matches]);
-
 
     useEffect(() => {
         const focusMatch = smartCapturesFocusMatchId != null

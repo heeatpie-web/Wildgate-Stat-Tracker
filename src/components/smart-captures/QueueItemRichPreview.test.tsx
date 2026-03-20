@@ -141,5 +141,19 @@ describe('QueueItemRichPreview', () => {
     expect(screen.getByText('Awaiting Result')).toBeInTheDocument();
     expect(screen.queryByText(/^Ongoing$/)).toBeNull();
   });
+
+  it('shows a practice range indicator when the match came from training', () => {
+    render(
+      <QueueItemRichPreview
+        match={{ ...baseMatch, isPracticeRange: true }}
+        displayNumber={31}
+        rawMatchId={baseMatch.id}
+        isSelected={false}
+        onClick={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText('Practice Range')).toHaveAttribute('title', 'Practice Range');
+  });
 });
 

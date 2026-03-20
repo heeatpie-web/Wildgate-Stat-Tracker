@@ -752,7 +752,13 @@ async function sendGameKeySequence({
     focusResult = await focusGameWindow(nut, candidate, safeFocusDelayMs);
 
     if (!focusResult.focusConfirmed) {
-      console.warn(`[gameInput] Focus not confirmed for "${action}", attempting key send anyway`);
+      return {
+        success: false,
+        action,
+        key,
+        error: `Failed to confirm Wildgate focus before sending ${action}.`,
+        ...(focusResult || buildWindowResult(candidate)),
+      };
     }
 
     await sendNutKeySequence(nut, key);
@@ -830,7 +836,13 @@ async function holdGameKeySequence({
     focusResult = await focusGameWindow(nut, candidate, safeFocusDelayMs);
 
     if (!focusResult.focusConfirmed) {
-      console.warn(`[gameInput] Focus not confirmed for "${action}", attempting key hold anyway`);
+      return {
+        success: false,
+        action,
+        key,
+        error: `Failed to confirm Wildgate focus before holding ${action}.`,
+        ...(focusResult || buildWindowResult(candidate)),
+      };
     }
 
     heldKey = translateSingleSendKeyToNutKey(nut, key);

@@ -217,6 +217,7 @@ const STARTUP_INTERACTION_GRACE_MS = 3500;
 const HAS_LAUNCHED_BEFORE_STORAGE_KEY = 'wg_has_launched_before_v1';
 const WELCOME_MESSAGE_SHOWN_THIS_LAUNCH_KEY = 'wg_welcome_message_shown_this_launch_v1';
 const TACTICAL_MAP_KEY_PROMPT_SEEN_STORAGE_KEY = 'wg_tactical_map_key_prompt_seen_v1';
+const FULL_AUTO_AUTO_ENABLED_AFTER_SETUP_STORAGE_KEY = 'wg_full_auto_auto_enabled_after_setup_v1';
 type SessionExitState = 'clean' | 'running';
 const getOnboardingUserScope = (user: string | null | undefined): string => {
     const normalized = String(user || '').trim().toLowerCase();
@@ -550,6 +551,7 @@ const App: React.FC = () => {
     const startupMatchNormalizationUserRef = React.useRef('');
     const matchesRef = React.useRef<Match[]>([]);
     const setTutorialCompleted = useAppStore(s => s.setTutorialCompleted);
+    const setFullAutoEnabled = useAppStore(s => s.setFullAutoEnabled);
     const tutorialCompleted = useAppStore(s => s.tutorialCompleted);
     const tipsEnabled = useAppStore(s => s.tipsEnabled);
     const tipLibraryIndex = useAppStore(s => s.tipLibraryIndex);
@@ -567,6 +569,7 @@ const App: React.FC = () => {
     const fullAutoEnabled = useAppStore(s => s.fullAutoEnabled);
     const welcomeBackToastShownRef = React.useRef(false);
     const tacticalMapPromptShownRef = React.useRef(false);
+    const fullAutoAutoEnabledAfterSetupRef = React.useRef(false);
     const tutorialAutoPromptedRef = React.useRef(false);
     const [preloadedViews, setPreloadedViews] = useState<Record<LazyDashboardView, boolean>>({
         analytics: lazyDashboardStatus.analytics === 'ready',
@@ -1040,6 +1043,38 @@ const App: React.FC = () => {
         setToast,
         showSetupWizard,
         showTutorial,
+        startupFlowReady,
+        tacticalMapKeybind,
+    ]);
+
+    useEffect(() => {
+        if (fullAutoAutoEnabledAfterSetupRef.current) return;
+        if (isStoreLoading || !startupFlowReady) return;
+        if (showSetupWizard) return;
+        if (!String(activeUser || '').trim()) return;
+        if (!String(tacticalMapKeybind || '').trim()) return;
+
+        try {
+            if (window.localStorage.getItem(FULL_AUTO_AUTO_ENABLED_AFTER_SETUP_STORAGE_KEY) === '1') {
+                fullAutoAutoEnabledAfterSetupRef.current = true;
+                return;
+            }
+            window.localStorage.setItem(FULL_AUTO_AUTO_ENABLED_AFTER_SETUP_STORAGE_KEY, '1');
+        } catch {
+            // localStorage is optional; the ref still prevents repeat flips this launch.
+        }
+
+        fullAutoAutoEnabledAfterSetupRef.current = true;
+        if (fullAutoEnabled) return;
+
+        Logger.info('App', 'Enabling full auto after setup completion and Tactical Map keybind configuration');
+        setFullAutoEnabled(true);
+    }, [
+        activeUser,
+        fullAutoEnabled,
+        isStoreLoading,
+        setFullAutoEnabled,
+        showSetupWizard,
         startupFlowReady,
         tacticalMapKeybind,
     ]);

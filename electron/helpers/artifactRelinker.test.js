@@ -23,7 +23,7 @@ describe('artifactRelinker.applyArtifactRepair', () => {
     }
   });
 
-  it('removes duplicate auto-capture links from the wrong match', () => {
+  it('leaves already-owned auto-capture screenshots attached to their current matches', () => {
     const userData = makeTempDir();
     tempDirs.push(userData);
     const dbPath = path.join(userData, 'wildgate_db.json');
@@ -58,10 +58,11 @@ describe('artifactRelinker.applyArtifactRepair', () => {
     const result = applyArtifactRepair({ dbPath, userData });
     const updatedDb = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
 
-    expect(result.summary.removedLinks).toBe(1);
+    expect(result.summary.appliedLinks).toBe(0);
+    expect(result.summary.removedLinks).toBe(0);
     expect(updatedDb.matches[0].artifacts).toEqual([matchOneCapture]);
-    expect(updatedDb.matches[1].artifacts).toEqual([]);
-    expect(fs.existsSync(matchTwoCapture)).toBe(false);
+    expect(updatedDb.matches[1].artifacts).toEqual([matchTwoCapture]);
+    expect(fs.existsSync(matchTwoCapture)).toBe(true);
   });
 
   it('ignores relinked auto-capture variants so one capture only links once', () => {

@@ -226,23 +226,18 @@ describe('SmartCapturesPanel paused lifecycle', () => {
     appStoreState.ocrMode = 'local';
   });
 
-  it('stops background auto-repair while inactive and preserves the current tools state', async () => {
+  it('does not auto-run artifact repair on mount or rerender', async () => {
     const { default: SmartCapturesPanel } = await import('./SmartCapturesPanel');
     const { rerender } = render(<SmartCapturesPanel />);
 
-    await waitFor(() => {
-      expect(previewArtifactRepair).toHaveBeenCalledTimes(1);
-    });
-    await waitFor(() => {
-      expect(applyArtifactRepair).toHaveBeenCalledTimes(1);
-    });
-    expect(screen.getByText('Planned')).toBeInTheDocument();
-    expect(screen.getByText('1')).toBeInTheDocument();
+    expect(previewArtifactRepair).not.toHaveBeenCalled();
+    expect(applyArtifactRepair).not.toHaveBeenCalled();
 
     await act(async () => {
       rerender(<SmartCapturesPanel isActive={false} />);
     });
-    expect(screen.getByText('Planned')).toBeInTheDocument();
+    expect(previewArtifactRepair).not.toHaveBeenCalled();
+    expect(applyArtifactRepair).not.toHaveBeenCalled();
 
     gameData.matches = [
       ...gameData.matches,
@@ -268,9 +263,8 @@ describe('SmartCapturesPanel paused lifecycle', () => {
       rerender(<SmartCapturesPanel isActive={false} />);
     });
 
-    expect(previewArtifactRepair).toHaveBeenCalledTimes(1);
-    expect(applyArtifactRepair).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('Planned')).toBeInTheDocument();
+    expect(previewArtifactRepair).not.toHaveBeenCalled();
+    expect(applyArtifactRepair).not.toHaveBeenCalled();
   });
 
   it('uses the latest OCR mode for keyboard-triggered re-analysis after a mode change', async () => {
@@ -295,7 +289,7 @@ describe('SmartCapturesPanel paused lifecycle', () => {
     });
   });
 
-  it('runs background artifact repair for new smart-capture rows even before artifacts are attached', async () => {
+  it('does not trigger artifact repair just because smart-capture rows appear', async () => {
     gameData.matches = [
       {
         id: 202,
@@ -319,12 +313,8 @@ describe('SmartCapturesPanel paused lifecycle', () => {
     const { default: SmartCapturesPanel } = await import('./SmartCapturesPanel');
     render(<SmartCapturesPanel />);
 
-    await waitFor(() => {
-      expect(previewArtifactRepair).toHaveBeenCalledTimes(1);
-    });
-    await waitFor(() => {
-      expect(applyArtifactRepair).toHaveBeenCalledTimes(1);
-    });
+    expect(previewArtifactRepair).not.toHaveBeenCalled();
+    expect(applyArtifactRepair).not.toHaveBeenCalled();
   });
 
   it('reveals a focused match by clearing filters before selecting it', async () => {
