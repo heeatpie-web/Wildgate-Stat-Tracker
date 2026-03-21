@@ -20,7 +20,7 @@
  * └──────────────────────────────┴─└─────────────────────────────────────┘─┘
  *
  * Key insight: Each enemy player has their OWN colored bar below their name.
- * The bar's color = team color (red/orange/yellow/yellowGreen).
+ * The bar's color = team color (one of 32 Wildgate colors; see WILDGATE_COLORS in colorUtils.cjs).
  * Players grouped by matching bar color = same team.
  * There is NO separate "team header row" — just player card after player card.
  *
@@ -28,7 +28,7 @@
  * Multiple screenshots may be needed to capture all enemy players.
  */
 
-const { detectTeamColorBarBelow, detectColorInRegion, clusterByHue } = require('./colorUtils.cjs');
+const { detectTeamColorBarBelow, detectColorInRegion, clusterByHue, WILDGATE_COLORS } = require('./colorUtils.cjs');
 const HAZARD_CATALOG = require('./hazardCatalog.json');
 const _fs = require('fs');
 const _os = require('os');
@@ -1795,7 +1795,10 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     if (!name || !color) return false;
     const n = String(name).trim().toLowerCase();
     const c = String(color).trim().toLowerCase();
-    return n === c || ['red', 'orange', 'yellow', 'yellowgreen', 'green', 'blue', 'purple', 'unknown'].includes(n);
+    // Reject team names that are just a color word (color bar text bled through OCR)
+    const colorWords = new Set(WILDGATE_COLORS.map(wc => wc.name.toLowerCase()));
+    colorWords.add('unknown');
+    return n === c || colorWords.has(n);
   };
 
   for (const cluster of knownGroups) {
