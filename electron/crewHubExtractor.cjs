@@ -28,7 +28,7 @@
  * Multiple screenshots may be needed to capture all enemy players.
  */
 
-const { detectTeamColorBarBelow, detectColorInRegion, clusterByHue, nearestWildgateColor, WILDGATE_COLORS } = require('./colorUtils.cjs');
+const { detectTeamColorBarBelow, detectColorInRegion, clusterByHue, WILDGATE_COLORS } = require('./colorUtils.cjs');
 const HAZARD_CATALOG = require('./hazardCatalog.json');
 const _fs = require('fs');
 const _os = require('os');
@@ -1626,21 +1626,31 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
       }
     }
   } else {
-    // ── Fallback: hue clustering → Y-gap sub-clustering → named-color label ──
-    // 1. Cluster ALL chromatic cards by raw hue (noise-tolerant; 15° minGap means
-    //    ±7° OCR variance won't split a team).
-    // 2. Split same-hue clusters by Y-gap (handles two teams who chose the same color).
-    // 3. Label each final group with the nearest Wildgate color to the cluster centroid hue.
-    const chromaticCards = uniqueCards.filter(c => typeof c.rawHue === 'number');
-    const nullHueCards   = uniqueCards.filter(c => typeof c.rawHue !== 'number');
+    // ── Fallback: color + Y-gap clustering ────────────────────────────────────
+    const colorGroups = new Map(); // color → { cards[], minY, maxY }
+    for (const card of uniqueCards) {
+      if (card.color !== 'unknown') {
+        if (!colorGroups.has(card.color)) {
+          colorGroups.set(card.color, { color: card.color, cards: [], minY: Infinity, maxY: -Infinity, confidence: 0 });
+        }
+        const g = colorGroups.get(card.color);
+        g.cards.push(card);
+        g.minY = Math.min(g.minY, card.y);
+        g.maxY = Math.max(g.maxY, card.y);
+        g.confidence = Math.max(g.confidence, card.confidence);
+      }
+    }
+
+    const unknownCards = uniqueCards.filter(c => c.color === 'unknown');
 
     function subClusterByYGap(cards) {
       if (cards.length <= 1) return [cards];
       const sorted = [...cards].sort((a, b) => a.y - b.y);
       const clusters = [[sorted[0]]];
-      for (let i = 1; i < sorted.length; i++) {
+      for (let i = 1; i < sorted.length; i += 1) {
         const gap = sorted[i].y - sorted[i - 1].y;
-        if (gap > getSplitGapForRange(sorted[i - 1].y, sorted[i].y)) {
+        const gapThreshold = getSplitGapForRange(sorted[i - 1].y, sorted[i].y);
+        if (gap > gapThreshold) {
           clusters.push([sorted[i]]);
         } else {
           clusters[clusters.length - 1].push(sorted[i]);
@@ -1649,62 +1659,64 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
       return clusters;
     }
 
-    function circMean(hues) {
-      const n = hues.length;
-      const sinSum = hues.reduce((s, h) => s + Math.sin(h * Math.PI / 180), 0);
-      const cosSum = hues.reduce((s, h) => s + Math.cos(h * Math.PI / 180), 0);
-      const rad = Math.atan2(sinSum / n, cosSum / n);
-      return Math.round(((rad * 180 / Math.PI) + 360) % 360);
-    }
-
     const expandedGroups = new Map();
     let syntheticColorIdx = 0;
-
-    if (chromaticCards.length > 0) {
-      const huePlayers = chromaticCards.map(c => ({ name: c.name, hue: c.rawHue, card: c }));
-      const hueClusters = clusterByHue(huePlayers);
-      for (const hueCluster of hueClusters) {
-        const clusterCards = hueCluster.map(p => p.card);
-        const ySubClusters = subClusterByYGap(clusterCards);
-        for (let i = 0; i < ySubClusters.length; i++) {
-          const subCards = ySubClusters[i];
-          const hues = subCards.map(c => c.rawHue);
-          const clusterHue = circMean(hues);
-          const colorLabel = nearestWildgateColor(clusterHue).name;
-          const key = i === 0 ? colorLabel : `${colorLabel}_split${syntheticColorIdx++}`;
-          expandedGroups.set(key, {
-            color: colorLabel,
-            cards: subCards,
-            minY: Math.min(...subCards.map(c => c.y)),
-            maxY: Math.max(...subCards.map(c => c.y)),
-            confidence: Math.max(...subCards.map(c => c.confidence || 0)),
-          });
-          dlog('[CrewHub] Cluster ' + colorLabel + ' (' + subCards.length + ' cards) hues: ' + hues.map(h => h + '°').join(', '));
-        }
+    for (const [color, group] of colorGroups) {
+      if (group.cards.length <= 1) {
+        expandedGroups.set(color, group);
+        continue;
       }
-    }
 
-    // Cards with no rawHue (black/white bars — circularHueMean returned null) keep
-    // their directly-detected color name. Merge into an existing group or add new.
-    for (const card of nullHueCards) {
-      if (card.color && card.color !== 'unknown' && card.color !== 'spectator') {
-        const key = card.color;
-        if (!expandedGroups.has(key)) {
-          expandedGroups.set(key, { color: card.color, cards: [], minY: Infinity, maxY: -Infinity, confidence: 0 });
-        }
-        const g = expandedGroups.get(key);
-        g.cards.push(card);
-        g.minY = Math.min(g.minY, card.y);
-        g.maxY = Math.max(g.maxY, card.y);
-        g.confidence = Math.max(g.confidence, card.confidence || 0);
+      const clusters = subClusterByYGap(group.cards);
+      if (clusters.length === 1) {
+        expandedGroups.set(color, group);
       } else {
-        expandedGroups.set('unknown_' + syntheticColorIdx++, {
-          color: 'unknown', cards: [card], minY: card.y, maxY: card.y, confidence: 0,
-        });
+        dlog('[CrewHub] Step4b: splitting color=' + color + ' into ' + clusters.length + ' Y-gap sub-groups');
+        for (let ci = 0; ci < clusters.length; ci += 1) {
+          const cluster = clusters[ci];
+          const key = ci === 0 ? color : `${color}_split${syntheticColorIdx++}`;
+          expandedGroups.set(key, {
+            color,  // preserve real color for downstream team name + output
+            cards: cluster,
+            minY: Math.min(...cluster.map(c => c.y)),
+            maxY: Math.max(...cluster.map(c => c.y)),
+            confidence: Math.max(...cluster.map(c => c.confidence || 0)),
+          });
+        }
       }
     }
 
+    // ── Step 5: Cluster unknown-color cards by hue ───────────────────────────
+    // Replaces both Y-position assignment (mixed lobby) and Y-gap clustering
+    // (all-unknown lobby). Gap-based hue clustering handles custom team colors
+    // that don't match the four hardcoded named colors.
     knownGroups = [...expandedGroups.values()];
+
+    const unknownWithHue = unknownCards.filter(c => typeof c.rawHue === 'number');
+    const unknownWithoutHue = unknownCards.filter(c => typeof c.rawHue !== 'number');
+
+    if (unknownWithHue.length > 0) {
+      const huePlayers = unknownWithHue.map(c => ({ name: c.name, hue: c.rawHue, card: c }));
+      const clusters = clusterByHue(huePlayers);
+      for (const cluster of clusters) {
+        const clusterCards = cluster.map(p => p.card);
+        const ys = clusterCards.map(c => c.y);
+        knownGroups.push({
+          color: 'unknown',
+          cards: clusterCards,
+          minY: Math.min(...ys),
+          maxY: Math.max(...ys),
+          confidence: 0,
+        });
+        console.log('[CrewHub] Hue-clustered', clusterCards.length, 'unknown-color cards at hues', cluster.map(p => p.hue + '°').join(', '));
+      }
+    }
+
+    // Cards with no hue (truly black/undetectable bars that slipped through)
+    // create isolated unknown groups as before.
+    for (const card of unknownWithoutHue) {
+      knownGroups.push({ color: 'unknown', cards: [card], minY: card.y, maxY: card.y, confidence: 0 });
+    }
   }
 
   // ── Step 5d: Merge tiny same-color fallback splits ──────────────────────────

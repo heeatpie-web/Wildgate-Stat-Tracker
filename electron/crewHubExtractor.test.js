@@ -61,20 +61,4 @@ describe('clusterByHue grouping', () => {
     expect(clusters).toHaveLength(1);
     expect(clusters[0]).toHaveLength(2);
   });
-
-  it('clusterByHue + nearestWildgateColor correctly groups warm-band players despite hue variance', () => {
-    // Simulates 3 orange-team players with ±10° hue variance straddling
-    // the orange(22°)/cognac(18°)/tangerine(26°) named-color boundaries.
-    // clusterByHue groups them together (15° minGap >> 10° spread).
-    // The cluster centroid (20°) maps to 'cognac' or 'orange' — exact name doesn't matter;
-    // what matters is all 3 land in ONE cluster.
-    const players = [
-      { name: 'A', hue: 14 },
-      { name: 'B', hue: 21 },
-      { name: 'C', hue: 26 },
-    ];
-    const clusters = clusterByHue(players, 4, 15);
-    expect(clusters).toHaveLength(1);
-    expect(clusters[0]).toHaveLength(3);
-  });
 });
