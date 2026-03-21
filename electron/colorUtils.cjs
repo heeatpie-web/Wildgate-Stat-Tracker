@@ -576,6 +576,71 @@ function getTeamColorInfo(colorName) {
   return TEAM_COLORS[colorName] || null;
 }
 
+/**
+ * Group players into teams by hue proximity using gap-based clustering.
+ *
+ * Treats hues as points on a circle (0–360°). Finds the largest arc between
+ * consecutive hues — this is the biggest "empty space" and becomes the natural
+ * starting boundary. The array is then rotated so it begins just after that
+ * largest arc, making wrap-around cases (e.g. red players near 0°/360°) work
+ * correctly. Additional splits are applied for the next-largest arcs.
+ *
+ * @param {{ name: string, hue: number }[]} players
+ * @param {number} [maxTeams=4] - Maximum number of teams (caps split count)
+ * @param {number} [minGap=15]  - Minimum arc size in degrees to count as a split
+ * @returns {{ name: string, hue: number }[][]} Array of clusters
+ */
+function clusterByHue(players, maxTeams = 4, minGap = 15) {
+  if (players.length === 0) return [];
+  if (players.length === 1) return [[players[0]]];
+
+  const sorted = [...players].sort((a, b) => a.hue - b.hue);
+
+  // Compute circular arcs between consecutive hues (including wrap-around)
+  const gaps = sorted.map((p, i) => {
+    const isLast = i === sorted.length - 1;
+    const nextHue = isLast ? sorted[0].hue + 360 : sorted[i + 1].hue;
+    return { afterIdx: i, gap: nextHue - p.hue };
+  });
+
+  // The largest gap is the "empty arc" — rotate so the array starts just after it
+  const largestGap = gaps.reduce((best, g) => (g.gap > best.gap ? g : best), gaps[0]);
+  const startIdx = (largestGap.afterIdx + 1) % sorted.length;
+  const rotated = [
+    ...sorted.slice(startIdx),
+    ...sorted.slice(0, startIdx),
+  ];
+
+  // Recompute linear gaps in the rotated array (no more wrap needed)
+  const linearGaps = rotated.slice(0, -1).map((p, i) => ({
+    afterIdx: i,
+    gap: rotated[i + 1].hue - p.hue + (rotated[i + 1].hue < p.hue ? 360 : 0),
+  }));
+
+  // Select up to (maxTeams - 1) largest gaps that exceed minGap as split points
+  const splitSet = new Set(
+    [...linearGaps]
+      .filter(g => g.gap > minGap)
+      .sort((a, b) => b.gap - a.gap)
+      .slice(0, maxTeams - 1)
+      .map(g => g.afterIdx)
+  );
+
+  if (splitSet.size === 0) return [rotated];
+
+  const clusters = [];
+  let current = [];
+  for (let i = 0; i < rotated.length; i++) {
+    current.push(rotated[i]);
+    if (splitSet.has(i)) {
+      clusters.push(current);
+      current = [];
+    }
+  }
+  if (current.length > 0) clusters.push(current);
+  return clusters;
+}
+
 module.exports = {
   TEAM_COLORS,
   rgbToHsl,
@@ -587,5 +652,6 @@ module.exports = {
   detectTeamColorBarBelow,
   findTeamColorRegions,
   getTeamColorInfo,
+  clusterByHue,
   __test__: { circularHueMean },
 };

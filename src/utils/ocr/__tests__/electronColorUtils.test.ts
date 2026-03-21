@@ -2,8 +2,9 @@ import { createRequire } from 'module';
 import { describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const { classifyTeamColorHSL, __test__ } = require('../../../../electron/colorUtils.cjs') as {
+const { classifyTeamColorHSL, clusterByHue, __test__ } = require('../../../../electron/colorUtils.cjs') as {
   classifyTeamColorHSL: (r: number, g: number, b: number) => { color: string; confidence: number };
+  clusterByHue: (players: { name: string; hue: number }[], maxTeams?: number, minGap?: number) => { name: string; hue: number }[][];
   __test__: {
     circularHueMean: (data: Uint8Array, channels: number) => number | null;
   };
@@ -123,5 +124,67 @@ describe('electron/colorUtils yellow-family classification', () => {
 
     expect(classifyTeamColorHSL(brightYellow.r, brightYellow.g, brightYellow.b).color).toBe('yellow');
     expect(classifyTeamColorHSL(greenerBadge.r, greenerBadge.g, greenerBadge.b).color).toBe('yellowGreen');
+  });
+});
+
+describe('electron/colorUtils clusterByHue', () => {
+  it('returns one cluster when all hues are within minGap', () => {
+    const players = [
+      { name: 'A', hue: 20 }, { name: 'B', hue: 22 }, { name: 'C', hue: 25 },
+    ];
+    const clusters = clusterByHue(players);
+    expect(clusters).toHaveLength(1);
+    expect(clusters[0]).toHaveLength(3);
+  });
+
+  it('splits two teams separated by a large gap', () => {
+    const players = [
+      { name: 'A', hue: 20 }, { name: 'B', hue: 22 },   // orange team
+      { name: 'C', hue: 270 }, { name: 'D', hue: 275 }, // purple team
+    ];
+    const clusters = clusterByHue(players);
+    expect(clusters).toHaveLength(2);
+    const names = clusters.map(c => c.map(p => p.name).sort());
+    expect(names).toContainEqual(['A', 'B']);
+    expect(names).toContainEqual(['C', 'D']);
+  });
+
+  it('handles a single player as its own cluster', () => {
+    const players = [{ name: 'Solo', hue: 120 }];
+    const clusters = clusterByHue(players);
+    expect(clusters).toHaveLength(1);
+    expect(clusters[0][0].name).toBe('Solo');
+  });
+
+  it('handles red players straddling 0°/360° as one team', () => {
+    const players = [
+      { name: 'A', hue: 355 }, { name: 'B', hue: 358 },
+      { name: 'C', hue: 2 },  { name: 'D', hue: 5 },
+    ];
+    const clusters = clusterByHue(players);
+    expect(clusters).toHaveLength(1);
+    expect(clusters[0]).toHaveLength(4);
+  });
+
+  it('respects maxTeams — caps number of clusters', () => {
+    const players = [
+      { name: 'A', hue: 0 }, { name: 'B', hue: 90 },
+      { name: 'C', hue: 180 }, { name: 'D', hue: 270 },
+      { name: 'E', hue: 45 }, // fifth team — should be merged
+    ];
+    const clusters = clusterByHue(players, 4);
+    expect(clusters.length).toBeLessThanOrEqual(4);
+  });
+
+  it('does not split clusters smaller than minGap', () => {
+    const players = [
+      { name: 'A', hue: 40 }, { name: 'B', hue: 50 }, // gap = 10° < minGap 15°
+    ];
+    const clusters = clusterByHue(players, 4, 15);
+    expect(clusters).toHaveLength(1);
+  });
+
+  it('returns empty array for empty input', () => {
+    expect(clusterByHue([])).toEqual([]);
   });
 });
