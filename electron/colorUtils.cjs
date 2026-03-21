@@ -362,6 +362,29 @@ function circularHueMean(data, channels, lightnessThreshold = 20, minChromFracti
 }
 
 /**
+ * Returns true if ≥ 70% of pixels in the buffer have lightness < 25%.
+ * Used as a pre-check to detect black/spectator team bars before the
+ * most-saturated-pixel search runs — prevents a stray bright border pixel
+ * from winning the saturation race on an otherwise-black bar.
+ *
+ * @param {Uint8Array} data - Raw pixel buffer
+ * @param {number} channels - Bytes per pixel
+ * @param {number} [darknessThreshold=25] - Lightness % below which a pixel is "dark"
+ * @param {number} [majorityFraction=0.70] - Fraction of dark pixels required
+ */
+function majorityDark(data, channels, darknessThreshold = 25, majorityFraction = 0.70) {
+  const ch = Math.max(1, channels);
+  const totalPixels = data.length / ch;
+  if (totalPixels === 0) return false;
+  let darkCount = 0;
+  for (let i = 0; i < data.length; i += ch) {
+    const { l } = rgbToHsl(data[i], data[i + 1], data[i + 2]);
+    if (l < darknessThreshold) darkCount++;
+  }
+  return darkCount / totalPixels >= majorityFraction;
+}
+
+/**
  * Detect color in a region of an image
  * @param {Buffer} imageBuffer - Image buffer (PNG/JPEG)
  * @param {Object} region - Region to sample { x, y, width, height }
@@ -392,50 +415,58 @@ async function detectColorInRegion(imageBuffer, region, sharpModule = null) {
       return { color: 'unknown', confidence: 0, rawHue: null, rgb: { r: 0, g: 0, b: 0 } };
     }
 
-    // Use circular hue averaging across chromatic pixels (lightness >= 20%).
-    // This is more stable than picking the single most-saturated pixel, which
-    // could be a stray border pixel rather than the team color.
-    // Returns null if the bar is predominantly dark (black/spectator).
-    const meanHue = circularHueMean(data, info.channels);
-
-    if (meanHue === null) {
+    // ── Black-bar pre-check ───────────────────────────────────────────────────
+    // If ≥ 70% of pixels are very dark (lightness < 25%), the bar is a black/
+    // spectator card. Return early before the saturation race so a stray bright
+    // border pixel can't override the true bar colour.
+    if (majorityDark(data, info.channels)) {
       return { color: 'black', confidence: 80, rawHue: null, rgb: { r: 0, g: 0, b: 0 } };
     }
 
-    // ── Hybrid classifier ────────────────────────────────────────────────────
-    // 1. Fast path: classifyTeamColorHSL has wide, noise-tolerant hue bands
-    //    tuned for the four default game colours (red/orange/yellow/yellowGreen).
-    //    If it recognises the colour, use it — this maintains accuracy for
-    //    standard lobbies.
-    // 2. Fallback: for custom colours not in the original four, nearestWildgateColor
-    //    maps to the nearest of all 32 Wildgate colours by hue distance.
-    const c = 0.5;
-    const x = c * (1 - Math.abs(((meanHue / 60) % 2) - 1));
-    const sector = Math.floor(meanHue / 60);
-    const [rp, gp, bp] = [
-      [c, x, 0], [x, c, 0], [0, c, x], [0, x, c], [x, 0, c], [c, 0, x],
-    ][sector] || [0, 0, 0];
-    const approxR = Math.round(rp * 255);
-    const approxG = Math.round(gp * 255);
-    const approxB = Math.round(bp * 255);
+    // ── Most-saturated-pixel sampling ─────────────────────────────────────────
+    // Find the pixel with the highest saturation×lightness score. Team colour
+    // bars are vivid and highly saturated; background/UI elements are not.
+    const ch = Math.max(1, info.channels);
+    let bestScore = -1;
+    let bestR = 0, bestG = 0, bestB = 0;
 
-    const hslResult = classifyTeamColorHSL(approxR, approxG, approxB);
+    for (let i = 0; i < data.length; i += ch) {
+      const r = data[i], g = data[i + 1], b = data[i + 2];
+      const hsl = rgbToHsl(r, g, b);
+      const score = (hsl.s / 100) * (hsl.l / 100);
+      if (score > bestScore) {
+        bestScore = score;
+        bestR = r; bestG = g; bestB = b;
+      }
+    }
+
+    if (bestScore < 0.01) {
+      return { color: 'unknown', confidence: 0, rawHue: null, rgb: { r: bestR, g: bestG, b: bestB } };
+    }
+
+    // Store the winning pixel's hue for clusterByHue downstream
+    const winningHsl = rgbToHsl(bestR, bestG, bestB);
+    const rawHue = winningHsl.s > 5 ? winningHsl.h : null;
+
+    // ── Hybrid classifier ─────────────────────────────────────────────────────
+    // Fast path: classifyTeamColorHSL has wide, noise-tolerant hue bands for the
+    // four default game colours. Fall through to nearestWildgateColor for custom.
+    const hslResult = classifyTeamColorHSL(bestR, bestG, bestB);
     if (hslResult.color !== 'unknown' && hslResult.color !== 'spectator') {
       return {
         color: hslResult.color,
         confidence: hslResult.confidence,
-        rawHue: meanHue,
-        rgb: { r: approxR, g: approxG, b: approxB },
+        rawHue,
+        rgb: { r: bestR, g: bestG, b: bestB },
       };
     }
 
-    // Custom colour — fall through to 32-colour nearest-hue lookup
-    const match = nearestWildgateColor(meanHue);
+    const match = nearestWildgateColor(rawHue ?? winningHsl.h);
     return {
       color: match.name,
       confidence: match.confidence,
-      rawHue: meanHue,
-      rgb: { r: approxR, g: approxG, b: approxB },
+      rawHue,
+      rgb: { r: bestR, g: bestG, b: bestB },
     };
   } catch (error) {
     console.error('[ColorUtils] detectColorInRegion failed:', error.message);
@@ -745,5 +776,5 @@ module.exports = {
   findTeamColorRegions,
   getTeamColorInfo,
   clusterByHue,
-  __test__: { circularHueMean },
+  __test__: { circularHueMean, majorityDark },
 };

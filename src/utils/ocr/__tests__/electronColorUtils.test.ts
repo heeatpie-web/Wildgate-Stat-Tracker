@@ -8,6 +8,7 @@ const { classifyTeamColorHSL, clusterByHue, nearestWildgateColor, __test__ } = r
   nearestWildgateColor: (hue: number) => { name: string; confidence: number };
   __test__: {
     circularHueMean: (data: Uint8Array, channels: number) => number | null;
+    majorityDark: (data: Uint8Array, channels: number) => boolean;
   };
 };
 
@@ -243,5 +244,40 @@ describe('electron/colorUtils clusterByHue', () => {
 
   it('returns empty array for empty input', () => {
     expect(clusterByHue([])).toEqual([]);
+  });
+});
+
+describe('electron/colorUtils detectColorInRegion black-bar detection', () => {
+  function makePixels(rgbs: [number, number, number][]): Uint8Array {
+    const buf = new Uint8Array(rgbs.length * 3);
+    rgbs.forEach(([r, g, b], i) => { buf[i*3]=r; buf[i*3+1]=g; buf[i*3+2]=b; });
+    return buf;
+  }
+
+  it('majorityDark returns true when >70% of pixels have lightness < 25%', () => {
+    // 80 dark pixels + 20 orange — should be detected as black
+    const { majorityDark } = __test__;
+    const pixels = makePixels([
+      ...Array(80).fill([20, 20, 20]),   // dark
+      ...Array(20).fill([254, 94, 0]),   // orange
+    ]);
+    expect(majorityDark(pixels, 3)).toBe(true);
+  });
+
+  it('majorityDark returns false for VANGUARD-style dark-but-coloured bars', () => {
+    // VANGUARD: dark orange-ish pixels, but only ~50% are below lightness 25%
+    const { majorityDark } = __test__;
+    const pixels = makePixels([
+      ...Array(50).fill([80, 40, 10]),   // dark orange, l≈18% — below threshold
+      ...Array(50).fill([150, 80, 20]),  // medium orange, l≈33% — above threshold
+    ]);
+    expect(majorityDark(pixels, 3)).toBe(false);
+  });
+
+  it('majorityDark returns true for CAREFREE-style truly black bars', () => {
+    // CAREFREE: essentially all pixels are very dark
+    const { majorityDark } = __test__;
+    const pixels = makePixels(Array(100).fill([15, 10, 20]));
+    expect(majorityDark(pixels, 3)).toBe(true);
   });
 });
