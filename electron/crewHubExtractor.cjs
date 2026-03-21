@@ -1256,6 +1256,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     // Sample the colored bar BELOW the name text
     let detectedColor = 'unknown';
     let colorConfidence = 0;
+    let rawHue = null;
 
     if (colorImageBuffer) {
       try {
@@ -1265,6 +1266,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
           dlog('[CrewHub] SKIP color detect: tiny bbox w=' + Math.round(colorDetectWidth) + ' h=' + Math.round(colorDetectHeight) + ' for "' + playerName + '"');
         } else {
           const cr = await detectTeamColorBarBelow(colorImageBuffer, colorDetectBbox, scale);
+          rawHue = typeof cr?.rawHue === 'number' ? cr.rawHue : null;
           if (cr.color !== 'unknown' && cr.color !== 'spectator' && cr.color !== 'black' && cr.confidence > 30) {
             detectedColor = cr.color;
             colorConfidence = cr.confidence;
@@ -1284,6 +1286,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
       y: line.y,
       name: playerName,
       color: detectedColor,
+      rawHue,
       confidence: colorConfidence,
       bbox: lineBbox,
     });
