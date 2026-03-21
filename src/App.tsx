@@ -9,6 +9,10 @@ import {
     useResultFlashMonitor,
     type ResultFlashMonitorDebugSnapshot,
 } from './hooks/useResultFlashMonitor';
+import {
+    useResultTextMonitor,
+    type ResultTextDetectionPayload,
+} from './hooks/useResultTextMonitor';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useFocusTrap } from './hooks/useFocusTrap';
 import { useMatchSubmission } from './hooks/useMatchSubmission';
@@ -139,7 +143,7 @@ import { buildActiveWeaponsFromLoadout, cloneLoadout, sanitizeUnknownLoadout } f
 import { extractArtifactSourceFromOcrData } from './utils/artifactSource';
 import { buildOcrNameConfidenceMapFromExtractedData } from './utils/ocr/nameSourceHints';
 import { buildAutoCaptureStateSnapshot } from './utils/autoCaptureState';
-import { startAutoCapture, type StartAutoCaptureResult } from './utils/electronBridge';
+import { sendGameUiAction, startAutoCapture, type StartAutoCaptureResult } from './utils/electronBridge';
 import { findActiveTelemetryDraftMatch } from './utils/smartCaptureScope';
 import {
     deriveCanonicalRosterCandidateTargetKey,
@@ -254,6 +258,13 @@ const toFiniteNumber = (value: unknown, fallback = 0): number => {
     return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const normalizeImageBase64Payload = (value: unknown): string | null => {
+    const normalized = String(value || '')
+        .trim()
+        .replace(/^data:image\/\w+;base64,/, '');
+    return normalized.length > 0 ? normalized : null;
+};
+
 const mergeCaptureArtifactPaths = (existing: string[] = [], incoming: string[] = []): string[] => {
     const next: string[] = [];
     const seen = new Set<string>();
@@ -286,15 +297,28 @@ const writeStoredSessionExitState = (state: SessionExitState): void => {
 };
 
 type FinalMatchResult = Exclude<MatchResult, 'Ongoing'>;
+type FullAutoDetectionMethod = 'flash' | 'text';
+type FullAutoSaveReason = FullAutoDetectionMethod | 'background' | 'manual';
 
 const IMAGE_ARTIFACT_PATTERN = /\.(png|jpe?g|webp|bmp|gif)$/i;
 const TELEMETRY_AUTO_CAPTURE_ARTIFACT_TARGET = 3;
 const TELEMETRY_POSTMATCH_FALLBACK_DELAY_MS = 15_000;
+const PREGAME_LOBBY_MACRO_DELAY_MS = 5_000;
 const FULL_AUTO_RESULT_OCR_POST_FLASH_DELAY_MS = 1_000;
 const FULL_AUTO_RESULT_OCR_RETRY_DELAY_MS = 300;
 const FULL_AUTO_RESULT_OCR_MAX_ATTEMPTS = 3;
 const FULL_AUTO_BACKGROUND_RESULT_OCR_INTERVAL_MS = 2_000;
 const FULL_AUTO_BACKGROUND_RESULT_OCR_MAX_ATTEMPTS = 30;
+const FULL_AUTO_FINAL_MOMENTS_SETTLE_MS = 300;
+const FULL_AUTO_DAMAGE_SOURCES_TRANSITION_MS = 400;
+const FULL_AUTO_DAMAGE_SOURCES_CAPTURE_TIMEOUT_MS = 2_000;
+const FULL_AUTO_DAMAGE_SOURCES_CAPTURE_REGION = {
+    left: 0.55,
+    top: 0.16,
+    width: 0.36,
+    height: 0.60,
+    normalized: true,
+} as const;
 
 const isImageArtifactEntry = (value: unknown): value is string => {
     const normalized = String(value || '').trim();
@@ -340,7 +364,7 @@ const getWatchingResultStatusPhase = (fullAutoEnabled: boolean): TelemetryAutoma
 );
 
 const getWatchingResultStatusMessage = (fullAutoEnabled: boolean): string => (
-    fullAutoEnabled ? 'Watching for result flash' : 'Watching for result screen'
+    fullAutoEnabled ? 'Watching for match-end flash or result text' : 'Watching for result screen'
 );
 
 const getTelemetryAutoCaptureStartFailure = (result: StartAutoCaptureResult): {
@@ -495,6 +519,7 @@ const App: React.FC = () => {
     const telemetryDraftFallbackTimersRef = React.useRef<Map<number, number>>(new Map());
     const telemetryBackgroundResultOcrTimersRef = React.useRef<Map<number, number>>(new Map());
     const telemetryBackgroundResultOcrAttemptsRef = React.useRef<Map<number, number>>(new Map());
+    const telemetryLobbyCaptureTimersRef = React.useRef<Map<number, number>>(new Map());
     const telemetryLobbyCaptureAttemptedRef = React.useRef<Set<number>>(new Set());
     const telemetryLiveFallbackAttemptedRef = React.useRef<Set<number>>(new Set());
     const telemetryAutoCaptureInFlightRef = React.useRef<Set<number>>(new Set());
@@ -764,14 +789,22 @@ const App: React.FC = () => {
         playAutomationFailed,
     } = useSoundEffects();
     const [fullAutoResultLatched, setFullAutoResultLatched] = useState(false);
+    const [fullAutoDetectionLocked, setFullAutoDetectionLockedState] = useState(false);
+    const fullAutoDetectionLockedRef = useRef(false);
     const fullAutoCaptureInFlightRef = useRef(false);
     const fullAutoEnabledRef = useRef(fullAutoEnabled);
     const telemetryLifecycleStageValueRef = useRef<TelemetryLifecycleStage>(telemetryLifecycleStage);
     const triggerFullAutoSaveRef = useRef<(options?: {
         initialDelayMs?: number;
-        reason?: 'flash' | 'background' | 'manual';
+        reason?: FullAutoSaveReason;
+        detectionMethod?: FullAutoDetectionMethod;
         matchId?: number | null;
     }) => Promise<void>>(async () => {});
+
+    const setFullAutoDetectionLocked = useCallback((locked: boolean) => {
+        fullAutoDetectionLockedRef.current = locked;
+        setFullAutoDetectionLockedState(locked);
+    }, []);
 
     const fuzzyRosterCandidates = React.useMemo(() => (
         (pendingReviews || [])
@@ -2152,6 +2185,21 @@ const App: React.FC = () => {
         telemetryBackgroundResultOcrAttemptsRef.current.clear();
     }, []);
 
+    const clearTelemetryLobbyCaptureTimer = useCallback((matchId?: number | null) => {
+        const normalizedMatchId = Number(matchId || 0);
+        if (Number.isInteger(normalizedMatchId) && normalizedMatchId > 0) {
+            const timerId = telemetryLobbyCaptureTimersRef.current.get(normalizedMatchId);
+            if (typeof timerId === 'number') {
+                window.clearTimeout(timerId);
+                telemetryLobbyCaptureTimersRef.current.delete(normalizedMatchId);
+            }
+            return;
+        }
+
+        telemetryLobbyCaptureTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+        telemetryLobbyCaptureTimersRef.current.clear();
+    }, []);
+
     const handleTelemetryDraftLater = useCallback(() => {
         if (!telemetryDraftPrompt) return;
         handledTelemetryDraftPostmatchPromptIdsRef.current.add(telemetryDraftPrompt.matchId);
@@ -2225,24 +2273,35 @@ const App: React.FC = () => {
     useEffect(() => () => {
         clearTelemetryDraftFallbackTimer();
         clearTelemetryBackgroundResultOcrTimer();
-    }, [clearTelemetryBackgroundResultOcrTimer, clearTelemetryDraftFallbackTimer]);
+        clearTelemetryLobbyCaptureTimer();
+    }, [clearTelemetryBackgroundResultOcrTimer, clearTelemetryDraftFallbackTimer, clearTelemetryLobbyCaptureTimer]);
 
     useEffect(() => {
         const nextDraftId = Number(activeTelemetryDraftMatch?.id || 0);
         if (!Number.isInteger(nextDraftId) || nextDraftId <= 0) {
             if (telemetryLifecycleStage === 'idle' || telemetryLifecycleStage === 'result') {
                 clearTelemetryBackgroundResultOcrTimer(latestTelemetryDraftIdRef.current);
+                clearTelemetryLobbyCaptureTimer(latestTelemetryDraftIdRef.current);
                 latestTelemetryDraftIdRef.current = null;
                 telemetryLiveStageMatchIdRef.current = null;
                 setTelemetryLiveStartedAt(null);
+                setFullAutoDetectionLocked(false);
             }
             return;
         }
         if (latestTelemetryDraftIdRef.current === nextDraftId) return;
         clearTelemetryBackgroundResultOcrTimer(latestTelemetryDraftIdRef.current);
+        clearTelemetryLobbyCaptureTimer(latestTelemetryDraftIdRef.current);
         latestTelemetryDraftIdRef.current = nextDraftId;
         setFullAutoResultLatched(false);
-    }, [activeTelemetryDraftMatch?.id, clearTelemetryBackgroundResultOcrTimer, telemetryLifecycleStage]);
+        setFullAutoDetectionLocked(false);
+    }, [
+        activeTelemetryDraftMatch?.id,
+        clearTelemetryBackgroundResultOcrTimer,
+        clearTelemetryLobbyCaptureTimer,
+        setFullAutoDetectionLocked,
+        telemetryLifecycleStage,
+    ]);
 
     useEffect(() => {
         if (telemetryLifecycleStage !== 'live' || normalizedActiveTelemetryDraftMatchId == null) {
@@ -2252,11 +2311,16 @@ const App: React.FC = () => {
         }
         if (telemetryLiveStageMatchIdRef.current !== normalizedActiveTelemetryDraftMatchId) {
             telemetryLiveStageMatchIdRef.current = normalizedActiveTelemetryDraftMatchId;
+            console.log('[LifecycleStage] live entered', {
+                matchId: normalizedActiveTelemetryDraftMatchId,
+                matchMode: activeTelemetryDraftMatch?.matchMode || (isTelemetryPracticeRange ? 'practice range' : 'unknown'),
+                at: new Date().toISOString(),
+            });
             setTelemetryLiveStartedAt(Date.now());
             return;
         }
         setTelemetryLiveStartedAt((current) => current ?? Date.now());
-    }, [normalizedActiveTelemetryDraftMatchId, telemetryLifecycleStage]);
+    }, [activeTelemetryDraftMatch?.matchMode, isTelemetryPracticeRange, normalizedActiveTelemetryDraftMatchId, telemetryLifecycleStage]);
 
     useEffect(() => {
         const currentStatus = useAppStore.getState().telemetryAutomationStatus;
@@ -2345,17 +2409,49 @@ const App: React.FC = () => {
     ]);
 
     useEffect(() => {
-        if (!fullAutoEnabled) return;
-        if (normalizedActiveTelemetryDraftMatchId == null) return;
-        const matchId = normalizedActiveTelemetryDraftMatchId;
-
-        if (telemetryLifecycleStage === 'pregame') {
-            if (telemetryLobbyCaptureAttemptedRef.current.has(matchId)) return;
-            telemetryLobbyCaptureAttemptedRef.current.add(matchId);
-            void startSilentTelemetryAutoCapture(matchId, 'pregame');
+        if (normalizedActiveTelemetryDraftMatchId == null) {
+            clearTelemetryLobbyCaptureTimer();
             return;
         }
 
+        const matchId = normalizedActiveTelemetryDraftMatchId;
+        const detectedMatchMode = activeTelemetryDraftMatch?.matchMode || (isTelemetryPracticeRange ? 'practice range' : 'unknown');
+
+        if (!fullAutoEnabled || telemetryLifecycleStage !== 'pregame' || isTelemetryPracticeRange) {
+            clearTelemetryLobbyCaptureTimer(matchId);
+            return;
+        }
+
+        if (telemetryLobbyCaptureAttemptedRef.current.has(matchId)) {
+            clearTelemetryLobbyCaptureTimer(matchId);
+            return;
+        }
+
+        if (telemetryLobbyCaptureTimersRef.current.has(matchId)) return;
+
+        const timerId = window.setTimeout(() => {
+            telemetryLobbyCaptureTimersRef.current.delete(matchId);
+            if (telemetryLobbyCaptureAttemptedRef.current.has(matchId)) return;
+            telemetryLobbyCaptureAttemptedRef.current.add(matchId);
+            console.log(`[AutoCapture] Pre-game lobby macro triggered (mode=${detectedMatchMode})`);
+            void startSilentTelemetryAutoCaptureRef.current(matchId, 'pregame');
+        }, PREGAME_LOBBY_MACRO_DELAY_MS);
+
+        telemetryLobbyCaptureTimersRef.current.set(matchId, timerId);
+        return () => clearTelemetryLobbyCaptureTimer(matchId);
+    }, [
+        activeTelemetryDraftMatch?.matchMode,
+        clearTelemetryLobbyCaptureTimer,
+        fullAutoEnabled,
+        isTelemetryPracticeRange,
+        normalizedActiveTelemetryDraftMatchId,
+        telemetryLifecycleStage,
+    ]);
+
+    useEffect(() => {
+        if (!fullAutoEnabled) return;
+        if (normalizedActiveTelemetryDraftMatchId == null) return;
+        const matchId = normalizedActiveTelemetryDraftMatchId;
         if (telemetryLifecycleStage !== 'live') return;
         if (hasCompleteTelemetryCaptureBundle(matchId)) return;
         if (telemetryAutoCaptureInFlightRef.current.has(matchId)) return;
@@ -2366,10 +2462,9 @@ const App: React.FC = () => {
     }, [
         fullAutoEnabled,
         hasCompleteTelemetryCaptureBundle,
-        normalizedActiveTelemetryDraftMatchId,
-        setTelemetryAutomationStatus,
-        startSilentTelemetryAutoCapture,
         isTelemetryPracticeRange,
+        normalizedActiveTelemetryDraftMatchId,
+        startSilentTelemetryAutoCapture,
         telemetryLifecycleStage,
     ]);
 
@@ -2667,15 +2762,78 @@ const App: React.FC = () => {
         }
     }, []);
 
-    const handleFullAutoResultFlashDetected = useCallback(() => {
-        if (fullAutoResultLatched || fullAutoCaptureInFlightRef.current) return;
+    const captureDamageSourcesArtifact = useCallback(async (
+        api: NonNullable<ReturnType<typeof getElectronAPI>>,
+        resultImageBase64: string,
+        matchId: number,
+    ) => {
+        const baselineCapture = await api.invoke('capture-result-screen-region', {
+            imageBase64: resultImageBase64,
+            cropRegion: FULL_AUTO_DAMAGE_SOURCES_CAPTURE_REGION,
+        });
+        const baselineImageBase64 = normalizeImageBase64Payload(baselineCapture?.imageBase64);
+        if (!baselineImageBase64) {
+            console.warn('[FullAuto] Unable to capture baseline damage panel region', { matchId });
+            return null;
+        }
+
+        await waitForDuration(FULL_AUTO_FINAL_MOMENTS_SETTLE_MS);
+
+        const toggleResult = await sendGameUiAction('show-damage-sources');
+        if (!toggleResult.success) {
+            console.warn('[FullAuto] Failed to toggle damage sources view', {
+                matchId,
+                error: toggleResult.error || null,
+            });
+            return null;
+        }
+
+        const deadlineAt = Date.now() + FULL_AUTO_DAMAGE_SOURCES_CAPTURE_TIMEOUT_MS;
+        while (Date.now() <= deadlineAt) {
+            await waitForDuration(FULL_AUTO_DAMAGE_SOURCES_TRANSITION_MS);
+            const followupCapture = await api.invoke('capture-result-screen-region', {
+                cropRegion: FULL_AUTO_DAMAGE_SOURCES_CAPTURE_REGION,
+            });
+            const followupImageBase64 = normalizeImageBase64Payload(followupCapture?.imageBase64);
+            if (!followupImageBase64) continue;
+            if (followupImageBase64 !== baselineImageBase64) {
+                return {
+                    imageBase64: followupImageBase64,
+                    kind: 'damage-sources' as const,
+                };
+            }
+        }
+
+        console.warn('[FullAuto] Damage sources view did not appear before timeout', { matchId });
+        return null;
+    }, []);
+
+    const beginFullAutoResultDetection = useCallback((
+        message: string,
+        matchId?: number | null,
+    ) => {
+        if (
+            fullAutoResultLatched
+            || fullAutoCaptureInFlightRef.current
+            || fullAutoDetectionLockedRef.current
+        ) {
+            return false;
+        }
+
+        setFullAutoDetectionLocked(true);
         setTelemetryAutomationStatus(createTelemetryAutomationStatus({
             phase: 'result-flash-detected',
-            message: 'Result flash detected',
-            matchId: normalizedActiveTelemetryDraftMatchId,
+            message,
+            matchId: matchId ?? normalizedActiveTelemetryDraftMatchId,
             level: 'info',
         }));
-    }, [fullAutoResultLatched, normalizedActiveTelemetryDraftMatchId, setTelemetryAutomationStatus]);
+        return true;
+    }, [
+        fullAutoResultLatched,
+        normalizedActiveTelemetryDraftMatchId,
+        setFullAutoDetectionLocked,
+        setTelemetryAutomationStatus,
+    ]);
 
     const appendResultFlashDebugEvent = useCallback((
         type: ResultFlashDebugEvent['type'],
@@ -2701,7 +2859,8 @@ const App: React.FC = () => {
 
     const triggerFullAutoSave = useCallback(async (options?: {
         initialDelayMs?: number;
-        reason?: 'flash' | 'background' | 'manual';
+        reason?: FullAutoSaveReason;
+        detectionMethod?: FullAutoDetectionMethod;
         matchId?: number | null;
     }) => {
         const api = getElectronAPI();
@@ -2719,8 +2878,13 @@ const App: React.FC = () => {
         ) {
             return;
         }
-        const initialDelayMs = Math.max(0, Number(options?.initialDelayMs ?? FULL_AUTO_RESULT_OCR_POST_FLASH_DELAY_MS) || 0);
         const reason = options?.reason || 'manual';
+        const detectionMethod = options?.detectionMethod;
+        const initialDelayMs = Math.max(0, Number(
+            options?.initialDelayMs
+            ?? (reason === 'flash' ? FULL_AUTO_RESULT_OCR_POST_FLASH_DELAY_MS : 0)
+        ) || 0);
+        const shouldResumeWatchingOnFailure = reason === 'flash' || reason === 'text';
         const restoreWaitingStatus = () => {
             const status = (
                 reason === 'background' || telemetryLifecycleStageValueRef.current !== 'live'
@@ -2738,6 +2902,10 @@ const App: React.FC = () => {
                     level: 'info',
                 });
             setTelemetryAutomationStatus(status);
+        };
+        const unlockDetectionIfNeeded = () => {
+            if (!shouldResumeWatchingOnFailure) return;
+            setFullAutoDetectionLocked(false);
         };
 
         fullAutoCaptureInFlightRef.current = true;
@@ -2770,12 +2938,26 @@ const App: React.FC = () => {
                 }
 
                 const imageBase64 = capture as string;
-                const scanResult = await api.invoke('scan-result-screen', { imageBase64 });
+                const scanResult = await api.invoke('scan-result-screen', {
+                    imageBase64,
+                    detectionMethod,
+                });
                 const resultData = scanResult?.data ?? { result: null };
+                if (!resultData.detectionMethod && detectionMethod) {
+                    resultData.detectionMethod = detectionMethod;
+                }
+                const damageSourcesArtifact = (
+                    resultData.result === 'Win'
+                    || resultData.result === 'Loss'
+                )
+                    ? await captureDamageSourcesArtifact(api, imageBase64, normalizedDraftMatchId)
+                    : null;
+                const supplementalArtifacts = damageSourcesArtifact ? [damageSourcesArtifact] : [];
                 const finalized = await autoFinalizeResultScreenCapture({
                     imageBase64,
                     resultData,
                     matchId: normalizedDraftMatchId,
+                    supplementalArtifacts,
                 });
 
                 if (finalized.success) {
@@ -2815,6 +2997,7 @@ const App: React.FC = () => {
             }
 
             if (shouldReturnToWatching) {
+                unlockDetectionIfNeeded();
                 restoreWaitingStatus();
                 return;
             }
@@ -2845,9 +3028,11 @@ const App: React.FC = () => {
         }
     }, [
         autoFinalizeResultScreenCapture,
+        captureDamageSourcesArtifact,
         fullAutoResultLatched,
         normalizedActiveTelemetryDraftMatchId,
         saveFullAutoDebugCapture,
+        setFullAutoDetectionLocked,
         setTelemetryAutomationStatus,
         setToast,
     ]);
@@ -2869,17 +3054,35 @@ const App: React.FC = () => {
             matchId: scheduledMatchId,
             delayMs: FULL_AUTO_RESULT_OCR_POST_FLASH_DELAY_MS,
         });
-        await handleFullAutoResultFlashDetected();
+        if (!beginFullAutoResultDetection('Result flash detected', scheduledMatchId)) return;
         await triggerFullAutoSave({
             initialDelayMs: FULL_AUTO_RESULT_OCR_POST_FLASH_DELAY_MS,
             reason: 'flash',
+            detectionMethod: 'flash',
             matchId: scheduledMatchId,
         });
-    }, [appendResultFlashDebugEvent, handleFullAutoResultFlashDetected, normalizedActiveTelemetryDraftMatchId, triggerFullAutoSave]);
+    }, [appendResultFlashDebugEvent, beginFullAutoResultDetection, normalizedActiveTelemetryDraftMatchId, triggerFullAutoSave]);
 
     const handleResultFlashResolvedWithDebug = useCallback(async () => {
         appendResultFlashDebugEvent('resolved', 'Brightness dropped; flash watcher reset');
     }, [appendResultFlashDebugEvent]);
+
+    const handleResultTextDetected = useCallback(async (payload: ResultTextDetectionPayload) => {
+        const scheduledMatchId = normalizedActiveTelemetryDraftMatchId;
+        console.log('[Brain] Text signal received - scheduling result capture immediately', {
+            matchId: scheduledMatchId,
+            result: payload.result,
+            placement: payload.placement ?? null,
+            text: payload.text || null,
+        });
+        if (!beginFullAutoResultDetection('Result text detected', scheduledMatchId)) return;
+        await triggerFullAutoSave({
+            initialDelayMs: 0,
+            reason: 'text',
+            detectionMethod: 'text',
+            matchId: scheduledMatchId,
+        });
+    }, [beginFullAutoResultDetection, normalizedActiveTelemetryDraftMatchId, triggerFullAutoSave]);
 
     usePixelMonitor(fullAutoResultLatched);
     useResultFlashMonitor({
@@ -2888,12 +3091,21 @@ const App: React.FC = () => {
             && normalizedActiveTelemetryDraftMatchId != null,
         liveStartedAt: telemetryLiveStartedAt,
         armDelayMs: isTelemetryPracticeRange ? 0 : undefined,
-        triggerLatched: fullAutoResultLatched,
+        triggerLatched: fullAutoResultLatched || fullAutoDetectionLocked,
         onFlashDetected: handleResultFlashDetectedWithDebug,
         onFlashResolved: handleResultFlashResolvedWithDebug,
         onDebugStateChange: IS_DEV_BUILD && devMode
             ? handleResultFlashDebugStateChange
             : undefined,
+    });
+    useResultTextMonitor({
+        enabled: fullAutoEnabled
+            && telemetryLifecycleStage === 'live'
+            && normalizedActiveTelemetryDraftMatchId != null,
+        liveStartedAt: telemetryLiveStartedAt,
+        armDelayMs: isTelemetryPracticeRange ? 0 : undefined,
+        triggerLatched: fullAutoResultLatched || fullAutoDetectionLocked,
+        onResultDetected: handleResultTextDetected,
     });
 
     const handleApplyOCRData = useCallback((

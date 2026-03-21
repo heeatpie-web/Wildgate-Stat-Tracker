@@ -132,7 +132,14 @@ type AutoResultScreenData = {
     result: 'Win' | 'Loss' | null;
     winType?: string | null;
     placement?: number | null;
+    detectionMethod?: 'flash' | 'text';
     damageTaken?: number | null;
+    damageSourcesAvailable?: boolean;
+};
+
+type AutoResultCaptureArtifact = {
+    imageBase64: string;
+    kind?: 'damage-sources';
 };
 
 type AutoFinalizeResultStatus = {
@@ -140,6 +147,7 @@ type AutoFinalizeResultStatus = {
     reason?: 'busy' | 'unconfirmed' | 'incomplete' | 'no-draft' | 'ipc-unavailable' | 'save-failed' | 'error';
     matchId?: number;
     artifactPath?: string | null;
+    artifactPaths?: string[];
 };
 
 const normalizeResultSubType = (winType: string | null | undefined, placement?: number | null): 'Artifact' | 'Combat' | null => {
@@ -148,6 +156,64 @@ const normalizeResultSubType = (winType: string | null | undefined, placement?: 
     if (normalized === 'combat') return 'Combat';
     if (Number.isInteger(Number(placement)) && Number(placement) >= 2 && Number(placement) <= 5) return 'Combat';
     return null;
+};
+
+const resolveSavedOcrMeta = (
+    pendingMatchData: Partial<Match> | null | undefined,
+    existingMatch: Match | null | undefined
+): Pick<Match, 'ocrState' | 'ocrReviewedAt'> => {
+    const reviewedAtRaw = Number(pendingMatchData?.ocrReviewedAt ?? existingMatch?.ocrReviewedAt ?? 0);
+    const ocrReviewedAt = Number.isFinite(reviewedAtRaw) && reviewedAtRaw > 0
+        ? reviewedAtRaw
+        : undefined;
+    if (ocrReviewedAt) {
+        return {
+            ocrState: 'saved',
+            ocrReviewedAt,
+        };
+    }
+    return {
+        ocrState: pendingMatchData?.ocrState || existingMatch?.ocrState,
+        ocrReviewedAt: undefined,
+    };
+};
+
+const mergeTextLines = (...lineSets: Array<Array<string | null | undefined> | null | undefined>): string[] => {
+    const seen = new Set<string>();
+    const merged: string[] = [];
+    lineSets.forEach((lineSet) => {
+        (lineSet || []).forEach((entry) => {
+            const normalized = String(entry || '').trim();
+            if (!normalized) return;
+            const key = normalized.toLowerCase();
+            if (seen.has(key)) return;
+            seen.add(key);
+            merged.push(normalized);
+        });
+    });
+    return merged;
+};
+
+const extractOcrLines = (ocrPayload: unknown): string[] => {
+    if (!ocrPayload || typeof ocrPayload !== 'object') return [];
+    const record = ocrPayload as Record<string, unknown>;
+    const explicitLines = Array.isArray(record.lines)
+        ? record.lines
+            .map((line) => {
+                if (typeof line === 'string') return line;
+                if (line && typeof line === 'object') {
+                    const lineRecord = line as Record<string, unknown>;
+                    return typeof lineRecord.text === 'string' ? lineRecord.text : '';
+                }
+                return '';
+            })
+            .filter((line): line is string => typeof line === 'string')
+        : [];
+    if (explicitLines.length > 0) {
+        return mergeTextLines(explicitLines);
+    }
+    const fullText = typeof record.text === 'string' ? record.text : '';
+    return mergeTextLines(fullText.split(/\r?\n/g));
 };
 
 const resolveExistingSubmissionMatch = ({
@@ -665,6 +731,7 @@ export const useMatchSubmission = () => {
                 if (selectedResult !== 'Loss' || !stored) return undefined;
                 return stored;
             })();
+            const savedOcrMeta = resolveSavedOcrMeta(pendingMatchData, existingMatch);
             const matchId = existingMatch?.id || Date.now();
             const matchTimestamp = existingMatch?.timestamp || pendingMatchData.timestamp || Date.now();
             const rawMergedLoadout = sanitizeLoadout(pendingMatchData.loadout || currentLoadout);
@@ -721,7 +788,7 @@ export const useMatchSubmission = () => {
                 ocrDebug: pendingMatchData?.ocrDebug || undefined,
                 opponentTeams: pendingMatchData?.opponentTeams || undefined,
                 eliminatedByTeam: finalEliminatedByTeam,
-                ocrState: pendingMatchData?.ocrState || existingMatch?.ocrState,
+                ...savedOcrMeta,
                 telemetryConsistency: finalTelemetryConsistency,
             };
             const submittedResult = newMatch.result;
@@ -938,6 +1005,7 @@ export const useMatchSubmission = () => {
                 if (selectedResult !== 'Loss' || !stored) return undefined;
                 return stored;
             })();
+            const savedOcrMeta = resolveSavedOcrMeta(pendingMatchData, existingMatch);
             const matchId = existingMatch?.id || Date.now();
             const matchTimestamp = existingMatch?.timestamp || pendingMatchData.timestamp || Date.now();
             const rawMergedLoadout = sanitizeLoadout(pendingMatchData.loadout || currentLoadout);
@@ -991,7 +1059,7 @@ export const useMatchSubmission = () => {
                 ocrDebug: pendingMatchData?.ocrDebug || undefined,
                 opponentTeams: pendingMatchData?.opponentTeams || undefined,
                 eliminatedByTeam: finalEliminatedByTeam,
-                ocrState: pendingMatchData?.ocrState || existingMatch?.ocrState,
+                ...savedOcrMeta,
                 telemetryConsistency: finalTelemetryConsistency,
             };
 
@@ -1024,10 +1092,12 @@ export const useMatchSubmission = () => {
         imageBase64,
         resultData,
         matchId,
+        supplementalArtifacts,
     }: {
         imageBase64: string;
         resultData: AutoResultScreenData;
         matchId?: number | null;
+        supplementalArtifacts?: AutoResultCaptureArtifact[] | null;
     }): Promise<AutoFinalizeResultStatus> => {
         if (submitting) return { success: false, reason: 'busy' };
 
@@ -1097,18 +1167,41 @@ export const useMatchSubmission = () => {
                 playDefeat();
             }
 
-            const rawBase64 = String(imageBase64 || '').replace(/^data:image\/\w+;base64,/, '').trim();
-            let savedArtifactPath: string | null = null;
-            if (rawBase64) {
+            const artifactsToSave: Array<{ rawBase64: string; kind?: AutoResultCaptureArtifact['kind'] }> = [
+                {
+                    rawBase64: String(imageBase64 || '').replace(/^data:image\/\w+;base64,/, '').trim(),
+                },
+                ...((supplementalArtifacts || []).map((artifact) => ({
+                    rawBase64: String(artifact?.imageBase64 || '').replace(/^data:image\/\w+;base64,/, '').trim(),
+                    kind: artifact?.kind,
+                }))),
+            ].filter((artifact) => artifact.rawBase64.length > 0);
+
+            const savedArtifactPaths: string[] = [];
+            let damageSourcesOcrLines: string[] = [];
+
+            for (const artifact of artifactsToSave) {
                 const saveResult = await api.invoke('save-screenshot', {
-                    imageBase64: rawBase64,
+                    imageBase64: artifact.rawBase64,
                     matchId: existingMatch.id,
                 });
-                savedArtifactPath = String(saveResult?.data?.filePath || '').trim() || null;
-                if (!savedArtifactPath) {
+                const savedPath = String(saveResult?.data?.filePath || '').trim() || '';
+                if (!savedPath) {
                     return { success: false, reason: 'save-failed' };
                 }
+                savedArtifactPaths.push(savedPath);
+
+                if (artifact.kind === 'damage-sources') {
+                    try {
+                        const ocrPayload = await api.invoke('ocr-scan', savedPath);
+                        damageSourcesOcrLines = mergeTextLines(damageSourcesOcrLines, extractOcrLines(ocrPayload));
+                    } catch (error) {
+                        Logger.warn('MatchSubmission', `Damage sources OCR failed for ${savedPath}`, error);
+                    }
+                }
             }
+
+            const savedArtifactPath = savedArtifactPaths[0] || null;
 
             const finalTime = (timeMin || timeSec)
                 ? `${timeMin || '00'}:${timeSec || '00'}`
@@ -1150,6 +1243,18 @@ export const useMatchSubmission = () => {
                 ? sanitizeLoadout({ ...rawMergedLoadout, ship: resolvedShip })
                 : rawMergedLoadout;
             const baseTelemetryConsistency = resolvedPendingMatchData.telemetryConsistency || existingMatch.telemetryConsistency;
+            const savedOcrMeta = resolveSavedOcrMeta(resolvedPendingMatchData, existingMatch);
+            const mergedDamageSourcesText = mergeTextLines(
+                existingMatch.damageSourcesText,
+                resolvedPendingMatchData.damageSourcesText,
+                damageSourcesOcrLines,
+            );
+            const finalDamageSourcesAvailable = (
+                resultData.damageSourcesAvailable === true
+                || savedArtifactPaths.length > 1
+                || mergedDamageSourcesText.length > 0
+                || existingMatch.damageSourcesAvailable === true
+            );
             const finalTelemetryConsistency = baseTelemetryConsistency
                 ? (() => {
                     const evaluated = evaluateTelemetryConsistencyChecks(baseTelemetryConsistency, {
@@ -1194,11 +1299,14 @@ export const useMatchSubmission = () => {
                 killedByShip: pendingKilledByShip || existingMatch.killedByShip || undefined,
                 notes: finalNotes,
                 timelineEvents: [...(resolvedPendingMatchData.timelineEvents || existingMatch.timelineEvents || [])],
-                artifacts: mergeArtifactLists(existingMatch.artifacts, resolvedPendingMatchData.artifacts, savedArtifactPath ? [savedArtifactPath] : []),
+                artifacts: mergeArtifactLists(existingMatch.artifacts, resolvedPendingMatchData.artifacts, savedArtifactPaths),
                 ocrDebug: resolvedPendingMatchData.ocrDebug || existingMatch.ocrDebug || undefined,
                 opponentTeams: resolvedPendingMatchData.opponentTeams || existingMatch.opponentTeams || undefined,
                 eliminatedByTeam: resolvedPendingMatchData.eliminatedByTeam || existingMatch.eliminatedByTeam || undefined,
-                ocrState: resolvedPendingMatchData.ocrState || existingMatch.ocrState,
+                resultDetectionMethod: resultData.detectionMethod || existingMatch.resultDetectionMethod,
+                damageSourcesAvailable: finalDamageSourcesAvailable,
+                damageSourcesText: mergedDamageSourcesText.length > 0 ? mergedDamageSourcesText : undefined,
+                ...savedOcrMeta,
                 telemetryConsistency: finalTelemetryConsistency,
             };
 
@@ -1221,7 +1329,7 @@ export const useMatchSubmission = () => {
             setMatchStartTime(null);
             notifyTelemetryDraftResolved(existingMatch.id);
 
-            const consumedArtifactPaths = mergeArtifactLists(existingMatch.artifacts, resolvedPendingMatchData.artifacts, savedArtifactPath ? [savedArtifactPath] : [], diskArtifacts);
+            const consumedArtifactPaths = mergeArtifactLists(existingMatch.artifacts, resolvedPendingMatchData.artifacts, savedArtifactPaths, diskArtifacts);
             notifyArtifactsConsumed(savedMatch.id, consumedArtifactPaths);
             window.dispatchEvent(new CustomEvent('recording:match-complete', {
                 detail: { result: savedMatch.result, matchId: savedMatch.id },
@@ -1235,6 +1343,7 @@ export const useMatchSubmission = () => {
                 success: true,
                 matchId: savedMatch.id,
                 artifactPath: savedArtifactPath,
+                artifactPaths: savedArtifactPaths,
             };
         } catch (e) {
             Logger.error('Submission', 'Auto result-screen finalization failed', e);

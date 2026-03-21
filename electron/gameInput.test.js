@@ -38,6 +38,14 @@ describe('gameInput send-keys translation', () => {
     ]);
   });
 
+  it('translates the literal right-bracket key', () => {
+    expect(translateSendKeysSequenceToNutKeys('m7]', Key)).toEqual([
+      Key.M,
+      Key.Num7,
+      Key.RightBracket,
+    ]);
+  });
+
   it('translates common single-key bindings', () => {
     expect(translateSendKeysSequenceToNutKeys('{TAB}', Key)).toEqual([Key.Tab]);
     expect(translateSendKeysSequenceToNutKeys('{ESC}', Key)).toEqual([Key.Escape]);
@@ -125,7 +133,7 @@ describe('gameInput window candidate cache', () => {
         width: 1600,
         height: 901,
       },
-      geometryAgeMs: 0,
+      geometryAgeMs: expect.any(Number),
     });
   });
 

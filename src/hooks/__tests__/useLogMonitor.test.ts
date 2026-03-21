@@ -129,6 +129,7 @@ describe('useLogMonitor', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.spyOn(console, 'trace').mockImplementation(() => undefined);
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.resetModules();
     addMatch.mockClear();
     updateMatch.mockClear();
@@ -177,6 +178,52 @@ describe('useLogMonitor', () => {
     Object.keys(ipcCallbacks).forEach((key) => {
       delete ipcCallbacks[key];
     });
+  });
+
+  it('classifies lobby-like loading maps as pregame and keeps practice range as live', async () => {
+    const { __test__ } = await import('../useLogMonitor');
+
+    expect(__test__.classifyTelemetryLifecycleStageFromMap('PreGameLobby')).toBe('pregame');
+    expect(__test__.classifyTelemetryLifecycleStageFromMap('WaitingRoom')).toBe('pregame');
+    expect(__test__.classifyTelemetryLifecycleStageFromMap('StartingZone')).toBe('pregame');
+    expect(__test__.classifyTelemetryLifecycleStageFromMap('CustomLobby')).toBe('pregame');
+    expect(__test__.classifyTelemetryLifecycleStageFromMap(
+      '/Game/Gameplay/GameEntryPoint/GameEntryPoint',
+      'PreGameLobbyWaitingForPlayers',
+    )).toBe('pregame');
+    expect(__test__.classifyTelemetryLifecycleStageFromMap(
+      '/Game/Gameplay/GameEntryPoint/GameEntryPoint',
+      'InGame',
+    )).toBe('live');
+    expect(__test__.classifyTelemetryLifecycleStageFromMap('PracticeRange_LobbyMap')).toBe('live');
+  });
+
+  it('infers telemetry match mode from practice-range and artifactsandgates signals', async () => {
+    const { __test__ } = await import('../useLogMonitor');
+
+    expect(__test__.inferTelemetryMatchMode({
+      practiceRangeSignal: true,
+      matchPoolValue: 'artifactsandgates',
+      payloadSources: [],
+    })).toBe('practice range');
+
+    expect(__test__.inferTelemetryMatchMode({
+      practiceRangeSignal: false,
+      matchPoolValue: 'artifactsandgates',
+      payloadSources: [],
+    })).toBe('artifactsandgates');
+
+    expect(__test__.inferTelemetryMatchMode({
+      practiceRangeSignal: false,
+      matchPoolValue: 'artifactsandgates_customlobby',
+      payloadSources: [],
+    })).toBe('custom');
+
+    expect(__test__.inferTelemetryMatchMode({
+      practiceRangeSignal: false,
+      matchPoolValue: '',
+      payloadSources: [{ lobbyType: 'CustomLobby' }],
+    })).toBe('custom');
   });
 
   it('registers listeners before starting telemetry monitoring and begins in high-accuracy mode', async () => {
@@ -276,6 +323,7 @@ describe('useLogMonitor', () => {
       result: 'Ongoing',
       subType: 'Telemetry Draft',
       ocrState: 'queued',
+      matchMode: 'custom',
       telemetryDraftState: 'active',
     });
     expect(uiState.setTelemetryLifecycleStage).toHaveBeenCalledWith('live');
@@ -322,6 +370,7 @@ describe('useLogMonitor', () => {
       player: 'Pilot',
       result: 'Ongoing',
       subType: 'Telemetry Draft',
+      matchMode: 'practice range',
     });
     expect(uiState.setTelemetryLifecycleStage).toHaveBeenCalledWith('live');
     expect(uiState.setTelemetryLifecycleIsPracticeRange).toHaveBeenCalledWith(true);
@@ -353,6 +402,7 @@ describe('useLogMonitor', () => {
       player: 'Pilot',
       result: 'Ongoing',
       subType: 'Telemetry Draft',
+      matchMode: 'practice range',
     });
     expect(uiState.setTelemetryLifecycleStage).toHaveBeenCalledWith('live');
     expect(uiState.setTelemetryLifecycleIsPracticeRange).toHaveBeenCalledWith(true);
@@ -457,6 +507,7 @@ describe('useLogMonitor', () => {
     expect(latestAddedMatch()).toMatchObject({
       isPracticeRange: true,
       telemetryDraftState: 'active',
+      matchMode: 'practice range',
     });
     expect(gameDataState.setIsMatchInProgress).toHaveBeenCalledWith(true);
     expect(uiState.setTelemetryLifecycleStage).toHaveBeenCalledWith('live');
@@ -595,6 +646,9 @@ describe('useLogMonitor', () => {
     });
 
     expect(addMatch).toHaveBeenCalledTimes(1);
+    expect(latestAddedMatch()).toMatchObject({
+      matchMode: 'custom',
+    });
     expect(gameDataState.setIsMatchInProgress).toHaveBeenCalledWith(true);
     expect(gameDataState.setMatchStartTime).toHaveBeenCalled();
     expect(uiState.setOverlayPhase).toHaveBeenCalledWith('Live');
@@ -629,6 +683,9 @@ describe('useLogMonitor', () => {
     });
 
     expect(addMatch).toHaveBeenCalledTimes(1);
+    expect(latestAddedMatch()).toMatchObject({
+      matchMode: 'artifactsandgates',
+    });
     expect(gameDataState.setIsMatchInProgress).toHaveBeenCalledWith(true);
     expect(gameDataState.setMatchStartTime).toHaveBeenCalled();
     expect(uiState.setOverlayPhase).toHaveBeenCalledWith('Live');
@@ -893,10 +950,11 @@ describe('useLogMonitor', () => {
     });
 
     const finalizedDraft = updateMatch.mock.calls
-      .map(([match]) => match as { time?: string })
+      .map(([match]) => match as { time?: string; matchMode?: string })
       .find((match) => typeof match?.time === 'string');
 
     expect(finalizedDraft).toBeTruthy();
+    expect(finalizedDraft?.matchMode).toBe('custom');
     expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-ready' }));
     dispatchSpy.mockRestore();
   });
@@ -942,10 +1000,11 @@ describe('useLogMonitor', () => {
     });
 
     const finalizedDraft = updateMatch.mock.calls
-      .map(([match]) => match as { time?: string })
+      .map(([match]) => match as { time?: string; matchMode?: string })
       .find((match) => typeof match?.time === 'string');
 
     expect(finalizedDraft).toBeTruthy();
+    expect(finalizedDraft?.matchMode).toBe('practice range');
     expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-ready' }));
     dispatchSpy.mockRestore();
   });
@@ -981,8 +1040,8 @@ describe('useLogMonitor', () => {
     });
 
     const finalizedBeforeFrontend = updateMatch.mock.calls
-      .map(([match]) => match as { id?: number; time?: string })
-      .find((match) => match.id === createdDraft?.id && typeof match.time === 'string');
+      .map(([match]) => match as { id?: number; telemetryDraftState?: string })
+      .find((match) => match.id === createdDraft?.id && match.telemetryDraftState === 'ready');
     expect(finalizedBeforeFrontend).toBeUndefined();
     expect(
       dispatchSpy.mock.calls.some(([event]) => (event as Event)?.type === 'telemetry:draft-ready')
@@ -999,10 +1058,11 @@ describe('useLogMonitor', () => {
     });
 
     const finalizedDraft = updateMatch.mock.calls
-      .map(([match]) => match as { id?: number; time?: string })
-      .find((match) => match.id === createdDraft?.id && typeof match.time === 'string');
+      .map(([match]) => match as { id?: number; telemetryDraftState?: string; matchMode?: string })
+      .find((match) => match.id === createdDraft?.id && match.telemetryDraftState === 'ready');
 
     expect(finalizedDraft).toBeTruthy();
+    expect(finalizedDraft?.matchMode).toBe('practice range');
     expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-ready' }));
     dispatchSpy.mockRestore();
   });

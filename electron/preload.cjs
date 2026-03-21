@@ -30,6 +30,7 @@ const INVOKE_CHANNELS = [
   'pixel-monitor-sample',
   'result-flash-sample',
   'scan-result-screen',
+  'capture-result-screen-region',
 ];
 
 const SEND_CHANNELS = [
@@ -41,6 +42,7 @@ const SEND_CHANNELS = [
   'toggle-overlay', 'set-overlay-style', 'set-window-bounds',
   'sync-auto-capture-hotkey-state',
   'result-flash-start', 'result-flash-stop',
+  'result-text-start', 'result-text-stop',
   'pixel-monitor-start', 'pixel-monitor-stop',
 ];
 
@@ -53,6 +55,7 @@ const RECEIVE_CHANNELS = [
   'auto-capture-status',
   'telemetry-prune-needed',
   'result-flash-detected', 'result-flash-resolved', 'result-flash-debug',
+  'result-text-detected', 'result-text-debug',
   'pixel-monitor-trigger',
 ];
 

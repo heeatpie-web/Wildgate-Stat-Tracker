@@ -31,6 +31,9 @@ const NAMED_KEY_MAP = Object.freeze({
   delete: 'Delete',
   del: 'Delete',
   backspace: 'Backspace',
+  ']': 'RightBracket',
+  rbracket: 'RightBracket',
+  rightbracket: 'RightBracket',
 });
 
 let nutApi = null;
@@ -788,6 +791,11 @@ function resolveCharacterKey(token, Key) {
   }
 
   if (token === ' ') return Key.Space;
+  if (token === ']') {
+    if (Object.prototype.hasOwnProperty.call(Key, 'RightBracket')) {
+      return Key.RightBracket;
+    }
+  }
 
   if (/^[a-z]$/i.test(token)) {
     const enumName = token.toUpperCase();

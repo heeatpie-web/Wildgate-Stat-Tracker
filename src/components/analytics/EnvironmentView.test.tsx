@@ -34,7 +34,7 @@ const matches: Match[] = [
         opponents: ['EnemyOne'],
         hero: 'Hero',
         ship: 'Hunter',
-        reachModifiers: ['Ion Storm'],
+        reachModifiers: ['Cosmic Storm'],
         kills: {},
         result: 'Win',
         subType: 'Combat',
@@ -49,7 +49,7 @@ const matches: Match[] = [
         opponents: ['EnemyTwo'],
         hero: 'Hero',
         ship: 'Hunter',
-        reachModifiers: ['Ion Storm'],
+        reachModifiers: ['Cosmic Storm'],
         kills: {},
         result: 'Loss',
         subType: 'Combat',
@@ -61,9 +61,9 @@ describe('EnvironmentView', () => {
         const onDrillDown = vi.fn();
         render(<EnvironmentView matches={matches} visualMode="editorial" onDrillDown={onDrillDown} />);
 
-        const buttons = screen.getAllByRole('button', { name: /ion storm/i });
+        const buttons = screen.getAllByRole('button', { name: /cosmic storm/i });
         fireEvent.click(buttons[0]);
 
-        expect(onDrillDown).toHaveBeenCalledWith('Ion Storm', 'Modifier');
+        expect(onDrillDown).toHaveBeenCalledWith('Cosmic Storm', 'Modifier');
     });
 });

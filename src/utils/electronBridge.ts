@@ -33,7 +33,11 @@ export interface OCRProcessRuntimeOptions {
   maxReroutePasses?: number;
 }
 
-export type GameUiAction = 'open-tactical-map' | 'open-crew-hub' | 'close-current-ui';
+export type GameUiAction =
+  | 'open-tactical-map'
+  | 'open-crew-hub'
+  | 'close-current-ui'
+  | 'show-damage-sources';
 export type GameScreenType = 'tactical_map' | 'crew_hub';
 
 export interface SendGameUiActionResult {

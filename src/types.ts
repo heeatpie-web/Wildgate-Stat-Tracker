@@ -19,6 +19,8 @@ export * from './utils/constants';
 
 /** Supported UI languages. Translations live in utils/translations.ts. */
 export type Language = 'en' | 'es' | 'mx' | 'pt' | 'br' | 'zh';
+/** Telemetry-derived lifecycle match mode used for auto-routing and persistence. */
+export type TelemetryMatchMode = 'custom' | 'artifactsandgates' | 'practice range';
 
 /**
  * Explicit OCR pipeline state for a match's artifacts.
@@ -240,6 +242,14 @@ export interface Match {
   telemetryDraftState?: TelemetryDraftState;
   /** Marks telemetry matches that originated from practice/training range sessions. */
   isPracticeRange?: boolean;
+  /** Telemetry-derived match mode captured from lifecycle evidence. */
+  matchMode?: TelemetryMatchMode;
+  /** Whether the result was first confirmed by flash or by visible result text. */
+  resultDetectionMethod?: 'flash' | 'text';
+  /** Whether the post-result damage sources panel was visible/captured. */
+  damageSourcesAvailable?: boolean;
+  /** OCR lines captured from the damage sources panel for later analytics. */
+  damageSourcesText?: string[];
 }
 
 /** Returns crew capacity (1-4) based on the ship display name. */

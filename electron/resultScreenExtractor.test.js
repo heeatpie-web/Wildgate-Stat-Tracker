@@ -13,7 +13,9 @@ describe('resultScreenExtractor heuristics', () => {
       result: 'Win',
       winType: 'artifact',
       placement: 1,
+      detectionMethod: 'flash',
       damageTaken: undefined,
+      damageSourcesAvailable: false,
     });
   });
 
@@ -21,24 +23,28 @@ describe('resultScreenExtractor heuristics', () => {
     expect(__test__.parseResultSignals({
       headlineTexts: ['VICTORY'],
       statusTexts: ['RIVALSELIMINATEL'],
-    })).toEqual({
+    }, { detectionMethod: 'text' })).toEqual({
       result: 'Win',
       winType: 'combat',
       placement: 1,
+      detectionMethod: 'text',
       damageTaken: undefined,
+      damageSourcesAvailable: false,
     });
   });
 
   it('parses combat losses and placement from placement banner text', () => {
     expect(__test__.parseResultSignals({
-      placementTexts: ['2NDPLACE'],
-      statusTexts: ['ANGUARDWINS', 'FINALMOMENTSRECAP'],
+      placementTexts: ['2', 'FINALMOMENTSRECAP'],
+      statusTexts: ['DEFEAT', 'ANGUARDWINS'],
       damageTexts: ['AFINALDAMAGETAKEN114'],
-    })).toEqual({
+    }, { detectionMethod: 'text' })).toEqual({
       result: 'Loss',
       winType: 'combat',
       placement: 2,
+      detectionMethod: 'text',
       damageTaken: 114,
+      damageSourcesAvailable: true,
     });
   });
 

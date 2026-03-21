@@ -5,6 +5,7 @@ export const buildAutoCaptureTelemetryDraft = ({
     matchId,
     timestamp,
     mode,
+    matchMode,
     player,
     hero,
     ship,
@@ -13,6 +14,7 @@ export const buildAutoCaptureTelemetryDraft = ({
     matchId: number;
     timestamp: number;
     mode: Match['mode'];
+    matchMode?: Match['matchMode'];
     player?: string | null;
     hero?: string | null;
     ship?: string | null;
@@ -66,5 +68,6 @@ export const buildAutoCaptureTelemetryDraft = ({
         timelineEvents: [],
         artifacts: [],
         ocrState: 'queued',
+        matchMode,
     };
 };

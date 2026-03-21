@@ -78,7 +78,7 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
             : telemetryLifecycleStage === 'pregame'
                 ? 'Pregame lobby detected'
                 : telemetryLifecycleStage === 'live'
-                    ? 'Watching for result flash'
+                    ? 'Watching for match-end result'
                     : telemetryLifecycleStage === 'result'
                         ? 'Waiting for match wrap-up'
                         : ''

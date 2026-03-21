@@ -26,6 +26,8 @@ const { sampleRegion: sampleDxgiRegion } = require('./dxgiSampler.cjs');
 const { startMonitor, stopMonitor, sampleRegion } = require('./pixelMonitor.cjs');
 const { extractResultScreen } = require('./resultScreenExtractor.cjs');
 const { startResultFlashMonitor, stopResultFlashMonitor } = require('./resultFlashMonitor.cjs');
+const { cropImageBuffer, decodeImageBase64 } = require('./resultCaptureHelper.cjs');
+const { startResultTextMonitor, stopResultTextMonitor } = require('./resultTextMonitor.cjs');
 const { buildAutoCaptureRequestFromStateSnapshot } = require('./autoCaptureHotkeyState.cjs');
 const { clearGameWindowCache, holdGameKeySequence, lookupGameWindowCandidate, lookupGameWindowGeometry, sendGameKeySequence, setPersistentPSRunner, validateGameInputRuntime } = require('./gameInput.cjs');
 const { runPSWithEnv, startPersistentPS, killPersistentPS } = require('./persistentPowerShell.cjs');
@@ -115,6 +117,7 @@ const GAME_UI_ACTION_KEYS = Object.freeze({
   'open-tactical-map': String(process.env.WILDGATE_GAME_KEY_TACTICAL_MAP || 'm').trim() || 'm',
   'open-crew-hub': String(process.env.WILDGATE_GAME_KEY_CREW_HUB || 'c').trim() || 'c',
   'close-current-ui': String(process.env.WILDGATE_GAME_KEY_CLOSE_UI || '{ESC}').trim() || '{ESC}',
+  'show-damage-sources': ']',
 });
 const VALID_GAME_UI_ACTIONS = new Set(Object.keys(GAME_UI_ACTION_KEYS));
 const VALID_GAME_SCREEN_TYPES = new Set(['tactical_map', 'crew_hub']);
@@ -3960,6 +3963,22 @@ autoUpdater.on('update-downloaded', (info) => { if (win) win.webContents.send('u
 autoUpdater.on('error', (err) => { if (win) win.webContents.send('update_error', err.message); });
 ipcMain.on('restart_app', () => autoUpdater.quitAndInstall());
 
+async function loadResultScreenshotBuffer(request = {}) {
+    const imageBase64 = typeof request?.imageBase64 === 'string'
+      ? request.imageBase64.trim()
+      : '';
+
+    if (imageBase64) {
+        const buffer = decodeImageBase64(imageBase64);
+        if (!buffer || buffer.length === 0) {
+            throw new Error('Invalid image data');
+        }
+        return buffer;
+    }
+
+    return captureGameWindowBuffer();
+}
+
 // ── Pixel Monitor ──────────────────────────────────────────────────────────────
 ipcMain.on('pixel-monitor-start', (_event, config) => {
     startMonitor(config, () => {
@@ -4004,16 +4023,65 @@ ipcMain.on('result-flash-stop', () => {
     stopResultFlashMonitor();
 });
 
-ipcMain.handle('scan-result-screen', async (_event, { imageBase64 }) => {
+ipcMain.on('result-text-start', (event, config = {}) => {
+    const sender = event.sender;
+    const armAt = Number.isFinite(Number(config?.armAt)) ? Math.round(Number(config.armAt)) : 0;
+    const intervalMs = Number.isFinite(Number(config?.intervalMs))
+        ? Math.max(100, Math.round(Number(config.intervalMs)))
+        : 500;
+    const captureRegion = config?.captureRegion || config?.textRegion || null;
+
+    console.log(`[ResultText] Starting tripwire monitor armAt=${armAt} intervalMs=${intervalMs} region=${JSON.stringify(captureRegion)}`);
+
+    const started = startResultTextMonitor({
+        armAt,
+        intervalMs,
+        captureRegion,
+        onDetected: (payload) => {
+            console.log('[ResultText] Text detected - notifying renderer');
+            if (!sender.isDestroyed()) sender.send('result-text-detected', payload);
+        },
+        onDebug: (snapshot) => {
+            if (!sender.isDestroyed()) sender.send('result-text-debug', snapshot);
+        },
+        _sampler: async () => captureGameWindowBuffer(),
+    });
+
+    if (!started) {
+        console.warn('[ResultText] Refusing to start tripwire monitor');
+        stopResultTextMonitor();
+    }
+});
+ipcMain.on('result-text-stop', () => {
+    console.log('[ResultText] Stopping tripwire monitor');
+    stopResultTextMonitor();
+});
+
+ipcMain.handle('capture-result-screen-region', async (_event, request = {}) => {
     try {
-        if (!imageBase64 || typeof imageBase64 !== 'string') {
-            return { success: false, error: 'Invalid image data' };
-        }
-        const buffer = Buffer.from(
-            imageBase64.replace(/^data:image\/\w+;base64,/, ''),
-            'base64'
-        );
-        const result = await extractResultScreen(buffer);
+        const buffer = await loadResultScreenshotBuffer(request);
+        const cropRegion = request?.cropRegion || request?.region || null;
+        const croppedBuffer = cropRegion ? await cropImageBuffer(buffer, cropRegion) : buffer;
+
+        return {
+            success: true,
+            imageBase64: croppedBuffer.toString('base64'),
+            byteLength: croppedBuffer.length,
+        };
+    } catch (err) {
+        console.error('[ResultCapture] Error:', err.message);
+        return { success: false, error: err.message };
+    }
+});
+
+ipcMain.handle('scan-result-screen', async (_event, request = {}) => {
+    try {
+        const buffer = await loadResultScreenshotBuffer(request);
+        const cropRegion = request?.cropRegion || request?.region || null;
+        const croppedBuffer = cropRegion ? await cropImageBuffer(buffer, cropRegion) : buffer;
+        const result = await extractResultScreen(croppedBuffer, {
+          detectionMethod: request?.detectionMethod,
+        });
         return { success: true, data: result };
     } catch (err) {
         console.error('[ResultScanner] Error:', err.message);

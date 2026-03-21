@@ -3,6 +3,20 @@ const NON_MATCH_MAP_PATTERNS = Object.freeze([
   'gameentrypoint',
   'mainmenu',
   'lobbymap',
+  'pregamelobby',
+  'pregame',
+  'waitingroom',
+  'startingzone',
+  'customlobby',
+]);
+
+const PREGAME_LOBBY_MAP_PATTERNS = Object.freeze([
+  'lobbymap',
+  'pregamelobby',
+  'pregame',
+  'waitingroom',
+  'startingzone',
+  'customlobby',
 ]);
 
 const normalizeMapName = (mapName: unknown): string => {
@@ -16,4 +30,10 @@ export const isNonMatchMap = (mapName: unknown): boolean => {
   return NON_MATCH_MAP_PATTERNS.some((pattern) => normalized.includes(pattern));
 };
 
-export { NON_MATCH_MAP_PATTERNS };
+export const isPregameLobbyMap = (mapName: unknown): boolean => {
+  const normalized = normalizeMapName(mapName);
+  if (!normalized) return false;
+  return PREGAME_LOBBY_MAP_PATTERNS.some((pattern) => normalized.includes(pattern));
+};
+
+export { NON_MATCH_MAP_PATTERNS, PREGAME_LOBBY_MAP_PATTERNS };

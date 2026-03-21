@@ -15,6 +15,7 @@ const FLASH_SAMPLE_INTERVAL_MS = 100;
 const FLASH_BRIGHT_HOLD_MS = 100;
 const FLASH_WHITE_THRESHOLD = Math.ceil(255 * 0.9);
 const FLASH_COOLDOWN_MS = 15_000;
+const MIN_PRE_ARM_FLASHES_TO_SKIP = 1;
 
 let _timer = null;
 let _state = null;
@@ -73,6 +74,8 @@ function buildDebugSnapshot(status, overrides = {}) {
     sampleIntervalMs: FLASH_SAMPLE_INTERVAL_MS,
     brightHoldMs: FLASH_BRIGHT_HOLD_MS,
     whiteThreshold: FLASH_WHITE_THRESHOLD,
+    preArmFlashCount: _state.preArmFlashCount,
+    minPreArmFlashesToSkip: MIN_PRE_ARM_FLASHES_TO_SKIP,
     brightSinceMs: _state.brightSinceMs,
     waitingForFlashEnd: _state.waitingForFlashEnd,
     flashNotified: _state.flashNotified,
@@ -92,18 +95,18 @@ function emitDebug(status, overrides = {}) {
   _state.onDebug(snapshot);
 }
 
+function getSamplingStatus(state) {
+  return state.waitingForFlashEnd
+    ? 'waiting-flash-end'
+    : (Date.now() < state.armAt ? 'arming-delay' : 'sampling');
+}
+
 async function pollOnce() {
   const state = _state;
   if (!state || state.pollInFlight) return;
 
   const now = Date.now();
-  if (now < state.armAt) {
-    state.lastUpdatedAt = now;
-    emitDebug('arming-delay');
-    return;
-  }
-
-  if (!state.waitingForFlashEnd && now < state.cooldownUntil) {
+  if (!state.waitingForFlashEnd && now >= state.armAt && now < state.cooldownUntil) {
     state.lastUpdatedAt = now;
     emitDebug('sampling');
     return;
@@ -111,7 +114,7 @@ async function pollOnce() {
 
   state.pollInFlight = true;
   state.lastUpdatedAt = now;
-  emitDebug(state.waitingForFlashEnd ? 'waiting-flash-end' : 'sampling');
+  emitDebug(getSamplingStatus(state));
 
   try {
     const sample = await state.sampler(state.absoluteRegion);
@@ -123,7 +126,7 @@ async function pollOnce() {
 
     if (!normalizedSample.success) {
       state.lastIsWhiteFrame = null;
-      emitDebug(state.waitingForFlashEnd ? 'waiting-flash-end' : 'sampling');
+      emitDebug(getSamplingStatus(state));
       return;
     }
 
@@ -141,11 +144,14 @@ async function pollOnce() {
         return;
       }
 
+      const hadNotifiedFlash = state.flashNotified === true;
       state.waitingForFlashEnd = false;
       state.brightSinceMs = null;
       state.flashNotified = false;
-      state.onResolved?.();
-      emitDebug('sampling');
+      if (hadNotifiedFlash) {
+        state.onResolved?.();
+      }
+      emitDebug(getSamplingStatus(state));
       return;
     }
 
@@ -155,8 +161,14 @@ async function pollOnce() {
       }
 
       if ((state.lastUpdatedAt - state.brightSinceMs) >= FLASH_BRIGHT_HOLD_MS) {
+        const flashStartedBeforeArm = state.brightSinceMs < state.armAt;
         state.waitingForFlashEnd = true;
-        if (!state.flashNotified) {
+        if (flashStartedBeforeArm && state.preArmFlashCount < MIN_PRE_ARM_FLASHES_TO_SKIP) {
+          state.preArmFlashCount += 1;
+          emitDebug('waiting-flash-end');
+          return;
+        }
+        if (state.lastUpdatedAt >= state.armAt && !state.flashNotified) {
           state.flashNotified = true;
           state.cooldownUntil = state.lastUpdatedAt + FLASH_COOLDOWN_MS;
           state.onDetected?.();
@@ -171,7 +183,7 @@ async function pollOnce() {
 
     state.brightSinceMs = null;
     state.flashNotified = false;
-    emitDebug('sampling');
+    emitDebug(getSamplingStatus(state));
   } catch (error) {
     if (_state !== state) return;
 
@@ -181,12 +193,12 @@ async function pollOnce() {
     }, state.absoluteRegion);
     state.lastIsWhiteFrame = null;
     state.lastUpdatedAt = Date.now();
-    emitDebug(state.waitingForFlashEnd ? 'waiting-flash-end' : 'sampling');
+    emitDebug(getSamplingStatus(state));
   } finally {
     if (_state === state) {
       state.pollInFlight = false;
       state.lastUpdatedAt = Date.now();
-      emitDebug(state.waitingForFlashEnd ? 'waiting-flash-end' : 'sampling');
+      emitDebug(getSamplingStatus(state));
     }
   }
 }
@@ -213,6 +225,7 @@ function startResultFlashMonitor({
     onResolved,
     onDebug,
     sampler: typeof _sampler === 'function' ? _sampler : dxgiSampleRegion,
+    preArmFlashCount: 0,
     brightSinceMs: null,
     waitingForFlashEnd: false,
     flashNotified: false,

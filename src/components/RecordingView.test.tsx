@@ -28,6 +28,13 @@ vi.mock('./recording/MissionPanel', () => ({
   MissionPanel: () => <div data-testid="MissionPanel">MissionPanel</div>,
 }));
 
+vi.mock('../providers/UIStateProvider', () => ({
+  useUIState: () => ({
+    telemetryLifecycleStage: 'idle',
+    telemetryAutomationStatus: null,
+  }),
+}));
+
 function setViewport(w: number, h: number) {
   (window as any).innerWidth = w;
   (window as any).innerHeight = h;

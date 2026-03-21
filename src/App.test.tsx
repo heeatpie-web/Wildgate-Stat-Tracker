@@ -9,6 +9,8 @@ const discardTelemetryDraftMock = vi.fn();
 const autoFinalizeResultScreenCaptureMock = vi.fn();
 const startAutoCaptureMock = vi.fn();
 const useResultFlashMonitorMock = vi.fn();
+const useResultTextMonitorMock = vi.fn();
+const sendGameUiActionMock = vi.fn();
 const playCaptureMock = vi.fn();
 const playAutomationStartMock = vi.fn();
 const playAutomationCompleteMock = vi.fn();
@@ -226,10 +228,15 @@ vi.mock('./utils/electronAPI', () => ({
 
 vi.mock('./utils/electronBridge', () => ({
   startAutoCapture: (...args: unknown[]) => startAutoCaptureMock(...args),
+  sendGameUiAction: (...args: unknown[]) => sendGameUiActionMock(...args),
 }));
 
 vi.mock('./hooks/useResultFlashMonitor', () => ({
   useResultFlashMonitor: (...args: unknown[]) => useResultFlashMonitorMock(...args),
+}));
+
+vi.mock('./hooks/useResultTextMonitor', () => ({
+  useResultTextMonitor: (...args: unknown[]) => useResultTextMonitorMock(...args),
 }));
 
 vi.mock('./utils/logger', () => ({
@@ -281,6 +288,9 @@ describe('App', () => {
     startAutoCaptureMock.mockReset();
     startAutoCaptureMock.mockResolvedValue({ started: true });
     useResultFlashMonitorMock.mockReset();
+    useResultTextMonitorMock.mockReset();
+    sendGameUiActionMock.mockReset();
+    sendGameUiActionMock.mockResolvedValue({ success: true, action: 'show-damage-sources', key: ']' });
     playCaptureMock.mockReset();
     playAutomationStartMock.mockReset();
     playAutomationCompleteMock.mockReset();
@@ -688,6 +698,11 @@ describe('App', () => {
       armDelayMs: 0,
       liveStartedAt: expect.any(Number),
     }));
+    expect(useResultTextMonitorMock).toHaveBeenCalledWith(expect.objectContaining({
+      enabled: true,
+      armDelayMs: 0,
+      liveStartedAt: expect.any(Number),
+    }));
 
     expect(startAutoCaptureMock).not.toHaveBeenCalled();
     vi.useRealTimers();
@@ -727,6 +742,107 @@ describe('App', () => {
       armDelayMs: 0,
       liveStartedAt: expect.any(Number),
     }));
+    expect(useResultTextMonitorMock).toHaveBeenCalledWith(expect.objectContaining({
+      enabled: true,
+      armDelayMs: 0,
+      liveStartedAt: expect.any(Number),
+    }));
+
+    expect(startAutoCaptureMock).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('fires the pregame lobby macro once after the delayed lobby settle window', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
+    uiState.telemetryLifecycleStage = 'pregame';
+    const draft = {
+      id: 8080,
+      timestamp: Date.now(),
+      date: '3/21/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      artifacts: [],
+      matchMode: 'artifactsandgates',
+    };
+    gameDataState.matches = [draft];
+    appStoreState.matches = [draft];
+
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    expect(startAutoCaptureMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(4_999);
+      await Promise.resolve();
+    });
+    expect(startAutoCaptureMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(startAutoCaptureMock).toHaveBeenCalledTimes(1);
+    expect(startAutoCaptureMock).toHaveBeenCalledWith(expect.objectContaining({
+      matchId: 8080,
+      telemetryLifecycleStage: 'pregame',
+      isMatchInProgress: false,
+    }));
+
+    await act(async () => {
+      vi.advanceTimersByTime(10_000);
+      await Promise.resolve();
+    });
+    expect(startAutoCaptureMock).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  it('skips the pregame lobby macro for practice range even if the stage enters pregame', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
+    uiState.telemetryLifecycleStage = 'pregame';
+    uiState.telemetryLifecycleIsPracticeRange = true;
+    const draft = {
+      id: 9090,
+      timestamp: Date.now(),
+      date: '3/21/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      artifacts: [],
+      isPracticeRange: true,
+      matchMode: 'practice range',
+    };
+    gameDataState.matches = [draft];
+    appStoreState.matches = [draft];
+
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(10_000);
+      await Promise.resolve();
+    });
 
     expect(startAutoCaptureMock).not.toHaveBeenCalled();
     vi.useRealTimers();
@@ -814,13 +930,143 @@ describe('App', () => {
       expect(api.invoke).toHaveBeenCalledWith('capture-screen');
       expect(autoFinalizeResultScreenCaptureMock).toHaveBeenCalledWith(expect.objectContaining({
         imageBase64: 'image-base64',
-        resultData: { result: 'Win' },
+        resultData: expect.objectContaining({ result: 'Win', detectionMethod: 'flash' }),
         matchId: 4321,
+        supplementalArtifacts: [],
       }));
     } finally {
       consoleLogSpy.mockRestore();
       vi.useRealTimers();
     }
+  });
+
+  it('captures a cropped damage-sources follow-up when text detection wins the result race', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
+    uiState.telemetryLifecycleStage = 'live';
+    const draft = {
+      id: 5432,
+      timestamp: Date.now(),
+      date: '3/21/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      artifacts: [],
+    };
+    gameDataState.matches = [draft];
+    appStoreState.matches = [draft];
+    autoFinalizeResultScreenCaptureMock.mockResolvedValue({ success: true });
+
+    const api = {
+      invoke: vi.fn((channel: string, payload?: any) => {
+        if (channel === 'capture-screen') {
+          return Promise.resolve('image-base64');
+        }
+        if (channel === 'scan-result-screen') {
+          return Promise.resolve({ data: { result: 'Loss', winType: 'combat', placement: 4, detectionMethod: 'text' } });
+        }
+        if (channel === 'capture-result-screen-region') {
+          if (payload?.imageBase64) {
+            return Promise.resolve({ success: true, imageBase64: 'baseline-region' });
+          }
+          return Promise.resolve({ success: true, imageBase64: 'damage-region' });
+        }
+        if (channel === 'telemetry-retention-status') {
+          return Promise.resolve(null);
+        }
+        return Promise.resolve(null);
+      }),
+      send: vi.fn(),
+      on: vi.fn(() => () => {}),
+      removeAllListeners: vi.fn(),
+    };
+    getElectronAPIMock.mockReturnValue(api);
+
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    const textOptions = useResultTextMonitorMock.mock.calls.at(-1)?.[0] as {
+      onResultDetected?: (payload: {
+        detectionMethod: 'text';
+        result: 'Win' | 'Loss' | null;
+        placement?: number;
+        text?: string;
+      }) => Promise<void>;
+    };
+    expect(textOptions?.onResultDetected).toBeTypeOf('function');
+
+    let triggerPromise: Promise<void> | undefined;
+    await act(async () => {
+      triggerPromise = textOptions.onResultDetected?.({
+        detectionMethod: 'text',
+        result: 'Loss',
+        placement: 4,
+        text: '4TH PLACE',
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(api.invoke).toHaveBeenCalledWith('capture-screen');
+    expect(api.invoke).toHaveBeenCalledWith('scan-result-screen', {
+      imageBase64: 'image-base64',
+      detectionMethod: 'text',
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(sendGameUiActionMock).toHaveBeenCalledWith('show-damage-sources');
+
+    await act(async () => {
+      vi.advanceTimersByTime(400);
+      await triggerPromise;
+    });
+
+    expect(api.invoke).toHaveBeenCalledWith('capture-result-screen-region', expect.objectContaining({
+      imageBase64: 'image-base64',
+      cropRegion: expect.objectContaining({
+        left: expect.any(Number),
+        top: expect.any(Number),
+        width: expect.any(Number),
+        height: expect.any(Number),
+        normalized: true,
+      }),
+    }));
+    expect(api.invoke).toHaveBeenCalledWith('capture-result-screen-region', expect.objectContaining({
+      cropRegion: expect.objectContaining({
+        left: expect.any(Number),
+        top: expect.any(Number),
+        width: expect.any(Number),
+        height: expect.any(Number),
+        normalized: true,
+      }),
+    }));
+    expect(autoFinalizeResultScreenCaptureMock).toHaveBeenCalledWith(expect.objectContaining({
+      imageBase64: 'image-base64',
+      resultData: expect.objectContaining({
+        result: 'Loss',
+        placement: 4,
+        detectionMethod: 'text',
+      }),
+      matchId: 5432,
+      supplementalArtifacts: [{
+        imageBase64: 'damage-region',
+        kind: 'damage-sources',
+      }],
+    }));
+    vi.useRealTimers();
   });
 
   it('does not launch the old delayed practice-range auto-capture path', async () => {

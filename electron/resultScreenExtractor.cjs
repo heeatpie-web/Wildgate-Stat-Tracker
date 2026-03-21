@@ -17,7 +17,9 @@ const { paddleOcrBuffer, paddleRecognizeBuffer } = require('./paddleOcrHandler.c
  *   result: 'Win'|'Loss'|null,
  *   winType?: 'combat'|'artifact',
  *   placement?: number,
- *   damageTaken?: number
+ *   detectionMethod: 'flash'|'text',
+ *   damageTaken?: number,
+ *   damageSourcesAvailable: boolean
  * }} ResultScreenData
  */
 
@@ -41,6 +43,8 @@ const DAMAGE_SCAN_VARIANTS = [
 
 const RESULT_REGIONS = {
   topWide: { left: 0.03, top: 0.02, width: 0.68, height: 0.30 },
+  resultCenter: { left: 0.30, top: 0.55, width: 0.40, height: 0.15 },
+  resultLeft: { left: 0.03, top: 0.60, width: 0.35, height: 0.15 },
   placement: { left: 0.04, top: 0.04, width: 0.34, height: 0.18 },
   statusLine: { left: 0.09, top: 0.08, width: 0.58, height: 0.18 },
   victoryLine: { left: 0.14, top: 0.03, width: 0.36, height: 0.13 },
@@ -66,6 +70,10 @@ const uniqueStrings = (values) => {
 };
 
 const normalizeToken = (value) => String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+const normalizeDetectionMethod = (value) => (String(value || '').trim().toLowerCase() === 'text'
+  ? 'text'
+  : 'flash');
 
 const toRegionPixels = (meta, region) => {
   const width = Math.max(1, Math.round((meta.width || 0) * region.width));
@@ -124,16 +132,58 @@ async function collectRecognizedTexts(imageBuffer, meta, region, variants) {
   return uniqueStrings(collected);
 }
 
+async function collectRecognizedTextsFromRegions(imageBuffer, meta, regions, variants) {
+  const collected = [];
+  for (const region of regions) {
+    const texts = await collectRecognizedTexts(imageBuffer, meta, region, variants);
+    collected.push(...texts);
+  }
+  return uniqueStrings(collected);
+}
+
+async function collectDetectedTextsFromRegions(imageBuffer, meta, regions, variants, ocrOptions) {
+  const collected = [];
+  for (const region of regions) {
+    const texts = await collectDetectedTexts(imageBuffer, meta, region, variants, ocrOptions);
+    collected.push(...texts);
+  }
+  return uniqueStrings(collected);
+}
+
 function parsePlacement(texts) {
   const normalized = texts.map(normalizeToken).filter(Boolean);
   const joined = normalized.join('|');
-  const exact = joined.match(/([2-5])(ST|ND|RD|TH)?PLACE/);
-  if (exact) return Number.parseInt(exact[1], 10);
+  const placementContext = joined.includes('PLACE')
+    || joined.includes('PLACED')
+    || joined.includes('POSITION')
+    || joined.includes('FINISH')
+    || joined.includes('RANK');
+  const contextualHints = placementContext
+    || joined.includes('DEFEAT')
+    || joined.includes('ELIMINATED')
+    || joined.includes('FINALMOMENTSRECAP')
+    || joined.includes('DAMAGETAKENINLAST2MIN')
+    || joined.includes('DAMAGETAKENINLAST2MINUTES');
 
-  if ((joined.includes('2ND') || joined.includes('2N0')) && joined.includes('PLACE')) return 2;
-  if ((joined.includes('3RD') || joined.includes('BRD')) && joined.includes('PLACE')) return 3;
-  if ((joined.includes('4TH') || joined.includes('ATH')) && joined.includes('PLACE')) return 4;
-  if ((joined.includes('5TH') || joined.includes('STH')) && joined.includes('PLACE')) return 5;
+  for (const text of normalized) {
+    const exact = text.match(/([1-5])(ST|ND|RD|TH)?PLACE/);
+    if (exact) return Number.parseInt(exact[1], 10);
+
+    const reversed = text.match(/PLACE([1-5])(ST|ND|RD|TH)?/);
+    if (reversed) return Number.parseInt(reversed[1], 10);
+
+    if ((text.includes('2ND') || text.includes('2N0')) && text.includes('PLACE')) return 2;
+    if ((text.includes('3RD') || text.includes('BRD')) && text.includes('PLACE')) return 3;
+    if ((text.includes('4TH') || text.includes('ATH')) && text.includes('PLACE')) return 4;
+    if ((text.includes('5TH') || text.includes('STH')) && text.includes('PLACE')) return 5;
+  }
+
+  if (contextualHints) {
+    for (const text of normalized) {
+      const bareOrdinal = text.match(/(^|[^0-9])([1-5])(?:ST|ND|RD|TH)?([^0-9]|$)/);
+      if (bareOrdinal) return Number.parseInt(bareOrdinal[2], 10);
+    }
+  }
 
   return undefined;
 }
@@ -172,7 +222,8 @@ function parseResultSignals({
   statusTexts = [],
   panelTexts = [],
   damageTexts = [],
-}) {
+}, options = {}) {
+  const detectionMethod = normalizeDetectionMethod(options.detectionMethod);
   const combinedTexts = uniqueStrings([
     ...headlineTexts,
     ...placementTexts,
@@ -181,7 +232,7 @@ function parseResultSignals({
   ]);
   const normalized = combinedTexts.map(normalizeToken).filter(Boolean);
   const joined = normalized.join('|');
-  const placement = parsePlacement([...placementTexts, ...headlineTexts, ...statusTexts]);
+  const placement = parsePlacement(placementTexts) ?? parsePlacement(headlineTexts);
   const damageTaken = parseDamageTaken([...damageTexts, ...panelTexts]);
 
   const hasVictory = joined.includes('VICTORY') || joined.includes('VICTOR');
@@ -193,35 +244,86 @@ function parseResultSignals({
   const hasFinalMoments = joined.includes('FINALMOMENTSRECAP') || joined.includes('NALMOMENTSRECA');
   const hasDefeat = joined.includes('DEFEAT');
   const hasDamagePanel = joined.includes('DAMAGETAKEN') || joined.includes('INLAST2MIN') || joined.includes('FINALDAMAGETAKEN');
-  const resolvedDamageTaken = (placement || hasEliminated || hasVanguardWins || hasFinalMoments || hasDamagePanel)
+  const hasDamageSourcesSignal = damageTaken != null
+    || hasEliminated
+    || hasVanguardWins
+    || hasFinalMoments
+    || hasDamagePanel
+    || (placement != null && placement >= 2 && placement <= 5);
+  const resolvedDamageTaken = hasDamageSourcesSignal
     ? damageTaken
     : undefined;
+  const resolvedDamageSourcesAvailable = hasDamageSourcesSignal || damageTaken != null;
 
   if (hasArtifactRecovered || (hasVictory && hasArtifact && !hasCombatWin)) {
-    return { result: 'Win', winType: 'artifact', placement: 1, damageTaken: resolvedDamageTaken };
+    return {
+      result: 'Win',
+      winType: 'artifact',
+      placement: 1,
+      detectionMethod,
+      damageTaken: resolvedDamageTaken,
+      damageSourcesAvailable: resolvedDamageSourcesAvailable,
+    };
   }
 
   if (hasCombatWin || (hasVictory && !hasArtifact)) {
-    return { result: 'Win', winType: 'combat', placement: 1, damageTaken: resolvedDamageTaken };
+    return {
+      result: 'Win',
+      winType: 'combat',
+      placement: 1,
+      detectionMethod,
+      damageTaken: resolvedDamageTaken,
+      damageSourcesAvailable: resolvedDamageSourcesAvailable,
+    };
   }
 
   if (placement && placement >= 2 && placement <= 5) {
-    return { result: 'Loss', winType: 'combat', placement, damageTaken: resolvedDamageTaken };
+    return {
+      result: 'Loss',
+      winType: 'combat',
+      placement,
+      detectionMethod,
+      damageTaken: resolvedDamageTaken,
+      damageSourcesAvailable: true,
+    };
   }
 
   if ((hasEliminated || hasVanguardWins || hasFinalMoments) && !hasVictory) {
-    return { result: 'Loss', winType: 'combat', placement, damageTaken: resolvedDamageTaken };
+    return {
+      result: 'Loss',
+      winType: 'combat',
+      placement,
+      detectionMethod,
+      damageTaken: resolvedDamageTaken,
+      damageSourcesAvailable: true,
+    };
   }
 
   if (hasDefeat && hasArtifact) {
-    return { result: 'Loss', winType: 'artifact', damageTaken: resolvedDamageTaken };
+    return {
+      result: 'Loss',
+      winType: 'artifact',
+      detectionMethod,
+      damageTaken: resolvedDamageTaken,
+      damageSourcesAvailable: resolvedDamageSourcesAvailable,
+    };
   }
 
   if (hasDefeat) {
-    return { result: 'Loss', damageTaken: resolvedDamageTaken };
+    return {
+      result: 'Loss',
+      detectionMethod,
+      damageTaken: resolvedDamageTaken,
+      damageSourcesAvailable: resolvedDamageSourcesAvailable,
+    };
   }
 
-  return { result: null, damageTaken: resolvedDamageTaken };
+  return {
+    result: null,
+    detectionMethod,
+    damageTaken: resolvedDamageTaken,
+    damageSourcesAvailable: resolvedDamageSourcesAvailable,
+  };
 }
 
 /**
@@ -229,12 +331,21 @@ function parseResultSignals({
  * @param {Buffer} imageBuffer
  * @returns {Promise<ResultScreenData>}
  */
-async function extractResultScreen(imageBuffer) {
+async function extractResultScreen(imageBuffer, options = {}) {
+  const detectionMethod = normalizeDetectionMethod(options.detectionMethod);
   const meta = await sharp(imageBuffer).metadata();
-  if (!meta.width || !meta.height) return { result: null };
+  if (!meta.width || !meta.height) {
+    return {
+      result: null,
+      detectionMethod,
+      damageSourcesAvailable: false,
+    };
+  }
 
   const [
     topWideTexts,
+    resultCenterTexts,
+    resultLeftTexts,
     placementTexts,
     statusTexts,
     victoryTexts,
@@ -242,34 +353,35 @@ async function extractResultScreen(imageBuffer) {
     damageWideTexts,
     damageTightTexts,
   ] = await Promise.all([
-    collectDetectedTexts(imageBuffer, meta, RESULT_REGIONS.topWide, OCR_SCAN_VARIANTS, {
+    collectDetectedTextsFromRegions(imageBuffer, meta, [RESULT_REGIONS.topWide, RESULT_REGIONS.resultCenter, RESULT_REGIONS.resultLeft], OCR_SCAN_VARIANTS, {
       allText: true,
       threshold: 0.2,
       minWidth: 8,
       minHeight: 8,
       minAspectRatio: 0.1,
     }),
-    collectRecognizedTexts(imageBuffer, meta, RESULT_REGIONS.placement, LINE_SCAN_VARIANTS),
+    collectRecognizedTextsFromRegions(imageBuffer, meta, [RESULT_REGIONS.resultCenter, RESULT_REGIONS.resultLeft], LINE_SCAN_VARIANTS),
+    collectRecognizedTextsFromRegions(imageBuffer, meta, [RESULT_REGIONS.placement], LINE_SCAN_VARIANTS),
     collectRecognizedTexts(imageBuffer, meta, RESULT_REGIONS.statusLine, LINE_SCAN_VARIANTS),
     collectRecognizedTexts(imageBuffer, meta, RESULT_REGIONS.victoryLine, LINE_SCAN_VARIANTS),
-    collectDetectedTexts(imageBuffer, meta, RESULT_REGIONS.rightPanel, OCR_SCAN_VARIANTS, {
+    collectDetectedTextsFromRegions(imageBuffer, meta, [RESULT_REGIONS.rightPanel], OCR_SCAN_VARIANTS, {
       allText: true,
       threshold: 0.2,
       minWidth: 8,
       minHeight: 8,
       minAspectRatio: 0.1,
     }),
-    collectRecognizedTexts(imageBuffer, meta, RESULT_REGIONS.damageWide, DAMAGE_SCAN_VARIANTS),
-    collectRecognizedTexts(imageBuffer, meta, RESULT_REGIONS.damageTight, DAMAGE_SCAN_VARIANTS),
+    collectRecognizedTextsFromRegions(imageBuffer, meta, [RESULT_REGIONS.damageWide], DAMAGE_SCAN_VARIANTS),
+    collectRecognizedTextsFromRegions(imageBuffer, meta, [RESULT_REGIONS.damageTight], DAMAGE_SCAN_VARIANTS),
   ]);
 
   const parsed = parseResultSignals({
     headlineTexts: [...victoryTexts, ...topWideTexts],
-    placementTexts,
+    placementTexts: [...placementTexts, ...resultCenterTexts, ...resultLeftTexts],
     statusTexts,
     panelTexts,
     damageTexts: [...damageWideTexts, ...damageTightTexts],
-  });
+  }, { detectionMethod });
 
   const debugTexts = uniqueStrings([
     ...victoryTexts,
@@ -291,6 +403,7 @@ async function extractResultScreen(imageBuffer) {
 
 const __test__ = {
   normalizeToken,
+  normalizeDetectionMethod,
   parsePlacement,
   parseDamageTaken,
   parseResultSignals,

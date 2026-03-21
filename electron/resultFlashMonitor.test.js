@@ -29,7 +29,7 @@ describe('resultFlashMonitor', () => {
     vi.useRealTimers();
   });
 
-  it('does not sample before the arm timestamp', async () => {
+  it('does not notify before the arm timestamp, even while pre-arm sampling is active', async () => {
     const onDetected = vi.fn();
     const sampler = vi.fn().mockResolvedValue(WHITE);
     const onDebug = vi.fn();
@@ -46,11 +46,44 @@ describe('resultFlashMonitor', () => {
     await vi.advanceTimersByTimeAsync(2_000);
 
     expect(onDetected).not.toHaveBeenCalled();
-    expect(sampler).not.toHaveBeenCalled();
+    expect(sampler).toHaveBeenCalled();
     expect(onDebug).toHaveBeenCalledWith(expect.objectContaining({
       status: 'arming-delay',
       armRemainingMs: expect.any(Number),
     }));
+  });
+
+  it('absorbs one flash that starts before arming and still detects the next live flash', async () => {
+    const onDetected = vi.fn();
+    const onResolved = vi.fn();
+    const sampler = vi.fn()
+      .mockResolvedValueOnce(DARK)
+      .mockResolvedValueOnce(WHITE)
+      .mockResolvedValueOnce(WHITE)
+      .mockResolvedValueOnce(DARK)
+      .mockResolvedValueOnce(DARK)
+      .mockResolvedValueOnce(WHITE)
+      .mockResolvedValueOnce(WHITE)
+      .mockResolvedValueOnce(DARK);
+
+    startResultFlashMonitor({
+      armAt: Date.now() + 250,
+      absoluteRegion: { x: 64, y: 1013, width: 107, height: 21 },
+      onDetected,
+      onResolved,
+      _sampler: sampler,
+    });
+
+    await flushAsyncWork();
+    await vi.advanceTimersByTimeAsync(300);
+    expect(onDetected).not.toHaveBeenCalled();
+    expect(onResolved).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(400);
+    expect(onDetected).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(100);
+    expect(onResolved).toHaveBeenCalledTimes(1);
   });
 
   it('fires onDetected for a fade-style white flash and resolves on the next dim frame', async () => {
