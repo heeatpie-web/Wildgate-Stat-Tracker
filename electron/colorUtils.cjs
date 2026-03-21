@@ -280,6 +280,7 @@ function circularHueMean(data, channels, lightnessThreshold = 20, minChromFracti
   }
 
   if (chromCount < totalPixels * minChromFraction) return null;
+  if (chromCount === 0) return null;
 
   const meanRad = Math.atan2(sinSum / chromCount, cosSum / chromCount);
   return Math.round(((meanRad * (180 / Math.PI)) + 360) % 360);

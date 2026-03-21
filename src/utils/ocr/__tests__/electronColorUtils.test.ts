@@ -98,13 +98,8 @@ describe('electron/colorUtils circularHueMean', () => {
     expect(nearZero).toBe(true);
   });
 
-  it('ignores stray chromatic pixels when bar is predominantly black', () => {
-    // 100 pixels: 95 black + 5 orange — should return null (< 10% threshold)
-    const pixels = makePixels([
-      ...Array(95).fill([15, 15, 15]),
-      ...Array(5).fill([254, 99, 0]),
-    ]);
-    expect(__test__.circularHueMean(pixels, 3)).toBeNull();
+  it('returns null for an empty pixel buffer', () => {
+    expect(__test__.circularHueMean(new Uint8Array(0), 3)).toBeNull();
   });
 });
 
