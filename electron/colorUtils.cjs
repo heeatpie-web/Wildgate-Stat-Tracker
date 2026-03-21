@@ -461,10 +461,11 @@ async function detectColorInRegion(imageBuffer, region, sharpModule = null) {
       };
     }
 
-    const match = nearestWildgateColor(rawHue ?? winningHsl.h);
+    // classifyTeamColorHSL doesn't recognise this colour — return unknown so the
+    // extractor's clusterByHue step can group by raw hue and label the cluster.
     return {
-      color: match.name,
-      confidence: match.confidence,
+      color: 'unknown',
+      confidence: 0,
       rawHue,
       rgb: { r: bestR, g: bestG, b: bestB },
     };

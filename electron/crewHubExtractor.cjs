@@ -28,7 +28,7 @@
  * Multiple screenshots may be needed to capture all enemy players.
  */
 
-const { detectTeamColorBarBelow, detectColorInRegion, clusterByHue, WILDGATE_COLORS } = require('./colorUtils.cjs');
+const { detectTeamColorBarBelow, detectColorInRegion, clusterByHue, WILDGATE_COLORS, nearestWildgateColor } = require('./colorUtils.cjs');
 const HAZARD_CATALOG = require('./hazardCatalog.json');
 const _fs = require('fs');
 const _os = require('os');
@@ -1701,14 +1701,21 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
       for (const cluster of clusters) {
         const clusterCards = cluster.map(p => p.card);
         const ys = clusterCards.map(c => c.y);
+        // Compute circular-mean hue of the cluster for a stable colour label
+        const hues = cluster.map(p => p.hue);
+        const sinSum = hues.reduce((s, h) => s + Math.sin(h * Math.PI / 180), 0);
+        const cosSum = hues.reduce((s, h) => s + Math.cos(h * Math.PI / 180), 0);
+        const meanRad = Math.atan2(sinSum / hues.length, cosSum / hues.length);
+        const centroidHue = Math.round(((meanRad * 180 / Math.PI) + 360) % 360);
+        const colorLabel = nearestWildgateColor(centroidHue).name;
         knownGroups.push({
-          color: 'unknown',
+          color: colorLabel,
           cards: clusterCards,
           minY: Math.min(...ys),
           maxY: Math.max(...ys),
           confidence: 0,
         });
-        console.log('[CrewHub] Hue-clustered', clusterCards.length, 'unknown-color cards at hues', cluster.map(p => p.hue + '°').join(', '));
+        console.log('[CrewHub] Hue-clustered', clusterCards.length, 'unknown-color cards as', colorLabel, 'at hues', cluster.map(p => p.hue + '°').join(', '));
       }
     }
 
