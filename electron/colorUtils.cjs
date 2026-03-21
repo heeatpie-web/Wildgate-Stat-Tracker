@@ -54,6 +54,46 @@ const TEAM_COLORS = {
   },
 };
 
+/**
+ * All 32 selectable Wildgate team colors, extracted from the in-game color picker.
+ * Hex codes were sampled from the center of each swatch.
+ * Hue is precomputed for fast nearest-match lookup.
+ */
+const WILDGATE_COLORS = [
+  { name: 'white',         hex: '#FFFFFF', r: 255, g: 255, b: 255 },
+  { name: 'cloud',         hex: '#E4E4E4', r: 228, g: 228, b: 228 },
+  { name: 'hotPink',       hex: '#DC257D', r: 220, g:  37, b: 125 },
+  { name: 'dustyRose',     hex: '#CB78A6', r: 203, g: 120, b: 166 },
+  { name: 'red',           hex: '#FF0000', r: 255, g:   0, b:   0 },
+  { name: 'salmon',        hex: '#CB6376', r: 203, g:  99, b: 118 },
+  { name: 'tangerine',     hex: '#D45C00', r: 212, g:  92, b:   0 },
+  { name: 'orange',        hex: '#FE5E00', r: 254, g:  94, b:   0 },
+  { name: 'goldenrod',     hex: '#FFAF00', r: 255, g: 175, b:   0 },
+  { name: 'marigold',      hex: '#FFD235', r: 255, g: 210, b:  53 },
+  { name: 'lightYellow',   hex: '#DDCB76', r: 221, g: 203, b: 118 },
+  { name: 'mustard',       hex: '#E69E00', r: 230, g: 158, b:   0 },
+  { name: 'yellowGreen',   hex: '#B5B500', r: 181, g: 181, b:   0 },
+  { name: 'limeGreen',     hex: '#8DE165', r: 141, g: 225, b: 101 },
+  { name: 'green',         hex: '#0F7632', r:  15, g: 118, b:  15 },
+  { name: 'blueGreen',     hex: '#019D71', r:   1, g: 157, b: 113 },
+  { name: 'seaGreen',      hex: '#43A998', r:  67, g: 169, b: 152 },
+  { name: 'paleBlue',      hex: '#87CBEE', r: 135, g: 203, b: 238 },
+  { name: 'cyan',          hex: '#00E3FF', r:   0, g: 227, b: 255 },
+  { name: 'skyBlue',       hex: '#35B6FF', r:  53, g: 182, b: 255 },
+  { name: 'blue',          hex: '#0070B1', r:   0, g: 112, b: 177 },
+  { name: 'periwinkle',    hex: '#6A8FFF', r: 106, g: 143, b: 255 },
+  { name: 'plum',          hex: '#312187', r:  49, g:  33, b: 135 },
+  { name: 'orchid',        hex: '#785DF4', r: 120, g:  93, b: 244 },
+  { name: 'purple',        hex: '#A600FF', r: 166, g:   0, b: 255 },
+  { name: 'grape',         hex: '#A94298', r: 169, g:  66, b: 152 },
+  { name: 'magentaRed',    hex: '#7F1B4B', r: 127, g:  27, b:  75 },
+  { name: 'cognac',        hex: '#973B13', r: 151, g:  59, b:  19 },
+  { name: 'black',         hex: '#0B0713', r:  11, g:   7, b:  19 },
+  { name: 'blueberry',     hex: '#4A3788', r:  74, g:  55, b: 136 },
+  { name: 'greenPea',      hex: '#1E5B4D', r:  30, g:  91, b:  77 },
+  { name: 'lightNavyBlue', hex: '#2C6288', r:  44, g:  98, b: 136 },
+];
+
 // Tolerance values for HSL matching
 // SAT_TOLERANCE is set wide because team name text on the bar dilutes average saturation
 const HUE_TOLERANCE = 12;
@@ -110,6 +150,13 @@ function rgbToHsl(r, g, b) {
   };
 }
 
+// Precompute HSL hue for each color so nearestWildgateColor can do fast lookup.
+// Achromatic entries (s < 10) get hue = null.
+const WILDGATE_COLORS_WITH_HUE = WILDGATE_COLORS.map(c => {
+  const hsl = rgbToHsl(c.r, c.g, c.b);
+  return { ...c, hue: hsl.s < 10 ? null : hsl.h };
+});
+
 /**
  * Calculate hue distance accounting for circular nature (0-360)
  * @param {number} h1 - First hue (0-360)
@@ -119,6 +166,34 @@ function rgbToHsl(r, g, b) {
 function hueDistance(h1, h2) {
   const diff = Math.abs(h1 - h2);
   return Math.min(diff, 360 - diff);
+}
+
+/**
+ * Find the nearest Wildgate team color by hue (circular distance).
+ *
+ * Achromatic colors (white, cloud, black) have null hue and are excluded from
+ * chromatic matching — they are handled upstream by the null-hue path in
+ * detectColorInRegion.
+ *
+ * @param {number} hue - Mean hue (0–360) from circularHueMean
+ * @returns {{ name: string, confidence: number }} Nearest color name and confidence
+ */
+function nearestWildgateColor(hue) {
+  let bestName = 'unknown';
+  let bestDist = Infinity;
+
+  for (const entry of WILDGATE_COLORS_WITH_HUE) {
+    if (entry.hue === null) continue; // skip achromatic (white/cloud/black)
+    const dist = hueDistance(hue, entry.hue);
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestName = entry.name;
+    }
+  }
+
+  // Confidence: 100 at dist=0, drops linearly, floor at 30
+  const confidence = Math.max(30, Math.round(100 - bestDist * 2));
+  return { name: bestName, confidence };
 }
 
 /**
@@ -327,25 +402,12 @@ async function detectColorInRegion(imageBuffer, region, sharpModule = null) {
       return { color: 'black', confidence: 80, rawHue: null, rgb: { r: 0, g: 0, b: 0 } };
     }
 
-    // Convert mean hue back to an approximate RGB for the named-color classifier.
-    // We only need hue; use s=100%, l=50% to get a pure saturated sample.
-    const c = 0.5; // chroma at l=0.5, s=1.0
-    const x = c * (1 - Math.abs(((meanHue / 60) % 2) - 1));
-    const sector = Math.floor(meanHue / 60);
-    const [rp, gp, bp] = [
-      [c, x, 0], [x, c, 0], [0, c, x], [0, x, c], [x, 0, c], [c, 0, x],
-    ][sector] || [0, 0, 0];
-    const approxR = Math.round(rp * 255);
-    const approxG = Math.round(gp * 255);
-    const approxB = Math.round(bp * 255);
-
-    const result = classifyTeamColorHSL(approxR, approxG, approxB);
-
+    const match = nearestWildgateColor(meanHue);
     return {
-      color: result.color,
-      confidence: result.confidence,
+      color: match.name,
+      confidence: match.confidence,
       rawHue: meanHue,
-      rgb: { r: approxR, g: approxG, b: approxB },
+      rgb: { r: 0, g: 0, b: 0 }, // rgb kept for API compat; hue is the authoritative signal
     };
   } catch (error) {
     console.error('[ColorUtils] detectColorInRegion failed:', error.message);
@@ -643,10 +705,12 @@ function clusterByHue(players, maxTeams = 4, minGap = 15) {
 
 module.exports = {
   TEAM_COLORS,
+  WILDGATE_COLORS,
   rgbToHsl,
   hueDistance,
   classifyTeamColorHSL,
   classifyTeamColorRGB,
+  nearestWildgateColor,
   detectColorInRegion,
   detectBadgeColorNearText,
   detectTeamColorBarBelow,

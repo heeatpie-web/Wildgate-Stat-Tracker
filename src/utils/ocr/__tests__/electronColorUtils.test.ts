@@ -2,9 +2,10 @@ import { createRequire } from 'module';
 import { describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const { classifyTeamColorHSL, clusterByHue, __test__ } = require('../../../../electron/colorUtils.cjs') as {
+const { classifyTeamColorHSL, clusterByHue, nearestWildgateColor, __test__ } = require('../../../../electron/colorUtils.cjs') as {
   classifyTeamColorHSL: (r: number, g: number, b: number) => { color: string; confidence: number };
   clusterByHue: (players: { name: string; hue: number }[], maxTeams?: number, minGap?: number) => { name: string; hue: number }[][];
+  nearestWildgateColor: (hue: number) => { name: string; confidence: number };
   __test__: {
     circularHueMean: (data: Uint8Array, channels: number) => number | null;
   };
@@ -124,6 +125,45 @@ describe('electron/colorUtils yellow-family classification', () => {
 
     expect(classifyTeamColorHSL(brightYellow.r, brightYellow.g, brightYellow.b).color).toBe('yellow');
     expect(classifyTeamColorHSL(greenerBadge.r, greenerBadge.g, greenerBadge.b).color).toBe('yellowGreen');
+  });
+});
+
+describe('electron/colorUtils nearestWildgateColor', () => {
+  it('returns red for hue=0', () => {
+    const result = nearestWildgateColor(0);
+    expect(result.name).toBe('red');
+    expect(result.confidence).toBeGreaterThan(80);
+  });
+
+  it('returns orange for hue=22', () => {
+    const result = nearestWildgateColor(22);
+    expect(result.name).toBe('orange');
+  });
+
+  it('returns cyan for hue=180', () => {
+    const result = nearestWildgateColor(180);
+    expect(result.name).toBe('cyan');
+  });
+
+  it('returns green for hue=120', () => {
+    const result = nearestWildgateColor(120);
+    expect(result.name).toBe('green');
+  });
+
+  it('returns purple for hue=279', () => {
+    const result = nearestWildgateColor(279);
+    expect(result.name).toBe('purple');
+  });
+
+  it('handles red wrap-around — hue=359 maps to red', () => {
+    const result = nearestWildgateColor(359);
+    expect(result.name).toBe('red');
+  });
+
+  it('confidence decreases as hue distance increases', () => {
+    const exact = nearestWildgateColor(0);    // exactly red
+    const near  = nearestWildgateColor(8);    // close to red
+    expect(exact.confidence).toBeGreaterThan(near.confidence);
   });
 });
 
