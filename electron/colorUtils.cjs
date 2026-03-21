@@ -402,12 +402,40 @@ async function detectColorInRegion(imageBuffer, region, sharpModule = null) {
       return { color: 'black', confidence: 80, rawHue: null, rgb: { r: 0, g: 0, b: 0 } };
     }
 
+    // ── Hybrid classifier ────────────────────────────────────────────────────
+    // 1. Fast path: classifyTeamColorHSL has wide, noise-tolerant hue bands
+    //    tuned for the four default game colours (red/orange/yellow/yellowGreen).
+    //    If it recognises the colour, use it — this maintains accuracy for
+    //    standard lobbies.
+    // 2. Fallback: for custom colours not in the original four, nearestWildgateColor
+    //    maps to the nearest of all 32 Wildgate colours by hue distance.
+    const c = 0.5;
+    const x = c * (1 - Math.abs(((meanHue / 60) % 2) - 1));
+    const sector = Math.floor(meanHue / 60);
+    const [rp, gp, bp] = [
+      [c, x, 0], [x, c, 0], [0, c, x], [0, x, c], [x, 0, c], [c, 0, x],
+    ][sector] || [0, 0, 0];
+    const approxR = Math.round(rp * 255);
+    const approxG = Math.round(gp * 255);
+    const approxB = Math.round(bp * 255);
+
+    const hslResult = classifyTeamColorHSL(approxR, approxG, approxB);
+    if (hslResult.color !== 'unknown' && hslResult.color !== 'spectator') {
+      return {
+        color: hslResult.color,
+        confidence: hslResult.confidence,
+        rawHue: meanHue,
+        rgb: { r: approxR, g: approxG, b: approxB },
+      };
+    }
+
+    // Custom colour — fall through to 32-colour nearest-hue lookup
     const match = nearestWildgateColor(meanHue);
     return {
       color: match.name,
       confidence: match.confidence,
       rawHue: meanHue,
-      rgb: { r: 0, g: 0, b: 0 }, // rgb kept for API compat; hue is the authoritative signal
+      rgb: { r: approxR, g: approxG, b: approxB },
     };
   } catch (error) {
     console.error('[ColorUtils] detectColorInRegion failed:', error.message);

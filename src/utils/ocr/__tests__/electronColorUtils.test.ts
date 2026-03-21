@@ -167,6 +167,23 @@ describe('electron/colorUtils nearestWildgateColor', () => {
   });
 });
 
+describe('electron/colorUtils detectColorInRegion hybrid classifier', () => {
+  it('classifyTeamColorHSL fast-path: orange hue (22°) returns orange not tangerine/cognac', () => {
+    // The old classifier has wide bands for orange — verify it still wins for standard colours
+    const result = classifyTeamColorHSL(254, 94, 0); // #FE5E00 — game orange
+    expect(result.color).toBe('orange');
+    expect(result.confidence).toBeGreaterThan(0);
+  });
+
+  it('nearestWildgateColor fallback: hotPink hue (331°) returns hotPink not unknown', () => {
+    // classifyTeamColorHSL returns unknown for hotPink; nearestWildgateColor should catch it
+    const hslResult = classifyTeamColorHSL(220, 37, 125); // #DC257D — hotPink (HSL hue=331)
+    expect(hslResult.color).toBe('unknown'); // confirms fast-path misses it
+    const wgResult = nearestWildgateColor(331);
+    expect(wgResult.name).toBe('hotPink'); // confirms fallback catches it
+  });
+});
+
 describe('electron/colorUtils clusterByHue', () => {
   it('returns one cluster when all hues are within minGap', () => {
     const players = [
