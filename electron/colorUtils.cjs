@@ -291,7 +291,7 @@ function circularHueMean(data, channels, lightnessThreshold = 20, minChromFracti
  * @param {Buffer} imageBuffer - Image buffer (PNG/JPEG)
  * @param {Object} region - Region to sample { x, y, width, height }
  * @param {Object} [sharp] - Sharp module instance (optional, will require if not provided)
- * @returns {Promise<{ color: string, confidence: number, rgb: { r: number, g: number, b: number } }>}
+ * @returns {Promise<{ color: string, confidence: number, rawHue: number|null, rgb: { r: number, g: number, b: number } }>}
  */
 async function detectColorInRegion(imageBuffer, region, sharpModule = null) {
   const sharp = sharpModule || require('sharp');
@@ -314,43 +314,42 @@ async function detectColorInRegion(imageBuffer, region, sharpModule = null) {
     const pixelCount = info.width * info.height;
 
     if (pixelCount === 0) {
-      return { color: 'unknown', confidence: 0, rgb: { r: 0, g: 0, b: 0 } };
+      return { color: 'unknown', confidence: 0, rawHue: null, rgb: { r: 0, g: 0, b: 0 } };
     }
 
-    // Pick the most saturated pixel in-region to avoid text/background averaging
-    // washing out the team color bars.
-    let bestR = 0, bestG = 0, bestB = 0;
-    let bestSat = -1;
-    let bestLight = -1;
-    for (let i = 0; i < data.length; i += info.channels) {
-      const pr = data[i];
-      const pg = data[i + 1];
-      const pb = data[i + 2];
-      const hsl = rgbToHsl(pr, pg, pb);
-      if (hsl.s > bestSat || (hsl.s === bestSat && hsl.l > bestLight)) {
-        bestSat = hsl.s;
-        bestLight = hsl.l;
-        bestR = pr;
-        bestG = pg;
-        bestB = pb;
-      }
+    // Use circular hue averaging across chromatic pixels (lightness >= 20%).
+    // This is more stable than picking the single most-saturated pixel, which
+    // could be a stray border pixel rather than the team color.
+    // Returns null if the bar is predominantly dark (black/spectator).
+    const meanHue = circularHueMean(data, info.channels);
+
+    if (meanHue === null) {
+      return { color: 'black', confidence: 80, rawHue: null, rgb: { r: 0, g: 0, b: 0 } };
     }
 
-    const r = bestR;
-    const g = bestG;
-    const b = bestB;
+    // Convert mean hue back to an approximate RGB for the named-color classifier.
+    // We only need hue; use s=100%, l=50% to get a pure saturated sample.
+    const c = 0.5; // chroma at l=0.5, s=1.0
+    const x = c * (1 - Math.abs(((meanHue / 60) % 2) - 1));
+    const sector = Math.floor(meanHue / 60);
+    const [rp, gp, bp] = [
+      [c, x, 0], [x, c, 0], [0, c, x], [0, x, c], [x, 0, c], [c, 0, x],
+    ][sector] || [0, 0, 0];
+    const approxR = Math.round(rp * 255);
+    const approxG = Math.round(gp * 255);
+    const approxB = Math.round(bp * 255);
 
-    // Classify using HSL (more robust)
-    const result = classifyTeamColorHSL(r, g, b);
+    const result = classifyTeamColorHSL(approxR, approxG, approxB);
 
     return {
       color: result.color,
       confidence: result.confidence,
-      rgb: { r, g, b },
+      rawHue: meanHue,
+      rgb: { r: approxR, g: approxG, b: approxB },
     };
   } catch (error) {
     console.error('[ColorUtils] detectColorInRegion failed:', error.message);
-    return { color: 'unknown', confidence: 0, rgb: { r: 0, g: 0, b: 0 } };
+    return { color: 'unknown', confidence: 0, rawHue: null, rgb: { r: 0, g: 0, b: 0 } };
   }
 }
 
