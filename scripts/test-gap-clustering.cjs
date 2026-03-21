@@ -12,90 +12,41 @@ Module._load = function (req, parent, isMain) {
   return _orig.apply(this, arguments);
 };
 
+const fs = require('fs');
 const sharp = require('sharp');
-const { rgbToHsl, classifyTeamColorHSL, __test__ } = require('../electron/colorUtils.cjs');
-const { regionIsBlack } = __test__;
-
-// ── Gap-based clustering (simulated new system) ─────────────────────────────
-// Sort hues, find largest gaps, split there. Max 4 teams (3 splits).
-function gapCluster(players, maxTeams = 4) {
-  if (players.length === 0) return [];
-
-  // Convert to circular hue — handle red wrapping around 0/360
-  const withHue = players.map(p => ({ ...p, h: p.hsl.h }));
-
-  // Sort by hue
-  const sorted = [...withHue].sort((a, b) => a.h - b.h);
-
-  if (sorted.length === 1) return [[sorted[0]]];
-
-  // Compute all adjacent gaps (including wrap-around)
-  const gaps = [];
-  for (let i = 0; i < sorted.length; i++) {
-    const next = (i + 1) % sorted.length;
-    const gap = next === 0
-      ? (360 - sorted[sorted.length - 1].h + sorted[0].h)
-      : sorted[next].h - sorted[i].h;
-    gaps.push({ afterIdx: i, gap });
-  }
-
-  // Pick the top (maxTeams-1) largest gaps as split points
-  // Only split on gaps > MIN_GAP to avoid splitting within a team due to noise
-  const MIN_GAP = 10;
-  const splitCount = maxTeams - 1;
-  const splitGaps = [...gaps]
-    .filter(g => g.gap > MIN_GAP)
-    .sort((a, b) => b.gap - a.gap)
-    .slice(0, splitCount);
-
-  if (splitGaps.length === 0) return [sorted]; // all one team
-
-  const splitIdxSet = new Set(splitGaps.map(g => g.afterIdx));
-
-  // Build clusters by walking the sorted array and splitting at gap points
-  const clusters = [];
-  let current = [];
-  for (let i = 0; i < sorted.length; i++) {
-    current.push(sorted[i]);
-    if (splitIdxSet.has(i)) {
-      clusters.push(current);
-      current = [];
-    }
-  }
-  if (current.length > 0) clusters.push(current);
-
-  return clusters;
-}
+const { detectTeamColorBarBelow, detectColorInRegion, clusterByHue } = require('../electron/colorUtils.cjs');
 
 // ── Sample bar color below a player name bbox ───────────────────────────────
-async function sampleBarColor(imagePath, bbox) {
+// Uses detectTeamColorBarBelow for the named-color result and detectColorInRegion
+// on the primary region to obtain rawHue for clustering.
+async function sampleBarColor(imageBuffer, bbox) {
+  // Get the named color result (high accuracy, multi-sample)
+  const colorResult = await detectTeamColorBarBelow(imageBuffer, bbox, 1);
+
+  // Compute the primary sample region (same geometry as detectTeamColorBarBelow internals)
   const textHeight = bbox.y1 - bbox.y0;
   const textWidth = bbox.x1 - bbox.x0;
   const gapBelow = Math.max(6, textHeight * 0.6);
   const barHeight = Math.max(12, textHeight * 1.1);
   const sampleY = bbox.y1 + gapBelow + (barHeight * 0.3);
-  const sampleH = Math.max(8, barHeight * 0.5);
-  const sampleW = Math.max(40, textWidth * 0.5);
-  const region = {
-    left: Math.floor(bbox.x0),
-    top: Math.max(0, Math.floor(sampleY)),
-    width: Math.floor(sampleW),
-    height: Math.floor(sampleH),
+  const sampleHeight = Math.max(8, barHeight * 0.5);
+  const sampleWidth = Math.max(40, textWidth * 0.5);
+
+  // Sample the primary region for rawHue
+  const primaryRegion = {
+    x: Math.max(0, Math.floor(bbox.x0)),
+    y: Math.max(0, Math.floor(sampleY)),
+    width: Math.floor(sampleWidth),
+    height: Math.floor(sampleHeight),
   };
-  try {
-    const { data, info } = await sharp(imagePath).extract(region).raw().toBuffer({ resolveWithObject: true });
-    const isBlk = regionIsBlack(data, info.channels);
-    let bestSat = -1, bestR = 0, bestG = 0, bestB = 0;
-    for (let i = 0; i < data.length; i += info.channels) {
-      const hsl = rgbToHsl(data[i], data[i + 1], data[i + 2]);
-      if (hsl.s > bestSat) { bestSat = hsl.s; bestR = data[i]; bestG = data[i + 1]; bestB = data[i + 2]; }
-    }
-    const hsl = rgbToHsl(bestR, bestG, bestB);
-    const named = classifyTeamColorHSL(bestR, bestG, bestB);
-    return { isBlack: isBlk, hsl, named, rgb: { r: bestR, g: bestG, b: bestB } };
-  } catch (e) {
-    return { isBlack: false, hsl: { h: 0, s: 0, l: 0 }, named: { color: 'unknown', confidence: 0 }, rgb: { r: 0, g: 0, b: 0 } };
-  }
+  const regionResult = await detectColorInRegion(imageBuffer, primaryRegion);
+
+  return {
+    color: colorResult.color,
+    confidence: colorResult.confidence,
+    rawHue: regionResult.rawHue,
+    rgb: colorResult.rgb || regionResult.rgb,
+  };
 }
 
 // ── Run simulation on a set of named player bboxes ──────────────────────────
@@ -104,9 +55,12 @@ async function simulate(label, imagePath, players) {
   console.log('  ' + label);
   console.log('═'.repeat(60));
 
+  // Load image once as a Buffer
+  const imageBuffer = fs.readFileSync(imagePath);
+
   const results = [];
   for (const p of players) {
-    const bar = await sampleBarColor(imagePath, p.bbox);
+    const bar = await sampleBarColor(imageBuffer, p.bbox);
     results.push({ name: p.name, side: p.side, ...bar });
   }
 
@@ -116,29 +70,43 @@ async function simulate(label, imagePath, players) {
 
   console.log('\nFRIENDLY (fast path, no clustering needed):');
   for (const p of teammates) {
-    console.log(`  ${p.name.padEnd(22)} hue=${String(p.hsl.h).padStart(3)}°  named=${p.named.color}`);
+    const hueStr = typeof p.rawHue === 'number' ? String(p.rawHue).padStart(3) + '°' : '  —  ';
+    console.log(`  ${p.name.padEnd(22)} hue=${hueStr}  named=${p.color}`);
   }
 
-  // Separate known vs unknown enemies
-  const knownEnemies = enemies.filter(r => !r.isBlack && r.named.color !== 'unknown');
-  const blackEnemies = enemies.filter(r => r.isBlack);
-  const unknownEnemies = enemies.filter(r => !r.isBlack && r.named.color === 'unknown');
+  // Separate known vs skipped vs unknown enemies
+  const knownEnemies = enemies.filter(r => r.color !== 'unknown' && r.color !== 'spectator' && r.color !== 'black');
+  const skippedEnemies = enemies.filter(r => r.color === 'black' || r.color === 'spectator');
+  const unknownEnemies = enemies.filter(r => r.color === 'unknown');
 
   console.log('\nENEMY BAR SAMPLES:');
   for (const p of enemies) {
-    const status = p.isBlack ? 'BLACK/skip' : p.named.color !== 'unknown' ? `FAST:${p.named.color}` : `UNKNOWN hue=${p.hsl.h}°`;
-    console.log(`  ${p.name.padEnd(22)} hue=${String(p.hsl.h).padStart(3)}°  → ${status}`);
+    const hueStr = typeof p.rawHue === 'number' ? String(p.rawHue).padStart(3) + '°' : '  —  ';
+    let status;
+    if (p.color === 'black' || p.color === 'spectator') {
+      status = `${p.color.toUpperCase()}/skip`;
+    } else if (p.color !== 'unknown') {
+      status = `FAST:${p.color}`;
+    } else {
+      status = typeof p.rawHue === 'number' ? `UNKNOWN hue=${p.rawHue}°` : 'UNKNOWN (no hue)';
+    }
+    console.log(`  ${p.name.padEnd(22)} hue=${hueStr}  → ${status}`);
   }
 
-  // Fast path groups
+  // Fast path groups (named colors)
   const fastGroups = {};
   for (const p of knownEnemies) {
-    if (!fastGroups[p.named.color]) fastGroups[p.named.color] = [];
-    fastGroups[p.named.color].push(p.name);
+    if (!fastGroups[p.color]) fastGroups[p.color] = [];
+    fastGroups[p.color].push(p.name);
   }
 
-  // Gap-based clustering on unknowns
-  const clusters = gapCluster(unknownEnemies.map(p => ({ name: p.name, hsl: p.hsl })));
+  // Gap-based clustering on unknowns that have a hue
+  const unknownsWithHue = unknownEnemies
+    .filter(p => typeof p.rawHue === 'number')
+    .map(p => ({ name: p.name, hue: p.rawHue }));
+  const unknownsWithoutHue = unknownEnemies.filter(p => typeof p.rawHue !== 'number');
+
+  const clusters = clusterByHue(unknownsWithHue);
 
   console.log('\nRESULT — SIMULATED NEW SYSTEM:');
   let teamIdx = 1;
@@ -146,11 +114,14 @@ async function simulate(label, imagePath, players) {
     console.log(`  Team ${teamIdx++} [${color.toUpperCase()} — fast path]: ${names.join(', ')}`);
   }
   for (const cluster of clusters) {
-    const hues = cluster.map(p => p.h + '°').join(', ');
+    const hues = cluster.map(p => p.hue + '°').join(', ');
     console.log(`  Team ${teamIdx++} [custom color, hues: ${hues}]: ${cluster.map(p => p.name).join(', ')}`);
   }
-  if (blackEnemies.length > 0) {
-    console.log(`  Skipped (black/spectator): ${blackEnemies.map(p => p.name).join(', ')}`);
+  if (skippedEnemies.length > 0) {
+    console.log(`  Skipped (black/spectator): ${skippedEnemies.map(p => p.name).join(', ')}`);
+  }
+  if (unknownsWithoutHue.length > 0) {
+    console.log(`  No hue detected: ${unknownsWithoutHue.map(p => p.name).join(', ')}`);
   }
 }
 
