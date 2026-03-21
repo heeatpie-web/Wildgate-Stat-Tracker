@@ -250,6 +250,42 @@ function classifyTeamColorRGB(r, g, b) {
 }
 
 /**
+ * Compute the circular mean hue of chromatic pixels in a raw pixel buffer.
+ * Dark pixels (lightness < lightnessThreshold%) are excluded — they are shadow,
+ * text, or true black and would distort the hue average.
+ *
+ * Returns null if fewer than minChromFraction of pixels survive the filter
+ * (indicates a black/spectator bar with no real color).
+ *
+ * @param {Uint8Array} data - Raw pixel buffer
+ * @param {number} channels - Bytes per pixel (3=RGB, 4=RGBA)
+ * @param {number} [lightnessThreshold=20] - Min lightness % to include pixel
+ * @param {number} [minChromFraction=0.10] - Min fraction of chromatic pixels required
+ * @returns {number|null} Mean hue (0–360) or null if bar is effectively black
+ */
+function circularHueMean(data, channels, lightnessThreshold = 20, minChromFraction = 0.10) {
+  const ch = Math.max(1, channels);
+  let sinSum = 0;
+  let cosSum = 0;
+  let chromCount = 0;
+  const totalPixels = data.length / ch;
+
+  for (let i = 0; i < data.length; i += ch) {
+    const hsl = rgbToHsl(data[i], data[i + 1], data[i + 2]);
+    if (hsl.l < lightnessThreshold) continue;
+    const rad = hsl.h * (Math.PI / 180);
+    sinSum += Math.sin(rad);
+    cosSum += Math.cos(rad);
+    chromCount += 1;
+  }
+
+  if (chromCount < totalPixels * minChromFraction) return null;
+
+  const meanRad = Math.atan2(sinSum / chromCount, cosSum / chromCount);
+  return Math.round(((meanRad * (180 / Math.PI)) + 360) % 360);
+}
+
+/**
  * Detect color in a region of an image
  * @param {Buffer} imageBuffer - Image buffer (PNG/JPEG)
  * @param {Object} region - Region to sample { x, y, width, height }
@@ -551,4 +587,5 @@ module.exports = {
   detectTeamColorBarBelow,
   findTeamColorRegions,
   getTeamColorInfo,
+  __test__: { circularHueMean },
 };
