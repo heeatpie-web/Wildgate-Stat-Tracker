@@ -145,8 +145,8 @@ describe('electron/colorUtils nearestWildgateColor', () => {
     expect(result.name).toBe('cyan');
   });
 
-  it('returns green for hue=120', () => {
-    const result = nearestWildgateColor(120);
+  it('returns green for hue=140', () => {
+    const result = nearestWildgateColor(140);
     expect(result.name).toBe('green');
   });
 
