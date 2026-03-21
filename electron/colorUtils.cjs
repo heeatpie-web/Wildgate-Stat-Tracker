@@ -473,12 +473,12 @@ async function detectTeamColorBarBelow(imageBuffer, bbox, scale = 1, sharpModule
 
   if (bestResult.confidence > 30) {
     dlog2(`[ColorUtils] Bar color=${bestResult.color} conf=${bestResult.confidence} x=${bestResult.xBase} yOff=${bestResult.yOff} rgb=(${bestResult.rgb?.r},${bestResult.rgb?.g},${bestResult.rgb?.b})`);
-    return { color: bestResult.color, confidence: bestResult.confidence, rgb: bestResult.rgb };
+    return { color: bestResult.color, confidence: bestResult.confidence, rgb: bestResult.rgb, rawHue: bestResult.rawHue ?? null };
   }
 
   // All attempts failed
   dlog2(`[ColorUtils] Bar color=unknown after all attempts. y1=${Math.round(origBbox.y1)} sampleY=${Math.round(sampleY)}`);
-  return { color: 'unknown', confidence: 0 };
+  return { color: 'unknown', confidence: 0, rawHue: null };
 }
 
 /**
