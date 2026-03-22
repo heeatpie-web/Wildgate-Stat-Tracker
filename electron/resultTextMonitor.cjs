@@ -6,15 +6,19 @@ const DEFAULT_SAMPLE_INTERVAL_MS = 500;
 const TRIPWIRE_BASELINE_ALPHA = 0.18;
 const TRIPWIRE_MIN_CONSECUTIVE_HITS = 2;
 const TRIPWIRE_MIN_ACTIVE_BOXES = 1;
-const TRIPWIRE_MIN_BOX_WHITE_RATIO = 0.015;
-const TRIPWIRE_MIN_BOX_WHITE_DELTA = 0.0075;
-const TRIPWIRE_MIN_TOTAL_WHITE_DELTA = 0.02;
+const TRIPWIRE_MIN_BOX_WHITE_RATIO = 0.09;
+const TRIPWIRE_MIN_BOX_WHITE_DELTA = 0.045;
+const TRIPWIRE_MIN_TOTAL_WHITE_DELTA = 0.045;
 const TRIPWIRE_WHITE_MIN_CHANNEL = 240;
 const TRIPWIRE_WHITE_MAX_DRIFT = 30;
 
-// The sample region is already collapsed to the result headline, so the tripwire box spans the full sample.
+// Three horizontal sub-boxes within the wide result-headline region.
+// A catches left-anchored layouts (2025), B+C catch center layouts (2026).
+// Relative coords within RESULT_TEXT_SAMPLE_REGION (left=0.2489, width=0.3991).
 const TRIPWIRE_BOX_LAYOUT = Object.freeze([
-  { id: 'result-b', left: 0, top: 0, width: 1, height: 1 },
+  { id: 'result-a', left: 0.0501, top: 0, width: 0.2571, height: 1 },
+  { id: 'result-b', left: 0.4357, top: 0, width: 0.2571, height: 1 },
+  { id: 'result-c', left: 0.6928, top: 0, width: 0.2571, height: 1 },
 ]);
 
 let _timer = null;

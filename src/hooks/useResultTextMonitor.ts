@@ -3,12 +3,13 @@ import { getElectronAPI } from '../utils/electronAPI';
 
 export const DEFAULT_RESULT_TEXT_ARM_DELAY_MS = 45_000;
 export const RESULT_TEXT_SAMPLE_INTERVAL_MS = 500;
-// This region matches the live result-headline tripwire box so we only sample the useful center-right band.
+// Wide band covering the result headline (VICTORY/DEFEAT) across all known screen layouts.
+// Spans x=478-1244, y=130-330 at 1920x1080 — boxes A/B/C cover left-anchored (2025) and center (2026) layouts.
 export const RESULT_TEXT_SAMPLE_REGION = {
-    left: 0.4228,
-    top: 0.149,
-    width: 0.1026,
-    height: 0.09,
+    left: 0.2489,
+    top: 0.1204,
+    width: 0.3991,
+    height: 0.1852,
     normalized: true,
 } as const;
 

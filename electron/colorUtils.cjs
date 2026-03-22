@@ -424,8 +424,11 @@ async function detectColorInRegion(imageBuffer, region, sharpModule = null) {
     }
 
     // ── Most-saturated-pixel sampling ─────────────────────────────────────────
-    // Find the pixel with the highest saturation×lightness score. Team colour
-    // bars are vivid and highly saturated; background/UI elements are not.
+    // Find the pixel with the highest saturation × lightness-bell-curve score.
+    // Team colour bars are vivid and mid-lightness. Near-white pixels (badge text,
+    // UI chrome) and near-black pixels are explicitly de-weighted by the bell curve
+    // so they don't masquerade as highly-saturated colour signals.
+    // Bell curve: peaks at l=50%, → 0 as l→0% or l→100%.
     const ch = Math.max(1, info.channels);
     let bestScore = -1;
     let bestR = 0, bestG = 0, bestB = 0;
@@ -433,7 +436,8 @@ async function detectColorInRegion(imageBuffer, region, sharpModule = null) {
     for (let i = 0; i < data.length; i += ch) {
       const r = data[i], g = data[i + 1], b = data[i + 2];
       const hsl = rgbToHsl(r, g, b);
-      const score = (hsl.s / 100) * (hsl.l / 100);
+      const lightnessScore = hsl.l <= 50 ? hsl.l / 50 : (100 - hsl.l) / 50;
+      const score = (hsl.s / 100) * lightnessScore;
       if (score > bestScore) {
         bestScore = score;
         bestR = r; bestG = g; bestB = b;
@@ -444,9 +448,11 @@ async function detectColorInRegion(imageBuffer, region, sharpModule = null) {
       return { color: 'unknown', confidence: 0, rawHue: null, rgb: { r: bestR, g: bestG, b: bestB } };
     }
 
-    // Store the winning pixel's hue for clusterByHue downstream
+    // Store the winning pixel's hue for clusterByHue downstream.
+    // Exclude near-white pixels (l > 90) — the HSL formula computes artifically
+    // high saturation at extreme lightness, making white text appear chromatic.
     const winningHsl = rgbToHsl(bestR, bestG, bestB);
-    const rawHue = winningHsl.s > 5 ? winningHsl.h : null;
+    const rawHue = (winningHsl.s > 5 && winningHsl.l <= 90) ? winningHsl.h : null;
 
     // ── Hybrid classifier ─────────────────────────────────────────────────────
     // Fast path: classifyTeamColorHSL handles the four legacy game colours plus
@@ -550,18 +556,16 @@ async function detectTeamColorBarBelow(imageBuffer, bbox, scale = 1, sharpModule
   const sampleWidth = Math.max(40, textWidth * 0.5);
 
   // The colored bar spans the full card width. The team name TEXT sits on the bar
-  // roughly aligned with the player name X position, which contaminates the average color.
-  // Sample AT and to the RIGHT of the player name first — that's where the bar has solid
-  // fill with no text overlay. Fall back leftward only as a last resort.
+  // roughly aligned with the player name X position. Sample AT and to the RIGHT of
+  // the player name only — leftward positions reach into the player avatar column
+  // (typically 40-80px left of the text) whose character art contains high-scoring
+  // blue/cyan pixels that outcompete the actual team badge colour.
   const rightStep = Math.max(sampleWidth * 0.65, textHeight * 2.5);
-  const leftStep = Math.max(sampleWidth * 0.85, textHeight * 3.2);
   const verticalStep = Math.max(2, sampleHeight * 0.4);
   const xPositions = [
     Math.max(0, Math.floor(origBbox.x0)),
     Math.max(0, Math.floor(origBbox.x0 + rightStep)),
     Math.max(0, Math.floor(origBbox.x0 + rightStep * 2)),
-    Math.max(0, Math.floor(origBbox.x0 - leftStep)),
-    Math.max(0, Math.floor(origBbox.x0 - leftStep * 2)),
   ];
   const yOffsets = [
     0,
@@ -603,11 +607,19 @@ async function detectTeamColorBarBelow(imageBuffer, bbox, scale = 1, sharpModule
           ) {
             bestResult = { ...result, xBase, yOff };
           }
-        } else if (result.color === 'unknown' && result.rawHue != null && result.rgb) {
-          // A chromatic pixel was found but didn't match any of the 4 standard colors.
-          // Score by saturation×lightness so we keep the most vivid sample.
+        } else if (
+          result.color === 'unknown' && result.rawHue != null && result.rgb &&
+          xBase === xPositions[0]  // primary position only (text left edge, reliably on badge)
+        ) {
+          // A chromatic pixel was found at the primary x-position but didn't match any
+          // of the 4 standard colors — this is a custom Wildgate colour badge.
+          // Rightward samples are not used here: they can exit the card into the
+          // game background, whose green/yellow hues would contaminate the result.
+          // Score by saturation × lightness bell-curve (peaks at l=50%).
           const hsl = rgbToHsl(result.rgb.r, result.rgb.g, result.rgb.b);
-          const score = (hsl.s / 100) * (hsl.l / 100);
+          if (hsl.l > 85) continue; // near-white (UI chrome) — discard
+          const lightnessScore = hsl.l <= 50 ? hsl.l / 50 : (100 - hsl.l) / 50;
+          const score = (hsl.s / 100) * lightnessScore;
           if (!bestChromaticUnknown || score > bestChromaticUnknown.score) {
             bestChromaticUnknown = { rawHue: result.rawHue, rgb: result.rgb, score };
           }

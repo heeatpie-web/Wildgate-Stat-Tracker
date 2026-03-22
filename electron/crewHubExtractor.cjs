@@ -1112,6 +1112,22 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     barLabelFrequency.set(key, (barLabelFrequency.get(key) || 0) + 1);
   }
 
+  // Pre-pass: build player-y → team-name-text map using sequential Y-order.
+  // In the enemy panel the pattern is always: PlayerName line, TeamBarText line,
+  // PlayerName line, TeamBarText line, … This gives us correct team names
+  // regardless of colour detection quality — used as fallback for capturedTeamNames.
+  const playerYToTextTeamName = new Map();
+  for (let gi = 0; gi < groupedLines.length - 1; gi++) {
+    const cur = groupedLines[gi];
+    const nxt = groupedLines[gi + 1];
+    if (!cur || !nxt) continue;
+    const curName = extractPlayerNameFromLine(cur.words);
+    if (!curName || !isValidOpponentName(curName)) continue;
+    const nxtBar = extractRawTeamNameFromLine(nxt.words);
+    if (!nxtBar) continue;
+    playerYToTextTeamName.set(Math.round(cur.y), nxtBar);
+  }
+
   for (const line of groupedLines) {
     // ── Skip lines that fall inside a known bar zone (ship name text) ──────────
     const inBarZone = barZones.some(z => line.y >= z.min && line.y <= z.max);
@@ -1282,12 +1298,20 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
       }
     }
 
+    const textTeamName = playerYToTextTeamName.get(Math.round(line.y)) || '';
+    // Populate capturedTeamNames from text if colour detection didn't already do it.
+    if (textTeamName && detectedColor !== 'unknown' && !capturedTeamNames.has(detectedColor)) {
+      capturedTeamNames.set(detectedColor, textTeamName);
+      dlog('[CrewHub] capturedTeamNames (text fallback): ' + detectedColor + ' → "' + textTeamName + '"');
+    }
+
     cards.push({
       y: line.y,
       name: playerName,
       color: detectedColor,
       rawHue,
       confidence: colorConfidence,
+      textTeamName,
       bbox: lineBbox,
     });
 
