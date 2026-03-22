@@ -1020,10 +1020,23 @@ describe('App', () => {
 
       await act(async () => {
         vi.advanceTimersByTime(1);
-        await triggerPromise;
+        await Promise.resolve();
+        await Promise.resolve();
       });
 
       expect(api.invoke).toHaveBeenCalledWith('capture-screen');
+
+      // Advance past FULL_AUTO_FINAL_MOMENTS_SETTLE_MS (2000ms) so captureDamageSourcesArtifact completes.
+      // capture-result-screen-region is not mocked here so tab1Base64 is null → returns null → [] artifacts.
+      await act(async () => {
+        vi.advanceTimersByTime(2500);
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+        await triggerPromise;
+      });
+
       expect(autoFinalizeResultScreenCaptureMock).toHaveBeenCalledWith(expect.objectContaining({
         imageBase64: 'image-base64',
         resultData: expect.objectContaining({ result: 'Win', detectionMethod: 'flash' }),
@@ -1067,12 +1080,14 @@ describe('App', () => {
           return Promise.resolve('image-base64');
         }
         if (channel === 'scan-result-screen') {
+          // First call: result-screen scan (no imageBase64 in payload matching damage-region)
+          // Second call: tab1 discard check (imageBase64 = 'damage-region')
+          if (payload?.imageBase64 === 'damage-region') {
+            return Promise.resolve({ data: { result: 'Loss', damageTaken: 1234 } });
+          }
           return Promise.resolve({ data: { result: 'Loss', winType: 'combat', placement: 4, detectionMethod: 'text' } });
         }
         if (channel === 'capture-result-screen-region') {
-          if (payload?.imageBase64) {
-            return Promise.resolve({ success: true, imageBase64: 'baseline-region' });
-          }
           return Promise.resolve({ success: true, imageBase64: 'damage-region' });
         }
         if (channel === 'telemetry-retention-status') {
@@ -1133,29 +1148,25 @@ describe('App', () => {
       detectionMethod: 'text',
     });
 
+    // New flow: 2000ms settle (FULL_AUTO_FINAL_MOMENTS_SETTLE_MS) before tab 1 capture
     await act(async () => {
-      vi.advanceTimersByTime(300);
+      vi.advanceTimersByTime(2000);
+      await Promise.resolve();
+      await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
     });
 
+    // After settle + tab1 capture + tab1 scan, show-damage-sources should be called
     expect(sendGameUiActionMock).toHaveBeenCalledWith('show-damage-sources');
 
+    // Advance past FULL_AUTO_DAMAGE_SOURCES_TRANSITION_MS (100ms) for tab2 capture
     await act(async () => {
-      vi.advanceTimersByTime(400);
+      vi.advanceTimersByTime(200);
       await triggerPromise;
     });
 
-    expect(api.invoke).toHaveBeenCalledWith('capture-result-screen-region', expect.objectContaining({
-      imageBase64: 'image-base64',
-      cropRegion: expect.objectContaining({
-        left: expect.any(Number),
-        top: expect.any(Number),
-        width: expect.any(Number),
-        height: expect.any(Number),
-        normalized: true,
-      }),
-    }));
+    // Tab 1 and tab 2 are both fresh captures (no imageBase64 in payload)
     expect(api.invoke).toHaveBeenCalledWith('capture-result-screen-region', expect.objectContaining({
       cropRegion: expect.objectContaining({
         left: expect.any(Number),
@@ -1173,10 +1184,10 @@ describe('App', () => {
         detectionMethod: 'text',
       }),
       matchId: 5432,
-      supplementalArtifacts: [{
-        imageBase64: 'damage-region',
-        kind: 'damage-sources',
-      }],
+      supplementalArtifacts: [
+        { imageBase64: 'damage-region', kind: 'damage-sources' },
+        { imageBase64: 'damage-region', kind: 'damage-ships' },
+      ],
     }));
     vi.useRealTimers();
   });

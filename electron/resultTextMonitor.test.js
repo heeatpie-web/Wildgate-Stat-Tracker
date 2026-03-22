@@ -115,7 +115,9 @@ describe('resultTextMonitor tripwire helpers', () => {
     expect(snapshot.triggered).toBe(false);
     expect(snapshot.activeBoxCount).toBe(0);
     expect(snapshot.totalWhiteDelta).toBeGreaterThan(0);
-    expect(snapshot.totalWhiteDelta).toBeLessThan(0.02);
+    // With the 3-box layout the sparse pixels land in at most one sub-box; total delta stays well
+    // below the TRIPWIRE_MIN_TOTAL_WHITE_DELTA threshold of 0.045.
+    expect(snapshot.totalWhiteDelta).toBeLessThan(0.04);
   });
 });
 

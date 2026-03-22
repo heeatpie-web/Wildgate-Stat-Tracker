@@ -2770,31 +2770,55 @@ const App: React.FC = () => {
 
     const captureDamageSourcesArtifact = useCallback(async (
         api: NonNullable<ReturnType<typeof getElectronAPI>>,
-        resultImageBase64: string,
+        _resultImageBase64: string,   // kept for signature compat; unused now
         matchId: number,
     ) => {
-        const baselineCapture = await api.invoke('capture-result-screen-region', {
-            imageBase64: resultImageBase64,
-            cropRegion: FULL_AUTO_DAMAGE_SOURCES_CAPTURE_REGION,
-        });
-        const baselineImageBase64 = normalizeImageBase64Payload(baselineCapture?.imageBase64);
-        if (!baselineImageBase64) {
-            console.warn('[FullAuto] Unable to capture baseline damage panel region', { matchId });
-            return null;
-        }
-
+        // Wait for damage panel to animate into position (~2s after result OCR fires)
         await waitForDuration(FULL_AUTO_FINAL_MOMENTS_SETTLE_MS);
 
-        const toggleResult = await sendGameUiAction('show-damage-sources');
-        if (!toggleResult.success) {
-            console.warn('[FullAuto] Failed to toggle damage sources view', {
-                matchId,
-                error: toggleResult.error || null,
-            });
+        // --- Tab 1: Damage Sources (fresh screenshot, panel now visible) ---
+        const tab1Capture = await api.invoke('capture-result-screen-region', {
+            cropRegion: FULL_AUTO_DAMAGE_SOURCES_CAPTURE_REGION,
+        });
+        const tab1Base64 = normalizeImageBase64Payload(tab1Capture?.imageBase64);
+        if (!tab1Base64) {
+            console.warn('[FullAuto] Unable to capture damage panel tab 1', { matchId });
             return null;
         }
 
-        return null;
+        // Discard check: scan tab 1 for damage-related content
+        const tab1Scan = await api.invoke('scan-result-screen', { imageBase64: tab1Base64 });
+        const tab1DamageTaken = tab1Scan?.data?.damageTaken ?? null;
+        const tab1HasDamage = tab1DamageTaken != null && Number.isFinite(Number(tab1DamageTaken));
+        if (!tab1HasDamage) {
+            console.warn('[FullAuto] No damage content in tab 1 crop — discarding damage capture', { matchId });
+            return null;
+        }
+
+        // --- Switch to Tab 2: Enemy Ships ---
+        const toggleResult = await sendGameUiAction('show-damage-sources');
+        if (!toggleResult.success) {
+            console.warn('[FullAuto] Failed to toggle to enemy ships tab', { matchId, error: toggleResult.error ?? null });
+            // Still return tab 1 even if tab 2 fails
+            return [{ imageBase64: tab1Base64, kind: 'damage-sources' as const }];
+        }
+
+        await waitForDuration(FULL_AUTO_DAMAGE_SOURCES_TRANSITION_MS);
+
+        // --- Tab 2: Enemy Ships ---
+        const tab2Capture = await api.invoke('capture-result-screen-region', {
+            cropRegion: FULL_AUTO_DAMAGE_SOURCES_CAPTURE_REGION,
+        });
+        const tab2Base64 = normalizeImageBase64Payload(tab2Capture?.imageBase64);
+        if (!tab2Base64) {
+            console.warn('[FullAuto] Unable to capture damage panel tab 2', { matchId });
+            return [{ imageBase64: tab1Base64, kind: 'damage-sources' as const }];
+        }
+
+        return [
+            { imageBase64: tab1Base64, kind: 'damage-sources' as const },
+            { imageBase64: tab2Base64, kind: 'damage-ships' as const },
+        ];
     }, []);
 
     const beginFullAutoResultDetection = useCallback((
@@ -2952,13 +2976,12 @@ const App: React.FC = () => {
                 if (!resultData.detectionMethod && detectionMethod) {
                     resultData.detectionMethod = detectionMethod;
                 }
-                const damageSourcesArtifact = (
+                const supplementalArtifacts = (
                     resultData.result === 'Win'
                     || resultData.result === 'Loss'
                 )
-                    ? await captureDamageSourcesArtifact(api, imageBase64, normalizedDraftMatchId)
-                    : null;
-                const supplementalArtifacts = damageSourcesArtifact ? [damageSourcesArtifact] : [];
+                    ? (await captureDamageSourcesArtifact(api, imageBase64, normalizedDraftMatchId)) ?? []
+                    : [];
                 const finalized = await autoFinalizeResultScreenCapture({
                     imageBase64,
                     resultData,
