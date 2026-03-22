@@ -46,6 +46,9 @@ const RESULT_REGIONS = {
   resultCenter: { left: 0.30, top: 0.55, width: 0.40, height: 0.15 },
   resultLeft: { left: 0.03, top: 0.60, width: 0.35, height: 0.15 },
   placement: { left: 0.04, top: 0.04, width: 0.34, height: 0.18 },
+  // Full-width scan for placement reveal screen ("2ND PLACE" centered on screen).
+  // The standard placement region only covers the left 34%, missing centered text.
+  placementFullWidth: { left: 0.0, top: 0.02, width: 1.0, height: 0.45 },
   statusLine: { left: 0.09, top: 0.08, width: 0.58, height: 0.18 },
   victoryLine: { left: 0.14, top: 0.03, width: 0.36, height: 0.13 },
   rightPanel: { left: 0.57, top: 0.17, width: 0.34, height: 0.56 },
@@ -386,7 +389,7 @@ async function extractResultScreen(imageBuffer, options = {}) {
     }, detectText),
     collectRecognizedTexts(imageBuffer, meta, RESULT_REGIONS.resultCenter, LINE_SCAN_VARIANTS, recognizeText),
     collectRecognizedTexts(imageBuffer, meta, RESULT_REGIONS.resultLeft, LINE_SCAN_VARIANTS, recognizeText),
-    collectRecognizedTextsFromRegions(imageBuffer, meta, [RESULT_REGIONS.placement], LINE_SCAN_VARIANTS, recognizeText),
+    collectRecognizedTextsFromRegions(imageBuffer, meta, [RESULT_REGIONS.placement, RESULT_REGIONS.placementFullWidth], LINE_SCAN_VARIANTS, recognizeText),
     collectRecognizedTexts(imageBuffer, meta, RESULT_REGIONS.statusLine, LINE_SCAN_VARIANTS, recognizeText),
     collectRecognizedTexts(imageBuffer, meta, RESULT_REGIONS.victoryLine, LINE_SCAN_VARIANTS, recognizeText),
     collectDetectedTextsFromRegions(imageBuffer, meta, [RESULT_REGIONS.rightPanel], OCR_SCAN_VARIANTS, {

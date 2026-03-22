@@ -1431,7 +1431,12 @@ export const useMatchSubmission = () => {
                 }))),
             ].filter((artifact) => artifact.rawBase64.length > 0);
 
-            const savedArtifactPaths: string[] = normalizedPersistedPrimaryArtifactPath
+            // If damage crops succeeded, the primary artifact is superseded — don't include it
+            // as a named artifact (the crops are smaller and contain the same info).
+            const hasDamageSourcesArtifact = (supplementalArtifacts || []).some(
+                (a) => a?.kind === 'damage-sources'
+            );
+            const savedArtifactPaths: string[] = normalizedPersistedPrimaryArtifactPath && !hasDamageSourcesArtifact
                 ? [normalizedPersistedPrimaryArtifactPath]
                 : [];
             let damageSourcesOcrLines: string[] = [];

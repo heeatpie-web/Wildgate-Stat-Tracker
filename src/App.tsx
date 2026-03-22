@@ -301,7 +301,6 @@ type FullAutoSaveReason = FullAutoDetectionMethod | 'background' | 'manual';
 
 const IMAGE_ARTIFACT_PATTERN = /\.(png|jpe?g|webp|bmp|gif)$/i;
 const TELEMETRY_AUTO_CAPTURE_ARTIFACT_TARGET = 3;
-const TELEMETRY_POSTMATCH_FALLBACK_DELAY_MS = 15_000;
 const PREGAME_LOBBY_MACRO_DELAY_MS = 5_000;
 // `capture-screen` already hides the overlay window and waits about 300ms before grabbing the game frame.
 const FULL_AUTO_RESULT_OCR_POST_FLASH_DELAY_MS = 0;
@@ -2641,7 +2640,7 @@ const App: React.FC = () => {
                 matchId,
                 level: 'info',
             }));
-            const timerId = window.setTimeout(() => {
+            const showManualFallback = () => {
                 if (handledTelemetryDraftPostmatchPromptIdsRef.current.has(matchId)) return;
                 setTelemetryAutomationStatus(createTelemetryAutomationStatus({
                     phase: 'manual-result-needed',
@@ -2654,8 +2653,7 @@ const App: React.FC = () => {
                     duration,
                     phase: 'postmatch',
                 });
-            }, TELEMETRY_POSTMATCH_FALLBACK_DELAY_MS);
-            telemetryDraftFallbackTimersRef.current.set(matchId, timerId);
+            };
 
             telemetryBackgroundResultOcrAttemptsRef.current.set(matchId, 1);
             void triggerFullAutoSaveRef.current({
@@ -2667,6 +2665,7 @@ const App: React.FC = () => {
             const backgroundTimerId = window.setInterval(() => {
                 if (!fullAutoEnabledRef.current) {
                     clearTelemetryBackgroundResultOcrTimer(matchId);
+                    showManualFallback();
                     return;
                 }
                 if (handledTelemetryDraftPostmatchPromptIdsRef.current.has(matchId)) {
@@ -2680,6 +2679,7 @@ const App: React.FC = () => {
                 const currentAttempts = Number(telemetryBackgroundResultOcrAttemptsRef.current.get(matchId) || 0);
                 if (currentAttempts >= FULL_AUTO_BACKGROUND_RESULT_OCR_MAX_ATTEMPTS) {
                     clearTelemetryBackgroundResultOcrTimer(matchId);
+                    showManualFallback();
                     return;
                 }
                 telemetryBackgroundResultOcrAttemptsRef.current.set(matchId, currentAttempts + 1);
@@ -2798,14 +2798,12 @@ const App: React.FC = () => {
 
     const captureDamageSourcesArtifact = useCallback(async (
         api: NonNullable<ReturnType<typeof getElectronAPI>>,
-        _resultImageBase64: string,   // kept for signature compat; unused now
+        resultImageBase64: string,
         matchId: number,
     ) => {
-        // Wait for damage panel to animate into position (~2s after result OCR fires)
-        await waitForDuration(FULL_AUTO_FINAL_MOMENTS_SETTLE_MS);
-
-        // --- Tab 1: Damage Sources (fresh screenshot, panel now visible) ---
+        // --- Tab 1: Damage Sources (crop from original result screenshot) ---
         const tab1Capture = await api.invoke('capture-result-screen-region', {
+            imageBase64: resultImageBase64,
             cropRegion: FULL_AUTO_DAMAGE_SOURCES_CAPTURE_REGION,
         });
         const tab1Base64 = normalizeImageBase64Payload(tab1Capture?.imageBase64);
@@ -2814,21 +2812,19 @@ const App: React.FC = () => {
             return null;
         }
 
-        // Discard check: scan tab 1 for damage-related content
-        const tab1Scan = await api.invoke('scan-result-screen', { imageBase64: tab1Base64 });
-        const tab1DamageTaken = tab1Scan?.data?.damageTaken ?? null;
-        const tab1HasDamage = tab1DamageTaken != null && Number.isFinite(Number(tab1DamageTaken));
-        if (!tab1HasDamage) {
-            console.warn('[FullAuto] No damage content in tab 1 crop — discarding damage capture', { matchId });
-            return null;
-        }
+        // Wait for damage panel to animate into position before pressing ]
+        await waitForDuration(FULL_AUTO_FINAL_MOMENTS_SETTLE_MS);
 
         // --- Switch to Tab 2: Enemy Ships ---
+        // Send ] multiple times with small gaps — single send is often missed
         const toggleResult = await sendGameUiAction('show-damage-sources');
         if (!toggleResult.success) {
             console.warn('[FullAuto] Failed to toggle to enemy ships tab', { matchId, error: toggleResult.error ?? null });
-            // Still return tab 1 even if tab 2 fails
-            return [{ imageBase64: tab1Base64, kind: 'damage-sources' as const }];
+        } else {
+            await waitForDuration(150);
+            await sendGameUiAction('show-damage-sources');
+            await waitForDuration(150);
+            await sendGameUiAction('show-damage-sources');
         }
 
         await waitForDuration(FULL_AUTO_DAMAGE_SOURCES_TRANSITION_MS);
@@ -2838,6 +2834,17 @@ const App: React.FC = () => {
             cropRegion: FULL_AUTO_DAMAGE_SOURCES_CAPTURE_REGION,
         });
         const tab2Base64 = normalizeImageBase64Payload(tab2Capture?.imageBase64);
+
+        // Post-capture discard check: scan tab 1 to verify damage panel was actually visible.
+        // If nothing detected (e.g. screenshot was the placement reveal screen), discard both.
+        const tab1Scan = await api.invoke('scan-result-screen', { imageBase64: tab1Base64 });
+        const tab1DamageTaken = tab1Scan?.data?.damageTaken ?? null;
+        const tab1HasDamage = tab1DamageTaken != null && Number.isFinite(Number(tab1DamageTaken));
+        if (!tab1HasDamage) {
+            console.warn('[FullAuto] No damage content in tab 1 — discarding damage capture', { matchId });
+            return null;
+        }
+
         if (!tab2Base64) {
             console.warn('[FullAuto] Unable to capture damage panel tab 2', { matchId });
             return [{ imageBase64: tab1Base64, kind: 'damage-sources' as const }];
