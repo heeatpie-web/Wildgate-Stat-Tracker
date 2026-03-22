@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.4.1": [
+    "Fix color detection: bell-curve score prevents white badge text from faking team colors",
+    "fix CAREFREE regression",
+    "remove avatar contamination from leftStep positions"
+  ],
   "v3.3.9": [
     "Performance: Result flash monitoring now uses DXGI sampling in the Electron main process instead of renderer-driven IPC polling.",
     "Reliability: Flash detection no longer depends on repeated PowerShell game-window lookups and now resolves cleanly after the flash ends.",
