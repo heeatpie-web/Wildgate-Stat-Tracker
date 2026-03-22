@@ -449,23 +449,30 @@ async function detectColorInRegion(imageBuffer, region, sharpModule = null) {
     const rawHue = winningHsl.s > 5 ? winningHsl.h : null;
 
     // ── Hybrid classifier ─────────────────────────────────────────────────────
-    // Fast path: classifyTeamColorHSL has wide, noise-tolerant hue bands for the
-    // four default game colours. Fall through to nearestWildgateColor for custom.
+    // Fast path: classifyTeamColorHSL handles the four legacy game colours plus
+    // spectator/black detection. Return spectator immediately; return known
+    // non-black chromatic colours immediately.
     const hslResult = classifyTeamColorHSL(bestR, bestG, bestB);
-    if (hslResult.color !== 'unknown' && hslResult.color !== 'spectator') {
-      return {
-        color: hslResult.color,
-        confidence: hslResult.confidence,
-        rawHue,
-        rgb: { r: bestR, g: bestG, b: bestB },
-      };
+    if (hslResult.color === 'spectator') {
+      return { color: 'spectator', confidence: hslResult.confidence, rawHue, rgb: { r: bestR, g: bestG, b: bestB } };
+    }
+    if (hslResult.color !== 'unknown' && hslResult.color !== 'black') {
+      return { color: hslResult.color, confidence: hslResult.confidence, rawHue, rgb: { r: bestR, g: bestG, b: bestB } };
     }
 
-    // classifyTeamColorHSL doesn't recognise this colour — return unknown so the
-    // extractor's clusterByHue step can group by raw hue and label the cluster.
+    // For 'unknown' or 'black': if the winning pixel has a detectable hue (S > 5%),
+    // use nearestWildgateColor to match against all 32 Wildgate team colors.
+    // This handles vivid colours classifyTeamColorHSL doesn't know (lime green,
+    // goldenrod, plum, grape, etc.) and dark-but-chromatic Wildgate colors.
+    if (rawHue !== null) {
+      const wg = nearestWildgateColor(rawHue);
+      return { color: wg.name, confidence: wg.confidence, rawHue, rgb: { r: bestR, g: bestG, b: bestB } };
+    }
+
+    // Truly achromatic pixel (S ≤ 5%) — keep black or return unknown.
     return {
-      color: 'unknown',
-      confidence: 0,
+      color: hslResult.color === 'black' ? 'black' : 'unknown',
+      confidence: hslResult.color === 'black' ? hslResult.confidence : 0,
       rawHue,
       rgb: { r: bestR, g: bestG, b: bestB },
     };
@@ -533,9 +540,10 @@ async function detectTeamColorBarBelow(imageBuffer, bbox, scale = 1, sharpModule
   const textWidth = origBbox.x1 - origBbox.x0;
 
   // Color bar sampling parameters (tuned for 1080p)
-  // Gap between name bottom and color bar top: ~11px
-  // Color bar height: ~20-22px
-  const gapBelow = Math.max(6, textHeight * 0.6);          // ~11px for 18px text
+  // The team color bar starts almost immediately below the player name text
+  // (actual measured gap is 1-5px on 1080p). The old formula (textHeight*0.6)
+  // overshot the bar by up to 18px, landing in the gap between cards.
+  const gapBelow = Math.max(2, textHeight * 0.15);
   const barHeight = Math.max(12, textHeight * 1.1);         // ~20px
   const sampleY = origBbox.y1 + gapBelow + (barHeight * 0.3);
   const sampleHeight = Math.max(8, barHeight * 0.5);
@@ -569,6 +577,11 @@ async function detectTeamColorBarBelow(imageBuffer, bbox, scale = 1, sharpModule
   // to beat a clean sample further right (e.g. pure orange s=100%) because the
   // HSL saturation tolerance is wide enough to let marginal reads through.
   let bestResult = { color: 'unknown', confidence: 0, rgb: null, xBase: 0, yOff: 0 };
+  // Track the best chromatic-unknown sample (rawHue non-null but classifyTeamColorHSL
+  // returned 'unknown' because the hue is a custom Wildgate color outside the 4-color bands).
+  // If ALL named-color attempts fail and bestResult ends up 'black', we prefer returning
+  // 'unknown'+rawHue so clusterByHue can group the card rather than skipping it as a spectator.
+  let bestChromaticUnknown = null; // { rawHue, rgb, score }
 
   for (const xBase of xPositions) {
     for (const yOff of yOffsets) {
@@ -580,12 +593,24 @@ async function detectTeamColorBarBelow(imageBuffer, bbox, scale = 1, sharpModule
       };
       try {
         const result = await detectColorInRegion(imageBuffer, region, sharpModule);
-        if (
-          result.color !== 'unknown' &&
-          result.color !== 'spectator' &&
-          result.confidence > bestResult.confidence
-        ) {
-          bestResult = { ...result, xBase, yOff };
+        if (result.color !== 'unknown' && result.color !== 'spectator') {
+          // Chromatic colors always beat 'black'; 'black' only wins over unknown/other black.
+          const curChromatic  = result.color !== 'black';
+          const bestChromatic = bestResult.color !== 'black' && bestResult.color !== 'unknown';
+          if (
+            (curChromatic  && (!bestChromatic || result.confidence > bestResult.confidence)) ||
+            (!curChromatic && !bestChromatic && result.confidence > bestResult.confidence)
+          ) {
+            bestResult = { ...result, xBase, yOff };
+          }
+        } else if (result.color === 'unknown' && result.rawHue != null && result.rgb) {
+          // A chromatic pixel was found but didn't match any of the 4 standard colors.
+          // Score by saturation×lightness so we keep the most vivid sample.
+          const hsl = rgbToHsl(result.rgb.r, result.rgb.g, result.rgb.b);
+          const score = (hsl.s / 100) * (hsl.l / 100);
+          if (!bestChromaticUnknown || score > bestChromaticUnknown.score) {
+            bestChromaticUnknown = { rawHue: result.rawHue, rgb: result.rgb, score };
+          }
         }
       } catch (_) {
         // out of bounds — skip
@@ -593,9 +618,23 @@ async function detectTeamColorBarBelow(imageBuffer, bbox, scale = 1, sharpModule
     }
   }
 
+  // If the only "positive" result is black but we found a chromatic pixel somewhere
+  // on the card, the card is NOT a spectator — it uses a custom color outside the
+  // standard 4-color bands. Return unknown+rawHue so clusterByHue can handle it.
+  if (bestResult.color === 'black' && bestChromaticUnknown) {
+    dlog2(`[ColorUtils] Bar custom-color: returning unknown rawHue=${bestChromaticUnknown.rawHue} (was black, chromatic px found)`);
+    return { color: 'unknown', confidence: 0, rawHue: bestChromaticUnknown.rawHue, rgb: bestChromaticUnknown.rgb };
+  }
+
   if (bestResult.confidence > 30) {
     dlog2(`[ColorUtils] Bar color=${bestResult.color} conf=${bestResult.confidence} x=${bestResult.xBase} yOff=${bestResult.yOff} rgb=(${bestResult.rgb?.r},${bestResult.rgb?.g},${bestResult.rgb?.b})`);
     return { color: bestResult.color, confidence: bestResult.confidence, rgb: bestResult.rgb, rawHue: bestResult.rawHue ?? null };
+  }
+
+  // All attempts failed — but still prefer a chromatic-unknown over a hard unknown
+  if (bestChromaticUnknown) {
+    dlog2(`[ColorUtils] Bar custom-color fallback: rawHue=${bestChromaticUnknown.rawHue}`);
+    return { color: 'unknown', confidence: 0, rawHue: bestChromaticUnknown.rawHue, rgb: bestChromaticUnknown.rgb };
   }
 
   // All attempts failed
