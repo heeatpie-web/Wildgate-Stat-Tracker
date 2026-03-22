@@ -1,4 +1,10 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.4.2": [
+    "Fix result capture: text monitor no longer resets baseline on stage transition",
+    "Reduce text tripwire interval 500ms to 250ms",
+    "Remove post-OCR delays",
+    "Preserve unconfirmed captures in match artifacts"
+  ],
   "v3.4.1": [
     "Fix color detection: bell-curve score prevents white badge text from faking team colors",
     "fix CAREFREE regression",
