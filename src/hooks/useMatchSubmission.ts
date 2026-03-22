@@ -144,7 +144,7 @@ type AutoResultScreenData = {
 
 type AutoResultCaptureArtifact = {
     imageBase64: string;
-    kind?: 'damage-sources';
+    kind?: 'damage-sources' | 'damage-ships';
 };
 
 type AutoFinalizeResultStatus = {
@@ -1448,7 +1448,7 @@ export const useMatchSubmission = () => {
                 }
                 savedArtifactPaths.push(savedPath);
 
-                if (artifact.kind === 'damage-sources') {
+                if (artifact.kind === 'damage-sources' || artifact.kind === 'damage-ships') {
                     try {
                         const ocrPayload = await api.invoke('ocr-scan', savedPath);
                         damageSourcesOcrLines = mergeTextLines(damageSourcesOcrLines, extractOcrLines(ocrPayload));
