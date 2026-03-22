@@ -232,4 +232,57 @@ describe('StorageService', () => {
     expect(loaded?.uidMappings.ships[PRIVATEER_GUID]).toBe('Privateer');
     expect(loaded?.uidMappings.players[PRIVATEER_GUID]).toBeUndefined();
   });
+
+  it('relocations in seed can move multiple misplaced GUIDs into weapons and equipment', async () => {
+    const SONIC_BOOM_GUID = 'D67BB8DA4C46726739FDBC887F37A9C1';
+    const THUNDER_DASH_GUID = '1FC6C97040714EF444F7119B75377054';
+    const ATTACK_DRONE_GUID = '3E9EF2344C50F8026CDCAAAAF7777907';
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'db-read') {
+        return createStorageData({
+          uidMappings: {
+            players: {
+              [SONIC_BOOM_GUID]: 'Sonic Boom',
+              [THUNDER_DASH_GUID]: 'Thunder Dash',
+              [ATTACK_DRONE_GUID]: 'Attack Drone',
+            },
+            ships: {},
+            weapons: {},
+            equipment: {},
+            perks: {},
+          },
+          uidSeedState: { seedVersionApplied: 7 },
+        });
+      }
+      if (channel === 'read-uid-seed') {
+        return {
+          version: 8,
+          players: {},
+          ships: {},
+          weapons: { [SONIC_BOOM_GUID]: 'Sonic Boom' },
+          equipment: {
+            [THUNDER_DASH_GUID]: 'Thunder Dash',
+            [ATTACK_DRONE_GUID]: 'Attack Drone',
+          },
+          perks: {},
+          relocations: [
+            { guid: SONIC_BOOM_GUID, from: 'players', to: 'weapons' },
+            { guid: THUNDER_DASH_GUID, from: 'players', to: 'equipment' },
+            { guid: ATTACK_DRONE_GUID, from: 'players', to: 'equipment' },
+          ],
+        };
+      }
+      return null;
+    });
+    const { StorageService } = await loadStorageModule({ invoke });
+
+    const loaded = await StorageService.init();
+
+    expect(loaded?.uidMappings.players[SONIC_BOOM_GUID]).toBeUndefined();
+    expect(loaded?.uidMappings.players[THUNDER_DASH_GUID]).toBeUndefined();
+    expect(loaded?.uidMappings.players[ATTACK_DRONE_GUID]).toBeUndefined();
+    expect(loaded?.uidMappings.weapons[SONIC_BOOM_GUID]).toBe('Sonic Boom');
+    expect(loaded?.uidMappings.equipment[THUNDER_DASH_GUID]).toBe('Thunder Dash');
+    expect(loaded?.uidMappings.equipment[ATTACK_DRONE_GUID]).toBe('Attack Drone');
+  });
 });

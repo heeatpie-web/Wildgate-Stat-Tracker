@@ -1,5 +1,5 @@
 {
-  "version": 7,
+  "version": 8,
   "players": {
     "C0C3960248AD43D20AA6DDA8AEB81424": "Sal",
     "E7539B7C4483C338E55B15B102E2F006": "Adrian",
@@ -8,10 +8,7 @@
     "39BEFBAF436F529669C207B5106D256A": "Mophs",
     "D978177246E41E1DC58185AD36ADB864": "Charlie",
     "282D534546A0DC63DDCE24A388C53B64": "Ion",
-    "130A8C544E4A13DBC33C9CBB47D4B36B": "Sammo",
-    "D67BB8DA4C46726739FDBC887F37A9C1": "Sonic Boom",
-    "1FC6C97040714EF444F7119B75377054": "Thunder Dash",
-    "3E9EF2344C50F8026CDCAAAAF7777907": "Attack Drone"
+    "130A8C544E4A13DBC33C9CBB47D4B36B": "Sammo"
   },
   "ships": {
     "0BFFF89B44027290DC6348B95A6B0F11": "Hunter",
@@ -33,7 +30,8 @@
     "0AAA474246ADEDFF6D39FC80D9794461": "Rocket Launcher",
     "2CACFD654B27AB15B6AC5FBB18216117": "Hand Cannon",
     "13638B5748A18C0CC643E1830A5A88DB": "Foam Sprayer",
-    "77A11BF74EE089D011376584479CFEA2": "Surefire"
+    "77A11BF74EE089D011376584479CFEA2": "Surefire",
+    "D67BB8DA4C46726739FDBC887F37A9C1": "Sonic Boom"
   },
   "equipment": {
     "F2B54FEC47BBDBEA641EB9AD846A0A8D": "Repair Drone",
@@ -43,6 +41,7 @@
     "58C97F0F43E24F47057BE7AE9321AC7D": "Healing Drone",
     "5D1B66E148D64162F74218B269E68016": "Foam Can",
     "93071BFC425FC379C95B12961147AF9B": "Plasma Can",
+    "3E9EF2344C50F8026CDCAAAAF7777907": "Attack Drone",
     "20C5C5A04C5A86EFAF1F9FAF2C0DD60C": "Thunder Dash",
     "A55363B942D501960129419A7D323AE6": "Flash Shield",
     "084F9E4B4A0F2C7BCC525C9B4C94C318": "Impact Can",
@@ -52,7 +51,10 @@
   "relocations": [
     { "guid": "DBCDD50744CF05BC84F52982E6567ACB", "from": "players", "to": "ships" },
     { "guid": "514C1B4747ED7E26AF209D9F5B7CED24", "from": "players", "to": "equipment" },
-    { "guid": "13082B1E4491D0640FCB7689B306FEEB", "from": "players", "to": "equipment" }
+    { "guid": "13082B1E4491D0640FCB7689B306FEEB", "from": "players", "to": "equipment" },
+    { "guid": "D67BB8DA4C46726739FDBC887F37A9C1", "from": "players", "to": "weapons" },
+    { "guid": "1FC6C97040714EF444F7119B75377054", "from": "players", "to": "equipment" },
+    { "guid": "3E9EF2344C50F8026CDCAAAAF7777907", "from": "players", "to": "equipment" }
   ],
   "perks": {
     "A7291E13434D4D67CFEAD0928F4CEA69": "Boarder",
