@@ -20,7 +20,7 @@
  * └──────────────────────────────┴─└─────────────────────────────────────┘─┘
  *
  * Key insight: Each enemy player has their OWN colored bar below their name.
- * The bar's color = team color (red/orange/yellow/yellowGreen).
+ * The bar's color = team color (one of 32 Wildgate colors; see WILDGATE_COLORS in colorUtils.cjs).
  * Players grouped by matching bar color = same team.
  * There is NO separate "team header row" — just player card after player card.
  *
@@ -28,7 +28,7 @@
  * Multiple screenshots may be needed to capture all enemy players.
  */
 
-const { detectTeamColorBarBelow, detectColorInRegion } = require('./colorUtils.cjs');
+const { detectTeamColorBarBelow, detectColorInRegion, clusterByHue, WILDGATE_COLORS, nearestWildgateColor } = require('./colorUtils.cjs');
 const HAZARD_CATALOG = require('./hazardCatalog.json');
 const _fs = require('fs');
 const _os = require('os');
@@ -1256,6 +1256,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     // Sample the colored bar BELOW the name text
     let detectedColor = 'unknown';
     let colorConfidence = 0;
+    let rawHue = null;
 
     if (colorImageBuffer) {
       try {
@@ -1265,6 +1266,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
           dlog('[CrewHub] SKIP color detect: tiny bbox w=' + Math.round(colorDetectWidth) + ' h=' + Math.round(colorDetectHeight) + ' for "' + playerName + '"');
         } else {
           const cr = await detectTeamColorBarBelow(colorImageBuffer, colorDetectBbox, scale);
+          rawHue = typeof cr?.rawHue === 'number' ? cr.rawHue : null;
           if (cr.color !== 'unknown' && cr.color !== 'spectator' && cr.color !== 'black' && cr.confidence > 30) {
             detectedColor = cr.color;
             colorConfidence = cr.confidence;
@@ -1284,6 +1286,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
       y: line.y,
       name: playerName,
       color: detectedColor,
+      rawHue,
       confidence: colorConfidence,
       bbox: lineBbox,
     });
@@ -1683,71 +1686,43 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
       }
     }
 
-    // ── Step 5: Assign unknown-color cards to nearest known group ───────────
+    // ── Step 5: Cluster unknown-color cards by hue ───────────────────────────
+    // Replaces both Y-position assignment (mixed lobby) and Y-gap clustering
+    // (all-unknown lobby). Gap-based hue clustering handles custom team colors
+    // that don't match the four hardcoded named colors.
     knownGroups = [...expandedGroups.values()];
 
-    if (knownGroups.length > 0) {
-      const sortedUnknownCards = [...unknownCards].sort((a, b) => a.y - b.y);
-      for (const card of sortedUnknownCards) {
-        let bestGroup = null;
-        let bestDist = Infinity;
-        for (const g of knownGroups) {
-          // Distance to the group's Y range (0 if inside range)
-          const dist = card.y < g.minY ? g.minY - card.y
-            : card.y > g.maxY ? card.y - g.maxY
-              : 0;
-          if (dist < bestDist) {
-            bestDist = dist;
-            bestGroup = g;
-          }
-        }
-        if (bestGroup && bestDist < CARD_HEIGHT * 3) {
-          // Prevent a distant unknown card from bridging two same-color teams.
-          // If the card sits beyond the same-color split gap, start a sibling
-          // cluster with the same color instead of extending the existing range.
-          const groupEdgeY = card.y < bestGroup.minY ? bestGroup.minY
-            : card.y > bestGroup.maxY ? bestGroup.maxY
-              : card.y;
-          if (bestDist > getSplitGapForRange(card.y, groupEdgeY)) {
-            knownGroups.push({
-              color: bestGroup.color,
-              cards: [card],
-              minY: card.y,
-              maxY: card.y,
-              confidence: card.confidence || bestGroup.confidence || 0,
-            });
-            console.log('[CrewHub] Split-assign unknown-color', card.name, '→ new', bestGroup.color, 'cluster (dist', Math.round(bestDist), 'px)');
-          } else {
-            bestGroup.cards.push(card);
-            bestGroup.minY = Math.min(bestGroup.minY, card.y);
-            bestGroup.maxY = Math.max(bestGroup.maxY, card.y);
-            console.log('[CrewHub] Assigned unknown-color', card.name, '→', bestGroup.color, '(dist', Math.round(bestDist), 'px)');
-          }
-        } else {
-          // No nearby known group — create isolated unknown group
-          knownGroups.push({ color: 'unknown', cards: [card], minY: card.y, maxY: card.y, confidence: 0 });
-        }
+    const unknownWithHue = unknownCards.filter(c => typeof c.rawHue === 'number');
+    const unknownWithoutHue = unknownCards.filter(c => typeof c.rawHue !== 'number');
+
+    if (unknownWithHue.length > 0) {
+      const huePlayers = unknownWithHue.map(c => ({ name: c.name, hue: c.rawHue, card: c }));
+      const clusters = clusterByHue(huePlayers);
+      for (const cluster of clusters) {
+        const clusterCards = cluster.map(p => p.card);
+        const ys = clusterCards.map(c => c.y);
+        // Compute circular-mean hue of the cluster for a stable colour label
+        const hues = cluster.map(p => p.hue);
+        const sinSum = hues.reduce((s, h) => s + Math.sin(h * Math.PI / 180), 0);
+        const cosSum = hues.reduce((s, h) => s + Math.cos(h * Math.PI / 180), 0);
+        const meanRad = Math.atan2(sinSum / hues.length, cosSum / hues.length);
+        const centroidHue = Math.round(((meanRad * 180 / Math.PI) + 360) % 360);
+        const colorLabel = nearestWildgateColor(centroidHue).name;
+        knownGroups.push({
+          color: colorLabel,
+          cards: clusterCards,
+          minY: Math.min(...ys),
+          maxY: Math.max(...ys),
+          confidence: 0,
+        });
+        console.log('[CrewHub] Hue-clustered', clusterCards.length, 'unknown-color cards as', colorLabel, 'at hues', cluster.map(p => p.hue + '°').join(', '));
       }
-    } else {
-      // ── Step 5b: Fallback — pure Y-gap clustering when ALL colors unknown ───
-      console.log('[CrewHub] No color info — falling back to Y-gap clustering');
-      let currentCluster = null;
-      for (const card of uniqueCards) {
-        if (!currentCluster) {
-          currentCluster = { color: 'unknown', cards: [card], minY: card.y, maxY: card.y, confidence: 0 };
-        } else {
-          const gap = card.y - currentCluster.maxY;
-          const TEAM_GAP_THRESHOLD = getSplitGapForRange(currentCluster.maxY, card.y);
-          if (gap > TEAM_GAP_THRESHOLD) {
-            knownGroups.push(currentCluster);
-            currentCluster = { color: 'unknown', cards: [card], minY: card.y, maxY: card.y, confidence: 0 };
-          } else {
-            currentCluster.cards.push(card);
-            currentCluster.maxY = card.y;
-          }
-        }
-      }
-      if (currentCluster && currentCluster.cards.length > 0) knownGroups.push(currentCluster);
+    }
+
+    // Cards with no hue (truly black/undetectable bars that slipped through)
+    // create isolated unknown groups as before.
+    for (const card of unknownWithoutHue) {
+      knownGroups.push({ color: 'unknown', cards: [card], minY: card.y, maxY: card.y, confidence: 0 });
     }
   }
 
@@ -1827,7 +1802,10 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     if (!name || !color) return false;
     const n = String(name).trim().toLowerCase();
     const c = String(color).trim().toLowerCase();
-    return n === c || ['red', 'orange', 'yellow', 'yellowgreen', 'green', 'blue', 'purple', 'unknown'].includes(n);
+    // Reject team names that are just a color word (color bar text bled through OCR)
+    const colorWords = new Set(WILDGATE_COLORS.map(wc => wc.name.toLowerCase()));
+    colorWords.add('unknown');
+    return n === c || colorWords.has(n);
   };
 
   for (const cluster of knownGroups) {
