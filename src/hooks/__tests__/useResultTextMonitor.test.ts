@@ -46,7 +46,7 @@ describe('useResultTextMonitor', () => {
 
     expect(sendMock).toHaveBeenCalledWith('result-text-start', {
       armAt: liveStartedAt + 45_000,
-      intervalMs: 500,
+      intervalMs: 250,
       captureRegion: RESULT_TEXT_SAMPLE_REGION,
     });
   });
@@ -138,9 +138,9 @@ describe('useResultTextMonitor', () => {
       isArmed: false,
       captureRegion: {
         left: 0.2489,
-        top: 0.1204,
+        top: 0.105,
         width: 0.3991,
-        height: 0.1852,
+        height: 0.12,
         normalized: true,
       },
     }));

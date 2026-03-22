@@ -105,8 +105,9 @@ describe('resultTextMonitor tripwire helpers', () => {
   it('ignores sparse bright pixels that stay below the white coverage threshold', async () => {
     const baselineMetrics = await __test__.analyzeTripwireBoxes(await createTripwireImage());
     const headerMetrics = await __test__.analyzeTripwireBoxes(await createCustomTripwireImage([
-      { left: 0.02, top: 0.02, width: 0.08, height: 0.06 },
-      { left: 0.14, top: 0.20, width: 0.05, height: 0.05 },
+      // Small patch inside result-b (x:348-553, y:68-239 at 800x240) — sparse enough to stay
+      // below TRIPWIRE_MIN_BOX_WHITE_RATIO (0.09) and TRIPWIRE_MIN_TOTAL_WHITE_DELTA (0.045).
+      { left: 0.46, top: 0.31, width: 0.02, height: 0.04 },
     ]));
     const baseline = __test__.createTripwireBaseline(baselineMetrics);
 

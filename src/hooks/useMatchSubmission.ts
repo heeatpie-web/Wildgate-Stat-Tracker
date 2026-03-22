@@ -27,6 +27,7 @@ import { sanitizeOpponentTeamsAgainstFriendlyRoster } from '../utils/ocr/friendl
 import { backfillOpponentTeamShipTypes } from '../utils/ocr/opponentTeamShipTypes';
 
 const DEFAULT_ARTIFACT_LOOKBACK_MS = 10 * 60 * 1000;
+const SCOPED_ARTIFACT_REPAIR_POSTMATCH_GRACE_MS = 5 * 60 * 1000;
 const IMAGE_ARTIFACT_PATTERN = /\.(png|jpe?g|webp|bmp|gif)$/i;
 const IS_LOADOUT_TRACE_ENABLED = import.meta.env.DEV || process.env.NODE_ENV === 'test';
 const canLaunchConfetti = () => {
@@ -1076,6 +1077,10 @@ export const useMatchSubmission = () => {
             const matchEnd = (totalDurationMs > 0 && matchStart > 0)
                 ? Math.min(submissionTime, matchStart + totalDurationMs + 90_000)
                 : submissionTime;
+            const repairEndTime = Math.min(
+                submissionTime,
+                matchEnd + SCOPED_ARTIFACT_REPAIR_POSTMATCH_GRACE_MS,
+            );
 
             const bundledArtifacts = await bundleMatchArtifacts(newMatch.id, matchStart, matchEnd);
             let scopedRepairAppliedLinks = 0;
@@ -1084,7 +1089,7 @@ export const useMatchSubmission = () => {
                 const repairResult = await applyArtifactRepair({
                     matchId: newMatch.id,
                     startTime: matchStart,
-                    endTime: matchEnd,
+                    endTime: repairEndTime,
                 });
                 scopedRepairAppliedLinks = Number(repairResult?.summary?.appliedLinks || 0);
                 scopedRepairRemovedLinks = Number(repairResult?.summary?.removedLinks || 0);
@@ -1349,32 +1354,16 @@ export const useMatchSubmission = () => {
         imageBase64,
         resultData,
         matchId,
+        persistedPrimaryArtifactPath,
         supplementalArtifacts,
     }: {
         imageBase64: string;
         resultData: AutoResultScreenData;
         matchId?: number | null;
+        persistedPrimaryArtifactPath?: string | null;
         supplementalArtifacts?: AutoResultCaptureArtifact[] | null;
     }): Promise<AutoFinalizeResultStatus> => {
         if (submitting) return { success: false, reason: 'busy' };
-
-        const normalizedResult = resultData?.result;
-        if (normalizedResult !== 'Win' && normalizedResult !== 'Loss') {
-            return { success: false, reason: 'unconfirmed' };
-        }
-
-        const rawPlacement = resultData?.placement;
-        const normalizedPlacement = rawPlacement != null && Number.isInteger(Number(rawPlacement))
-            ? Math.min(5, Math.max(2, Number(rawPlacement)))
-            : null;
-        const normalizedSubType = normalizeResultSubType(resultData?.winType, normalizedPlacement);
-
-        if (!normalizedSubType) {
-            return { success: false, reason: 'incomplete' };
-        }
-        if (normalizedResult === 'Loss' && normalizedSubType === 'Combat' && normalizedPlacement == null) {
-            return { success: false, reason: 'incomplete' };
-        }
 
         const state = useAppStore.getState();
         const {
@@ -1414,6 +1403,14 @@ export const useMatchSubmission = () => {
             return { success: false, reason: 'ipc-unavailable' };
         }
 
+        const normalizedResult = resultData?.result;
+        const rawPlacement = resultData?.placement;
+        const normalizedPlacement = rawPlacement != null && Number.isInteger(Number(rawPlacement))
+            ? Math.min(5, Math.max(2, Number(rawPlacement)))
+            : null;
+        const normalizedSubType = normalizeResultSubType(resultData?.winType, normalizedPlacement);
+        const normalizedPersistedPrimaryArtifactPath = String(persistedPrimaryArtifactPath || '').trim();
+
         try {
             setSubmitting(true);
 
@@ -1425,16 +1422,18 @@ export const useMatchSubmission = () => {
             }
 
             const artifactsToSave: Array<{ rawBase64: string; kind?: AutoResultCaptureArtifact['kind'] }> = [
-                {
+                ...(!normalizedPersistedPrimaryArtifactPath ? [{
                     rawBase64: String(imageBase64 || '').replace(/^data:image\/\w+;base64,/, '').trim(),
-                },
+                }] : []),
                 ...((supplementalArtifacts || []).map((artifact) => ({
                     rawBase64: String(artifact?.imageBase64 || '').replace(/^data:image\/\w+;base64,/, '').trim(),
                     kind: artifact?.kind,
                 }))),
             ].filter((artifact) => artifact.rawBase64.length > 0);
 
-            const savedArtifactPaths: string[] = [];
+            const savedArtifactPaths: string[] = normalizedPersistedPrimaryArtifactPath
+                ? [normalizedPersistedPrimaryArtifactPath]
+                : [];
             let damageSourcesOcrLines: string[] = [];
 
             for (const artifact of artifactsToSave) {
@@ -1458,7 +1457,45 @@ export const useMatchSubmission = () => {
                 }
             }
 
-            const savedArtifactPath = savedArtifactPaths[0] || null;
+            const savedArtifactPath = savedArtifactPaths[0] || normalizedPersistedPrimaryArtifactPath || null;
+            const syncDraftArtifactsOnly = async (
+                reason: 'unconfirmed' | 'incomplete'
+            ): Promise<AutoFinalizeResultStatus> => {
+                const syncedArtifacts = mergeArtifactLists(
+                    existingMatch.artifacts,
+                    resolvedPendingMatchData.artifacts,
+                    savedArtifactPaths,
+                );
+                const currentArtifacts = existingMatch.artifacts || [];
+                const artifactsChanged = syncedArtifacts.length !== currentArtifacts.length
+                    || syncedArtifacts.some((artifactPath, index) => artifactPath !== currentArtifacts[index]);
+                if (artifactsChanged) {
+                    updateMatch({
+                        ...existingMatch,
+                        artifacts: syncedArtifacts,
+                    });
+                    await StorageService.flush();
+                }
+                return {
+                    success: false,
+                    reason,
+                    matchId: existingMatch.id,
+                    artifactPath: savedArtifactPath,
+                    artifactPaths: savedArtifactPaths,
+                };
+            };
+
+            if (normalizedResult !== 'Win' && normalizedResult !== 'Loss') {
+                return syncDraftArtifactsOnly('unconfirmed');
+            }
+
+            if (!normalizedSubType) {
+                return syncDraftArtifactsOnly('incomplete');
+            }
+            if (normalizedResult === 'Loss' && normalizedSubType === 'Combat' && normalizedPlacement == null) {
+                return syncDraftArtifactsOnly('incomplete');
+            }
+
             const backgroundArtifactPaths = mergeArtifactLists(
                 existingMatch.artifacts,
                 resolvedPendingMatchData.artifacts,

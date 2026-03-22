@@ -2,7 +2,7 @@
 
 const { sampleBoxes: dxgiSampleBoxes } = require('./dxgiSampler.cjs');
 
-const DEFAULT_SAMPLE_INTERVAL_MS = 500;
+const DEFAULT_SAMPLE_INTERVAL_MS = 250;
 const TRIPWIRE_BASELINE_ALPHA = 0.18;
 const TRIPWIRE_MIN_CONSECUTIVE_HITS = 2;
 const TRIPWIRE_MIN_ACTIVE_BOXES = 1;

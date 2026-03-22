@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { getElectronAPI } from '../utils/electronAPI';
 
 export const DEFAULT_RESULT_TEXT_ARM_DELAY_MS = 45_000;
-export const RESULT_TEXT_SAMPLE_INTERVAL_MS = 500;
+export const RESULT_TEXT_SAMPLE_INTERVAL_MS = 250;
 // Tight band covering the result headline across known screen layouts.
 // Spans x=478-1244, y=113-243 at 1920x1080 — boxes A/B/C cover left-anchored (2025) and center (2026) layouts
 // without diluting the white ratio with large areas of dark background below the text.
