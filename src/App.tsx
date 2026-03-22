@@ -309,14 +309,16 @@ const FULL_AUTO_RESULT_OCR_RETRY_DELAY_MS = 300;
 const FULL_AUTO_RESULT_OCR_MAX_ATTEMPTS = 3;
 const FULL_AUTO_BACKGROUND_RESULT_OCR_INTERVAL_MS = 2_000;
 const FULL_AUTO_BACKGROUND_RESULT_OCR_MAX_ATTEMPTS = 30;
-const FULL_AUTO_FINAL_MOMENTS_SETTLE_MS = 300;
-const FULL_AUTO_DAMAGE_SOURCES_TRANSITION_MS = 400;
-const FULL_AUTO_DAMAGE_SOURCES_CAPTURE_TIMEOUT_MS = 2_000;
+// Time to wait after result OCR for the damage panel to slide into position (~3s from text, ~2s from tripwire fire)
+const FULL_AUTO_FINAL_MOMENTS_SETTLE_MS = 2_000;
+// Time to wait after pressing ] before capturing tab 2
+const FULL_AUTO_DAMAGE_SOURCES_TRANSITION_MS = 100;
+// Damage panel region: x=1010, y=100, w=880, h=720 at 1920x1080 — fits the FINAL MOMENTS RECAP panel
 const FULL_AUTO_DAMAGE_SOURCES_CAPTURE_REGION = {
-    left: 0.55,
-    top: 0.16,
-    width: 0.36,
-    height: 0.60,
+    left: 0.526,
+    top: 0.093,
+    width: 0.458,
+    height: 0.667,
     normalized: true,
 } as const;
 
@@ -2792,23 +2794,6 @@ const App: React.FC = () => {
             return null;
         }
 
-        const deadlineAt = Date.now() + FULL_AUTO_DAMAGE_SOURCES_CAPTURE_TIMEOUT_MS;
-        while (Date.now() <= deadlineAt) {
-            await waitForDuration(FULL_AUTO_DAMAGE_SOURCES_TRANSITION_MS);
-            const followupCapture = await api.invoke('capture-result-screen-region', {
-                cropRegion: FULL_AUTO_DAMAGE_SOURCES_CAPTURE_REGION,
-            });
-            const followupImageBase64 = normalizeImageBase64Payload(followupCapture?.imageBase64);
-            if (!followupImageBase64) continue;
-            if (followupImageBase64 !== baselineImageBase64) {
-                return {
-                    imageBase64: followupImageBase64,
-                    kind: 'damage-sources' as const,
-                };
-            }
-        }
-
-        console.warn('[FullAuto] Damage sources view did not appear before timeout', { matchId });
         return null;
     }, []);
 
