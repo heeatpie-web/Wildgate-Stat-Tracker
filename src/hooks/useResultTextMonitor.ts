@@ -4,10 +4,10 @@ import { getElectronAPI } from '../utils/electronAPI';
 export const DEFAULT_RESULT_TEXT_ARM_DELAY_MS = 45_000;
 export const RESULT_TEXT_SAMPLE_INTERVAL_MS = 500;
 export const RESULT_TEXT_SAMPLE_REGION = {
-    left: 0.03,
-    top: 0.55,
-    width: 0.67,
-    height: 0.22,
+    left: 0.115,
+    top: 0.095,
+    width: 0.57,
+    height: 0.18,
     normalized: true,
 } as const;
 
@@ -31,6 +31,9 @@ export interface ResultTextDetectionPayload {
     winType?: 'combat' | 'artifact';
     placement?: 1 | 2 | 3 | 4 | 5;
     text?: string;
+    activeBoxIds?: string[];
+    tripwireActiveBoxCount?: number;
+    tripwireTotalWhiteDelta?: number;
     armAt?: number;
     detectedAt?: number;
     captureRegion?: {
@@ -111,6 +114,11 @@ const normalizeDetectionPayload = (value: unknown): ResultTextDetectionPayload =
         winType: normalizeWinType(record.winType),
         placement: normalizePlacement(record.placement),
         text: typeof record.text === 'string' ? record.text : undefined,
+        activeBoxIds: Array.isArray(record.activeBoxIds)
+            ? record.activeBoxIds.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+            : undefined,
+        tripwireActiveBoxCount: toFiniteNumber(record.tripwireActiveBoxCount) ?? undefined,
+        tripwireTotalWhiteDelta: toFiniteNumber(record.tripwireTotalWhiteDelta) ?? undefined,
         armAt: toFiniteNumber(record.armAt) ?? undefined,
         detectedAt: toFiniteNumber(record.detectedAt) ?? undefined,
         captureRegion: record.captureRegion && typeof record.captureRegion === 'object'

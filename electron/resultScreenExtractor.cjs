@@ -112,39 +112,39 @@ async function buildCrop(imageBuffer, meta, region, variant = {}) {
   return pipeline.png().toBuffer();
 }
 
-async function collectDetectedTexts(imageBuffer, meta, region, variants, ocrOptions) {
+async function collectDetectedTexts(imageBuffer, meta, region, variants, ocrOptions, detectText = paddleOcrBuffer) {
   const collected = [];
   for (const variant of variants) {
     const cropBuffer = await buildCrop(imageBuffer, meta, region, variant);
-    const lines = await paddleOcrBuffer(cropBuffer, ocrOptions);
+    const lines = await detectText(cropBuffer, ocrOptions);
     collected.push(...lines.map((entry) => entry.text));
   }
   return uniqueStrings(collected);
 }
 
-async function collectRecognizedTexts(imageBuffer, meta, region, variants) {
+async function collectRecognizedTexts(imageBuffer, meta, region, variants, recognizeText = paddleRecognizeBuffer) {
   const collected = [];
   for (const variant of variants) {
     const cropBuffer = await buildCrop(imageBuffer, meta, region, variant);
-    const text = await paddleRecognizeBuffer(cropBuffer);
+    const text = await recognizeText(cropBuffer);
     if (text) collected.push(text);
   }
   return uniqueStrings(collected);
 }
 
-async function collectRecognizedTextsFromRegions(imageBuffer, meta, regions, variants) {
+async function collectRecognizedTextsFromRegions(imageBuffer, meta, regions, variants, recognizeText = paddleRecognizeBuffer) {
   const collected = [];
   for (const region of regions) {
-    const texts = await collectRecognizedTexts(imageBuffer, meta, region, variants);
+    const texts = await collectRecognizedTexts(imageBuffer, meta, region, variants, recognizeText);
     collected.push(...texts);
   }
   return uniqueStrings(collected);
 }
 
-async function collectDetectedTextsFromRegions(imageBuffer, meta, regions, variants, ocrOptions) {
+async function collectDetectedTextsFromRegions(imageBuffer, meta, regions, variants, ocrOptions, detectText = paddleOcrBuffer) {
   const collected = [];
   for (const region of regions) {
-    const texts = await collectDetectedTexts(imageBuffer, meta, region, variants, ocrOptions);
+    const texts = await collectDetectedTexts(imageBuffer, meta, region, variants, ocrOptions, detectText);
     collected.push(...texts);
   }
   return uniqueStrings(collected);
@@ -333,6 +333,12 @@ function parseResultSignals({
  */
 async function extractResultScreen(imageBuffer, options = {}) {
   const detectionMethod = normalizeDetectionMethod(options.detectionMethod);
+  const detectText = typeof options.paddleOcrBuffer === 'function'
+    ? options.paddleOcrBuffer
+    : paddleOcrBuffer;
+  const recognizeText = typeof options.paddleRecognizeBuffer === 'function'
+    ? options.paddleRecognizeBuffer
+    : paddleRecognizeBuffer;
   const meta = await sharp(imageBuffer).metadata();
   if (!meta.width || !meta.height) {
     return {
@@ -359,20 +365,21 @@ async function extractResultScreen(imageBuffer, options = {}) {
       minWidth: 8,
       minHeight: 8,
       minAspectRatio: 0.1,
-    }),
-    collectRecognizedTextsFromRegions(imageBuffer, meta, [RESULT_REGIONS.resultCenter, RESULT_REGIONS.resultLeft], LINE_SCAN_VARIANTS),
-    collectRecognizedTextsFromRegions(imageBuffer, meta, [RESULT_REGIONS.placement], LINE_SCAN_VARIANTS),
-    collectRecognizedTexts(imageBuffer, meta, RESULT_REGIONS.statusLine, LINE_SCAN_VARIANTS),
-    collectRecognizedTexts(imageBuffer, meta, RESULT_REGIONS.victoryLine, LINE_SCAN_VARIANTS),
+    }, detectText),
+    collectRecognizedTexts(imageBuffer, meta, RESULT_REGIONS.resultCenter, LINE_SCAN_VARIANTS, recognizeText),
+    collectRecognizedTexts(imageBuffer, meta, RESULT_REGIONS.resultLeft, LINE_SCAN_VARIANTS, recognizeText),
+    collectRecognizedTextsFromRegions(imageBuffer, meta, [RESULT_REGIONS.placement], LINE_SCAN_VARIANTS, recognizeText),
+    collectRecognizedTexts(imageBuffer, meta, RESULT_REGIONS.statusLine, LINE_SCAN_VARIANTS, recognizeText),
+    collectRecognizedTexts(imageBuffer, meta, RESULT_REGIONS.victoryLine, LINE_SCAN_VARIANTS, recognizeText),
     collectDetectedTextsFromRegions(imageBuffer, meta, [RESULT_REGIONS.rightPanel], OCR_SCAN_VARIANTS, {
       allText: true,
       threshold: 0.2,
       minWidth: 8,
       minHeight: 8,
       minAspectRatio: 0.1,
-    }),
-    collectRecognizedTextsFromRegions(imageBuffer, meta, [RESULT_REGIONS.damageWide], DAMAGE_SCAN_VARIANTS),
-    collectRecognizedTextsFromRegions(imageBuffer, meta, [RESULT_REGIONS.damageTight], DAMAGE_SCAN_VARIANTS),
+    }, detectText),
+    collectRecognizedTextsFromRegions(imageBuffer, meta, [RESULT_REGIONS.damageWide], DAMAGE_SCAN_VARIANTS, recognizeText),
+    collectRecognizedTextsFromRegions(imageBuffer, meta, [RESULT_REGIONS.damageTight], DAMAGE_SCAN_VARIANTS, recognizeText),
   ]);
 
   const parsed = parseResultSignals({
@@ -380,7 +387,10 @@ async function extractResultScreen(imageBuffer, options = {}) {
     placementTexts: [...placementTexts, ...resultCenterTexts, ...resultLeftTexts],
     statusTexts,
     panelTexts,
-    damageTexts: [...damageWideTexts, ...damageTightTexts],
+    damageTexts: [
+      ...(Array.isArray(damageWideTexts) ? damageWideTexts : []),
+      ...(Array.isArray(damageTightTexts) ? damageTightTexts : []),
+    ],
   }, { detectionMethod });
 
   const debugTexts = uniqueStrings([
@@ -389,8 +399,8 @@ async function extractResultScreen(imageBuffer, options = {}) {
     ...statusTexts,
     ...topWideTexts,
     ...panelTexts,
-    ...damageWideTexts,
-    ...damageTightTexts,
+    ...(Array.isArray(damageWideTexts) ? damageWideTexts : []),
+    ...(Array.isArray(damageTightTexts) ? damageTightTexts : []),
   ]);
   console.log(
     '[ResultScreenExtractor] texts=%s parsed=%o',

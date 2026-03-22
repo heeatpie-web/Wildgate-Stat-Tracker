@@ -4,7 +4,6 @@ import { useUIState } from './providers/UIStateProvider';
 import { useGameData } from './providers/GameDataProvider';
 import { useUserPreferences } from './providers/UserPreferencesProvider';
 import { useLogMonitor } from './hooks/useLogMonitor';
-import { usePixelMonitor } from './hooks/usePixelMonitor';
 import {
     useResultFlashMonitor,
     type ResultFlashMonitorDebugSnapshot,
@@ -2930,7 +2929,20 @@ const App: React.FC = () => {
                     imageBase64,
                     detectionMethod,
                 });
-                const resultData = scanResult?.data ?? { result: null };
+                if (scanResult?.success === false) {
+                    console.warn('[FullAuto] Result screen scan failed', {
+                        matchId: normalizedDraftMatchId,
+                        detectionMethod,
+                        error: scanResult?.error || 'unknown error',
+                    });
+                }
+                const resultData = scanResult?.success === false
+                    ? {
+                        result: null,
+                        detectionMethod: detectionMethod || undefined,
+                        damageSourcesAvailable: false,
+                    }
+                    : (scanResult?.data ?? { result: null });
                 if (!resultData.detectionMethod && detectionMethod) {
                     resultData.detectionMethod = detectionMethod;
                 }
@@ -3059,9 +3071,9 @@ const App: React.FC = () => {
         const scheduledMatchId = normalizedActiveTelemetryDraftMatchId;
         console.log('[Brain] Text signal received - scheduling result capture immediately', {
             matchId: scheduledMatchId,
-            result: payload.result,
-            placement: payload.placement ?? null,
-            text: payload.text || null,
+            activeBoxIds: payload.activeBoxIds ?? [],
+            activeBoxCount: payload.tripwireActiveBoxCount ?? 0,
+            totalWhiteDelta: payload.tripwireTotalWhiteDelta ?? 0,
         });
         if (!beginFullAutoResultDetection('Result text detected', scheduledMatchId)) return;
         await triggerFullAutoSave({
@@ -3072,7 +3084,6 @@ const App: React.FC = () => {
         });
     }, [beginFullAutoResultDetection, normalizedActiveTelemetryDraftMatchId, triggerFullAutoSave]);
 
-    usePixelMonitor(fullAutoResultLatched);
     useResultFlashMonitor({
         enabled: fullAutoEnabled
             && telemetryLifecycleStage === 'live'

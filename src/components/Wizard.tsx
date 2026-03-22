@@ -70,9 +70,23 @@ const formatDurationOffset = (seconds: number): string => {
     return `${remaining}s`;
 };
 
+const dedupeWizardNames = (values: Array<string | null | undefined>): string[] => {
+    const seen = new Set<string>();
+    const deduped: string[] = [];
+    values.forEach((value) => {
+        const normalized = String(value || '').trim();
+        const key = normalized.toLowerCase();
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        deduped.push(normalized);
+    });
+    return deduped;
+};
+
 interface EmbeddedOcrFooterActions {
     discard: () => void;
     saveAndClose: () => void;
+    commitDraft: () => boolean;
 }
 
 export const Wizard: React.FC = () => {
@@ -398,9 +412,13 @@ export const Wizard: React.FC = () => {
     const hasPendingOcrReview = normalizedPendingOcrState === 'reviewing';
     const hasSavedOcrReview = normalizedPendingOcrState === 'saved' || Boolean(pendingMatchData?.ocrReviewedAt);
     const isTelemetryDraftPending = pendingStoreMatch?.subType === 'Telemetry Draft';
+    const handleReturnToResultTab = React.useCallback(() => {
+        React.startTransition(() => setActiveTab('result'));
+    }, []);
+
     const handleAbortSubmission = React.useCallback(async () => {
         if (activeTab === 'ocr') {
-            React.startTransition(() => setActiveTab('result'));
+            handleReturnToResultTab();
             return;
         }
         if (!isTelemetryDraftPending || !pendingStoreMatch?.id) {
@@ -412,7 +430,7 @@ export const Wizard: React.FC = () => {
         );
         if (!confirmed) return;
         await discardTelemetryDraft(pendingStoreMatch.id);
-    }, [activeTab, discardTelemetryDraft, isTelemetryDraftPending, pendingStoreMatch, setShowWizard]);
+    }, [activeTab, discardTelemetryDraft, handleReturnToResultTab, isTelemetryDraftPending, pendingStoreMatch, setShowWizard]);
     const abortButtonLabel = activeTab === 'ocr'
         ? 'Back to Result'
         : (isTelemetryDraftPending ? 'Discard Match Draft' : 'Abort Submission');
@@ -427,10 +445,106 @@ export const Wizard: React.FC = () => {
         }
     }, [activeTab, hasSavedOcrReview, isWizardOpen, showGuidedDetails]);
 
-    if (!showWizard || !pendingMatchData) return null;
-
     const canFinalizeResult = hasCompleteResultPath;
     const submissionSubType = selectedResult === 'Draw' ? 'Combat' : (selectedWinType || 'Combat');
+    const normalizedLossPlacement = Number.isFinite(Number(pendingPlacement))
+        ? Math.min(5, Math.max(2, Number(pendingPlacement)))
+        : null;
+    const commitWizardState = React.useCallback(() => {
+        if (hasPendingOcrReview) {
+            embeddedOcrFooterActions?.commitDraft();
+        }
+        const latestPending = useAppStore.getState().pendingMatchData;
+        if (!latestPending) return false;
+
+        const normalizedOcrState = String(latestPending.ocrState || '').trim().toLowerCase();
+        const shouldFinalizeOcr = normalizedOcrState === 'reviewing'
+            || normalizedOcrState === 'ready'
+            || Number(latestPending.ocrReviewedAt) > 0;
+
+        const activePlayerKey = String(latestPending.player || activeUser || '').trim().toLowerCase();
+        const nextTeammates = dedupeWizardNames(
+            Array.isArray(latestPending.teammates) ? latestPending.teammates : []
+        ).filter((name) => name.toLowerCase() !== activePlayerKey);
+        const nextOpponents = dedupeWizardNames([
+            ...(Array.isArray(latestPending.opponents) ? latestPending.opponents : []),
+            ...((latestPending.opponentTeams || []).flatMap((team) => team.players || [])),
+        ]).filter((name) => name.toLowerCase() !== activePlayerKey);
+        const nextKills = Object.entries({
+            ...(latestPending.kills || {}),
+            ...(kills || {}),
+        }).reduce<Record<string, number>>((acc, [ship, value]) => {
+            const parsed = Number(value) || 0;
+            if (parsed > 0) {
+                acc[ship] = parsed;
+            }
+            return acc;
+        }, {});
+        const reviewedAt = shouldFinalizeOcr
+            ? (
+                Number(latestPending.ocrReviewedAt) > 0
+                    ? Number(latestPending.ocrReviewedAt)
+                    : Date.now()
+            )
+            : undefined;
+        const nextTime = (timeMin || timeSec)
+            ? `${timeMin || '00'}:${timeSec || '00'}`
+            : latestPending.time;
+        const nextPlacement = selectedResult === 'Win'
+            ? 1
+            : (selectedResult === 'Loss' && submissionSubType === 'Combat'
+                ? (normalizedLossPlacement ?? latestPending.placement ?? undefined)
+                : undefined);
+
+        setSelectedTeammates(nextTeammates);
+        setSelectedOpponents(nextOpponents);
+        setPendingDraftData({
+            ...latestPending,
+            result: selectedResult || latestPending.result,
+            subType: submissionSubType,
+            placement: nextPlacement,
+            time: nextTime,
+            damageTaken: Math.max(
+                Number(latestPending.damageTaken) || 0,
+                Number.parseInt(String(damageTaken || ''), 10) || 0
+            ),
+            poiEasy: Math.max(Number(latestPending.poiEasy) || 0, Number(poiEasy) || 0),
+            poiMedium: Math.max(Number(latestPending.poiMedium) || 0, Number(poiMedium) || 0),
+            poiEpic: Math.max(Number(latestPending.poiEpic) || 0, Number(poiEpic) || 0),
+            kills: Object.keys(nextKills).length > 0 ? nextKills : latestPending.kills,
+            killedBy: pendingKilledBy || latestPending.killedBy || undefined,
+            killedByShip: pendingKilledByShip || latestPending.killedByShip || undefined,
+            teammates: nextTeammates,
+            opponents: nextOpponents,
+            ocrReviewedAt: reviewedAt,
+            ocrState: shouldFinalizeOcr ? 'saved' : latestPending.ocrState,
+        });
+        return shouldFinalizeOcr;
+    }, [
+        activeUser,
+        damageTaken,
+        embeddedOcrFooterActions,
+        hasPendingOcrReview,
+        kills,
+        normalizedLossPlacement,
+        pendingKilledBy,
+        pendingKilledByShip,
+        poiEasy,
+        poiEpic,
+        poiMedium,
+        selectedResult,
+        setPendingDraftData,
+        setSelectedOpponents,
+        setSelectedTeammates,
+        submissionSubType,
+        timeMin,
+        timeSec,
+    ]);
+    const handleFinalizeWizardSave = React.useCallback(() => {
+        if (!canFinalizeResult || submitting) return;
+        commitWizardState();
+        void processFinalSubmission(submissionSubType);
+    }, [canFinalizeResult, commitWizardState, processFinalSubmission, submissionSubType, submitting]);
     const submitResultsHint = (() => {
         if (!hasSelectedResult) return 'Select Win, Loss, or Draw to submit.';
         if (!hasSelectedOutcomeType) {
@@ -443,6 +557,8 @@ export const Wizard: React.FC = () => {
         }
         return '';
     })();
+
+    if (!showWizard || !pendingMatchData) return null;
 
     const cardClass = `wizard-card rounded-2xl border border-md-sys-outline/14 shadow-sm bg-md-sys-surface-container ${isOverlayMode ? 'p-4' : 'p-5'}`;
     const labelClass = 'wizard-section-label text-label-sm font-black uppercase tracking-widest text-md-sys-on-surface/92 mb-2 block';
@@ -1294,11 +1410,12 @@ export const Wizard: React.FC = () => {
                             </>
                         )}
                     </div>
-                ) : (
-                        <div
-                        data-testid="wizard-ocr-tab-panel"
-                        className={`flex-1 min-h-0 overflow-y-auto custom-scrollbar flex flex-col ${isOverlayMode ? 'px-4 py-4 gap-3' : 'px-8 py-6 gap-4'}`}
-                    >
+                ) : null}
+
+                <div
+                    data-testid="wizard-ocr-tab-panel"
+                    className={`${activeTab === 'ocr' ? 'flex-1 min-h-0 overflow-y-auto custom-scrollbar flex flex-col' : 'hidden'} ${isOverlayMode ? 'px-4 py-4 gap-3' : 'px-8 py-6 gap-4'}`}
+                >
                         <div className={cardClass}>
                             <div className="flex items-center justify-between gap-2">
                                 <span className={labelClass + ' mb-0 flex items-center gap-2'}>
@@ -1409,21 +1526,18 @@ export const Wizard: React.FC = () => {
                             <div className={isPendingOcrProcessing ? 'pointer-events-none opacity-60' : undefined}>
                                 <OcrCorrectionModal
                                     isOpen={true}
+                                    isActive={activeTab === 'ocr'}
                                     embedded={true}
                                     hideFooterActions={true}
                                     autoAcceptOnSaveAndApply={wizardCloseOnOcrApply}
                                     onEmbeddedFooterActionsChange={setEmbeddedOcrFooterActions}
-                                    onClose={() => React.startTransition(() => setActiveTab('result'))}
+                                    onClose={handleReturnToResultTab}
                                     onRequestRerunOcr={() => {
                                         void handleWizardRerunOcr();
                                     }}
                                     rerunOcrDisabled={isRerunningOcr || isPendingOcrProcessing}
                                     isRerunningOcr={isRerunningOcr}
                                     onAcceptAll={() => {
-                                        // Persist OCR review state before returning to the
-                                        // result tab so the operator can finish the actual
-                                        // save/finalize action without the wizard dumping back
-                                        // to the recording screen mid-flow.
                                         const latestPending = useAppStore.getState().pendingMatchData;
                                         const matchId = latestPending?.id;
                                         if (matchId) {
@@ -1438,7 +1552,7 @@ export const Wizard: React.FC = () => {
                                             }
                                         }
                                         if (wizardCloseOnOcrApply) {
-                                            setShowWizard(null);
+                                            handleFinalizeWizardSave();
                                             return;
                                         }
                                         React.startTransition(() => setActiveTab('result'));
@@ -1464,8 +1578,7 @@ export const Wizard: React.FC = () => {
                                 </div>
                             )}
                         </div>
-                    </div>
-                )}
+                </div>
 
                 <div className="sticky bottom-0 z-10 border-t border-md-sys-outline/5 bg-md-sys-surface px-4 py-4 shadow-[0_-10px_24px_rgba(15,23,42,0.14)] flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <button
@@ -1489,11 +1602,20 @@ export const Wizard: React.FC = () => {
                                     {submitResultsHint}
                                 </div>
                             ) : null}
+                            {!submitResultsHint && hasPendingOcrReview ? (
+                                <div
+                                    data-testid="wizard-auto-apply-ocr-hint"
+                                    className="text-label-sm font-semibold text-md-sys-primary text-center sm:text-right"
+                                >
+                                    OCR review will be auto-applied when you save.
+                                </div>
+                            ) : null}
                             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
                                 <button
                                     type="button"
                                     onClick={() => {
                                         if (!canFinalizeResult) return;
+                                        commitWizardState();
                                         saveResultDraft(submissionSubType);
                                     }}
                                     disabled={submitting || !canFinalizeResult}
@@ -1503,11 +1625,7 @@ export const Wizard: React.FC = () => {
                                 </button>
                                 <button
                                     onClick={() => {
-                                        if (hasPendingOcrReview) {
-                                            React.startTransition(() => setActiveTab('ocr'));
-                                            return;
-                                        }
-                                        processFinalSubmission(submissionSubType);
+                                        handleFinalizeWizardSave();
                                     }}
                                     disabled={submitting || !canFinalizeResult}
                                     data-testid="wizard-submit-results-button"
@@ -1532,9 +1650,9 @@ export const Wizard: React.FC = () => {
                                 type="button"
                                 onClick={embeddedOcrFooterActions.saveAndClose}
                                 className="w-full sm:w-auto px-5 py-3 rounded-2xl font-bold uppercase tracking-wide-30 text-label-sm bg-md-sys-primary text-md-sys-onPrimary shadow-xl active:scale-95 transition-all"
-                                title="Save reviewed OCR corrections and apply them"
+                                title={wizardCloseOnOcrApply ? 'Save reviewed OCR corrections and close the wizard' : 'Save reviewed OCR corrections and apply them'}
                             >
-                                Save and Apply
+                                {wizardCloseOnOcrApply ? 'Save and Close' : 'Save and Apply'}
                             </button>
                         </div>
                     )}

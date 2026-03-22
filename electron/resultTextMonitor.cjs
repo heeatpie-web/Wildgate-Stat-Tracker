@@ -1,6 +1,6 @@
 'use strict';
 
-const { cropImageBuffer } = require('./resultCaptureHelper.cjs');
+const { sampleBoxes: dxgiSampleBoxes } = require('./dxgiSampler.cjs');
 
 const DEFAULT_SAMPLE_INTERVAL_MS = 500;
 const TRIPWIRE_BASELINE_ALPHA = 0.18;
@@ -11,26 +11,19 @@ const TRIPWIRE_MIN_BOX_WHITE_DELTA = 0.0075;
 const TRIPWIRE_MIN_TOTAL_WHITE_DELTA = 0.02;
 const TRIPWIRE_WHITE_MIN_CHANNEL = 210;
 const TRIPWIRE_WHITE_MAX_DRIFT = 30;
-const OCR_CONFIRM_COOLDOWN_MS = 1_000;
 
 const TRIPWIRE_BOX_LAYOUT = Object.freeze([
-  { id: 'center-a', left: 0.34, top: 0.04, width: 0.16, height: 0.24 },
-  { id: 'center-b', left: 0.52, top: 0.04, width: 0.16, height: 0.24 },
-  { id: 'left-a', left: 0.06, top: 0.28, width: 0.18, height: 0.24 },
-  { id: 'left-b', left: 0.26, top: 0.28, width: 0.18, height: 0.24 },
-  { id: 'left-c', left: 0.46, top: 0.28, width: 0.18, height: 0.24 },
+  { id: 'result-a', left: 0.04, top: 0.12, width: 0.12, height: 0.76 },
+  { id: 'result-b', left: 0.20, top: 0.12, width: 0.12, height: 0.76 },
+  { id: 'result-c', left: 0.36, top: 0.12, width: 0.12, height: 0.76 },
+  { id: 'result-d', left: 0.52, top: 0.12, width: 0.12, height: 0.76 },
+  { id: 'result-e', left: 0.68, top: 0.12, width: 0.12, height: 0.76 },
+  { id: 'result-f', left: 0.84, top: 0.12, width: 0.12, height: 0.76 },
 ]);
 
 let _timer = null;
 let _state = null;
-let _defaultRecognizer = null;
 let _sharp = null;
-
-function getDefaultRecognizer() {
-  if (_defaultRecognizer) return _defaultRecognizer;
-  _defaultRecognizer = require('./paddleOcrHandler.cjs').paddleRecognizeBuffer;
-  return _defaultRecognizer;
-}
 
 function getSharp() {
   if (_sharp) return _sharp;
@@ -38,66 +31,18 @@ function getSharp() {
   return _sharp;
 }
 
-function normalizeRecognizedText(text) {
-  return String(text || '')
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, ' ')
-    .trim();
-}
-
-function parsePlacementFromText(text) {
-  const normalized = normalizeRecognizedText(text);
-  const compact = normalized.replace(/\s+/g, '');
-
-  let match = compact.match(/([1-5])(ST|ND|RD|TH)PLACE/);
-  if (match) {
-    return Number.parseInt(match[1], 10);
-  }
-
-  match = compact.match(/([1-5])(ST|ND|RD|TH)/);
-  if (match && (compact.includes('PLACE') || compact.includes('PLACEMENT'))) {
-    return Number.parseInt(match[1], 10);
-  }
-
-  match = normalized.match(/\b([1-5])(ST|ND|RD|TH)\b/);
-  if (match) {
-    return Number.parseInt(match[1], 10);
-  }
-
-  return undefined;
-}
-
-function detectResultTextSignal(text) {
-  const normalized = normalizeRecognizedText(text);
-  const compact = normalized.replace(/\s+/g, '');
-  const placement = parsePlacementFromText(normalized);
-
-  const hasVictory = compact.includes('VICTORY') || compact.includes('VICTOR');
-  const hasDefeat = compact.includes('DEFEAT');
-  const hasEliminated = compact.includes('ELIMINATED');
-  const hasPlacementKeyword = compact.includes('PLACE')
-    || compact.includes('PLACEMENT')
-    || placement != null;
-
-  const detected = hasVictory || hasDefeat || hasEliminated || hasPlacementKeyword;
-  let result = null;
-  let winType;
-
-  if (hasVictory) {
-    result = 'Win';
-    winType = compact.includes('ARTIFACT') ? 'artifact' : 'combat';
-  } else if (hasDefeat || hasEliminated || hasPlacementKeyword) {
-    result = 'Loss';
-    winType = compact.includes('ARTIFACT') ? 'artifact' : 'combat';
-  }
-
+function normalizeAbsoluteRegion(region) {
+  const x = Number(region?.x);
+  const y = Number(region?.y);
+  const width = Number(region?.width);
+  const height = Number(region?.height);
+  if (![x, y, width, height].every(Number.isFinite)) return null;
+  if (width <= 0 || height <= 0) return null;
   return {
-    detected,
-    detectionMethod: 'text',
-    result,
-    winType,
-    placement,
-    text: normalized,
+    x: Math.round(x),
+    y: Math.round(y),
+    width: Math.round(width),
+    height: Math.round(height),
   };
 }
 
@@ -222,6 +167,7 @@ function createDebugSnapshot(status, overrides = {}) {
     armRemainingMs: Math.max(0, _state.armAt - Date.now()),
     sampleIntervalMs: _state.intervalMs,
     captureRegion: _state.captureRegion,
+    absoluteRegion: _state.absoluteRegion,
     detected: _state.detected,
     lastRecognizedText: _state.lastRecognizedText,
     lastSignal: _state.lastSignal,
@@ -241,27 +187,23 @@ function emitDebug(status, overrides = {}) {
   _state.onDebug(snapshot);
 }
 
-async function confirmRecognizedResult(state, cropBuffer) {
-  const recognizedText = await state.recognizer(cropBuffer);
-  const signal = detectResultTextSignal(recognizedText);
+function createTripwireDetectionPayload(state) {
+  const activeBoxes = Array.isArray(state?.lastTripwire?.boxes)
+    ? state.lastTripwire.boxes.filter((box) => box?.active)
+    : [];
 
-  state.lastRecognizedText = String(recognizedText || '');
-  state.lastSignal = signal;
-  state.lastUpdatedAt = Date.now();
-
-  if (!signal.detected || state.detected) {
-    return false;
-  }
-
-  state.detected = true;
-  state.onDetected?.({
-    ...signal,
+  return {
+    detectionMethod: 'text',
+    result: null,
     armAt: state.armAt,
-    captureRegion: state.captureRegion,
     detectedAt: state.lastUpdatedAt,
-  });
-  emitDebug('detected');
-  return true;
+    captureRegion: state.captureRegion,
+    activeBoxIds: activeBoxes
+      .map((box) => (typeof box?.id === 'string' ? box.id : ''))
+      .filter(Boolean),
+    tripwireActiveBoxCount: Number(state?.lastTripwire?.activeBoxCount || 0),
+    tripwireTotalWhiteDelta: Number(state?.lastTripwire?.totalWhiteDelta || 0),
+  };
 }
 
 async function pollOnce() {
@@ -273,18 +215,11 @@ async function pollOnce() {
   emitDebug(Date.now() < state.armAt ? 'arming-delay' : 'sampling');
 
   try {
-    const sampled = await state.sampler(state.captureRegion);
+    const boxMetrics = await state.sampler(state.absoluteRegion);
     if (_state !== state) return;
-
-    if (!Buffer.isBuffer(sampled) || sampled.length === 0) {
-      throw new Error('Result text sampler returned an empty buffer');
+    if (!Array.isArray(boxMetrics) || boxMetrics.length === 0) {
+      throw new Error('Result text sampler returned no tripwire metrics');
     }
-
-    const cropBuffer = state.captureRegion
-      ? await cropImageBuffer(sampled, state.captureRegion)
-      : sampled;
-
-    const boxMetrics = await state.tripwireAnalyzer(cropBuffer);
     const isArmed = Date.now() >= state.armAt;
 
     if (!Array.isArray(state.baselineWhiteRatios) || state.baselineWhiteRatios.length !== boxMetrics.length) {
@@ -311,15 +246,13 @@ async function pollOnce() {
     if (tripwire.triggered) {
       state.tripwireConsecutiveHits += 1;
 
-      if (
-        state.tripwireConsecutiveHits >= TRIPWIRE_MIN_CONSECUTIVE_HITS
-        && Date.now() >= state.ocrCooldownUntil
-      ) {
-        state.ocrCooldownUntil = Date.now() + OCR_CONFIRM_COOLDOWN_MS;
-        const confirmed = await confirmRecognizedResult(state, cropBuffer);
-        if (confirmed) {
-          return;
-        }
+      if (state.tripwireConsecutiveHits >= TRIPWIRE_MIN_CONSECUTIVE_HITS) {
+        state.detected = true;
+        state.lastSignal = createTripwireDetectionPayload(state);
+        state.lastUpdatedAt = Date.now();
+        state.onDetected?.(state.lastSignal);
+        emitDebug('detected');
+        return;
       }
     } else {
       state.tripwireConsecutiveHits = 0;
@@ -348,22 +281,31 @@ function startResultTextMonitor({
   armAt = 0,
   intervalMs = DEFAULT_SAMPLE_INTERVAL_MS,
   captureRegion = null,
+  absoluteRegion = null,
   onDetected,
   onDebug,
   _sampler,
-  _recognizer,
-  _tripwireAnalyzer,
 } = {}) {
   stopResultTextMonitor();
 
-  const sampler = typeof _sampler === 'function' ? _sampler : null;
-  const recognizer = typeof _recognizer === 'function' ? _recognizer : getDefaultRecognizer();
-  const tripwireAnalyzer = typeof _tripwireAnalyzer === 'function'
-    ? _tripwireAnalyzer
-    : analyzeTripwireBoxes;
+  const normalizedAbsoluteRegion = normalizeAbsoluteRegion(absoluteRegion);
+  const sampler = typeof _sampler === 'function'
+    ? _sampler
+    : async (region) => {
+      const sample = await dxgiSampleBoxes({
+        ...region,
+        boxes: TRIPWIRE_BOX_LAYOUT,
+        whiteMinChannel: TRIPWIRE_WHITE_MIN_CHANNEL,
+        whiteMaxDrift: TRIPWIRE_WHITE_MAX_DRIFT,
+      });
+      if (!sample?.success) {
+        throw new Error(sample?.error || 'DXGI tripwire sample failed');
+      }
+      return Array.isArray(sample?.data?.boxes) ? sample.data.boxes : [];
+    };
   const safeIntervalMs = Math.max(100, Math.round(Number(intervalMs) || DEFAULT_SAMPLE_INTERVAL_MS));
 
-  if (!sampler || typeof recognizer !== 'function' || typeof tripwireAnalyzer !== 'function') {
+  if (!normalizedAbsoluteRegion || typeof sampler !== 'function') {
     return false;
   }
 
@@ -371,9 +313,8 @@ function startResultTextMonitor({
     armAt: Number.isFinite(Number(armAt)) ? Math.round(Number(armAt)) : 0,
     intervalMs: safeIntervalMs,
     captureRegion,
+    absoluteRegion: normalizedAbsoluteRegion,
     sampler,
-    recognizer,
-    tripwireAnalyzer,
     onDetected,
     onDebug,
     detected: false,
@@ -384,7 +325,6 @@ function startResultTextMonitor({
     lastTripwire: null,
     tripwireConsecutiveHits: 0,
     baselineWhiteRatios: null,
-    ocrCooldownUntil: 0,
     lastUpdatedAt: Date.now(),
   };
 
@@ -408,9 +348,7 @@ const __test__ = {
   analyzeTripwireBoxes,
   buildTripwireSnapshot,
   createTripwireBaseline,
-  detectResultTextSignal,
-  normalizeRecognizedText,
-  parsePlacementFromText,
+  createTripwireDetectionPayload,
   TRIPWIRE_BOX_LAYOUT,
   updateTripwireBaseline,
 };

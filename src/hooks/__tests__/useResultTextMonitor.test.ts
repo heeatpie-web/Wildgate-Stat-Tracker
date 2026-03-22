@@ -137,10 +137,10 @@ describe('useResultTextMonitor', () => {
       status: 'waiting-live-start',
       isArmed: false,
       captureRegion: {
-        left: 0.03,
-        top: 0.55,
-        width: 0.67,
-        height: 0.22,
+        left: 0.115,
+        top: 0.095,
+        width: 0.57,
+        height: 0.18,
         normalized: true,
       },
     }));

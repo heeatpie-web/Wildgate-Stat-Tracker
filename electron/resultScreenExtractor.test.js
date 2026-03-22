@@ -2,7 +2,9 @@ import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const { __test__ } = require('./resultScreenExtractor.cjs');
+const sharp = require('sharp');
+
+const { __test__, extractResultScreen } = require('./resultScreenExtractor.cjs');
 
 describe('resultScreenExtractor heuristics', () => {
   it('parses artifact victories from partial OCR text', () => {
@@ -54,5 +56,39 @@ describe('resultScreenExtractor heuristics', () => {
 
   it('extracts damage totals from noisy OCR digits', () => {
     expect(__test__.parseDamageTaken(['I14', 'AFINALDAMAGETAKEN114'])).toBe(114);
+  });
+
+  it('extracts combat-loss results without crashing when both damage OCR buckets are present', async () => {
+    let recognizeCallCount = 0;
+    const recognizeText = async () => {
+      recognizeCallCount += 1;
+      if (recognizeCallCount <= 9) return '4TH PLACE';
+      if (recognizeCallCount <= 12) return 'DEFEAT';
+      if (recognizeCallCount <= 15) return '';
+      if (recognizeCallCount <= 18) return 'FINAL DAMAGE TAKEN 114';
+      return '114';
+    };
+
+    const imageBuffer = await sharp({
+      create: {
+        width: 1920,
+        height: 1080,
+        channels: 3,
+        background: { r: 0, g: 0, b: 0 },
+      },
+    }).png().toBuffer();
+
+    await expect(extractResultScreen(imageBuffer, {
+      detectionMethod: 'text',
+      paddleOcrBuffer: async () => [],
+      paddleRecognizeBuffer: recognizeText,
+    })).resolves.toEqual({
+      result: 'Loss',
+      winType: 'combat',
+      placement: 4,
+      detectionMethod: 'text',
+      damageTaken: 114,
+      damageSourcesAvailable: true,
+    });
   });
 });

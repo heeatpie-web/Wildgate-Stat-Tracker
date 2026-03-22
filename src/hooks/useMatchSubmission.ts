@@ -1,25 +1,30 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
-import { Match } from '../types';
+import { Match, OpponentTeam } from '../types';
 import { useSoundEffects } from '../hooks/useSoundEffects';
-import { applyArtifactRepair, bundleMatchArtifacts, getMatchArtifactsStructured, removeAllMatchArtifacts } from '../utils/artifactService';
+import { applyArtifactRepair, bundleMatchArtifacts, getMatchArtifactsStructured, removeAllMatchArtifacts, rerunOCRMulti } from '../utils/artifactService';
 import { StorageService } from '../utils/storage';
 import { getElectronAPI } from '../utils/electronAPI';
 import Logger from '../utils/logger';
 import { capTeammateNames } from '../utils/teamLimits';
 import { evaluateTelemetryConsistencyChecks, formatDurationOffset } from '../utils/telemetryConsistency';
 import { sanitizeLoadout } from '../utils/loadout';
+import type { ExtractedModifier, ExtractedPlayer, OCRExtractedData } from '../utils/ocr/ocrTypes';
 import {
     getRosterCandidatePruneIds,
     getRosterCandidatePruneIdsForAcceptedName,
 } from '../utils/pendingReviewUtils';
 import { buildRosterAutoPopulateDecisions } from '../utils/rosterAutoPopulate';
 import {
+    extractArtifactSourceFromOcrData,
     extractArtifactSourceFromReachModifiers,
     stripArtifactSourceModifiers,
 } from '../utils/artifactSource';
+import { buildOcrNameConfidenceMapFromExtractedData } from '../utils/ocr/nameSourceHints';
+import { sanitizeOpponentTeamsAgainstFriendlyRoster } from '../utils/ocr/friendlyTeamDeduper';
+import { backfillOpponentTeamShipTypes } from '../utils/ocr/opponentTeamShipTypes';
 
 const DEFAULT_ARTIFACT_LOOKBACK_MS = 10 * 60 * 1000;
 const IMAGE_ARTIFACT_PATTERN = /\.(png|jpe?g|webp|bmp|gif)$/i;
@@ -192,6 +197,179 @@ const mergeTextLines = (...lineSets: Array<Array<string | null | undefined> | nu
         });
     });
     return merged;
+};
+
+const dedupeNames = (...nameSets: Array<Array<string | null | undefined> | null | undefined>): string[] => {
+    const seen = new Set<string>();
+    const merged: string[] = [];
+    nameSets.forEach((nameSet) => {
+        (nameSet || []).forEach((entry) => {
+            const normalized = String(entry || '').trim();
+            if (!normalized) return;
+            const key = normalizeNameKey(normalized);
+            if (!key || seen.has(key)) return;
+            seen.add(key);
+            merged.push(normalized);
+        });
+    });
+    return merged;
+};
+
+const coerceExtractedPlayerName = (entry: string | ExtractedPlayer | null | undefined): string =>
+    typeof entry === 'string'
+        ? entry
+        : String(entry?.name || '');
+
+const toCanonicalModifierNames = (
+    modifiers: Array<string | ExtractedModifier> | null | undefined,
+    hazards: string[] | null | undefined,
+): string[] => {
+    const merged = dedupeNames(
+        (modifiers || []).map((entry) => (
+            typeof entry === 'string'
+                ? entry
+                : entry?.name
+        )),
+        hazards || [],
+    );
+    return stripArtifactSourceModifiers(merged);
+};
+
+const buildSilentBackgroundOcrMatch = ({
+    match,
+    combined,
+    activeUser,
+}: {
+    match: Match;
+    combined: OCRExtractedData;
+    activeUser?: string | null;
+}): Match => {
+    const activeUserKey = normalizeNameKey(activeUser || match.player || '');
+    const isActiveUserLike = (rawName: string | null | undefined): boolean => {
+        const key = normalizeNameKey(rawName);
+        return !!key && key === activeUserKey;
+    };
+
+    const nextTeammateNames = (combined.teammates || [])
+        .map(coerceExtractedPlayerName)
+        .map((entry) => String(entry || '').trim())
+        .filter(Boolean)
+        .filter((entry) => !isActiveUserLike(entry));
+
+    const unresolvedOpponentTeams: OpponentTeam[] = (combined.opponentTeams || []).map((team, index) => ({
+        teamName: String(team?.teamName || `Enemy Team ${index + 1}`).trim() || `Enemy Team ${index + 1}`,
+        shipType: String(team?.shipType || '').trim(),
+        color: String(team?.color || 'unknown').trim() || 'unknown',
+        players: dedupeNames((team?.players || []).map((player) => coerceExtractedPlayerName(player))),
+        sourceRowIndex: typeof team?.sourceRowIndex === 'number' ? team.sourceRowIndex : undefined,
+        sourceRowY: typeof team?.sourceRowY === 'number' ? team.sourceRowY : undefined,
+    }));
+
+    const friendlyTeamSanitization = sanitizeOpponentTeamsAgainstFriendlyRoster({
+        teams: unresolvedOpponentTeams,
+        activeUser: activeUser || match.player || '',
+        friendlyPlayers: [
+            ...(match.teammates || []),
+            ...nextTeammateNames,
+        ],
+        friendlyTeamLabels: [
+            combined.playerTeamName,
+            combined.playerShip?.teamName,
+            combined.playerShipName,
+            combined.playerShip?.shipType,
+            match.ship,
+        ],
+    });
+
+    const shipForTeammateCap = String(combined.playerShip?.shipType || match.ship || '').trim();
+    const nextOpponentTeams = backfillOpponentTeamShipTypes(friendlyTeamSanitization.teams, {
+        sessionShipTypes: {},
+        enemyShips: combined.enemyShips,
+    });
+    const nextOpponents = dedupeNames(
+        match.opponents || [],
+        nextOpponentTeams.flatMap((team) => team.players || []).filter((name) => !isActiveUserLike(name)),
+    );
+    const nextTeammates = capTeammateNames(
+        dedupeNames(
+            match.teammates || [],
+            nextTeammateNames,
+            friendlyTeamSanitization.promotedFriendlyPlayers,
+        ),
+        shipForTeammateCap,
+    );
+
+    const nextArtifactSource = extractArtifactSourceFromOcrData(
+        (combined.reachModifiers || []) as Array<string | ExtractedModifier>,
+        (combined.hazards || []) as Array<string | ExtractedModifier>,
+        combined.artifactType,
+    );
+    const nextModifierNames = dedupeNames(
+        match.reachModifiers || [],
+        toCanonicalModifierNames(
+            (combined.reachModifiers || []) as Array<string | ExtractedModifier>,
+            combined.hazards || [],
+        ),
+    );
+    const nextNameConfidence = buildOcrNameConfidenceMapFromExtractedData(combined);
+    const reviewedAt = Number(match.ocrReviewedAt || 0);
+
+    return {
+        ...match,
+        ship: shipForTeammateCap || match.ship,
+        teammates: nextTeammates,
+        opponents: nextOpponents,
+        opponentTeams: nextOpponentTeams.length > 0 ? nextOpponentTeams : (match.opponentTeams || []),
+        reachModifiers: nextModifierNames,
+        artifactSource: String(nextArtifactSource || match.artifactSource || '').trim() || undefined,
+        ocrDebug: {
+            ...(match.ocrDebug || {}),
+            rawText: combined.rawText || match.ocrDebug?.rawText,
+            confidence: combined.overallConfidence || match.ocrDebug?.confidence,
+            hazards: Array.isArray(combined.hazards)
+                ? Array.from(new Set(combined.hazards.map((hazard) => String(hazard || '').trim()).filter(Boolean)))
+                : match.ocrDebug?.hazards,
+            source: combined.ocrSource || match.ocrDebug?.source,
+            fallbackReason: combined.ocrFallbackReason || match.ocrDebug?.fallbackReason,
+            cloudError: combined.ocrCloudError || match.ocrDebug?.cloudError,
+            geminiError: combined.ocrGeminiError || match.ocrDebug?.geminiError,
+            mergeStats: combined.mergeStats ? {
+                total: combined.mergeStats.total,
+                agreed: combined.mergeStats.agreed,
+                cloudPreferred: combined.mergeStats.cloudPreferred,
+                localOnly: combined.mergeStats.localOnly,
+                cloudOnly: combined.mergeStats.cloudOnly,
+                conflicts: combined.mergeStats.conflicts,
+            } : match.ocrDebug?.mergeStats,
+            nameConfidence: Object.keys(nextNameConfidence).length > 0
+                ? nextNameConfidence
+                : match.ocrDebug?.nameConfidence,
+            playerTeamName: String(
+                combined.playerTeamName
+                || combined.playerShip?.teamName
+                || match.ocrDebug?.playerTeamName
+                || match.ocrDebug?.playerShipTeamName
+                || ''
+            ).trim() || undefined,
+            playerShipTeamName: String(
+                combined.playerShip?.teamName
+                || combined.playerTeamName
+                || match.ocrDebug?.playerShipTeamName
+                || match.ocrDebug?.playerTeamName
+                || ''
+            ).trim() || undefined,
+            playerShipName: String(
+                combined.playerShipName
+                || combined.playerTeamName
+                || combined.playerShip?.teamName
+                || match.ocrDebug?.playerShipName
+                || ''
+            ).trim() || undefined,
+            timestamp: Date.now(),
+        },
+        ocrState: reviewedAt > 0 ? 'saved' : 'reviewing',
+        ocrReviewedAt: reviewedAt > 0 ? reviewedAt : undefined,
+    };
 };
 
 const extractOcrLines = (ocrPayload: unknown): string[] => {
@@ -398,6 +576,7 @@ export const useMatchSubmission = () => {
 
     const { playVictory, playDefeat } = useSoundEffects();
     const [submitting, setSubmitting] = useState(false);
+    const backgroundArtifactOcrJobsRef = useRef<Set<number>>(new Set());
 
     const pickFirstKnown = useCallback((...values: Array<string | undefined | null>) => {
         const known = values.find(v => v && !/^unknown/i.test(v));
@@ -453,6 +632,84 @@ export const useMatchSubmission = () => {
             },
         }));
     }, []);
+
+    const queueBackgroundArtifactOcr = useCallback((matchId: number, imagePaths: string[], activeUserHint?: string | null) => {
+        const normalizedMatchId = Number(matchId || 0);
+        const normalizedImagePaths = dedupeNames(imagePaths || []).filter((artifactPath) => IMAGE_ARTIFACT_PATTERN.test(artifactPath));
+        if (!Number.isInteger(normalizedMatchId) || normalizedMatchId <= 0 || normalizedImagePaths.length === 0) {
+            return;
+        }
+        if (backgroundArtifactOcrJobsRef.current.has(normalizedMatchId)) {
+            return;
+        }
+        backgroundArtifactOcrJobsRef.current.add(normalizedMatchId);
+
+        window.setTimeout(() => {
+            void (async () => {
+                try {
+                    const storeState = useAppStore.getState();
+                    const startingMatch = (storeState.matches || []).find((entry) => Number(entry.id || 0) === normalizedMatchId);
+                    if (!startingMatch) return;
+
+                    updateMatch({
+                        ...startingMatch,
+                        ocrState: 'processing',
+                    });
+
+                    const rerun = await rerunOCRMulti(
+                        normalizedImagePaths,
+                        String(activeUserHint || startingMatch.player || storeState.activeUser || '').trim(),
+                        storeState.ocrMode,
+                        storeState.ocrRegions,
+                        { forceUncached: true },
+                    );
+                    const combined = rerun.data;
+                    const latestMatch = (useAppStore.getState().matches || []).find((entry) => Number(entry.id || 0) === normalizedMatchId);
+                    if (!latestMatch) return;
+
+                    if (!rerun.success || !combined) {
+                        Logger.warn('MatchSubmission', `Background artifact OCR failed for match ${normalizedMatchId}`, rerun.error || 'No OCR data returned');
+                        updateMatch({
+                            ...latestMatch,
+                            ocrState: 'error',
+                        });
+                        await StorageService.flush();
+                        return;
+                    }
+
+                    const mergedMatch = buildSilentBackgroundOcrMatch({
+                        match: latestMatch,
+                        combined,
+                        activeUser: activeUserHint || latestMatch.player || storeState.activeUser,
+                    });
+                    updateMatch(mergedMatch);
+                    applyRosterAutoPopulationForSavedMatch(mergedMatch);
+                    await StorageService.flush();
+                    Logger.info('MatchSubmission', 'Background artifact OCR merged into saved match', {
+                        matchId: normalizedMatchId,
+                        artifactCount: normalizedImagePaths.length,
+                        confidence: combined.overallConfidence,
+                    });
+                } catch (error) {
+                    Logger.error('MatchSubmission', `Background artifact OCR crashed for match ${normalizedMatchId}`, error);
+                    const latestMatch = (useAppStore.getState().matches || []).find((entry) => Number(entry.id || 0) === normalizedMatchId);
+                    if (latestMatch) {
+                        updateMatch({
+                            ...latestMatch,
+                            ocrState: 'error',
+                        });
+                        try {
+                            await StorageService.flush();
+                        } catch {
+                            // Ignore secondary persistence failures after the primary OCR error.
+                        }
+                    }
+                } finally {
+                    backgroundArtifactOcrJobsRef.current.delete(normalizedMatchId);
+                }
+            })();
+        }, 0);
+    }, [updateMatch]);
 
     const discardCurrentMatch = useCallback(async (matchId?: number | null) => {
         const normalizedMatchId = Number(matchId);
@@ -1202,6 +1459,10 @@ export const useMatchSubmission = () => {
             }
 
             const savedArtifactPath = savedArtifactPaths[0] || null;
+            const backgroundArtifactPaths = mergeArtifactLists(
+                existingMatch.artifacts,
+                resolvedPendingMatchData.artifacts,
+            );
 
             const finalTime = (timeMin || timeSec)
                 ? `${timeMin || '00'}:${timeSec || '00'}`
@@ -1338,6 +1599,11 @@ export const useMatchSubmission = () => {
                 message: `Match auto-saved: ${savedMatch.result} (${savedMatch.subType})`,
                 type: 'success',
             });
+            queueBackgroundArtifactOcr(
+                savedMatch.id,
+                backgroundArtifactPaths,
+                savedMatch.player || activeUser,
+            );
 
             return {
                 success: true,
@@ -1351,7 +1617,7 @@ export const useMatchSubmission = () => {
         } finally {
             setSubmitting(false);
         }
-    }, [submitting, clearSubmissionState, notifyArtifactsConsumed, notifyTelemetryDraftResolved, pickFirstKnown, playDefeat, playVictory, setIsMatchInProgress, setMatchStartTime, setToast, updateMatch]);
+    }, [submitting, clearSubmissionState, notifyArtifactsConsumed, notifyTelemetryDraftResolved, pickFirstKnown, playDefeat, playVictory, queueBackgroundArtifactOcr, setIsMatchInProgress, setMatchStartTime, setToast, updateMatch]);
 
     const discardTelemetryDraft = useCallback(async (matchId: number) => {
         if (!Number.isInteger(matchId) || matchId <= 0 || submitting) return false;

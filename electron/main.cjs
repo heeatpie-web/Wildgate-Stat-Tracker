@@ -23,7 +23,6 @@ const dbHelpers = require('./helpers/dbHelpers.cjs');
 const { registerArtifactHandlers, saveScreenshotImage } = require('./handlers/artifactHandlers.cjs');
 const { createAutoCaptureCoordinator } = require('./autoCaptureCoordinator.cjs');
 const { sampleRegion: sampleDxgiRegion } = require('./dxgiSampler.cjs');
-const { startMonitor, stopMonitor, sampleRegion } = require('./pixelMonitor.cjs');
 const { extractResultScreen } = require('./resultScreenExtractor.cjs');
 const { startResultFlashMonitor, stopResultFlashMonitor } = require('./resultFlashMonitor.cjs');
 const { cropImageBuffer, decodeImageBase64 } = require('./resultCaptureHelper.cjs');
@@ -671,8 +670,8 @@ function normalizeResultFlashNormalizedRegion(config) {
   const source = config?.normalizedRegion && typeof config.normalizedRegion === 'object'
     ? config.normalizedRegion
     : null;
-  const x = Number(source?.x);
-  const y = Number(source?.y);
+  const x = Number.isFinite(Number(source?.x)) ? Number(source.x) : Number(source?.left);
+  const y = Number.isFinite(Number(source?.y)) ? Number(source.y) : Number(source?.top);
   const width = Number(source?.width);
   const height = Number(source?.height);
   if (![x, y, width, height].every(Number.isFinite)) return null;
@@ -2158,7 +2157,7 @@ async function fsyncDirBestEffort(dirPath) {
 }
 
 async function writeFileDurableAtomic(filePath, payload) {
-  const tempPath = `${filePath}.tmp`;
+  const tempPath = `${filePath}.${process.pid}.${Date.now()}.${crypto.randomUUID()}.tmp`;
   await fsPromises.mkdir(path.dirname(filePath), { recursive: true });
 
   const fileHandle = await fsPromises.open(tempPath, 'w');
@@ -2189,7 +2188,21 @@ async function writeFileDurableAtomic(filePath, payload) {
 
   if (renameError) {
     // Last-resort fallback for Windows rename contention: replace via copy + unlink.
-    await fsPromises.copyFile(tempPath, filePath);
+    try {
+      await fsPromises.copyFile(tempPath, filePath);
+    } catch (copyError) {
+      const copyCode = String(copyError?.code || '');
+      if (copyCode === 'ENOENT') {
+        try {
+          await fsPromises.access(filePath);
+          await fsyncDirBestEffort(path.dirname(filePath));
+          return;
+        } catch {
+          // Fall through to the original copy failure.
+        }
+      }
+      throw copyError;
+    }
     try {
       await fsPromises.unlink(tempPath);
     } catch {
@@ -3979,14 +3992,6 @@ async function loadResultScreenshotBuffer(request = {}) {
     return captureGameWindowBuffer();
 }
 
-// ── Pixel Monitor ──────────────────────────────────────────────────────────────
-ipcMain.on('pixel-monitor-start', (_event, config) => {
-    startMonitor(config, () => {
-        if (win) win.webContents.send('pixel-monitor-trigger');
-    });
-});
-ipcMain.on('pixel-monitor-stop', () => stopMonitor());
-ipcMain.handle('pixel-monitor-sample', async (_event, config) => sampleRegion(config));
 ipcMain.handle('result-flash-sample', async (_event, config) => sampleResultFlashRegion(config));
 ipcMain.on('result-flash-start', (event, config) => {
     const normalizedRegion = normalizeResultFlashNormalizedRegion(config);
@@ -4029,14 +4034,27 @@ ipcMain.on('result-text-start', (event, config = {}) => {
     const intervalMs = Number.isFinite(Number(config?.intervalMs))
         ? Math.max(100, Math.round(Number(config.intervalMs)))
         : 500;
-    const captureRegion = config?.captureRegion || config?.textRegion || null;
+    const normalizedRegion = normalizeResultFlashNormalizedRegion({
+        normalizedRegion: config?.captureRegion || config?.textRegion || null,
+    });
+    const absoluteRegion = convertResultFlashRegionToPrimaryDisplayAbsoluteRegion(normalizedRegion);
 
-    console.log(`[ResultText] Starting tripwire monitor armAt=${armAt} intervalMs=${intervalMs} region=${JSON.stringify(captureRegion)}`);
+    if (!normalizedRegion || !absoluteRegion) {
+        console.warn('[ResultText] Refusing to start tripwire monitor: invalid normalized region');
+        stopResultTextMonitor();
+        return;
+    }
+
+    console.log(
+        `[ResultText] Starting tripwire monitor armAt=${armAt} intervalMs=${intervalMs} `
+        + `region=${JSON.stringify(absoluteRegion)}`
+    );
 
     const started = startResultTextMonitor({
         armAt,
         intervalMs,
-        captureRegion,
+        captureRegion: normalizedRegion,
+        absoluteRegion,
         onDetected: (payload) => {
             console.log('[ResultText] Text detected - notifying renderer');
             if (!sender.isDestroyed()) sender.send('result-text-detected', payload);
@@ -4044,7 +4062,6 @@ ipcMain.on('result-text-start', (event, config = {}) => {
         onDebug: (snapshot) => {
             if (!sender.isDestroyed()) sender.send('result-text-debug', snapshot);
         },
-        _sampler: async () => captureGameWindowBuffer(),
     });
 
     if (!started) {

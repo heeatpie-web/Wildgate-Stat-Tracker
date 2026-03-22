@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useMatchSubmission } from '../useMatchSubmission';
-import { applyArtifactRepair, bundleMatchArtifacts, getMatchArtifactsStructured, removeAllMatchArtifacts } from '../../utils/artifactService';
+import { applyArtifactRepair, bundleMatchArtifacts, getMatchArtifactsStructured, removeAllMatchArtifacts, rerunOCRMulti } from '../../utils/artifactService';
 import { StorageService } from '../../utils/storage';
 
 const setToast = vi.fn();
@@ -126,6 +126,7 @@ vi.mock('../../utils/artifactService', () => ({
   bundleMatchArtifacts: vi.fn().mockResolvedValue([]),
   getMatchArtifactsStructured: vi.fn().mockResolvedValue({ images: [], imageFiles: [], telemetry: [] }),
   removeAllMatchArtifacts: vi.fn().mockResolvedValue({ removedPaths: [], failedPaths: [] }),
+  rerunOCRMulti: vi.fn().mockResolvedValue({ success: true, perFile: [], data: undefined }),
 }));
 
 vi.mock('../../utils/storage', () => ({
@@ -219,6 +220,8 @@ describe('useMatchSubmission', () => {
     vi.mocked(getMatchArtifactsStructured).mockResolvedValue({ images: [], imageFiles: [], telemetry: [] });
     vi.mocked(removeAllMatchArtifacts).mockReset();
     vi.mocked(removeAllMatchArtifacts).mockResolvedValue({ removedPaths: [], failedPaths: [] });
+    vi.mocked(rerunOCRMulti).mockReset();
+    vi.mocked(rerunOCRMulti).mockResolvedValue({ success: true, perFile: [], data: undefined });
     vi.mocked(StorageService.flush).mockClear();
     electronInvokeMock.mockReset();
     electronInvokeMock.mockResolvedValue({ success: true, data: { filePath: 'C:\\match_artifacts\\999\\capture_result.png' } });
@@ -1399,6 +1402,156 @@ describe('useMatchSubmission', () => {
       'C:\\match_artifacts\\7070\\capture_result.png',
       'C:\\match_artifacts\\7070\\damage_sources.png',
     ]);
+  });
+
+  it('autoFinalizeResultScreenCapture returns before background artifact OCR starts, then merges crew/map OCR later', async () => {
+    vi.useFakeTimers();
+    const draftId = 8181;
+    const draftTimestamp = 1_700_001_111_000;
+    mockStoreState.activeUser = 'Tester';
+    mockStoreState.pendingMatchData = {
+      id: draftId,
+      timestamp: draftTimestamp,
+      player: 'Tester',
+      mode: 'Artifact Brawl',
+      teammates: ['Tester'],
+      artifacts: [
+        'C:\\match_artifacts\\8181\\capture_map.png',
+        'C:\\match_artifacts\\8181\\capture_crew.png',
+      ],
+      ocrState: 'queued',
+    };
+    mockStoreState.matches = [{
+      id: draftId,
+      timestamp: draftTimestamp,
+      date: '3/21/2026',
+      mode: 'Artifact Brawl',
+      player: 'Tester',
+      teammates: ['Tester'],
+      opponents: [],
+      hero: 'Adrian',
+      ship: '',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      time: '00:00',
+      notes: '',
+      artifacts: [
+        'C:\\match_artifacts\\8181\\capture_map.png',
+        'C:\\match_artifacts\\8181\\capture_crew.png',
+      ],
+      telemetryDraftState: 'active',
+      ocrState: 'queued',
+    }];
+    vi.mocked(getMatchArtifactsStructured).mockResolvedValue({
+      images: [
+        'C:\\match_artifacts\\8181\\capture_map.png',
+        'C:\\match_artifacts\\8181\\capture_crew.png',
+        'C:\\match_artifacts\\8181\\capture_result.png',
+      ],
+      imageFiles: [],
+      telemetry: [],
+    });
+    electronInvokeMock.mockResolvedValue({
+      success: true,
+      data: { filePath: 'C:\\match_artifacts\\8181\\capture_result.png' },
+    });
+    vi.mocked(rerunOCRMulti).mockResolvedValue({
+      success: true,
+      perFile: [
+        {
+          imagePath: 'C:\\match_artifacts\\8181\\capture_map.png',
+          success: true,
+        },
+        {
+          imagePath: 'C:\\match_artifacts\\8181\\capture_crew.png',
+          success: true,
+        },
+      ],
+      data: {
+        screenshotType: 'crew_hub',
+        artifacts: [
+          'C:\\match_artifacts\\8181\\capture_map.png',
+          'C:\\match_artifacts\\8181\\capture_crew.png',
+        ],
+        playerShip: { shipType: 'Hunter', teamName: 'Tester Crew', confidence: 93 },
+        playerTeamName: 'Tester Crew',
+        playerShipName: 'Tester Crew',
+        reachModifiers: [{ name: 'Ionized', confidence: 91, rawText: 'Ionized' }],
+        enemyShips: [{ teamName: 'Enemy One', shipType: 'Bastion', color: 'red' }],
+        teammates: [{ name: 'Wingmate', confidence: 88 }],
+        opponentTeams: [{
+          teamName: 'Enemy One',
+          shipType: 'Bastion',
+          color: 'red',
+          players: [{ name: 'EnemyPilot', confidence: 85 }],
+          confidence: 85,
+        }],
+        overallConfidence: 92,
+        captureTimestamp: Date.now(),
+        rawText: 'Wingmate EnemyPilot Ionized',
+        ocrSource: 'local',
+      },
+    });
+
+    const { result } = renderHook(() => useMatchSubmission());
+
+    let finalized;
+    await act(async () => {
+      finalized = await result.current.autoFinalizeResultScreenCapture({
+        imageBase64: 'data:image/png;base64,ZmFrZQ==',
+        resultData: {
+          result: 'Win',
+          winType: 'artifact',
+          placement: 1,
+        },
+        matchId: draftId,
+      });
+    });
+
+    expect(finalized).toEqual({
+      success: true,
+      matchId: draftId,
+      artifactPath: 'C:\\match_artifacts\\8181\\capture_result.png',
+      artifactPaths: ['C:\\match_artifacts\\8181\\capture_result.png'],
+    });
+    expect(rerunOCRMulti).not.toHaveBeenCalled();
+    expect(updateMatch).toHaveBeenCalledTimes(1);
+    expect(updateMatch.mock.calls[0][0].result).toBe('Win');
+
+    await act(async () => {
+      vi.runAllTimers();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(rerunOCRMulti).toHaveBeenCalledWith(
+      [
+        'C:\\match_artifacts\\8181\\capture_map.png',
+        'C:\\match_artifacts\\8181\\capture_crew.png',
+      ],
+      'Tester',
+      mockStoreState.ocrMode,
+      mockStoreState.ocrRegions,
+      { forceUncached: true },
+    );
+    expect(updateMatch).toHaveBeenCalledTimes(3);
+    expect(updateMatch.mock.calls[1][0]).toEqual(expect.objectContaining({
+      id: draftId,
+      ocrState: 'processing',
+    }));
+    expect(updateMatch.mock.calls[2][0]).toEqual(expect.objectContaining({
+      id: draftId,
+      ship: 'Hunter',
+      teammates: ['Tester', 'Wingmate'],
+      opponents: ['EnemyPilot'],
+      reachModifiers: ['Ionized'],
+      artifactSource: undefined,
+      ocrState: 'reviewing',
+    }));
+
+    vi.useRealTimers();
   });
 
   it('discardTelemetryDraft removes draft artifacts, deletes the draft, and clears submission state', async () => {

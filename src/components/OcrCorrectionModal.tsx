@@ -39,14 +39,16 @@ import { sanitizeOpponentTeamsAgainstFriendlyRoster } from '../utils/ocr/friendl
 
 interface OcrCorrectionModalProps {
     isOpen: boolean;
+    isActive?: boolean;
     onClose: () => void;
     onAcceptAll: () => void;
-    screenshots?: string[];
+    screenshots?: string[]; 
     embedded?: boolean;
     hideFooterActions?: boolean;
     onEmbeddedFooterActionsChange?: ((actions: {
         discard: () => void;
         saveAndClose: () => void;
+        commitDraft: () => boolean;
     } | null) => void) | null;
     onRequestRerunOcr?: () => void;
     rerunOcrDisabled?: boolean;
@@ -96,6 +98,8 @@ interface SubmitCorrectionsOptions {
     closeAfterApply?: boolean;
     autoAcceptHighConfidence?: boolean;
     correctionOverrides?: Record<string, string>;
+    notify?: boolean;
+    invokeOnAcceptAll?: boolean;
 }
 
 const IMAGE_FILE_PATTERN = /\.(png|jpe?g|webp|bmp|gif)$/i;
@@ -360,6 +364,10 @@ const serializeTeamDraftSeed = (teams: TeamDraft[]): string => JSON.stringify(
     }))
 );
 
+const serializeModifierDraftSeed = (modifiers: string[]): string => JSON.stringify(
+    dedupeModifierNames(modifiers)
+);
+
 const clonePendingMatchDraft = (value: Partial<Match> | null | undefined): Partial<Match> | null => {
     if (!value) return null;
     return {
@@ -443,6 +451,7 @@ const buildSessionShipTypeMapFromDraft = (
 
 export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     isOpen,
+    isActive = true,
     onClose,
     onAcceptAll,
     screenshots,
@@ -513,8 +522,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     const modifierSuggestionsId = useId();
     const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
     const scrollBodyRef = useRef<HTMLDivElement | null>(null);
-    const suppressSeedSyncRef = useRef(false);
-    const teamDraftSeedRef = useRef<string>('');
+    const reviewSeedSignatureRef = useRef<string>('');
     const initialTeamDraftRef = useRef<TeamDraft[]>([]);
     const initialPendingDraftRef = useRef<Partial<Match> | null>(null);
     const initialSessionShipTypesRef = useRef<Record<string, string>>({});
@@ -523,7 +531,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     const dialogTitleId = useId();
     const dialogDescriptionId = useId();
     const evidenceSectionRef = useRef<HTMLElement | null>(null);
-    const focusTrapRef = useFocusTrap<HTMLDivElement>(isOpen && pendingBatchAction === null);
+    const focusTrapRef = useFocusTrap<HTMLDivElement>(isOpen && isActive && pendingBatchAction === null);
     const { announce } = useAriaLiveRegion(isOpen);
     const reviewScreenshots = useMemo(() => (
         (screenshots || [])
@@ -584,8 +592,47 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
             formatArtifactSourceModifier(pendingMatchData?.artifactSource),
         ])
     ), [detectedHazards, pendingMatchData?.artifactSource, pendingMatchData?.reachModifiers]);
+    const seededModifierDraftSignature = useMemo(
+        () => serializeModifierDraftSeed(seededModifierDraft),
+        [seededModifierDraft]
+    );
     const [modifierDraft, setModifierDraft] = useState<string[]>(() => seededModifierDraft);
     const [modifierInput, setModifierInput] = useState('');
+    const reviewSeedSignature = useMemo(() => JSON.stringify({
+        matchId: Number(pendingMatchData?.id || 0) || null,
+        ocrState: normalizeSubmittedName(String(pendingMatchData?.ocrState || '')),
+        ocrReviewedAt: Number(pendingMatchData?.ocrReviewedAt || 0) || 0,
+        teamDraft: seededTeamDraftSignature,
+        modifierDraft: seededModifierDraftSignature,
+        sessionShipTypes: serializeShipTypeMap(sessionShipTypes),
+        screenshotCount: reviewScreenshots.length,
+    }), [
+        pendingMatchData?.id,
+        pendingMatchData?.ocrReviewedAt,
+        pendingMatchData?.ocrState,
+        reviewScreenshots.length,
+        seededModifierDraftSignature,
+        seededTeamDraftSignature,
+        sessionShipTypes,
+    ]);
+    const resetReviewDraftState = useCallback(() => {
+        setCorrections({});
+        setIgnored(new Set());
+        setSearchQuery({});
+        setActiveInputPlayer(null);
+        setDropdownAnchor(null);
+        setPendingBatchAction(null);
+        setTeamDraft(seededTeamDraft);
+        setModifierDraft(seededModifierDraft);
+        setModifierInput('');
+        initialTeamDraftRef.current = seededTeamDraft.map((team) => ({
+            ...team,
+            players: [...(team.players || [])],
+        }));
+        initialPendingDraftRef.current = clonePendingMatchDraft(pendingMatchData);
+        initialSessionShipTypesRef.current = { ...(sessionShipTypes || {}) };
+        setSelectedScreenshotIdx(0);
+    }, [pendingMatchData, seededModifierDraft, seededTeamDraft, sessionShipTypes]);
     const previewCorrections = useMemo<Record<string, string>>(() => (
         Object.entries(corrections).reduce<Record<string, string>>((acc, [ocrName, correctedName]) => {
             const normalizedOcrName = normalizeSubmittedName(ocrName);
@@ -689,37 +736,14 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     }, []);
 
     useEffect(() => {
-        if (!isOpen) return;
-        setCorrections({});
-        setIgnored(new Set());
-        setSearchQuery({});
-        setActiveInputPlayer(null);
-        setDropdownAnchor(null);
-        setPendingBatchAction(null);
-        setTeamDraft(seededTeamDraft);
-        setModifierDraft(seededModifierDraft);
-        setModifierInput('');
-        initialTeamDraftRef.current = seededTeamDraft.map((team) => ({
-            ...team,
-            players: [...(team.players || [])],
-        }));
-        initialPendingDraftRef.current = clonePendingMatchDraft(pendingMatchData);
-        initialSessionShipTypesRef.current = { ...(sessionShipTypes || {}) };
-        teamDraftSeedRef.current = seededTeamDraftSignature;
-        setSelectedScreenshotIdx(0);
-    }, [isOpen, pendingMatchData, seededModifierDraft, seededTeamDraft, seededTeamDraftSignature, sessionShipTypes]);
-
-    useEffect(() => {
-        if (!isOpen) return;
-        if (suppressSeedSyncRef.current) {
-            suppressSeedSyncRef.current = false;
-            teamDraftSeedRef.current = seededTeamDraftSignature;
+        if (!isOpen) {
+            reviewSeedSignatureRef.current = '';
             return;
         }
-        if (teamDraftSeedRef.current === seededTeamDraftSignature) return;
-        setTeamDraft(seededTeamDraft);
-        teamDraftSeedRef.current = seededTeamDraftSignature;
-    }, [isOpen, seededTeamDraft, seededTeamDraftSignature]);
+        if (reviewSeedSignatureRef.current === reviewSeedSignature) return;
+        resetReviewDraftState();
+        reviewSeedSignatureRef.current = reviewSeedSignature;
+    }, [isOpen, resetReviewDraftState, reviewSeedSignature]);
 
     useEffect(() => {
         const activePlayer = activeInputPlayer;
@@ -960,8 +984,10 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         }, {});
     };
 
-    const handleSubmitCorrections = (options?: SubmitCorrectionsOptions) => {
+    const handleSubmitCorrections = (options?: SubmitCorrectionsOptions): boolean => {
         const closeAfterApply = options?.closeAfterApply ?? false;
+        const notify = options?.notify ?? true;
+        const invokeOnAcceptAll = options?.invokeOnAcceptAll ?? closeAfterApply;
         const autoAcceptOverrides = options?.autoAcceptHighConfidence
             ? buildAutoAcceptCorrectionOverrides(ocrBatchAcceptThreshold)
             : {};
@@ -1200,16 +1226,19 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
             },
         });
 
-        announce(`Applied ${corrected + added} correction decisions.`, 'polite');
-        setToast({
-            message: closeAfterApply
-                ? `OCR review applied: ${corrected + added} player decisions saved.`
-                : `OCR review applied: ${corrected + added} player decisions ready to save.`,
-            type: 'success',
-        });
-        if (closeAfterApply) {
+        if (notify) {
+            announce(`Applied ${corrected + added} correction decisions.`, 'polite');
+            setToast({
+                message: closeAfterApply
+                    ? `OCR review applied: ${corrected + added} player decisions saved.`
+                    : `OCR review applied: ${corrected + added} player decisions ready to save.`,
+                type: 'success',
+            });
+        }
+        if (closeAfterApply && invokeOnAcceptAll) {
             onAcceptAll();
         }
+        return true;
     };
 
     const applyBatchAccept = (threshold: number): Record<string, string> => {
@@ -1298,16 +1327,24 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
             autoAcceptHighConfidence: autoAcceptOnSaveAndApply,
         });
     };
+    const handleCommitDraft = (): boolean => handleSubmitCorrections({
+        closeAfterApply: false,
+        notify: false,
+        invokeOnAcceptAll: false,
+    });
     const embeddedDiscardActionRef = useRef<() => void>(() => {});
     const embeddedSaveActionRef = useRef<() => void>(() => {});
+    const embeddedCommitDraftActionRef = useRef<() => boolean>(() => false);
     embeddedDiscardActionRef.current = handleDiscardReview;
     embeddedSaveActionRef.current = handleSaveAndClose;
+    embeddedCommitDraftActionRef.current = handleCommitDraft;
 
     useEffect(() => {
         if (!embedded || !onEmbeddedFooterActionsChange) return;
         onEmbeddedFooterActionsChange({
             discard: () => embeddedDiscardActionRef.current(),
             saveAndClose: () => embeddedSaveActionRef.current(),
+            commitDraft: () => embeddedCommitDraftActionRef.current(),
         });
         return () => {
             onEmbeddedFooterActionsChange(null);
@@ -1395,7 +1432,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         }
     }, [teamDraft, announce, setToast]);
 
-    const shortcutsEnabled = isOpen && pendingBatchAction === null && activeInputPlayer === null;
+    const shortcutsEnabled = isOpen && isActive && pendingBatchAction === null && activeInputPlayer === null;
     useKeyboardShortcuts([
         { key: 'Enter', ctrl: true, handler: () => handleSubmitCorrections() },
         {
@@ -1418,7 +1455,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         <>
             <div
                 className={embedded
-                    ? 'w-full flex flex-col'
+                    ? `${isActive ? 'w-full flex flex-col' : 'hidden'}`
                     : 'fixed inset-0 md3-dialog-scrim z-top-second flex items-start justify-center p-4 overflow-y-auto animate-fade-in'}
                 onClick={embedded ? undefined : onClose}
             >
@@ -1426,6 +1463,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                     ref={focusTrapRef}
                     role="dialog"
                     aria-modal="true"
+                    aria-hidden={embedded && !isActive ? 'true' : undefined}
                     aria-labelledby={dialogTitleId}
                     aria-describedby={isHelpBannerDismissed ? undefined : dialogDescriptionId}
                     className={embedded

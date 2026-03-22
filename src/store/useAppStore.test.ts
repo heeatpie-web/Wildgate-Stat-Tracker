@@ -57,14 +57,7 @@ describe('useAppStore OCR preference hydration', () => {
     expect(store.getState().autoCaptureWaitMultiplier).toBe(0.5);
     expect(store.getState().tacticalMapKeybind).toBe('');
     expect(store.getState().autoPopulateRosterOnSave).toBe(true);
-    expect(store.getState().pixelMonitorEnabled).toBe(false);
-    expect(store.getState().pixelMonitorX).toBe(1492);
-    expect(store.getState().pixelMonitorY).toBe(203);
-    expect(store.getState().pixelMonitorWidth).toBe(170);
-    expect(store.getState().pixelMonitorHeight).toBe(56);
-    expect(store.getState().pixelMonitorIntervalMs).toBe(3000);
-    expect(store.getState().pixelMonitorChangeSensitivity).toBe(30);
-    expect(store.getState().fullAutoEnabled).toBe(false);
+    expect(store.getState().fullAutoEnabled).toBe(true);
   });
 
   it('preserves explicit saved OCR preferences for existing users', async () => {
@@ -117,18 +110,21 @@ describe('useAppStore OCR preference hydration', () => {
     expect(store.getState().uidMappings.perks).toEqual({ PERK_VOIDWEAVE: 'Afterburn' });
   });
 
-  it('persists full auto and pixel monitor settings through storage', async () => {
+  it('defaults Full Auto on while preserving an explicit persisted opt-out', async () => {
+    const { store: disabledStore } = await loadStore({
+      fullAutoEnabled: false,
+    });
+    expect(disabledStore.getState().fullAutoEnabled).toBe(false);
+
+    const { store: defaultStore } = await loadStore({});
+    expect(defaultStore.getState().fullAutoEnabled).toBe(true);
+  });
+
+  it('persists full auto settings through storage', async () => {
     const { store, saveMock } = await loadStore({});
 
     store.setState({
       fullAutoEnabled: true,
-      pixelMonitorEnabled: true,
-      pixelMonitorX: 1820,
-      pixelMonitorY: 240,
-      pixelMonitorWidth: 220,
-      pixelMonitorHeight: 72,
-      pixelMonitorIntervalMs: 4200,
-      pixelMonitorChangeSensitivity: 41,
     });
 
     await waitFor(() => {
@@ -138,13 +134,6 @@ describe('useAppStore OCR preference hydration', () => {
     const savedPayload = saveMock.mock.calls.at(-1)?.[0];
     expect(savedPayload.settings).toEqual(expect.objectContaining({
       fullAutoEnabled: true,
-      pixelMonitorEnabled: true,
-      pixelMonitorX: 1820,
-      pixelMonitorY: 240,
-      pixelMonitorWidth: 220,
-      pixelMonitorHeight: 72,
-      pixelMonitorIntervalMs: 4200,
-      pixelMonitorChangeSensitivity: 41,
     }));
   });
 });

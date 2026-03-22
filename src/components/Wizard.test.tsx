@@ -57,6 +57,9 @@ const discardTelemetryDraft = vi.fn();
 const setPendingMatchDataFromStore = vi.fn();
 const rerunOCRMulti = vi.fn();
 const bundleMatchArtifacts = vi.fn();
+const ocrModalMockConfig = {
+    commitDraft: vi.fn(() => false),
+};
 const appStoreState = {
     ocrMode: 'local',
     ocrRegions: undefined,
@@ -109,6 +112,7 @@ vi.mock('./OcrCorrectionModal', () => ({
             onEmbeddedFooterActionsChange?.({
                 discard: () => closeRef.current?.(),
                 saveAndClose: () => acceptRef.current?.(),
+                commitDraft: () => ocrModalMockConfig.commitDraft(),
             });
             return () => onEmbeddedFooterActionsChange?.(null);
         }, [onEmbeddedFooterActionsChange]);
@@ -149,6 +153,12 @@ describe('Wizard', () => {
         rerunOCRMulti.mockResolvedValue({
             success: false,
             perFile: [],
+        });
+        ocrModalMockConfig.commitDraft.mockReset();
+        ocrModalMockConfig.commitDraft.mockReturnValue(false);
+        setPendingMatchDataFromStore.mockImplementation((next: any) => {
+            appStoreState.pendingMatchData = next;
+            gameData.pendingMatchData = next;
         });
         uiState.setShowWizard.mockImplementation((next: 'Win' | 'Loss' | 'Draw' | 'Match Result' | null) => {
             uiState.showWizard = next;
@@ -319,6 +329,108 @@ describe('Wizard', () => {
         expect(getSubmitResultsButton()).toBeEnabled();
         fireEvent.click(screen.getByRole('button', { name: /save results only/i }));
         expect(saveResultDraft).toHaveBeenCalledWith('Artifact');
+    });
+
+    it('auto-applies pending OCR review when saving from the result tab', async () => {
+        const { Wizard } = await import('./Wizard');
+        gameData.pendingMatchData = {
+            id: 1202,
+            player: 'TestPilot',
+            result: 'Win',
+            subType: 'Combat',
+            ocrState: 'reviewing',
+            teammates: ['TestPilot', 'Wingman'],
+            opponents: [],
+            opponentTeams: [{
+                teamName: 'Enemy Team',
+                shipType: 'Scout',
+                color: 'blue',
+                players: ['EnemyOne', 'EnemyTwo'],
+            }],
+            loadout: {
+                hero: 'Adrian',
+                ship: 'Hunter',
+                weapons: [],
+                equipment: [],
+            },
+            kills: { 'AI Legion': 0 },
+        };
+        appStoreState.pendingMatchData = gameData.pendingMatchData;
+        uiState.showWizard = 'Win';
+
+        render(<Wizard />);
+
+        expect(screen.getByTestId('wizard-auto-apply-ocr-hint')).toHaveTextContent('OCR review will be auto-applied when you save.');
+
+        fireEvent.click(getSubmitResultsButton());
+
+        expect(setPendingMatchDataFromStore).toHaveBeenCalledWith(expect.objectContaining({
+            ocrState: 'saved',
+            teammates: ['Wingman'],
+            opponents: ['EnemyOne', 'EnemyTwo'],
+        }));
+        expect(processFinalSubmission).toHaveBeenCalledWith('Combat');
+        expect(screen.queryByRole('button', { name: /save and apply/i })).not.toBeInTheDocument();
+    });
+
+    it('runs the unified wizard commit before save-results-only so hidden OCR draft edits are not lost', async () => {
+        const { Wizard } = await import('./Wizard');
+        gameData.pendingMatchData = {
+            id: 1203,
+            player: 'TestPilot',
+            result: 'Win',
+            subType: 'Combat',
+            ocrState: 'reviewing',
+            teammates: ['TestPilot', 'Wingman'],
+            opponents: [],
+            opponentTeams: [{
+                teamName: 'Enemy Team',
+                shipType: 'Scout',
+                color: 'blue',
+                players: ['EnemyOne'],
+            }],
+            loadout: {
+                hero: 'Adrian',
+                ship: 'Hunter',
+                weapons: [],
+                equipment: [],
+            },
+            kills: { 'AI Legion': 0 },
+        };
+        appStoreState.pendingMatchData = gameData.pendingMatchData;
+        uiState.showWizard = 'Win';
+        ocrModalMockConfig.commitDraft.mockImplementation(() => {
+            const committedDraft = {
+                ...appStoreState.pendingMatchData,
+                teammates: ['TestPilot', 'Wingman Edited'],
+                opponents: ['Enemy Edited'],
+                opponentTeams: [{
+                    teamName: 'Enemy Team',
+                    shipType: 'Scout',
+                    color: 'blue',
+                    players: ['Enemy Edited'],
+                }],
+                reachModifiers: ['Ancient Vault'],
+                ocrReviewedAt: 1_700_000_123_000,
+                ocrState: 'ready',
+            };
+            setPendingMatchDataFromStore(committedDraft);
+            return true;
+        });
+
+        render(<Wizard />);
+
+        fireEvent.click(screen.getByRole('button', { name: /save results only/i }));
+
+        expect(ocrModalMockConfig.commitDraft).toHaveBeenCalledTimes(1);
+        expect(setPendingMatchDataFromStore).toHaveBeenLastCalledWith(expect.objectContaining({
+            teammates: ['Wingman Edited'],
+            opponents: ['Enemy Edited'],
+            reachModifiers: ['Ancient Vault'],
+            ocrState: 'saved',
+            ocrReviewedAt: 1_700_000_123_000,
+        }));
+        expect(saveResultDraft).toHaveBeenCalledWith('Combat');
     });
 
     it('discards the underlying telemetry draft from the wizard footer instead of only closing the modal', async () => {
@@ -503,7 +615,7 @@ describe('Wizard', () => {
 
         render(<Wizard />);
         fireEvent.click(screen.getByRole('button', { name: /artifact win/i }));
-        fireEvent.click(screen.getByRole('button', { name: /ocr review/i }));
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr review/i })[0]);
 
         expect(screen.getByText('Prospector Loadout')).toBeInTheDocument();
         expect(screen.getByText('Telemetry')).toBeInTheDocument();
@@ -623,7 +735,7 @@ describe('Wizard', () => {
         uiState.showWizard = 'Match Result';
 
         const { container } = render(<Wizard />);
-        fireEvent.click(screen.getByRole('button', { name: /ocr review/i }));
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr review/i })[0]);
 
         const ocrPanel = screen.getByTestId('wizard-ocr-tab-panel');
         const embeddedShell = screen.getByTestId('ocr-correction-embedded-shell');
@@ -662,7 +774,7 @@ describe('Wizard', () => {
         uiState.showWizard = 'Win';
 
         const { rerender } = render(<Wizard />);
-        fireEvent.click(screen.getByRole('button', { name: /ocr review/i }));
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr review/i })[0]);
 
         expect(screen.getByTestId('wizard-ocr-processing-overlay')).toBeInTheDocument();
         expect(screen.getByText(/processing ocr/i)).toBeInTheDocument();
@@ -711,7 +823,7 @@ describe('Wizard', () => {
         uiState.showWizard = 'Win';
 
         render(<Wizard />);
-        fireEvent.click(screen.getByRole('button', { name: /ocr review/i }));
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr review/i })[0]);
         fireEvent.click(screen.getByRole('button', { name: /save and apply/i }));
 
         await waitFor(() => {
@@ -729,6 +841,7 @@ describe('Wizard', () => {
         const { Wizard } = await import('./Wizard');
         gameData.pendingMatchData = {
             id: 916,
+            subType: 'Combat',
             loadout: {
                 hero: 'Adrian',
                 ship: 'Hunter',
@@ -760,20 +873,15 @@ describe('Wizard', () => {
         appStoreState.wizardCloseOnOcrApply = true;
         uiState.showWizard = 'Win';
 
-        const { rerender } = render(<Wizard />);
-        fireEvent.click(screen.getByRole('button', { name: /ocr review/i }));
-        fireEvent.click(screen.getByRole('button', { name: /save and apply/i }));
+        render(<Wizard />);
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr review/i })[0]);
+        fireEvent.click(screen.getByRole('button', { name: /save and close/i }));
 
-        await waitFor(() => {
-            expect(uiState.setShowWizard).toHaveBeenCalledWith(null);
-        });
-        rerender(<Wizard />);
-
-        expect(screen.queryByRole('button', { name: /save and apply/i })).not.toBeInTheDocument();
         expect(gameData.updateMatch).toHaveBeenCalledWith(expect.objectContaining({
             id: 916,
             ocrState: 'saved',
         }));
+        expect(processFinalSubmission).toHaveBeenCalledWith('Combat');
     });
 
     it('keeps prospector loadout collapsed by default in the OCR tab', async () => {
@@ -795,7 +903,7 @@ describe('Wizard', () => {
 
         render(<Wizard />);
         fireEvent.click(screen.getByRole('button', { name: /artifact win/i }));
-        fireEvent.click(screen.getByRole('button', { name: /ocr review/i }));
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr review/i })[0]);
 
         expect(screen.getByRole('button', {
             name: /weapons: 1 · equipment: 1 · perk: 1/i,
@@ -855,7 +963,7 @@ describe('Wizard', () => {
         });
 
         render(<Wizard />);
-        fireEvent.click(screen.getByRole('button', { name: /ocr review/i }));
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr review/i })[0]);
         fireEvent.click(screen.getByRole('button', { name: /re-run ocr/i }));
 
         await waitFor(() => {
