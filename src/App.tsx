@@ -303,8 +303,9 @@ const IMAGE_ARTIFACT_PATTERN = /\.(png|jpe?g|webp|bmp|gif)$/i;
 const TELEMETRY_AUTO_CAPTURE_ARTIFACT_TARGET = 3;
 const PREGAME_LOBBY_MACRO_DELAY_MS = 5_000;
 // `capture-screen` already hides the overlay window and waits about 300ms before grabbing the game frame.
-const FULL_AUTO_RESULT_OCR_POST_FLASH_DELAY_MS = 0;
-const FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS = 0;
+// Add a small extra buffer so the result flash fully clears before the OCR burst starts.
+const FULL_AUTO_RESULT_OCR_POST_FLASH_DELAY_MS = 250;
+const FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS = 250;
 const FULL_AUTO_RESULT_OCR_RETRY_DELAY_MS = 300;
 const FULL_AUTO_RESULT_OCR_MAX_ATTEMPTS = 3;
 const FULL_AUTO_BACKGROUND_RESULT_OCR_INTERVAL_MS = 2_000;
@@ -3169,7 +3170,7 @@ const App: React.FC = () => {
     const handleResultFlashDetectedWithDebug = useCallback(async () => {
         appendResultFlashDebugEvent('detected', 'Flash threshold held on the game capture; scheduling screenshot burst');
         const scheduledMatchId = normalizedActiveTelemetryDraftMatchId;
-        console.log('[Brain] Flash signal received - scheduling result capture in 0ms', {
+        console.log(`[Brain] Flash signal received - scheduling result capture in ${FULL_AUTO_RESULT_OCR_POST_FLASH_DELAY_MS}ms`, {
             matchId: scheduledMatchId,
             delayMs: FULL_AUTO_RESULT_OCR_POST_FLASH_DELAY_MS,
         });

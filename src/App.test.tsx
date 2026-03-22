@@ -1018,7 +1018,7 @@ describe('App', () => {
     vi.useRealTimers();
   });
 
-  it('starts the result screenshot burst immediately after flash detection', async () => {
+  it('starts the result screenshot burst 250ms after flash detection', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
     uiState.telemetryLifecycleStage = 'live';
@@ -1085,9 +1085,15 @@ describe('App', () => {
       });
 
       expect(consoleLogSpy).toHaveBeenCalledWith(
-        '[Brain] Flash signal received - scheduling result capture in 0ms',
-        expect.objectContaining({ matchId: 4321, delayMs: 0 }),
+        '[Brain] Flash signal received - scheduling result capture in 250ms',
+        expect.objectContaining({ matchId: 4321, delayMs: 250 }),
       );
+      expect(api.invoke).not.toHaveBeenCalledWith('capture-screen');
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(250);
+      });
+
       expect(api.invoke).toHaveBeenCalledWith('capture-screen');
       expect(api.invoke).toHaveBeenCalledWith('save-screenshot', {
         imageBase64: 'image-base64',
@@ -1114,7 +1120,7 @@ describe('App', () => {
     }
   });
 
-  it('upgrades an in-flight flash detection to tripwire text before the retry burst continues', async () => {
+  it('upgrades a pending flash detection to tripwire text before the delayed burst starts', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
     uiState.telemetryLifecycleStage = 'live';
@@ -1215,16 +1221,11 @@ describe('App', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(300);
     });
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(2500);
-    });
     await flashPromise;
 
     const resultScanCalls = api.invoke.mock.calls.filter(([channel]) => channel === 'scan-result-screen');
-    expect(resultScanCalls.length).toBeGreaterThan(1);
-    expect(resultScanCalls[0]?.[1]?.detectionMethod).toBe('flash');
-    expect(resultScanCalls.slice(1).every(([, payload]) => payload?.detectionMethod === 'text')).toBe(true);
+    expect(resultScanCalls.length).toBeGreaterThan(0);
+    expect(resultScanCalls.every(([, payload]) => payload?.detectionMethod === 'text')).toBe(true);
     expect(autoFinalizeResultScreenCaptureMock).toHaveBeenCalledWith(expect.objectContaining({
       imageBase64: 'image-base64',
       resultData: expect.objectContaining({ result: 'Loss', detectionMethod: 'text' }),
@@ -1323,27 +1324,30 @@ describe('App', () => {
       await Promise.resolve();
     });
 
+    expect(api.invoke).not.toHaveBeenCalledWith('capture-screen');
+
+    // Advance past the 250ms OCR delay so the initial result screenshot and scan can run.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+
     expect(api.invoke).toHaveBeenCalledWith('capture-screen');
     expect(api.invoke).toHaveBeenCalledWith('scan-result-screen', {
       imageBase64: 'image-base64',
       detectionMethod: 'text',
     });
 
-    // New flow: 2000ms settle (FULL_AUTO_FINAL_MOMENTS_SETTLE_MS) before tab 1 capture
+    // After the initial capture, wait through the 2000ms settle before toggling to tab 2.
     await act(async () => {
-      vi.advanceTimersByTime(2000);
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(2000);
     });
 
     // After settle + tab1 capture + tab1 scan, show-damage-sources should be called
     expect(sendGameUiActionMock).toHaveBeenCalledWith('show-damage-sources');
 
-    // Advance past FULL_AUTO_DAMAGE_SOURCES_TRANSITION_MS (100ms) for tab2 capture
+    // Advance through the repeated ] taps (150ms + 150ms) and the final 100ms tab transition.
     await act(async () => {
-      vi.advanceTimersByTime(200);
+      await vi.advanceTimersByTimeAsync(400);
       await triggerPromise;
     });
 
