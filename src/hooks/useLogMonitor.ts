@@ -233,10 +233,11 @@ const TELEMETRY_LOADOUT_SIGNAL_KEYS = new Set([
 ]);
 const TELEMETRY_LOADOUT_RECORD_KEY_PATTERN = /(loadout|shipselection|gamemodeshipselection|characterloadout)/i;
 const TELEMETRY_SHARED_SHIP_SELECTION_PATTERN = /(shipselection|gamemodeshipselection)/i;
-const MATCHMAKER_START_STATE_PATTERN = /(inprogress|loading|travel|starting|active|playing|ingame|in_game|matchstarted|(?:mm_)?game_found|(?:mm_)?server_found)/i;
+const MATCHMAKER_LOADING_STATE_PATTERN = /(inprogress|loading|travel|starting|active|playing|ingame|in_game|matchstarted|(?:mm_)?game_found|(?:mm_)?server_found)/i;
 const PRACTICE_RANGE_MATCHMAKER_BOOTSTRAP_STATE_PATTERN = /(looking|search|pending|queue|queued|waiting|matchmaking|travel|starting|active|playing|ingame|in_game|matchstarted|(?:mm_)?game_found|(?:mm_)?server_found)/i;
 const PRACTICE_RANGE_MATCHMAKER_TERMINAL_STATE_PATTERN = /(cancel|canceled|cancelled|not_matchmaking|idle|failed|error|closed|ended|completed|setup)/i;
 const PRACTICE_RANGE_STARTUP_RECOVERY_MAX_AGE_SECONDS = 15 * 60;
+const MAX_PREGAME_LOADING_EVENT_AGE_SECONDS = 30;
 const TELEMETRY_MAP_NAME_KEYS = ['loadedMap', 'loadingMap'];
 const TELEMETRY_MATCHMAKER_STATE_KEYS = [
     'newStatus', 'new_status',
@@ -323,8 +324,8 @@ const extractTelemetryDurationOverrideSeconds = (
     return normalizedDuration;
 };
 
-const isLiveMatchmakerState = (value: unknown): boolean =>
-    typeof value === 'string' && MATCHMAKER_START_STATE_PATTERN.test(value.trim());
+const isLoadingMatchmakerState = (value: unknown): boolean =>
+    typeof value === 'string' && MATCHMAKER_LOADING_STATE_PATTERN.test(value.trim());
 
 const isPracticeRangeBootstrapMatchmakerState = (value: unknown): boolean => {
     const normalized = String(value || '').trim().toLowerCase();
@@ -1277,6 +1278,7 @@ export const useLogMonitor = (activeUser?: string) => {
                     const loadingMapName = typeof loadingMapRaw === 'string' ? loadingMapRaw : '';
                     const loadingMapNameLower = loadingMapName.toLowerCase();
                     const loadingMatchState = pickTelemetryValueCaseInsensitive(payloadSources, ['matchState', 'match_state']);
+                    const loadingMatchStateText = toStringOrEmpty(loadingMatchState).trim();
                     const practiceRangeMapSignal = !!loadingMapName && isPracticeRangeMap(loadingMapName);
                     const practiceRangeMatchPoolSignal = isPracticeRangeMatchPool(matchPoolValue);
                     if (practiceRangeMatchPoolSignal && currentMatchSessionId) {
@@ -1290,7 +1292,7 @@ export const useLogMonitor = (activeUser?: string) => {
                         || practiceRangeSessionSignal
                     );
                     if (IS_TELEMETRY_DEBUG && name === 'NebLoadingScreen') {
-                        console.log('[LifecycleStage] NebLoadingScreen map=', loadingMapName || null, 'matchState=', loadingMatchState || null);
+                        console.log('[LifecycleStage] NebLoadingScreen map=', loadingMapName || null, 'matchState=', loadingMatchStateText || null);
                     }
                     if (IS_TELEMETRY_DEBUG && name === 'NebClientMatchmakerStateChange') {
                         console.log('[LifecycleStage] NebClientMatchmakerStateChange fields=', {
@@ -1365,10 +1367,28 @@ export const useLogMonitor = (activeUser?: string) => {
                     const loadingScreenStageSignal = name === 'NebLoadingScreen'
                         ? classifyTelemetryLifecycleStageFromMap(loadingMapName, loadingMatchState)
                         : null;
-                    const mapStartSignal = loadingScreenStageSignal === 'loading'
-                        || loadingScreenStageSignal === 'pregame'
-                        || loadingScreenStageSignal === 'live';
-                    const mapEndSignal = loadingScreenStageSignal === 'result';
+                    const stalePregameLoadingSignal = name === 'NebLoadingScreen'
+                        && loadingScreenStageSignal === 'pregame'
+                        && !practiceRangeSignal
+                        && ageSeconds > MAX_PREGAME_LOADING_EVENT_AGE_SECONDS;
+                    if (stalePregameLoadingSignal) {
+                        Logger.warn(
+                            'LogMonitor',
+                            `[LIFECYCLE] Skipped stale pregame loading-screen event ${JSON.stringify({
+                                at: new Date(gameTime).toISOString(),
+                                ageSeconds,
+                                loadingMap: loadingMapName || null,
+                                matchState: loadingMatchStateText || null,
+                            })}`,
+                        );
+                    }
+                    const effectiveLoadingScreenStageSignal = stalePregameLoadingSignal
+                        ? null
+                        : loadingScreenStageSignal;
+                    const mapStartSignal = effectiveLoadingScreenStageSignal === 'loading'
+                        || effectiveLoadingScreenStageSignal === 'pregame'
+                        || effectiveLoadingScreenStageSignal === 'live';
+                    const mapEndSignal = effectiveLoadingScreenStageSignal === 'result';
                     const explicitEmptySessionIdSignal = hasExplicitMatchSessionIdSignal && !currentMatchSessionId;
                     if (explicitEmptySessionIdSignal && (currentLifecycleStage === 'loading' || currentLifecycleStage === 'pregame')) {
                         Logger.debug(
@@ -1386,14 +1406,15 @@ export const useLogMonitor = (activeUser?: string) => {
                             telemetryLiveStartedAtRef.current == null
                             || Math.max(0, Math.floor((gameTime - telemetryLiveStartedAtRef.current) / 1000)) >= MIN_SESSION_END_GRACE_SECONDS
                         );
-                    const matchmakerStartSignal = name === 'NebClientMatchmakerStateChange'
+                    const matchmakerLoadingSignal = name === 'NebClientMatchmakerStateChange'
                         && !!currentMatchSessionId
-                        && (isLiveMatchmakerState(matchmakerState) || practiceRangeBootstrapSignal);
+                        && isLoadingMatchmakerState(matchmakerState);
                     const nextLifecycleStage = sessionEndSignal
                         ? 'result'
                         : (
-                            loadingScreenStageSignal
-                            || (matchmakerStartSignal ? 'live' : null)
+                            effectiveLoadingScreenStageSignal
+                            || (practiceRangeBootstrapSignal ? 'live' : null)
+                            || (matchmakerLoadingSignal ? 'loading' : null)
                         );
                     const startLifecycleSignal = nextLifecycleStage === 'loading'
                         || nextLifecycleStage === 'pregame'
@@ -1430,9 +1451,13 @@ export const useLogMonitor = (activeUser?: string) => {
                             practiceRangeSessionSignal,
                             hasExplicitMatchSessionIdSignal,
                             loadingScreenStageSignal,
+                            effectiveLoadingScreenStageSignal,
+                            stalePregameLoadingSignal,
+                            ageSeconds,
                             nextLifecycleStage,
                             mapStartSignal,
-                            matchmakerStartSignal,
+                            practiceRangeBootstrapSignal,
+                            matchmakerLoadingSignal,
                             mapEndSignal,
                             sessionEndSignal,
                             telemetryMatchMode,
@@ -1443,7 +1468,7 @@ export const useLogMonitor = (activeUser?: string) => {
                             hasDraft: !!telemetryDraftMatchIdRef.current,
                         })}`);
                     }
-                    if (loadingScreenStageSignal === 'live' && practiceRangeSignal) {
+                    if (effectiveLoadingScreenStageSignal === 'live' && practiceRangeSignal) {
                         Logger.info('LogMonitor', `Treating practice-range telemetry as live lifecycle stage: ${loadingMapName || String(matchPoolValue || '')}`);
                     }
                     if (nextLifecycleStage) {

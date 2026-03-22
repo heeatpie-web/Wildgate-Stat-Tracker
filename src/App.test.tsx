@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
+const loggerInfo = vi.fn();
 const loggerWarn = vi.fn();
 const getElectronAPIMock = vi.fn(() => null);
 const discardTelemetryDraftMock = vi.fn();
@@ -242,7 +243,7 @@ vi.mock('./hooks/useResultTextMonitor', () => ({
 vi.mock('./utils/logger', () => ({
   default: {
     debug: vi.fn(),
-    info: vi.fn(),
+    info: (...args: unknown[]) => loggerInfo(...args),
     warn: (...args: unknown[]) => loggerWarn(...args),
     error: vi.fn(),
     captureException: vi.fn(),
@@ -279,6 +280,7 @@ describe('App', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    loggerInfo.mockClear();
     window.localStorage.clear();
     window.sessionStorage.clear();
     getElectronAPIMock.mockReturnValue(null);
@@ -752,6 +754,52 @@ describe('App', () => {
     vi.useRealTimers();
   });
 
+  it('does not auto-start capture when standard/custom telemetry enters live', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
+    uiState.telemetryLifecycleStage = 'live';
+    uiState.telemetryLifecycleIsPracticeRange = false;
+    const draft = {
+      id: 7070,
+      timestamp: Date.now(),
+      date: '3/21/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      artifacts: [],
+      matchMode: 'artifactsandgates',
+    };
+    gameDataState.matches = [draft];
+    appStoreState.matches = [draft];
+
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(20_000);
+      await Promise.resolve();
+    });
+
+    expect(startAutoCaptureMock).not.toHaveBeenCalled();
+    expect(uiState.setTelemetryAutomationStatus).toHaveBeenCalledWith(expect.objectContaining({
+      phase: 'watching-result-flash',
+      message: 'Watching for match-end flash or result text',
+      matchId: 7070,
+    }));
+    expect(uiState.setTelemetryAutomationStatus).not.toHaveBeenCalledWith(expect.objectContaining({
+      phase: 'capturing-live-fallback',
+    }));
+    vi.useRealTimers();
+  });
+
   it('fires the pregame lobby macro once after the delayed lobby settle window', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
@@ -800,6 +848,10 @@ describe('App', () => {
       telemetryLifecycleStage: 'pregame',
       isMatchInProgress: false,
     }));
+    expect(loggerInfo).toHaveBeenCalledWith(
+      'AutoCapture',
+      expect.stringContaining('Pregame auto-capture triggered'),
+    );
 
     await act(async () => {
       vi.advanceTimersByTime(10_000);
@@ -845,6 +897,10 @@ describe('App', () => {
     });
 
     expect(startAutoCaptureMock).not.toHaveBeenCalled();
+    expect(loggerInfo).toHaveBeenCalledWith(
+      'AutoCapture',
+      expect.stringContaining('Skipping pregame auto-capture for practice range'),
+    );
     vi.useRealTimers();
   });
 
@@ -1104,47 +1160,6 @@ describe('App', () => {
 
     expect(startAutoCaptureMock).not.toHaveBeenCalled();
     vi.useRealTimers();
-  });
-
-  it('surfaces tactical-map-key failures for silent live fallback capture', async () => {
-    appStoreState.fullAutoEnabled = true;
-    uiState.telemetryLifecycleStage = 'live';
-    const draft = {
-      id: 777,
-      timestamp: Date.now(),
-      date: '3/19/2026',
-      mode: 'Artifact Brawl',
-      player: 'Pilot',
-      teammates: [],
-      opponents: [],
-      hero: 'Venture',
-      ship: 'Hunter (4 Player)',
-      reachModifiers: [],
-      kills: {},
-      result: 'Ongoing',
-      subType: 'Telemetry Draft',
-      telemetryDraftState: 'active',
-      artifacts: [],
-    };
-    gameDataState.matches = [draft];
-    appStoreState.matches = [draft];
-    startAutoCaptureMock.mockResolvedValue({ started: false, reason: 'missing-tactical-map-key' });
-
-    const { default: App } = await import('./App');
-    render(<App />);
-
-    await waitFor(() => {
-      expect(startAutoCaptureMock).toHaveBeenCalledTimes(1);
-    });
-
-    expect(uiState.setTelemetryAutomationStatus).toHaveBeenCalledWith(expect.objectContaining({
-      phase: 'failed',
-      message: expect.stringContaining('Tactical Map keybind'),
-    }));
-    expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({
-      message: expect.stringContaining('Tactical Map keybind'),
-      type: 'warning',
-    }));
   });
 
   it('renders recording view in default dashboard mode', async () => {

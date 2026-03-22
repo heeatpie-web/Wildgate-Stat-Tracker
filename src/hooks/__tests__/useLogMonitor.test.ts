@@ -12,6 +12,10 @@ const updateMatch = vi.fn((match: Record<string, unknown>) => {
 const setLastActivity = vi.fn();
 const setTelemetryStatus = vi.fn();
 const processTelemetryEvent = vi.fn();
+const loggerDebug = vi.fn();
+const loggerInfo = vi.fn();
+const loggerWarn = vi.fn();
+const loggerError = vi.fn();
 
 const gameDataState = {
   addMatch,
@@ -118,10 +122,10 @@ vi.mock('../../utils/electronAPI', () => ({
 
 vi.mock('../../utils/logger', () => ({
   default: {
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
+    debug: (...args: unknown[]) => loggerDebug(...args),
+    info: (...args: unknown[]) => loggerInfo(...args),
+    warn: (...args: unknown[]) => loggerWarn(...args),
+    error: (...args: unknown[]) => loggerError(...args),
   },
 }));
 
@@ -136,6 +140,10 @@ describe('useLogMonitor', () => {
     setLastActivity.mockClear();
     setTelemetryStatus.mockClear();
     processTelemetryEvent.mockClear();
+    loggerDebug.mockClear();
+    loggerInfo.mockClear();
+    loggerWarn.mockClear();
+    loggerError.mockClear();
     appStoreState.setPlayerName.mockClear();
     appStoreState.resetSelectionSourcesForNewMatch.mockClear();
     appStoreState.resetMatchTrackingForNewMatch.mockClear();
@@ -195,6 +203,9 @@ describe('useLogMonitor', () => {
       '/Game/Gameplay/GameEntryPoint/GameEntryPoint',
       'InGame',
     )).toBe('live');
+    expect(__test__.classifyTelemetryLifecycleStageFromMap(
+      '/Game/Gameplay/GameEntryPoint/GameEntryPoint',
+    )).toBe('loading');
     expect(__test__.classifyTelemetryLifecycleStageFromMap('PracticeRange_LobbyMap')).toBe('live');
   });
 
@@ -303,6 +314,72 @@ describe('useLogMonitor', () => {
     expect(gameDataState.setActiveWeapons).not.toHaveBeenCalled();
   });
 
+  it('starts non-practice MM_GAME_FOUND sessions in loading instead of live', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: {
+            event: {
+              newStatus: 'MM_GAME_FOUND',
+              sESSIONId: 'custom-game-found-session',
+              ticketMatchPool: 'CustomLobby',
+            },
+          },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    expect(addMatch).toHaveBeenCalledTimes(1);
+    expect(latestAddedMatch()).toMatchObject({
+      player: 'Pilot',
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      matchMode: 'custom',
+    });
+    expect(uiState.setTelemetryLifecycleStage).toHaveBeenCalledWith('loading');
+    expect(uiState.setTelemetryLifecycleIsPracticeRange).toHaveBeenCalledWith(false);
+    expect(gameDataState.setIsMatchInProgress).toHaveBeenCalledWith(false);
+  });
+
+  it('keeps non-practice MM_SERVER_FOUND sessions in loading until loading-screen telemetry arrives', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: {
+            event: {
+              newStatus: 'MM_SERVER_FOUND',
+              sESSIONId: 'custom-server-found-session',
+              ticketMatchPool: 'CustomLobby',
+            },
+          },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    expect(addMatch).toHaveBeenCalledTimes(1);
+    expect(latestAddedMatch()).toMatchObject({
+      player: 'Pilot',
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      matchMode: 'custom',
+    });
+    expect(uiState.setTelemetryLifecycleStage).toHaveBeenCalledWith('loading');
+    expect(uiState.setTelemetryLifecycleIsPracticeRange).toHaveBeenCalledWith(false);
+    expect(gameDataState.setIsMatchInProgress).toHaveBeenCalledWith(false);
+  });
+
   it('creates a telemetry draft on map-start signal', async () => {
     const { useLogMonitor } = await import('../useLogMonitor');
     renderHook(() => useLogMonitor('Pilot'));
@@ -328,6 +405,112 @@ describe('useLogMonitor', () => {
     });
     expect(uiState.setTelemetryLifecycleStage).toHaveBeenCalledWith('live');
     expect(uiState.setTelemetryLifecycleIsPracticeRange).toHaveBeenCalledWith(false);
+  });
+
+  it('promotes fresh GameEntryPoint pregame loading-screen telemetry into the pregame stage', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: {
+            loadingMap: '/Game/Gameplay/GameEntryPoint/GameEntryPoint',
+            matchState: 'PreGameLobbyWaitingForPlayers',
+          },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    expect(addMatch).toHaveBeenCalledTimes(1);
+    expect(uiState.setTelemetryLifecycleStage).toHaveBeenCalledWith('pregame');
+    expect(uiState.setTelemetryLifecycleIsPracticeRange).toHaveBeenCalledWith(false);
+    expect(gameDataState.setIsMatchInProgress).toHaveBeenCalledWith(false);
+  });
+
+  it('promotes fresh GameEntryPoint in-game loading-screen telemetry into the live stage', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: {
+            loadingMap: '/Game/Gameplay/GameEntryPoint/GameEntryPoint',
+            matchState: 'InGame',
+          },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    expect(addMatch).toHaveBeenCalledTimes(1);
+    expect(uiState.setTelemetryLifecycleStage).toHaveBeenCalledWith('live');
+    expect(uiState.setTelemetryLifecycleIsPracticeRange).toHaveBeenCalledWith(false);
+    expect(gameDataState.setIsMatchInProgress).toHaveBeenCalledWith(true);
+  });
+
+  it('ignores stale non-practice pregame loading-screen events older than 30 seconds', async () => {
+    vi.useFakeTimers();
+    const now = new Date('2026-03-21T18:00:00.000Z');
+    vi.setSystemTime(now);
+    gameDataState.sessionStartTime = now.getTime();
+
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: {
+            event: {
+              newStatus: 'MM_GAME_FOUND',
+              sESSIONId: 'stale-pregame-session',
+              ticketMatchPool: 'CustomLobby',
+            },
+          },
+          ClientTimestamp: Math.floor(now.getTime() / 1000),
+        },
+      ]);
+    });
+
+    addMatch.mockClear();
+    uiState.setTelemetryLifecycleStage.mockClear();
+    uiState.setTelemetryLifecycleIsPracticeRange.mockClear();
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: {
+            loadingMap: '/Game/Gameplay/GameEntryPoint/GameEntryPoint',
+            matchState: 'PreGameLobbyWaitingForPlayers',
+          },
+          ClientTimestamp: Math.floor((now.getTime() - 31_000) / 1000),
+        },
+      ]);
+    });
+
+    expect(addMatch).not.toHaveBeenCalled();
+    expect(uiState.setTelemetryLifecycleStage).not.toHaveBeenCalled();
+    expect(uiState.setTelemetryLifecycleIsPracticeRange).not.toHaveBeenCalled();
+    expect(loggerWarn).toHaveBeenCalledWith(
+      'LogMonitor',
+      expect.stringContaining('Skipped stale pregame loading-screen event'),
+    );
+    expect(loggerWarn).toHaveBeenCalledWith(
+      'LogMonitor',
+      expect.stringContaining('"ageSeconds":31'),
+    );
+    expect(loggerWarn).toHaveBeenCalledWith(
+      'LogMonitor',
+      expect.stringContaining('PreGameLobbyWaitingForPlayers'),
+    );
+    vi.useRealTimers();
   });
 
   it('creates a telemetry draft when loadingMap is only present on the payload envelope', async () => {
@@ -628,7 +811,7 @@ describe('useLogMonitor', () => {
     expect(addMatch).not.toHaveBeenCalled();
   });
 
-  it('starts lifecycle from a live matchmaker state when the map-start event is missing', async () => {
+  it('starts lifecycle from a non-practice matchmaker state in loading when the map-start event is missing', async () => {
     const { useLogMonitor } = await import('../useLogMonitor');
     renderHook(() => useLogMonitor('Pilot'));
 
@@ -649,13 +832,13 @@ describe('useLogMonitor', () => {
     expect(latestAddedMatch()).toMatchObject({
       matchMode: 'custom',
     });
-    expect(gameDataState.setIsMatchInProgress).toHaveBeenCalledWith(true);
-    expect(gameDataState.setMatchStartTime).toHaveBeenCalled();
-    expect(uiState.setOverlayPhase).toHaveBeenCalledWith('Live');
-    expect(uiState.setTelemetryLifecycleStage).toHaveBeenCalledWith('live');
+    expect(gameDataState.setIsMatchInProgress).toHaveBeenCalledWith(false);
+    expect(gameDataState.setMatchStartTime).toHaveBeenCalledWith(null);
+    expect(uiState.setOverlayPhase).toHaveBeenCalledWith('Setup');
+    expect(uiState.setTelemetryLifecycleStage).toHaveBeenCalledWith('loading');
   });
 
-  it('starts lifecycle when matchmaker state only exposes newStatus and event session id while context session id is blank', async () => {
+  it('starts lifecycle in loading when matchmaker state only exposes newStatus and event session id while context session id is blank', async () => {
     const { useLogMonitor } = await import('../useLogMonitor');
     renderHook(() => useLogMonitor('Pilot'));
 
@@ -686,13 +869,13 @@ describe('useLogMonitor', () => {
     expect(latestAddedMatch()).toMatchObject({
       matchMode: 'artifactsandgates',
     });
-    expect(gameDataState.setIsMatchInProgress).toHaveBeenCalledWith(true);
-    expect(gameDataState.setMatchStartTime).toHaveBeenCalled();
-    expect(uiState.setOverlayPhase).toHaveBeenCalledWith('Live');
-    expect(uiState.setTelemetryLifecycleStage).toHaveBeenCalledWith('live');
+    expect(gameDataState.setIsMatchInProgress).toHaveBeenCalledWith(false);
+    expect(gameDataState.setMatchStartTime).toHaveBeenCalledWith(null);
+    expect(uiState.setOverlayPhase).toHaveBeenCalledWith('Setup');
+    expect(uiState.setTelemetryLifecycleStage).toHaveBeenCalledWith('loading');
   });
 
-  it('does not restart lifecycle when a map-start event arrives after a live matchmaker start', async () => {
+  it('does not restart lifecycle when a map-start event arrives after a loading matchmaker start', async () => {
     const baseSec = Math.floor(Date.now() / 1000);
     const { useLogMonitor } = await import('../useLogMonitor');
     renderHook(() => useLogMonitor('Pilot'));
@@ -737,10 +920,10 @@ describe('useLogMonitor', () => {
     expect(appStoreState.resetSelectionSourcesForNewMatch).not.toHaveBeenCalled();
     expect(appStoreState.resetMatchTrackingForNewMatch).not.toHaveBeenCalled();
     expect(appStoreState.resetMatchMetricsForNewMatch).not.toHaveBeenCalled();
-    expect(gameDataState.setIsMatchInProgress).not.toHaveBeenCalled();
-    expect(gameDataState.setMatchStartTime).not.toHaveBeenCalled();
-    expect(uiState.setOverlayPhase).not.toHaveBeenCalled();
-    expect(uiState.setTelemetryLifecycleStage).not.toHaveBeenCalled();
+    expect(gameDataState.setIsMatchInProgress).toHaveBeenCalledWith(true);
+    expect(gameDataState.setMatchStartTime).toHaveBeenCalled();
+    expect(uiState.setOverlayPhase).toHaveBeenCalledWith('Live');
+    expect(uiState.setTelemetryLifecycleStage).toHaveBeenCalledWith('live');
   });
 
   it('does not finalize a live telemetry draft when a later event omits sessionId', async () => {

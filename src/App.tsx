@@ -521,10 +521,10 @@ const App: React.FC = () => {
     const telemetryBackgroundResultOcrAttemptsRef = React.useRef<Map<number, number>>(new Map());
     const telemetryLobbyCaptureTimersRef = React.useRef<Map<number, number>>(new Map());
     const telemetryLobbyCaptureAttemptedRef = React.useRef<Set<number>>(new Set());
-    const telemetryLiveFallbackAttemptedRef = React.useRef<Set<number>>(new Set());
+    const telemetryLobbyCaptureSkipLoggedRef = React.useRef<Set<number>>(new Set());
     const telemetryAutoCaptureInFlightRef = React.useRef<Set<number>>(new Set());
     const telemetryAutoCaptureCompletedRef = React.useRef<Set<number>>(new Set());
-    const telemetryAutoCaptureOriginRef = React.useRef<Map<number, 'pregame' | 'live'>>(new Map());
+    const telemetryAutoCaptureOriginRef = React.useRef<Map<number, 'pregame'>>(new Map());
     const latestTelemetryDraftIdRef = React.useRef<number | null>(null);
     const telemetryLiveStageMatchIdRef = React.useRef<number | null>(null);
     const telemetryPruneNotificationKeyRef = React.useRef<string | null>(null);
@@ -1939,10 +1939,10 @@ const App: React.FC = () => {
             const isLobbyCapture = captureOrigin === 'pregame';
             const capturePhase = isLobbyCapture
                 ? 'capturing-lobby'
-                : 'capturing-live-fallback';
+                : 'capturing-manual';
             const captureLabel = isLobbyCapture
                 ? 'Lobby'
-                : 'Live fallback';
+                : 'Auto';
 
             if (phase === 'started') {
                 if (normalizedMatchId != null) {
@@ -1953,14 +1953,14 @@ const App: React.FC = () => {
                     phase: capturePhase,
                     message: isLobbyCapture
                         ? 'Auto-capturing lobby screenshots'
-                        : 'Running live fallback capture',
+                        : 'Auto-capture running',
                     matchId: normalizedMatchId,
                     level: 'info',
                 }));
                 setToast({
                     message: isLobbyCapture
                         ? 'Lobby auto-capture running...'
-                        : 'Live fallback auto-capture running...',
+                        : 'Auto-capture running...',
                     type: 'info',
                 });
                 return;
@@ -1991,6 +1991,7 @@ const App: React.FC = () => {
                 if (normalizedMatchId != null) {
                     telemetryAutoCaptureInFlightRef.current.delete(normalizedMatchId);
                     telemetryAutoCaptureCompletedRef.current.add(normalizedMatchId);
+                    telemetryAutoCaptureOriginRef.current.delete(normalizedMatchId);
                 }
                 playAutomationComplete();
                 const stayWatchingResult = telemetryLifecycleStage === 'live';
@@ -2007,7 +2008,7 @@ const App: React.FC = () => {
                 setToast({
                     message: isLobbyCapture
                         ? 'Lobby auto-capture complete.'
-                        : 'Live fallback capture complete.',
+                        : 'Auto-capture complete.',
                     type: 'success',
                 });
                 return;
@@ -2015,6 +2016,7 @@ const App: React.FC = () => {
             if (phase === 'failed') {
                 if (normalizedMatchId != null) {
                     telemetryAutoCaptureInFlightRef.current.delete(normalizedMatchId);
+                    telemetryAutoCaptureOriginRef.current.delete(normalizedMatchId);
                 }
                 const baseMessage = typeof payload?.message === 'string' && payload.message.trim()
                     ? payload.message
@@ -2219,21 +2221,11 @@ const App: React.FC = () => {
 
     const startSilentTelemetryAutoCapture = useCallback(async (
         matchId: number,
-        origin: 'pregame' | 'live',
     ): Promise<StartAutoCaptureResult> => {
-        telemetryAutoCaptureOriginRef.current.set(matchId, origin);
-        const statusConfig = origin === 'pregame'
-            ? {
-                phase: 'capturing-lobby' as const,
-                message: 'Auto-capturing lobby screenshots',
-            }
-            : {
-                phase: 'capturing-live-fallback' as const,
-                message: 'Running live fallback capture',
-            };
+        telemetryAutoCaptureOriginRef.current.set(matchId, 'pregame');
         setTelemetryAutomationStatus(createTelemetryAutomationStatus({
-            phase: statusConfig.phase,
-            message: statusConfig.message,
+            phase: 'capturing-lobby',
+            message: 'Auto-capturing lobby screenshots',
             matchId,
             level: 'info',
         }));
@@ -2245,8 +2237,8 @@ const App: React.FC = () => {
             sessionStartTime,
             matchId,
             lifecycleActive: true,
-            telemetryLifecycleStage: origin === 'pregame' ? 'pregame' : 'live',
-            isMatchInProgress: origin !== 'pregame',
+            telemetryLifecycleStage: 'pregame',
+            isMatchInProgress: false,
         }));
 
         const startFailure = getTelemetryAutoCaptureStartFailure(result);
@@ -2254,6 +2246,7 @@ const App: React.FC = () => {
             return result;
         }
 
+        telemetryAutoCaptureOriginRef.current.delete(matchId);
         playAutomationFailed();
         setTelemetryAutomationStatus(createTelemetryAutomationStatus({
             phase: 'failed',
@@ -2328,7 +2321,7 @@ const App: React.FC = () => {
         const normalizedMatchId = Number.isInteger(activeMatchId) && activeMatchId > 0 ? activeMatchId : null;
         const shouldPreserveCurrentStatus = currentStatus && (
             currentStatus.phase === 'capturing-lobby'
-            || currentStatus.phase === 'capturing-live-fallback'
+            || currentStatus.phase === 'capturing-manual'
             || currentStatus.phase === 'result-flash-detected'
             || currentStatus.phase === 'result-ocr'
             || currentStatus.phase === 'result-ocr-burst'
@@ -2417,7 +2410,19 @@ const App: React.FC = () => {
         const matchId = normalizedActiveTelemetryDraftMatchId;
         const detectedMatchMode = activeTelemetryDraftMatch?.matchMode || (isTelemetryPracticeRange ? 'practice range' : 'unknown');
 
-        if (!fullAutoEnabled || telemetryLifecycleStage !== 'pregame' || isTelemetryPracticeRange) {
+        if (telemetryLifecycleStage === 'pregame' && isTelemetryPracticeRange) {
+            clearTelemetryLobbyCaptureTimer(matchId);
+            if (!telemetryLobbyCaptureSkipLoggedRef.current.has(matchId)) {
+                telemetryLobbyCaptureSkipLoggedRef.current.add(matchId);
+                Logger.info(
+                    'AutoCapture',
+                    `Skipping pregame auto-capture for practice range (matchId=${matchId}, mode=${detectedMatchMode})`,
+                );
+            }
+            return;
+        }
+
+        if (!fullAutoEnabled || telemetryLifecycleStage !== 'pregame') {
             clearTelemetryLobbyCaptureTimer(matchId);
             return;
         }
@@ -2433,8 +2438,11 @@ const App: React.FC = () => {
             telemetryLobbyCaptureTimersRef.current.delete(matchId);
             if (telemetryLobbyCaptureAttemptedRef.current.has(matchId)) return;
             telemetryLobbyCaptureAttemptedRef.current.add(matchId);
-            console.log(`[AutoCapture] Pre-game lobby macro triggered (mode=${detectedMatchMode})`);
-            void startSilentTelemetryAutoCaptureRef.current(matchId, 'pregame');
+            Logger.info(
+                'AutoCapture',
+                `Pregame auto-capture triggered (matchId=${matchId}, mode=${detectedMatchMode}, delayMs=${PREGAME_LOBBY_MACRO_DELAY_MS})`,
+            );
+            void startSilentTelemetryAutoCaptureRef.current(matchId);
         }, PREGAME_LOBBY_MACRO_DELAY_MS);
 
         telemetryLobbyCaptureTimersRef.current.set(matchId, timerId);
@@ -2445,26 +2453,6 @@ const App: React.FC = () => {
         fullAutoEnabled,
         isTelemetryPracticeRange,
         normalizedActiveTelemetryDraftMatchId,
-        telemetryLifecycleStage,
-    ]);
-
-    useEffect(() => {
-        if (!fullAutoEnabled) return;
-        if (normalizedActiveTelemetryDraftMatchId == null) return;
-        const matchId = normalizedActiveTelemetryDraftMatchId;
-        if (telemetryLifecycleStage !== 'live') return;
-        if (hasCompleteTelemetryCaptureBundle(matchId)) return;
-        if (telemetryAutoCaptureInFlightRef.current.has(matchId)) return;
-        if (isTelemetryPracticeRange) return;
-        if (telemetryLiveFallbackAttemptedRef.current.has(matchId)) return;
-        telemetryLiveFallbackAttemptedRef.current.add(matchId);
-        void startSilentTelemetryAutoCapture(matchId, 'live');
-    }, [
-        fullAutoEnabled,
-        hasCompleteTelemetryCaptureBundle,
-        isTelemetryPracticeRange,
-        normalizedActiveTelemetryDraftMatchId,
-        startSilentTelemetryAutoCapture,
         telemetryLifecycleStage,
     ]);
 
