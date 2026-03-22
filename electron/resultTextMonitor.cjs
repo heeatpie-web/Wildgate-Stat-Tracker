@@ -12,13 +12,14 @@ const TRIPWIRE_MIN_TOTAL_WHITE_DELTA = 0.045;
 const TRIPWIRE_WHITE_MIN_CHANNEL = 240;
 const TRIPWIRE_WHITE_MAX_DRIFT = 30;
 
-// Three horizontal sub-boxes within the wide result-headline region.
-// A catches left-anchored layouts (2025), B+C catch center layouts (2026).
+// Three horizontal sub-boxes within the result-headline region.
+// A samples the lower part of the left headline slot where shifted placement text settles,
+// while B+C track the centered headline text more tightly.
 // Relative coords within RESULT_TEXT_SAMPLE_REGION (left=0.2489, width=0.3991).
 const TRIPWIRE_BOX_LAYOUT = Object.freeze([
-  { id: 'result-a', left: 0.0501, top: 0, width: 0.2571, height: 1 },
-  { id: 'result-b', left: 0.4357, top: 0, width: 0.2571, height: 1 },
-  { id: 'result-c', left: 0.6928, top: 0, width: 0.2571, height: 1 },
+  { id: 'result-a', left: 0.0501, top: 0.6434, width: 0.2571, height: 0.3566 },
+  { id: 'result-b', left: 0.4357, top: 0.2868, width: 0.2571, height: 0.7132 },
+  { id: 'result-c', left: 0.6928, top: 0.2868, width: 0.2571, height: 0.7132 },
 ]);
 
 let _timer = null;
