@@ -667,6 +667,46 @@ describe('App', () => {
     vi.useRealTimers();
   });
 
+  it('keeps result watchers armed during telemetry result stage for an active draft', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
+    uiState.telemetryLifecycleStage = 'result';
+    const draft = {
+      id: 9876,
+      timestamp: Date.now(),
+      date: '3/21/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'ready',
+      artifacts: [],
+    };
+    gameDataState.matches = [draft];
+    appStoreState.matches = [draft];
+
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    expect(useResultFlashMonitorMock).toHaveBeenCalledWith(expect.objectContaining({
+      enabled: true,
+      armDelayMs: 0,
+      liveStartedAt: expect.any(Number),
+    }));
+    expect(useResultTextMonitorMock).toHaveBeenCalledWith(expect.objectContaining({
+      enabled: true,
+      armDelayMs: 0,
+      liveStartedAt: expect.any(Number),
+    }));
+    vi.useRealTimers();
+  });
+
   it('arms the flash watcher immediately in practice range', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
@@ -1067,6 +1107,22 @@ describe('App', () => {
         placement: 4,
         text: '4TH PLACE',
       });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(api.invoke).not.toHaveBeenCalledWith('capture-screen');
+
+    await act(async () => {
+      vi.advanceTimersByTime(499);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(api.invoke).not.toHaveBeenCalledWith('capture-screen');
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
       await Promise.resolve();
       await Promise.resolve();
     });

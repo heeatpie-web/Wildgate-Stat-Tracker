@@ -150,9 +150,16 @@ async function collectDetectedTextsFromRegions(imageBuffer, meta, regions, varia
   return uniqueStrings(collected);
 }
 
-function parsePlacement(texts) {
+function parsePlacement(texts, options = {}) {
   const normalized = texts.map(normalizeToken).filter(Boolean);
-  const joined = normalized.join('|');
+  const contextTexts = Array.isArray(options.contextTexts)
+    ? options.contextTexts
+    : [];
+  const normalizedContext = uniqueStrings([
+    ...texts,
+    ...contextTexts,
+  ]).map(normalizeToken).filter(Boolean);
+  const joined = normalizedContext.join('|');
   const placementContext = joined.includes('PLACE')
     || joined.includes('PLACED')
     || joined.includes('POSITION')
@@ -161,21 +168,23 @@ function parsePlacement(texts) {
   const contextualHints = placementContext
     || joined.includes('DEFEAT')
     || joined.includes('ELIMINATED')
+    || joined.includes('VANGUARDWINS')
+    || joined.includes('ANGUARDWINS')
     || joined.includes('FINALMOMENTSRECAP')
     || joined.includes('DAMAGETAKENINLAST2MIN')
     || joined.includes('DAMAGETAKENINLAST2MINUTES');
 
   for (const text of normalized) {
-    const exact = text.match(/([1-5])(ST|ND|RD|TH)?PLACE/);
+    const exact = text.match(/([1-5])(ST|ND|RD|TH)?PLAC(?:E)?/);
     if (exact) return Number.parseInt(exact[1], 10);
 
-    const reversed = text.match(/PLACE([1-5])(ST|ND|RD|TH)?/);
+    const reversed = text.match(/PLAC(?:E)?([1-5])(ST|ND|RD|TH)?/);
     if (reversed) return Number.parseInt(reversed[1], 10);
 
-    if ((text.includes('2ND') || text.includes('2N0')) && text.includes('PLACE')) return 2;
-    if ((text.includes('3RD') || text.includes('BRD')) && text.includes('PLACE')) return 3;
-    if ((text.includes('4TH') || text.includes('ATH')) && text.includes('PLACE')) return 4;
-    if ((text.includes('5TH') || text.includes('STH')) && text.includes('PLACE')) return 5;
+    if ((text.includes('2ND') || text.includes('2N0')) && text.includes('PLA')) return 2;
+    if ((text.includes('3RD') || text.includes('BRD')) && text.includes('PLA')) return 3;
+    if ((text.includes('4TH') || text.includes('ATH')) && text.includes('PLA')) return 4;
+    if ((text.includes('5TH') || text.includes('STH')) && text.includes('PLA')) return 5;
   }
 
   if (contextualHints) {
@@ -232,7 +241,16 @@ function parseResultSignals({
   ]);
   const normalized = combinedTexts.map(normalizeToken).filter(Boolean);
   const joined = normalized.join('|');
-  const placement = parsePlacement(placementTexts) ?? parsePlacement(headlineTexts);
+  const placementContextTexts = uniqueStrings([
+    ...headlineTexts,
+    ...statusTexts,
+    ...panelTexts,
+  ]);
+  const placement = parsePlacement(placementTexts, {
+    contextTexts: placementContextTexts,
+  }) ?? parsePlacement(headlineTexts, {
+    contextTexts: [...placementTexts, ...statusTexts, ...panelTexts],
+  });
   const damageTaken = parseDamageTaken([...damageTexts, ...panelTexts]);
 
   const hasVictory = joined.includes('VICTORY') || joined.includes('VICTOR');

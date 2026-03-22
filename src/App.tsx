@@ -304,6 +304,7 @@ const TELEMETRY_AUTO_CAPTURE_ARTIFACT_TARGET = 3;
 const TELEMETRY_POSTMATCH_FALLBACK_DELAY_MS = 15_000;
 const PREGAME_LOBBY_MACRO_DELAY_MS = 5_000;
 const FULL_AUTO_RESULT_OCR_POST_FLASH_DELAY_MS = 1_000;
+const FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS = 500;
 const FULL_AUTO_RESULT_OCR_RETRY_DELAY_MS = 300;
 const FULL_AUTO_RESULT_OCR_MAX_ATTEMPTS = 3;
 const FULL_AUTO_BACKGROUND_RESULT_OCR_INTERVAL_MS = 2_000;
@@ -2295,8 +2296,18 @@ const App: React.FC = () => {
         telemetryLifecycleStage,
     ]);
 
+    const shouldWatchResultScreens = (
+        normalizedActiveTelemetryDraftMatchId != null
+        && (telemetryLifecycleStage === 'live' || telemetryLifecycleStage === 'result')
+    );
+    const resultMonitorArmDelayMs = (
+        isTelemetryPracticeRange || telemetryLifecycleStage === 'result'
+    )
+        ? 0
+        : undefined;
+
     useEffect(() => {
-        if (telemetryLifecycleStage !== 'live' || normalizedActiveTelemetryDraftMatchId == null) {
+        if (!shouldWatchResultScreens) {
             telemetryLiveStageMatchIdRef.current = null;
             setTelemetryLiveStartedAt(null);
             return;
@@ -2312,7 +2323,13 @@ const App: React.FC = () => {
             return;
         }
         setTelemetryLiveStartedAt((current) => current ?? Date.now());
-    }, [activeTelemetryDraftMatch?.matchMode, isTelemetryPracticeRange, normalizedActiveTelemetryDraftMatchId, telemetryLifecycleStage]);
+    }, [
+        activeTelemetryDraftMatch?.matchMode,
+        isTelemetryPracticeRange,
+        normalizedActiveTelemetryDraftMatchId,
+        shouldWatchResultScreens,
+        telemetryLifecycleStage,
+    ]);
 
     useEffect(() => {
         const currentStatus = useAppStore.getState().telemetryAutomationStatus;
@@ -2869,7 +2886,11 @@ const App: React.FC = () => {
         const detectionMethod = options?.detectionMethod;
         const initialDelayMs = Math.max(0, Number(
             options?.initialDelayMs
-            ?? (reason === 'flash' ? FULL_AUTO_RESULT_OCR_POST_FLASH_DELAY_MS : 0)
+            ?? (
+                reason === 'flash'
+                    ? FULL_AUTO_RESULT_OCR_POST_FLASH_DELAY_MS
+                    : (reason === 'text' ? FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS : 0)
+            )
         ) || 0);
         const shouldResumeWatchingOnFailure = reason === 'flash' || reason === 'text';
         const restoreWaitingStatus = () => {
@@ -3069,15 +3090,16 @@ const App: React.FC = () => {
 
     const handleResultTextDetected = useCallback(async (payload: ResultTextDetectionPayload) => {
         const scheduledMatchId = normalizedActiveTelemetryDraftMatchId;
-        console.log('[Brain] Text signal received - scheduling result capture immediately', {
+        console.log('[Brain] Text signal received - scheduling result capture in 500ms', {
             matchId: scheduledMatchId,
+            delayMs: FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS,
             activeBoxIds: payload.activeBoxIds ?? [],
             activeBoxCount: payload.tripwireActiveBoxCount ?? 0,
             totalWhiteDelta: payload.tripwireTotalWhiteDelta ?? 0,
         });
         if (!beginFullAutoResultDetection('Result text detected', scheduledMatchId)) return;
         await triggerFullAutoSave({
-            initialDelayMs: 0,
+            initialDelayMs: FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS,
             reason: 'text',
             detectionMethod: 'text',
             matchId: scheduledMatchId,
@@ -3085,11 +3107,9 @@ const App: React.FC = () => {
     }, [beginFullAutoResultDetection, normalizedActiveTelemetryDraftMatchId, triggerFullAutoSave]);
 
     useResultFlashMonitor({
-        enabled: fullAutoEnabled
-            && telemetryLifecycleStage === 'live'
-            && normalizedActiveTelemetryDraftMatchId != null,
+        enabled: fullAutoEnabled && shouldWatchResultScreens,
         liveStartedAt: telemetryLiveStartedAt,
-        armDelayMs: isTelemetryPracticeRange ? 0 : undefined,
+        armDelayMs: resultMonitorArmDelayMs,
         triggerLatched: fullAutoResultLatched || fullAutoDetectionLocked,
         onFlashDetected: handleResultFlashDetectedWithDebug,
         onFlashResolved: handleResultFlashResolvedWithDebug,
@@ -3098,11 +3118,9 @@ const App: React.FC = () => {
             : undefined,
     });
     useResultTextMonitor({
-        enabled: fullAutoEnabled
-            && telemetryLifecycleStage === 'live'
-            && normalizedActiveTelemetryDraftMatchId != null,
+        enabled: fullAutoEnabled && shouldWatchResultScreens,
         liveStartedAt: telemetryLiveStartedAt,
-        armDelayMs: isTelemetryPracticeRange ? 0 : undefined,
+        armDelayMs: resultMonitorArmDelayMs,
         triggerLatched: fullAutoResultLatched || fullAutoDetectionLocked,
         onResultDetected: handleResultTextDetected,
     });

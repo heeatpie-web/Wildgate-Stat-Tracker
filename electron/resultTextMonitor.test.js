@@ -38,6 +38,30 @@ async function createTripwireImage(activeBoxIds = []) {
   return sharp(pixels, { raw: { width, height, channels: 3 } }).png().toBuffer();
 }
 
+async function createCustomTripwireImage(regions = []) {
+  const width = 800;
+  const height = 240;
+  const pixels = Buffer.alloc(width * height * 3, 12);
+
+  for (const region of regions) {
+    const left = Math.max(0, Math.floor(region.left * width));
+    const top = Math.max(0, Math.floor(region.top * height));
+    const regionWidth = Math.max(1, Math.floor(region.width * width));
+    const regionHeight = Math.max(1, Math.floor(region.height * height));
+
+    for (let y = top; y < Math.min(height, top + regionHeight); y += 1) {
+      for (let x = left; x < Math.min(width, left + regionWidth); x += 1) {
+        const offset = ((y * width) + x) * 3;
+        pixels[offset] = 255;
+        pixels[offset + 1] = 255;
+        pixels[offset + 2] = 255;
+      }
+    }
+  }
+
+  return sharp(pixels, { raw: { width, height, channels: 3 } }).png().toBuffer();
+}
+
 describe('resultTextMonitor text parsing', () => {
   it('builds a pure tripwire detection payload without OCR fields', () => {
     const payload = __test__.createTripwireDetectionPayload({
@@ -45,15 +69,10 @@ describe('resultTextMonitor text parsing', () => {
       captureRegion: { left: 0.03, top: 0.55, width: 0.67, height: 0.22, normalized: true },
       lastUpdatedAt: 456,
       lastTripwire: {
-        activeBoxCount: 3,
-        totalWhiteDelta: 0.09,
+        activeBoxCount: 1,
+        totalWhiteDelta: 0.04,
         boxes: [
-          { id: 'result-a', active: true },
-          { id: 'result-b', active: false },
-          { id: 'result-c', active: true },
-          { id: 'result-d', active: true },
-          { id: 'result-e', active: false },
-          { id: 'result-f', active: false },
+          { id: 'result-b', active: true },
         ],
       },
     });
@@ -63,24 +82,40 @@ describe('resultTextMonitor text parsing', () => {
       result: null,
       armAt: 123,
       detectedAt: 456,
-      tripwireActiveBoxCount: 3,
-      tripwireTotalWhiteDelta: 0.09,
-      activeBoxIds: ['result-a', 'result-c', 'result-d'],
+      tripwireActiveBoxCount: 1,
+      tripwireTotalWhiteDelta: 0.04,
+      activeBoxIds: ['result-b'],
     });
   });
 });
 
 describe('resultTextMonitor tripwire helpers', () => {
-  it('marks the tripwire as triggered when multiple white-text boxes spike above baseline', async () => {
+  it('marks the tripwire as triggered when the headline box spikes above baseline', async () => {
     const baselineMetrics = await __test__.analyzeTripwireBoxes(await createTripwireImage());
-    const hotMetrics = await __test__.analyzeTripwireBoxes(await createTripwireImage(['result-a', 'result-b']));
+    const hotMetrics = await __test__.analyzeTripwireBoxes(await createTripwireImage(['result-b']));
     const baseline = __test__.createTripwireBaseline(baselineMetrics);
 
     const snapshot = __test__.buildTripwireSnapshot(hotMetrics, baseline);
 
     expect(snapshot.triggered).toBe(true);
-    expect(snapshot.activeBoxCount).toBeGreaterThanOrEqual(2);
+    expect(snapshot.activeBoxCount).toBe(1);
     expect(snapshot.totalWhiteDelta).toBeGreaterThan(0.02);
+  });
+
+  it('ignores sparse bright pixels that stay below the white coverage threshold', async () => {
+    const baselineMetrics = await __test__.analyzeTripwireBoxes(await createTripwireImage());
+    const headerMetrics = await __test__.analyzeTripwireBoxes(await createCustomTripwireImage([
+      { left: 0.02, top: 0.02, width: 0.08, height: 0.06 },
+      { left: 0.14, top: 0.20, width: 0.05, height: 0.05 },
+    ]));
+    const baseline = __test__.createTripwireBaseline(baselineMetrics);
+
+    const snapshot = __test__.buildTripwireSnapshot(headerMetrics, baseline);
+
+    expect(snapshot.triggered).toBe(false);
+    expect(snapshot.activeBoxCount).toBe(0);
+    expect(snapshot.totalWhiteDelta).toBeGreaterThan(0);
+    expect(snapshot.totalWhiteDelta).toBeLessThan(0.02);
   });
 });
 
@@ -96,7 +131,7 @@ describe('resultTextMonitor loop', () => {
 
   it('keeps OCR asleep until the tripwire sees sustained white result text', async () => {
     const baselineMetrics = await __test__.analyzeTripwireBoxes(await createTripwireImage());
-    const hotMetrics = await __test__.analyzeTripwireBoxes(await createTripwireImage(['result-a', 'result-b', 'result-c']));
+    const hotMetrics = await __test__.analyzeTripwireBoxes(await createTripwireImage(['result-b']));
     const sampler = vi.fn()
       .mockResolvedValueOnce(baselineMetrics)
       .mockResolvedValueOnce(hotMetrics)
@@ -123,13 +158,13 @@ describe('resultTextMonitor loop', () => {
     expect(onDetected.mock.calls[0][0]).toMatchObject({
       detectionMethod: 'text',
       result: null,
-      tripwireActiveBoxCount: 3,
-      activeBoxIds: ['result-a', 'result-b', 'result-c'],
+      tripwireActiveBoxCount: 1,
+      activeBoxIds: ['result-b'],
     });
   });
 
   it('samples during the arm delay to build baseline but does not fire before the monitor is armed', async () => {
-    const hotMetrics = await __test__.analyzeTripwireBoxes(await createTripwireImage(['result-a', 'result-b', 'result-c']));
+    const hotMetrics = await __test__.analyzeTripwireBoxes(await createTripwireImage(['result-b']));
     const sampler = vi.fn().mockResolvedValue(hotMetrics);
     const onDetected = vi.fn();
 

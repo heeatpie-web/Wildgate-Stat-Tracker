@@ -3,11 +3,12 @@ import { getElectronAPI } from '../utils/electronAPI';
 
 export const DEFAULT_RESULT_TEXT_ARM_DELAY_MS = 45_000;
 export const RESULT_TEXT_SAMPLE_INTERVAL_MS = 500;
+// This region matches the live result-headline tripwire box so we only sample the useful center-right band.
 export const RESULT_TEXT_SAMPLE_REGION = {
-    left: 0.115,
-    top: 0.095,
-    width: 0.57,
-    height: 0.18,
+    left: 0.4228,
+    top: 0.149,
+    width: 0.1026,
+    height: 0.09,
     normalized: true,
 } as const;
 

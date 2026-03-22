@@ -5,20 +5,16 @@ const { sampleBoxes: dxgiSampleBoxes } = require('./dxgiSampler.cjs');
 const DEFAULT_SAMPLE_INTERVAL_MS = 500;
 const TRIPWIRE_BASELINE_ALPHA = 0.18;
 const TRIPWIRE_MIN_CONSECUTIVE_HITS = 2;
-const TRIPWIRE_MIN_ACTIVE_BOXES = 2;
+const TRIPWIRE_MIN_ACTIVE_BOXES = 1;
 const TRIPWIRE_MIN_BOX_WHITE_RATIO = 0.015;
 const TRIPWIRE_MIN_BOX_WHITE_DELTA = 0.0075;
 const TRIPWIRE_MIN_TOTAL_WHITE_DELTA = 0.02;
-const TRIPWIRE_WHITE_MIN_CHANNEL = 210;
+const TRIPWIRE_WHITE_MIN_CHANNEL = 240;
 const TRIPWIRE_WHITE_MAX_DRIFT = 30;
 
+// The sample region is already collapsed to the result headline, so the tripwire box spans the full sample.
 const TRIPWIRE_BOX_LAYOUT = Object.freeze([
-  { id: 'result-a', left: 0.04, top: 0.12, width: 0.12, height: 0.76 },
-  { id: 'result-b', left: 0.20, top: 0.12, width: 0.12, height: 0.76 },
-  { id: 'result-c', left: 0.36, top: 0.12, width: 0.12, height: 0.76 },
-  { id: 'result-d', left: 0.52, top: 0.12, width: 0.12, height: 0.76 },
-  { id: 'result-e', left: 0.68, top: 0.12, width: 0.12, height: 0.76 },
-  { id: 'result-f', left: 0.84, top: 0.12, width: 0.12, height: 0.76 },
+  { id: 'result-b', left: 0, top: 0, width: 1, height: 1 },
 ]);
 
 let _timer = null;

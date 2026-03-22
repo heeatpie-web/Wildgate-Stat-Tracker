@@ -50,6 +50,50 @@ describe('resultScreenExtractor heuristics', () => {
     });
   });
 
+  it('accepts truncated placement OCR like 2NDPLA as a combat-loss placement signal', () => {
+    expect(__test__.parseResultSignals({
+      placementTexts: ['OND', '2NDPLA'],
+    }, { detectionMethod: 'text' })).toEqual({
+      result: 'Loss',
+      winType: 'combat',
+      placement: 2,
+      detectionMethod: 'text',
+      damageTaken: undefined,
+      damageSourcesAvailable: true,
+    });
+  });
+
+  it('recovers placement when the ordinal is isolated but loss context lives in other OCR buckets', () => {
+    expect(__test__.parseResultSignals({
+      placementTexts: ['2ND'],
+      statusTexts: ['DEFEAT'],
+      panelTexts: ['FINAL MOMENTS RECAP', 'VANGUARD WINS'],
+      damageTexts: ['114'],
+    }, { detectionMethod: 'text' })).toEqual({
+      result: 'Loss',
+      winType: 'combat',
+      placement: 2,
+      detectionMethod: 'text',
+      damageTaken: 114,
+      damageSourcesAvailable: true,
+    });
+  });
+
+  it('uses shared context to recover a bare digit placement from headline OCR', () => {
+    expect(__test__.parseResultSignals({
+      headlineTexts: ['2'],
+      statusTexts: ['DEFEAT'],
+      panelTexts: ['FINAL MOMENTS RECAP'],
+    }, { detectionMethod: 'text' })).toEqual({
+      result: 'Loss',
+      winType: 'combat',
+      placement: 2,
+      detectionMethod: 'text',
+      damageTaken: undefined,
+      damageSourcesAvailable: true,
+    });
+  });
+
   it('salvages third-place OCR when 3 is misread as B', () => {
     expect(__test__.parsePlacement(['BRDPLACE', 'LIMINATED'])).toBe(3);
   });
