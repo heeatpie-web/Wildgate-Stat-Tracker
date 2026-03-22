@@ -1,4 +1,11 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.4.3": [
+    "Fix placement reveal OCR missing centered text",
+    "simplify damage capture (take both screenshots, discard if no damage detected)",
+    "delay manual-result prompt until background OCR exhausted",
+    "fix Sensor Trap and Blast Can misclassified as players in uid-seed",
+    "add Surefire weapon GUID"
+  ],
   "v3.4.2": [
     "Fix result capture: text monitor no longer resets baseline on stage transition",
     "Reduce text tripwire interval 500ms to 250ms",
