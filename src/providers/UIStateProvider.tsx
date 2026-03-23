@@ -103,7 +103,7 @@ interface UIStateContextType {
     overlayTab: string;
     setOverlayTab: (tab: 'Mission' | 'Squadron' | 'Social') => void;
     overlayPhase: string;
-    setOverlayPhase: (phase: 'Setup' | 'Live' | 'Result') => void;
+    setOverlayPhase: (phase: 'Setup' | 'Live' | 'Menu') => void;
     telemetryLifecycleStage: TelemetryLifecycleStage;
     setTelemetryLifecycleStage: (stage: TelemetryLifecycleStage) => void;
     telemetryLifecycleIsPracticeRange: boolean;

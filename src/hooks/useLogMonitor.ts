@@ -378,7 +378,7 @@ const TELEMETRY_LIFECYCLE_STAGE_RANK: Record<TelemetryLifecycleStage, number> = 
     loading: 1,
     pregame: 2,
     live: 3,
-    result: 4,
+    menu: 4,
 };
 
 type TelemetryDraftReadyTrigger = 'frontend' | 'session-end' | 'unknown';
@@ -392,7 +392,7 @@ const classifyTelemetryLifecycleStageFromMap = (
     const lower = normalized.toLowerCase();
     if (isPregameLoadingMatchState(matchState)) return 'pregame';
     if (isLiveLoadingMatchState(matchState)) return 'live';
-    if (lower.includes('frontend')) return 'result';
+    if (lower.includes('frontend')) return 'menu';
     if (isPracticeRangeMap(normalized)) return 'live';
     if (lower.includes('gameentrypoint')) return 'loading';
     if (isPregameLobbyMap(normalized)) return 'pregame';
@@ -443,8 +443,8 @@ const shouldAdvanceTelemetryLifecycleStage = (
     nextStage: Exclude<TelemetryLifecycleStage, 'idle'>,
 ): boolean => {
     if (currentStage === nextStage) return false;
-    if (currentStage === 'idle' || currentStage === 'result') return true;
-    if (nextStage === 'result') return true;
+    if (currentStage === 'idle' || currentStage === 'menu') return true;
+    if (nextStage === 'menu') return true;
     return TELEMETRY_LIFECYCLE_STAGE_RANK[nextStage] > TELEMETRY_LIFECYCLE_STAGE_RANK[currentStage];
 };
 
@@ -997,7 +997,7 @@ export const useLogMonitor = (activeUser?: string) => {
             return;
         }
 
-        if (currentStage === 'idle' || currentStage === 'result' || shouldRestartStaleLiveStage) {
+        if (currentStage === 'idle' || currentStage === 'menu' || shouldRestartStaleLiveStage) {
             if (telemetryLifecycleActiveRef.current && !telemetryDraftMatchIdRef.current) {
                 telemetryLifecycleActiveRef.current = false;
                 telemetryLifecycleStartedAtRef.current = null;
@@ -1051,7 +1051,7 @@ export const useLogMonitor = (activeUser?: string) => {
         applyTelemetryTimerValue(finalized.duration);
         setIsMatchInProgress(false);
         setMatchStartTime(null);
-        setOverlayPhase('Result');
+        setOverlayPhase('Menu');
     }, [
         applyTelemetryTimerValue,
         createTelemetryDraftIfNeeded,
@@ -1344,7 +1344,7 @@ export const useLogMonitor = (activeUser?: string) => {
                     );
                     const allowStartupPracticeRangeBootstrap = (
                         practiceRangeBootstrapSignal
-                        && (currentLifecycleStage === 'idle' || currentLifecycleStage === 'result')
+                        && (currentLifecycleStage === 'idle' || currentLifecycleStage === 'menu')
                         && !telemetryLifecycleActiveRef.current
                         && ageSeconds <= PRACTICE_RANGE_STARTUP_RECOVERY_MAX_AGE_SECONDS
                     );
@@ -1401,7 +1401,7 @@ export const useLogMonitor = (activeUser?: string) => {
                     const mapStartSignal = effectiveLoadingScreenStageSignal === 'loading'
                         || effectiveLoadingScreenStageSignal === 'pregame'
                         || effectiveLoadingScreenStageSignal === 'live';
-                    const mapEndSignal = effectiveLoadingScreenStageSignal === 'result';
+                    const mapEndSignal = effectiveLoadingScreenStageSignal === 'menu';
                     const explicitEmptySessionIdSignal = hasExplicitMatchSessionIdSignal && !currentMatchSessionId;
                     if (explicitEmptySessionIdSignal && (currentLifecycleStage === 'loading' || currentLifecycleStage === 'pregame')) {
                         Logger.debug(
@@ -1423,7 +1423,7 @@ export const useLogMonitor = (activeUser?: string) => {
                         && !!currentMatchSessionId
                         && isLoadingMatchmakerState(matchmakerState);
                     const nextLifecycleStage = sessionEndSignal
-                        ? 'result'
+                        ? 'menu'
                         : (
                             effectiveLoadingScreenStageSignal
                             || (practiceRangeBootstrapSignal ? 'live' : null)
@@ -1490,7 +1490,7 @@ export const useLogMonitor = (activeUser?: string) => {
                             : (sessionEndSignal ? 'session-end' : 'unknown');
                         transitionTelemetryLifecycleStage(nextLifecycleStage, gameTime, payloadDurationSeconds, {
                             isPracticeRange: practiceRangeSignal && nextLifecycleStage === 'live',
-                            readyTrigger: nextLifecycleStage === 'result' ? readyTrigger : 'unknown',
+                            readyTrigger: nextLifecycleStage === 'menu' ? readyTrigger : 'unknown',
                         });
                     }
 

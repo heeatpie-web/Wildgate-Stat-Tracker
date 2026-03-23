@@ -145,7 +145,7 @@ interface GameDataContextType {
     dismissRosterCandidateKeys: (keys: string[]) => void;
     detectedUnknowns: Record<string, DetectedUnknownMapping>;
     addMapping: (id: string, name: string) => void;
-    setOverlayPhase: (phase: 'Setup' | 'Live' | 'Result') => void;
+    setOverlayPhase: (phase: 'Setup' | 'Live' | 'Menu') => void;
     playerProfiles: Record<string, PlayerProfile>;
     playerEncounterRoleCorrections: Record<string, PlayerEncounterRoleCorrection>;
     getPlayerEncounterRoleCorrection: (matchId: number, playerName: string) => EncounterRoleCorrection | null;

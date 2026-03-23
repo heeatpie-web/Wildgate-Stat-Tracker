@@ -80,7 +80,7 @@ export interface TelemetryStatusState {
     lastEventAt?: number;
 }
 
-export type TelemetryLifecycleStage = 'idle' | 'loading' | 'pregame' | 'live' | 'result';
+export type TelemetryLifecycleStage = 'idle' | 'loading' | 'pregame' | 'live' | 'menu';
 export type TelemetryAutomationStatusPhase =
     | 'idle'
     | 'loading-match'
@@ -134,7 +134,7 @@ export interface UISlice {
     isOverlayMode: boolean;
     isAlwaysOnTop: boolean;
     overlayTab: 'Mission' | 'Squadron' | 'Social';
-    overlayPhase: 'Setup' | 'Live' | 'Result';
+    overlayPhase: 'Setup' | 'Live' | 'Menu';
     telemetryLifecycleStage: TelemetryLifecycleStage;
     telemetryLifecycleIsPracticeRange: boolean;
     telemetryAutomationStatus: TelemetryAutomationStatusState | null;
@@ -169,7 +169,7 @@ export interface UISlice {
     setIsOverlayMode: (isOverlay: boolean) => void;
     setIsAlwaysOnTop: (always: boolean) => void;
     setOverlayTab: (tab: 'Mission' | 'Squadron' | 'Social') => void;
-    setOverlayPhase: (phase: 'Setup' | 'Live' | 'Result') => void;
+    setOverlayPhase: (phase: 'Setup' | 'Live' | 'Menu') => void;
     setTelemetryLifecycleStage: (stage: TelemetryLifecycleStage) => void;
     setTelemetryLifecycleIsPracticeRange: (isPracticeRange: boolean) => void;
     setTelemetryAutomationStatus: (status: TelemetryAutomationStatusState | null) => void;

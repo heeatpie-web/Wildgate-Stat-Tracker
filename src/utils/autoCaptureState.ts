@@ -71,7 +71,7 @@ export const buildAutoCaptureStateSnapshot = (
         telemetryLifecycleStage: Object.prototype.hasOwnProperty.call(overrides, 'telemetryLifecycleStage')
             ? (overrides.telemetryLifecycleStage ?? 'idle')
             : (
-                ['loading', 'pregame', 'live', 'result'].includes(String(state.telemetryLifecycleStage || '').trim())
+                ['loading', 'pregame', 'live', 'menu'].includes(String(state.telemetryLifecycleStage || '').trim())
                     ? state.telemetryLifecycleStage
                     : 'idle'
             ),

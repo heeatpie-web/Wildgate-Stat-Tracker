@@ -69,8 +69,8 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
             ? 'Pregame'
             : telemetryLifecycleStage === 'live'
                 ? 'Live'
-                : telemetryLifecycleStage === 'result'
-                    ? 'Result'
+                : telemetryLifecycleStage === 'menu'
+                    ? 'Menu'
                     : 'Idle';
     const automationMessage = telemetryAutomationStatus?.message || (
         telemetryLifecycleStage === 'loading'
@@ -79,8 +79,8 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
                 ? 'Pregame lobby detected'
                 : telemetryLifecycleStage === 'live'
                     ? 'Watching for match-end result'
-                    : telemetryLifecycleStage === 'result'
-                        ? 'Waiting for match wrap-up'
+                    : telemetryLifecycleStage === 'menu'
+                        ? 'Waiting for menu transition'
                         : ''
     );
 
