@@ -1388,6 +1388,12 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     y: Math.round(card.y),
     confidence: card.confidence,
   })));
+  const repeatedCardNameCounts = new Map();
+  for (const card of uniqueCards) {
+    const key = normalizeNameKey(card.name);
+    if (!key) continue;
+    repeatedCardNameCounts.set(key, (repeatedCardNameCounts.get(key) || 0) + 1);
+  }
 
   // ── Step 3b-post: Remove cards whose name is a garbled form of a captured team name ─
   // e.g. "Fancy Goose" == "FANCY GOOSE", "ANGUAR" ⊂ "VANGUARD", "VANCUARP" ≈ "VANGUARD"
@@ -1506,6 +1512,25 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     return rawKey;
   }
 
+  function teamLabelsAreNearDuplicate(left, right) {
+    const leftKey = normalizeBadgeKey(left);
+    const rightKey = normalizeBadgeKey(right);
+    if (!leftKey || !rightKey) return false;
+    if (leftKey === rightKey) return true;
+    if (leftKey.length >= 6 && rightKey.length >= 6 && (leftKey.includes(rightKey) || rightKey.includes(leftKey))) {
+      return true;
+    }
+    if (leftKey.length >= 8 && rightKey.length >= 8) {
+      const maxLen = Math.max(leftKey.length, rightKey.length);
+      return (levenshteinDistance(leftKey, rightKey) / maxLen) <= 0.2;
+    }
+    return false;
+  }
+
+  function getGroupDisplayName(group) {
+    return group?.badgeName || capturedTeamNames.get(group?.color) || '';
+  }
+
   // ── Step 4a: Badge-first grouping (player line + repeated badge line below) ─
   const minBadgeGap = scaleReferencePx(18, geometry, 'y', scale);
   const maxBadgeGap = scaleReferencePx(120, geometry, 'y', scale);
@@ -1615,6 +1640,12 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
           return typeof groupHue === 'number' && hueDistance(cardHue, groupHue) <= HUE_MERGE_THRESHOLD;
         });
         if (!sameColorExisting) {
+          const strongSingletonSignal =
+            (card.confidence || 0) >= 55 ||
+            (card.textTeamName && card.textTeamName.length >= 4);
+          if (!strongSingletonSignal) {
+            dlog('[CrewHub] Step4a defer weak singleton color "' + card.name + '" color=' + card.color + ' conf=' + (card.confidence || 0));
+          } else {
           knownGroups.push({
             color: card.color,
             badgeName: capturedTeamNames.get(card.color) || '',
@@ -1625,6 +1656,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
           });
           dlog('[CrewHub] Step4a preserve singleton color "' + card.name + '" -> color=' + card.color);
           continue;
+          }
         }
       }
 
@@ -1652,7 +1684,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
       if (bestGroup && bestDist <= distLimit) {
         const colorMismatch = card.color && card.color !== 'unknown'
           && bestGroup.color && bestGroup.color !== card.color;
-        if (colorMismatch && bestDist > CARD_HEIGHT * 0.9) {
+        if (colorMismatch && bestDist > CARD_HEIGHT * 0.9 && (card.confidence || 0) >= 55) {
           knownGroups.push({
             color: card.color,
             badgeName: capturedTeamNames.get(card.color) || '',
@@ -1815,6 +1847,65 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     }
   }
 
+  // ── Step 5e: Merge low-confidence singleton shards that resolve to the same
+  // team-name label as a larger neighbouring group. This is a safety net for
+  // cases like "XOSMICSANS" vs "COSMICSANS" where one noisy card spawns a
+  // separate colour shard after badge capture.
+  for (let i = 0; i < knownGroups.length; i += 1) {
+    const a = knownGroups[i];
+    if (!a || (a.cards || []).length !== 1) continue;
+    const aName = getGroupDisplayName(a);
+    if (!aName) continue;
+
+    for (let j = 0; j < knownGroups.length; j += 1) {
+      if (i === j) continue;
+      const b = knownGroups[j];
+      if (!b || (b.cards || []).length <= (a.cards || []).length) continue;
+      const bName = getGroupDisplayName(b);
+      if (!bName || !teamLabelsAreNearDuplicate(aName, bName)) continue;
+
+      const gap = b.minY > a.maxY ? b.minY - a.maxY
+        : a.minY > b.maxY ? a.minY - b.maxY
+          : 0;
+      const weakSingleton = (a.confidence || 0) < 60;
+      if (!weakSingleton && gap > getMergeGapForRange(a.maxY, b.minY)) continue;
+
+      b.cards = [...(b.cards || []), ...(a.cards || [])];
+      b.minY = Math.min(b.minY, a.minY);
+      b.maxY = Math.max(b.maxY, a.maxY);
+      b.confidence = Math.max(b.confidence || 0, a.confidence || 0);
+      if (!b.badgeName || aName.length > b.badgeName.length) b.badgeName = aName;
+      knownGroups.splice(i, 1);
+      i -= 1;
+      dlog('[CrewHub] Step5e merged named singleton shard "' + aName + '" into "' + bName + '"');
+      break;
+    }
+  }
+
+  // Some team names are OCR'd on the player line itself and repeat across the
+  // whole group (e.g. "555TIMER" on every red card). When bar-text capture
+  // misses, promote that repeated label into a fallback badge name so the group
+  // keeps a real team identity after pseudo-player cleanup.
+  for (const group of knownGroups) {
+    if (!group || group.color === 'unknown' || getGroupDisplayName(group)) continue;
+    const repeatedLabelCounts = new Map();
+    const repeatedLabelDisplay = new Map();
+    for (const card of (group.cards || [])) {
+      const key = normalizeBadgeKey(card?.name || '');
+      if (!key || key.length < 4) continue;
+      repeatedLabelCounts.set(key, (repeatedLabelCounts.get(key) || 0) + 1);
+      const display = String(card?.name || '').trim();
+      const existing = repeatedLabelDisplay.get(key) || '';
+      if (display.length > existing.length) repeatedLabelDisplay.set(key, display);
+    }
+    const bestRepeated = [...repeatedLabelCounts.entries()]
+      .filter(([, count]) => count >= 2)
+      .sort((left, right) => right[1] - left[1])[0];
+    if (!bestRepeated) continue;
+    group.badgeName = repeatedLabelDisplay.get(bestRepeated[0]) || group.badgeName || '';
+    dlog('[CrewHub] Step5f promoted repeated card label "' + group.badgeName + '" for color=' + group.color);
+  }
+
   // ── Build output ─────────────────────────────────────────────────────────────
   let teamCounter = 1;
   const enemyTeams = [];
@@ -1909,9 +2000,8 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
   // Under-capture guard: if we found color clusters but too few players, salvage
   // unmatched valid names and assign them to nearest known-color team by Y.
   const knownColorTeams = enemyTeams.filter(t => t.color && t.color !== 'unknown');
-  const totalPlayers = enemyTeams.reduce((sum, t) => sum + (t.players?.length || 0), 0);
-  if (knownColorTeams.length > 0 && totalPlayers < Math.max(6, knownColorTeams.length * 3)) {
-    const existingNames = new Set(enemyTeams.flatMap(t => (t.players || []).map(p => normalizeNameKey(p))));
+  const existingNames = new Set(enemyTeams.flatMap(t => (t.players || []).map(p => normalizeNameKey(p))));
+  if (knownColorTeams.length > 0 && existingNames.size < Math.max(6, knownColorTeams.length * 3)) {
     const pickSalvageNameFromLine = (lineWords) => {
       let primary = extractPlayerNameFromLine(lineWords);
       if (primary && (isValidOpponentName(primary) || isLikelyShortUiSuffixTagCandidate(lineWords, primary))) {
@@ -1942,16 +2032,26 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
       if (best && bestScore >= 35) return best;
       return null;
     };
+    const salvageNameCounts = new Map();
+    for (const line of groupedLines) {
+      const name = pickSalvageNameFromLine(line.words);
+      const key = normalizeNameKey(name);
+      if (!key) continue;
+      salvageNameCounts.set(key, (salvageNameCounts.get(key) || 0) + 1);
+    }
 
     const salvageCandidates = groupedLines
       .map(line => {
         const inBarZone = barZones.some(z => line.y >= z.min && line.y <= z.max);
-        if (inBarZone) return null;
         const name = pickSalvageNameFromLine(line.words);
         if (!name) return null;
         const key = normalizeNameKey(name);
         if (!key || existingNames.has(key)) return null;
         if (skippedSpectatorNameKeys.has(key) || isSkippedSpectatorRow(line.y)) return null;
+        if (inBarZone) {
+          if ((salvageNameCounts.get(key) || 0) > 1) return null;
+          if (isTeamName(name)) return null;
+        }
         return { name, y: line.y };
       })
       .filter(Boolean);
@@ -1962,7 +2062,9 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
         const yValues = (team.players || [])
           .map(p => uniqueCards.find(c => namesAreNearDuplicate(c.name, p))?.y)
           .filter(v => Number.isFinite(v));
-        const anchorY = yValues.length > 0 ? yValues.reduce((a, b) => a + b, 0) / yValues.length : null;
+        const anchorY = yValues.length > 0
+          ? yValues.reduce((a, b) => a + b, 0) / yValues.length
+          : (Number.isFinite(team.sourceRowY) ? team.sourceRowY : null);
         if (!Number.isFinite(anchorY)) continue;
         const dist = Math.abs(candidate.y - anchorY);
         if (dist < bestDist) {
@@ -1975,6 +2077,61 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
         existingNames.add(normalizeNameKey(candidate.name));
         dlog('[CrewHub] Under-capture salvage: assigned "' + candidate.name + '" -> ' + best.color);
       }
+    }
+  }
+
+  // Repeated card labels like "555TIMER" can be team-bar OCR leaking into the
+  // player slot. If the same normalized label appears across 3+ distinct cards,
+  // drop it from final player lists and keep only the genuinely unique players.
+  for (const team of enemyTeams) {
+    if (!Array.isArray(team?.players) || team.players.length === 0) continue;
+    const before = [...team.players];
+    team.players = team.players.filter((player) => (repeatedCardNameCounts.get(normalizeNameKey(player)) || 0) < 3);
+    if (team.players.length !== before.length) {
+      dlog('[CrewHub] Removed repeated pseudo-player label(s) from "' + (team.name || team.color || 'unknown') + '": ' + before.join(', '));
+    }
+  }
+
+  for (let i = enemyTeams.length - 1; i >= 0; i -= 1) {
+    if ((enemyTeams[i]?.players || []).length === 0) {
+      dlog('[CrewHub] Dropped empty enemy team after cleanup: "' + (enemyTeams[i]?.name || enemyTeams[i]?.color || 'unknown') + '"');
+      enemyTeams.splice(i, 1);
+    }
+  }
+
+  // Collapse singleton name shards into the stronger sibling team when the team
+  // labels are near-duplicates. This trims OCR bar-text ghosts like
+  // "XOSMICSANS" beside "COSMICSANS" without creating a permanent extra team.
+  for (let i = 0; i < enemyTeams.length; i += 1) {
+    const source = enemyTeams[i];
+    if (!source || (source.players || []).length !== 1) continue;
+    const sourceName = source.name || '';
+    if (!sourceName) continue;
+
+    for (let j = 0; j < enemyTeams.length; j += 1) {
+      if (i === j) continue;
+      const target = enemyTeams[j];
+      if (!target || !target.name || !teamLabelsAreNearDuplicate(sourceName, target.name)) continue;
+      if ((target.players || []).length < (source.players || []).length) continue;
+
+      const lonePlayer = (source.players || [])[0];
+      const playerSeenElsewhere = lonePlayer
+        ? enemyTeams.some((team, teamIndex) => (
+          teamIndex !== i &&
+          (team.players || []).some((player) => namesAreNearDuplicate(player, lonePlayer))
+        ))
+        : false;
+      if (lonePlayer && !playerSeenElsewhere) {
+        pushUniquePlayerName(target.players, lonePlayer);
+      }
+      if ((!target.name || target.nameSource !== 'team_bar') && source.nameSource === 'team_bar') {
+        target.name = source.name;
+        target.nameSource = source.nameSource;
+      }
+      enemyTeams.splice(i, 1);
+      i -= 1;
+      dlog('[CrewHub] Final merge: collapsed singleton shard "' + sourceName + '" into "' + target.name + '"');
+      break;
     }
   }
 

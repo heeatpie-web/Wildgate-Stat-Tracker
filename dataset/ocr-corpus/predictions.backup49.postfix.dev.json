@@ -1,0 +1,1380 @@
+{
+  "version": 1,
+  "generatedAt": "2026-03-23T17:55:50.218Z",
+  "sourceTruth": "dataset/ocr-corpus/ground-truth.json",
+  "ocrMode": "both",
+  "samples": [
+    {
+      "sampleId": "match130_04-53-56",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "fartingPuppy",
+        "Xiphorix",
+        "H4VOKXP"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "GOBLINGARAGE",
+          "teamColor": "red",
+          "shipType": "",
+          "players": [
+            "Zha_Ha_Dum",
+            "DevilsDisciple33",
+            "eneva_echo",
+            "thunderj"
+          ]
+        },
+        {
+          "teamName": "SHIPPYMCSHIPFACE",
+          "teamColor": "orange",
+          "shipType": "",
+          "players": [
+            "Hoff07",
+            "Shocketh The Storm",
+            "Mr Lemon Water"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match129_03-45-23",
+      "screenshotTypeHint": "tactical_map",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "LankyBastar",
+        "Kiphoriz",
+        "Xiphori"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "GETSUNK",
+          "teamColor": "unknown",
+          "shipType": "Hunter",
+          "players": []
+        }
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match128_03-12-24",
+      "screenshotTypeHint": "tactical_map",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "LankyBastard",
+        "Xiphorix",
+        "H4VOK_XP",
+        "Xiphori"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "BATTERWINGRAM",
+          "teamColor": "red",
+          "shipType": "Bastion",
+          "players": [
+            "Saln_Reclaimer",
+            "Sune",
+            "Fennix Gaming YT"
+          ]
+        },
+        {
+          "teamName": "ROCKLOBSTER",
+          "teamColor": "orange",
+          "shipType": "Hunter",
+          "players": [
+            "Seto_Kaiiba93",
+            "MightYgor09",
+            "JoeFro420",
+            "ricks-027"
+          ]
+        }
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Cryon Rift",
+        "Few Asteroids",
+        "Few Ships",
+        "Legion Patrols",
+        "Low Altitude Fog",
+        "Rogue Turrets"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match126_02-38-34",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "Xiphorix",
+        "H4VOK_XP"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "DADJOKES",
+          "teamColor": "salmon",
+          "shipType": "",
+          "players": [
+            "just INCREDIBLE61",
+            "merion70",
+            "soccer8en10"
+          ]
+        },
+        {
+          "teamName": "PARALLELPORK",
+          "teamColor": "cognac",
+          "shipType": "",
+          "players": [
+            "aabatteries2005",
+            "minikane",
+            "RancidAloner"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match123_02-02-22",
+      "screenshotTypeHint": "tactical_map",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "Rap1dWarrior",
+        "BricksParts",
+        "StueGrifn"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "FILTHYTHIEVES",
+          "teamColor": "orange",
+          "shipType": "Bastion",
+          "players": []
+        },
+        {
+          "teamName": "GENUINERISK",
+          "teamColor": "unknown",
+          "shipType": "Hunter",
+          "players": []
+        }
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Fast Gate",
+        "Few Asteroids",
+        "Few Ships",
+        "Legion Patrols",
+        "Rogue Turrets"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match121_01-10-33",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "RapldWarrior",
+        "BricksParts",
+        "StueGrifn"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "WAYWARD",
+          "teamColor": "red",
+          "shipType": "",
+          "players": [
+            "Goblina TT",
+            "chrismario",
+            "ArbiterofMercy",
+            "Zic Zac Cadillac"
+          ]
+        },
+        {
+          "teamName": "OLDLACE",
+          "teamColor": "orange",
+          "shipType": "",
+          "players": [
+            "eneva_echo",
+            "Zha_Ha_Dum I9"
+          ]
+        },
+        {
+          "teamName": "PROBYMCPROBEFACE",
+          "teamColor": "goldenrod",
+          "shipType": "",
+          "players": [
+            "Po Tay Toes2010",
+            "Krackpipe"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match116_20-33-47",
+      "screenshotTypeHint": "tactical_map",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "c0mbat_Barbi3",
+        "BricksParts",
+        "StueGrifn"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "DODGETHEBULLET",
+          "teamColor": "red",
+          "shipType": "Hunter",
+          "players": [
+            "dinosaur131048",
+            "Xx Dackax Xx",
+            "TakMe_9mm",
+            "TheWaldmann995"
+          ]
+        },
+        {
+          "teamName": "CARLTURTLE",
+          "teamColor": "orange",
+          "shipType": "",
+          "players": [
+            "20Aira20",
+            "LuiscestMoumou",
+            "LuckyStrike_29"
+          ]
+        }
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match115_20-00-27",
+      "screenshotTypeHint": "tactical_map",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "c0mbat_Barbi3",
+        "BricksParts",
+        "StueGrifn"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "ELDRITCHLUNARCORE",
+          "teamColor": "red",
+          "shipType": "Hunter",
+          "players": [
+            "LordSpawn2k",
+            "Goose Craft King",
+            "Amir9688",
+            "Soninho_S2"
+          ]
+        },
+        {
+          "teamName": "POCODIABLO",
+          "teamColor": "orange",
+          "shipType": "Outlaw",
+          "players": [
+            "Marquis_De Blood",
+            "MegaOptimus"
+          ]
+        },
+        {
+          "teamName": "DEPARTUREIN042",
+          "teamColor": "unknown",
+          "shipType": "Outlaw",
+          "players": []
+        }
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Epic Loot",
+        "Few Ships",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Low Altitude Fog"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match114_19-21-48",
+      "screenshotTypeHint": "tactical_map",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "c0mbat_Barbi3",
+        "BricksParts",
+        "StueGrifn"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "TSUNAMI",
+          "teamColor": "red",
+          "shipType": "Hunter",
+          "players": [
+            "Alhasha",
+            "pedigree_floe",
+            "Mar4K"
+          ]
+        },
+        {
+          "teamName": "HANDTOSSED",
+          "teamColor": "cognac",
+          "shipType": "Outlaw",
+          "players": [
+            "SirPrigman",
+            "Pir4ni",
+            "OmikronApex"
+          ]
+        }
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Ancient Vault",
+        "Epic Loot",
+        "Few Ships",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Lots of Asteroids",
+        "Rogue Turrets"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match113_02-35-34",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "c0mbat_Barbi3",
+        "fartingPuppy",
+        "Xiphorix"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "OURNAMERANOUTOF",
+          "teamColor": "red",
+          "shipType": "",
+          "players": [
+            "Frodo VINN",
+            "Sohailkhan99",
+            "Eizgan",
+            "frncrd"
+          ]
+        },
+        {
+          "teamName": "GAMMAGANG",
+          "teamColor": "orange",
+          "shipType": "",
+          "players": [
+            "Jackdaw",
+            "WargasmAlert",
+            "Tytan9",
+            "Ophelia074"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match98_03-20-51",
+      "screenshotTypeHint": "tactical_map",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "c0mbat_Barbi3",
+        "fartingPuppy",
+        "H4V0K_XP",
+        "Capturequalitylooksgoo"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "555TIMER",
+          "teamColor": "red",
+          "shipType": "Hunter",
+          "players": [
+            "LordSpawn2k",
+            "Samdhai02",
+            "Iah11119"
+          ]
+        },
+        {
+          "teamName": "COSMICSANS",
+          "teamColor": "orange",
+          "shipType": "Unknown",
+          "players": [
+            "ElmisterBadger",
+            "owes42",
+            "Alvaro_095",
+            "Fernanver09"
+          ]
+        }
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Ancient Vault",
+        "Cryon Rift",
+        "Few Ships",
+        "Legion Patrols",
+        "Low Altitude Fog"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match111_23-15-22",
+      "screenshotTypeHint": "tactical_map",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "RapldWarrior",
+        "Ondra-oc4sek",
+        "Beachbums O1",
+        "Xx Beachbums01"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "SCARINGISCARING",
+          "teamColor": "red",
+          "shipType": "Hunter",
+          "players": [
+            "Yabami",
+            "Mesemir",
+            "Pu4uPu4u",
+            "Danielfnrk"
+          ]
+        },
+        {
+          "teamName": "CHECKMATE",
+          "teamColor": "orange",
+          "shipType": "Hunter",
+          "players": [
+            "go_sox16-D",
+            "Shplint",
+            "Faded_Hashira",
+            "going-ku"
+          ]
+        }
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Ancient Vault",
+        "Cryon Rift",
+        "Fast Gate",
+        "Few Ships",
+        "Lava Epics",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Low Altitude Fog"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match109_21-26-16",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "Rusty Mc Clean",
+        "Bottomtickle",
+        "Rive"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "NOBOARDERSPLEASE",
+          "teamColor": "red",
+          "shipType": "",
+          "players": [
+            "LordSpawn2k",
+            "Nigthmare GMC",
+            "Moistcable"
+          ]
+        },
+        {
+          "teamName": "OURNAMERANOUTOF",
+          "teamColor": "orange",
+          "shipType": "",
+          "players": [
+            "Zha_Ha_Dum",
+            "BruiserBingie",
+            "Amir9688"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match112_23-48-20",
+      "screenshotTypeHint": "tactical_map",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "Xx Beachbums01",
+        "RapldWarrior",
+        "Rap1dWarriol"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "SHIPPYMCSHIPFACE",
+          "teamColor": "orange",
+          "shipType": "Hunter",
+          "players": []
+        },
+        {
+          "teamName": "BLACKOUT",
+          "teamColor": "marigold",
+          "shipType": "Hunter",
+          "players": []
+        },
+        {
+          "teamName": "LOWSTANDARDS",
+          "teamColor": "unknown",
+          "shipType": "Hunter",
+          "players": []
+        }
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Ancient Vault",
+        "Few Ships",
+        "Gloaming Expanse",
+        "Haunted Storm",
+        "Lava Epics",
+        "Legion Patrols",
+        "Low Altitude Fog"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match96_23-28-52",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "lamthemilkman TTY",
+        "c0mbat_Barbi3",
+        "frncrd"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "HEAVYMETAL",
+          "teamColor": "red",
+          "shipType": "",
+          "players": [
+            "Yegy",
+            "Shter",
+            "PermanentWinner",
+            "Ge Rican Do"
+          ]
+        },
+        {
+          "teamName": "THEHOW",
+          "teamColor": "orange",
+          "shipType": "",
+          "players": [
+            "Alcaxofo",
+            "Zvajshtajger",
+            "Gerti_bdns"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match93_18-24-45",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "MP2 Echoes Grenchler",
+        "Purple White Fo639",
+        "Thought"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "RAIDINGRAINBOW",
+          "teamColor": "magentaRed",
+          "shipType": "",
+          "players": [
+            "Jay MG6684",
+            "gre4d",
+            "Fabio171198"
+          ]
+        },
+        {
+          "teamName": "BELLPEPPER",
+          "teamColor": "orange",
+          "shipType": "",
+          "players": [
+            "Seoxys",
+            "VulvyQueen",
+            "Natsu"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match89_06-35-35",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "c0mbat_Barbi3",
+        "fartingPuppy",
+        "Tone"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "COUNTERPOINT",
+          "teamColor": "red",
+          "shipType": "",
+          "players": [
+            "Melfice",
+            "6ch1",
+            "hg12061",
+            "jdogood"
+          ]
+        },
+        {
+          "teamName": "SEABISCUIT",
+          "teamColor": "orange",
+          "shipType": "",
+          "players": [
+            "bendist10",
+            "i123KILL",
+            "WowOkay",
+            "Cowcrusader"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match87_05-01-38",
+      "screenshotTypeHint": "tactical_map",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "c0mbat_Barbi3",
+        "fartingPuppy",
+        "Tone"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "BUNCHOFNODES",
+          "teamColor": "red",
+          "shipType": "Outlaw",
+          "players": [
+            "leet",
+            "AtIlnkys"
+          ]
+        },
+        {
+          "teamName": "THESEACUCUMBER",
+          "teamColor": "orange",
+          "shipType": "Bastion",
+          "players": [
+            "thunderj",
+            "steaming343",
+            "Par-zivalx",
+            "GoGetter321"
+          ]
+        }
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Few Asteroids",
+        "Few Ships",
+        "Lava Epics",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Rogue Turrets"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match85_04-35-24",
+      "screenshotTypeHint": "tactical_map",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "c0mbat_Barbi3",
+        "fartingPuppy",
+        "Xiphorix",
+        "Xiphori"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "LIVELAUGHSTEAL",
+          "teamColor": "red",
+          "shipType": "Hunter",
+          "players": [
+            "Cadian5",
+            "DevilsDisciple33",
+            "CongoDuck",
+            "LuminantVibe"
+          ]
+        },
+        {
+          "teamName": "ATTACK-O-LANTERN",
+          "teamColor": "orange",
+          "shipType": "Hunter",
+          "players": [
+            "Frankmanuel3D",
+            "paolo8282",
+            "JdotMdot",
+            "Shter"
+          ]
+        }
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Cosmic Storm",
+        "Easy Loot",
+        "Few Ships",
+        "Legion Patrols"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match84_03-45-30",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "c0mbat_Barbi3",
+        "Xiphorix"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "ARTIFACTSPLEEEASE",
+          "teamColor": "orange",
+          "shipType": "",
+          "players": [
+            "DISCOCHOWDER22",
+            "Big Dusty Luke",
+            "Bigtower",
+            "God Like Gr8ness"
+          ]
+        },
+        {
+          "teamName": "POCODIABLO",
+          "teamColor": "red",
+          "shipType": "",
+          "players": [
+            "TwotOne",
+            "Nigthmare GMC",
+            "forgottensoul"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match79_02-03-19",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "MP2 Echoes Grenchler",
+        "c0mbat_Barbi3",
+        "Xiphorix"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "HEROSTAINS",
+          "teamColor": "cognac",
+          "shipType": "",
+          "players": [
+            "N7EP1C",
+            "Nigthmare GMC",
+            "CongoDuck",
+            "Thinkshooter"
+          ]
+        },
+        {
+          "teamName": "VANGUARD",
+          "teamColor": "cognac",
+          "shipType": "",
+          "players": [
+            "soloslayer_21",
+            "Justaseal5",
+            "immortal-zin85"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match78_00-54-06",
+      "screenshotTypeHint": "tactical_map",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "BricksParts",
+        "StueGrifn",
+        "Xiphori"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "MAXIMUMMOXIE",
+          "teamColor": "orange",
+          "shipType": "Solo Outlaw",
+          "players": []
+        },
+        {
+          "teamName": "METRONOME",
+          "teamColor": "unknown",
+          "shipType": "Hunter",
+          "players": []
+        }
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Ancient Vault",
+        "Cryon Rift",
+        "Few Ships",
+        "Lava Epics",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Lots of Asteroids",
+        "Rogue Turrets"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match77_23-05-13",
+      "screenshotTypeHint": "tactical_map",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "fartingPuppy",
+        "Goblina",
+        "Goblina TTV"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "ANNUALZITCANUSA",
+          "teamColor": "red",
+          "shipType": "Hunter",
+          "players": [
+            "LuminantVibe",
+            "fifihaze",
+            "DAWDNR19",
+            "Przystojniaku"
+          ]
+        },
+        {
+          "teamName": "Team 1",
+          "teamColor": "orange",
+          "shipType": "",
+          "players": [
+            "River.Banks",
+            "DokmyWok",
+            "alxndr008",
+            "OjuanBird"
+          ]
+        }
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match75_21-57-06",
+      "screenshotTypeHint": "tactical_map",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "itamare84",
+        "Goblina",
+        "TheF16",
+        "Goblina TTV"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "OURNAMERANOUTOF",
+          "teamColor": "red",
+          "shipType": "Hunter",
+          "players": [
+            "Amir9688",
+            "Nigthmare GMC",
+            "ObliqueState3485",
+            "Moistcable"
+          ]
+        },
+        {
+          "teamName": "UNSINKABLEII",
+          "teamColor": "orange",
+          "shipType": "Hunter",
+          "players": [
+            "Dam-ned1024xd",
+            "mikesauge"
+          ]
+        },
+        {
+          "teamName": "GUNSINALLDIRECTIONS",
+          "teamColor": "unknown",
+          "shipType": "Outlaw",
+          "players": []
+        },
+        {
+          "teamName": "COZYMURDER",
+          "teamColor": "mustard",
+          "shipType": "Outlaw",
+          "players": [
+            "Chase",
+            "NathanFielder"
+          ]
+        }
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Fast Gate",
+        "Few Asteroids",
+        "Few Ships",
+        "Gloaming Expanse",
+        "Lava Epics",
+        "Legion Patrols",
+        "Rogue Turrets"
+      ],
+      "yourShipType": "Bastion"
+    },
+    {
+      "sampleId": "match72_06-15-30",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "Germ Dawg Mi11",
+        "Xiphorix",
+        "Tone"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "GLASSCANNON",
+          "teamColor": "red",
+          "shipType": "",
+          "players": [
+            "forgottensoul",
+            "chrismario",
+            "Oguri_Cap",
+            "TwotOne"
+          ]
+        },
+        {
+          "teamName": "WITCHFULTHINKING",
+          "teamColor": "orange",
+          "shipType": "",
+          "players": [
+            "7VERTIGO",
+            "Icydeadpeople7",
+            "Sologray",
+            "MeMatiane22"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match74_21-27-17",
+      "screenshotTypeHint": "tactical_map",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "Goblina TTV",
+        "itamare84"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "AFTERLIFEASTRONAUTS",
+          "teamColor": "orange",
+          "shipType": "Hunter",
+          "players": []
+        },
+        {
+          "teamName": "DANCECRAB",
+          "teamColor": "unknown",
+          "shipType": "Scout",
+          "players": []
+        }
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ancient Vault",
+        "Few Ships",
+        "Gloaming Expanse",
+        "Lava Epics",
+        "Legion Patrols"
+      ],
+      "yourShipType": "Bastion"
+    },
+    {
+      "sampleId": "match110_21-58-53",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "Rusty Mc Clean",
+        "LuminantVibe",
+        "Rive"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "CRIMSONGUARD",
+          "teamColor": "red",
+          "shipType": "",
+          "players": [
+            "Zha_Ha_Dum",
+            "BruiserBingie",
+            "Genoharadan1135",
+            "eneva_echo"
+          ]
+        },
+        {
+          "teamName": "BATTERY",
+          "teamColor": "orange",
+          "shipType": "",
+          "players": [
+            "Ondra-oc4sek",
+            "Xx Beachbums01 Xx",
+            "srmsr",
+            "RapidWarrior"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match91_17-32-01",
+      "screenshotTypeHint": "tactical_map",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "Purple White Fo639",
+        "lamthemilkman TTV",
+        "Thought"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "PUMPKINSPICELATTE",
+          "teamColor": "red",
+          "shipType": "Hunter",
+          "players": [
+            "RootGorce",
+            "Nigthmare GMC",
+            "MystOgun"
+          ]
+        },
+        {
+          "teamName": "Team 1",
+          "teamColor": "orange",
+          "shipType": "",
+          "players": [
+            "Easy",
+            "Goose Craft King",
+            "Jay MG6684",
+            "MP2 Echoes Grenchler"
+          ]
+        }
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match94_22-28-57",
+      "screenshotTypeHint": "tactical_map",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "Iamthemilkman TTV",
+        "Ombat_Barbi3",
+        "BricksParts"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "LIZARDLIZARDLIZARD",
+          "teamColor": "orange",
+          "shipType": "Hunter",
+          "players": []
+        },
+        {
+          "teamName": "DANCECRAB",
+          "teamColor": "unknown",
+          "shipType": "Outlaw",
+          "players": []
+        }
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Fast Gate",
+        "Few Ships",
+        "Gloaming Expanse",
+        "Haunted Storm",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Lots of Asteroids",
+        "Rogue Turrets"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match95_22-50-36",
+      "screenshotTypeHint": "tactical_map",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "lamthemilkmanTT",
+        "c0mbat_Barbi3",
+        "BricksParts",
+        "lamthemilkman TTVY"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "CRIMSONGUARD",
+          "teamColor": "red",
+          "shipType": "Privateer",
+          "players": [
+            "Genoharadan1135",
+            "BruiserBingie",
+            "Zha_Ha_Dum I9",
+            "eneva_echo"
+          ]
+        },
+        {
+          "teamName": "POCODIABLO",
+          "teamColor": "cognac",
+          "shipType": "Bastion",
+          "players": [
+            "Gerti_bdns",
+            "NonnaFranca32",
+            "Zvajshtajger",
+            "MeMatiane22"
+          ]
+        }
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Dead Worlds",
+        "Few Asteroids",
+        "Few Ships",
+        "Lava Epics",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Rogue Turrets",
+        "Sandstorm"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match97_23-50-19",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "lamthemilkmanTT",
+        "c0mbat_Barbi3",
+        "frncrd"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "AGENTSOFCHAOS",
+          "teamColor": "cognac",
+          "shipType": "",
+          "players": [
+            "Genoharadan1135",
+            "Zha_Ha_Dum I9",
+            "eneva_echo"
+          ]
+        },
+        {
+          "teamName": "BUTTEROLOGY",
+          "teamColor": "cognac",
+          "shipType": "",
+          "players": [
+            "PermanentWinner",
+            "Alcaxofo",
+            "Destrga"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match99_03-46-28",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "c0mbat_Barbi3",
+        "fartingPuppy",
+        "H4V0K_XP"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "COZYMURDER",
+          "teamColor": "red",
+          "shipType": "",
+          "players": [
+            "gaowang134",
+            "luiso2.4",
+            "just INCREDIBLE61",
+            "Raziel"
+          ]
+        },
+        {
+          "teamName": "COSMICSANS",
+          "teamColor": "orange",
+          "shipType": "",
+          "players": [
+            "ElmisterBadger",
+            "Fernanver09",
+            "Alvaro_095",
+            "owes42"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match100_04-09-18",
+      "screenshotTypeHint": "tactical_map",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "c0mbat_Barbi3",
+        "fartingPuppy",
+        "H4VOK_XP",
+        "H4VOK_X"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "COSMICSANS",
+          "teamColor": "orange",
+          "shipType": "Hunter",
+          "players": [
+            "Alvaro_095",
+            "Fernanver09",
+            "owes42",
+            "ElmisterBadger"
+          ]
+        },
+        {
+          "teamName": "GETSUNK",
+          "teamColor": "grape",
+          "shipType": "Hunter",
+          "players": [
+            "nullifiedgmn.gg",
+            "likely_asleep",
+            "just INCREDIBLE61",
+            "The Jay Mahn"
+          ]
+        }
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ancient Vault",
+        "Cosmic Storm",
+        "Few Ships",
+        "Legion Patrols",
+        "Low Altitude Fog"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match105_22-20-46",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "c0mbat_Barbi3",
+        "fartingPuppy",
+        "Beachbums01"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "ZIRCONIA",
+          "teamColor": "salmon",
+          "shipType": "",
+          "players": [
+            "Dr.Wheeler",
+            "Warwas12",
+            "Shplint"
+          ]
+        },
+        {
+          "teamName": "GHOULSGALORE",
+          "teamColor": "orange",
+          "shipType": "",
+          "players": [
+            "Montanaeltony562-D",
+            "kwaaxooo"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match119_23-03-22",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "H4VOK_XP",
+        "Riv209",
+        "JrmJr",
+        "H4VOK_X"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "ESCAPEVELOCITY",
+          "teamColor": "yellowGreen",
+          "shipType": "Solo Outlaw",
+          "players": [
+            "Ondra-oc4sek",
+            "Braiker",
+            "Capman5",
+            "Iwootywoot"
+          ]
+        },
+        {
+          "teamName": "BOREALIS",
+          "teamColor": "cognac",
+          "shipType": "Solo Outlaw",
+          "players": [
+            "fartingPuppy",
+            "Ledurricane",
+            "lirolake"
+          ]
+        },
+        {
+          "teamName": "FANCYGOOSE",
+          "teamColor": "cognac",
+          "shipType": "Privateer",
+          "players": [
+            "Rive",
+            "Riv19",
+            "Eudico",
+            "itamare84"
+          ]
+        },
+        {
+          "teamName": "VANGUARD",
+          "teamColor": "goldenrod",
+          "shipType": "Hunter",
+          "players": [
+            "6Tiblolan1",
+            "Goblina TT",
+            "Caziban",
+            "G4zZy9"
+          ]
+        }
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Dead Worlds",
+        "Epic Loot",
+        "Few Asteroids",
+        "Legion Patrols",
+        "Rogue Turrets"
+      ],
+      "yourShipType": "Privateer"
+    }
+  ],
+  "failures": [
+    {
+      "sampleId": "match106_23-15-17",
+      "error": "Missing image: C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/106/capture_2026-02-17T23-15-17-086Z.png"
+    }
+  ]
+}

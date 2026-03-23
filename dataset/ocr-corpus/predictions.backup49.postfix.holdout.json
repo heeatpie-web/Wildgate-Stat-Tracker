@@ -1,0 +1,444 @@
+{
+  "version": 1,
+  "generatedAt": "2026-03-23T17:57:32.481Z",
+  "sourceTruth": "dataset/ocr-corpus/ground-truth.holdout.json",
+  "ocrMode": "both",
+  "samples": [
+    {
+      "sampleId": "match132_06-02-56",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "fartingPuppy",
+        "AlixThus19",
+        "H4VOKXP",
+        "leet"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "WITCHPLEASE",
+          "teamColor": "salmon",
+          "shipType": "",
+          "players": [
+            "SticksandStones",
+            "6Tiblolan",
+            "Scipion",
+            "7Tibiblen9"
+          ]
+        },
+        {
+          "teamName": "ATTACK-O-LANTERN",
+          "teamColor": "orange",
+          "shipType": "",
+          "players": [
+            "eneva_echo",
+            "Drimakus",
+            "PerfectSin11",
+            "Hoff07"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match131_05-26-45",
+      "screenshotTypeHint": "tactical_map",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "fartingPuppy",
+        "AlixThus",
+        "H4VOK_X"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "PUBLICHOUSE",
+          "teamColor": "orange",
+          "shipType": "Hunter",
+          "players": []
+        },
+        {
+          "teamName": "CLAYBORNE",
+          "teamColor": "unknown",
+          "shipType": "Hunter",
+          "players": []
+        }
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Dead Worlds",
+        "Few Ships",
+        "Legion Patrols",
+        "Sandstorm"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match129_03-45-42",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "LankyBastard",
+        "AlixThus19",
+        "Xiphorix",
+        "H4VOKXP"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "WITCHPLEASE",
+          "teamColor": "red",
+          "shipType": "",
+          "players": [
+            "Scipion",
+            "SticksandStones",
+            "7Tibiblen"
+          ]
+        },
+        {
+          "teamName": "Team 1",
+          "teamColor": "orange",
+          "shipType": "",
+          "players": [
+            "hipstercthulhu"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match124_01-33-38",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "fartingPuppy",
+        "AlixThus19",
+        "H4VOKXP",
+        "Mar4K9"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "Team 1",
+          "teamColor": "red",
+          "shipType": "",
+          "players": [
+            "Psyche Field Trip",
+            "MauroLs01",
+            "langdonjon86",
+            "BeastfromthEast"
+          ]
+        },
+        {
+          "teamName": "SHIPPYMCSHIPFACE",
+          "teamColor": "orange",
+          "shipType": "",
+          "players": [
+            "Grip My Glizzy"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match123_02-02-34",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "RapldWarrior",
+        "BricksParts",
+        "AlixThus19",
+        "StueGrifn"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "FILTHYTHIEVES",
+          "teamColor": "orange",
+          "shipType": "",
+          "players": [
+            "acriex",
+            "DiddlyFiddle",
+            "DustyCalves",
+            "Ltchexmix"
+          ]
+        },
+        {
+          "teamName": "GENUINERISK",
+          "teamColor": "red",
+          "shipType": "",
+          "players": [
+            "Tails",
+            "Limler"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match118_22-01-14",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "AlixThus19",
+        "Riv219",
+        "JrmJr"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "BANANACASTLE",
+          "teamColor": "mustard",
+          "shipType": "",
+          "players": [
+            "Capman",
+            "Bottomtickle",
+            "Ondra-oc4sek",
+            "itamare84"
+          ]
+        },
+        {
+          "teamName": "LIZARDLIZARDLIZARD",
+          "teamColor": "yellowGreen",
+          "shipType": "",
+          "players": [
+            "Pfannisher",
+            "Daafin",
+            "wavelen"
+          ]
+        },
+        {
+          "teamName": "FANCYGOOSE",
+          "teamColor": "orange",
+          "shipType": "",
+          "players": [
+            "Riv19"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match117_21-21-44",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "AlixThus",
+        "Riv2I9",
+        "Capman",
+        "JrmJr"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "SHIPPYMCSHIPFACE",
+          "teamColor": "orange",
+          "shipType": "",
+          "players": [
+            "ForgottenPoetry",
+            "H4VOK_XP",
+            "Ombat_Barbi3",
+            "Daafin"
+          ]
+        },
+        {
+          "teamName": "FANCYGOOSE",
+          "teamColor": "goldenrod",
+          "shipType": "",
+          "players": [
+            "Rive",
+            "Ondra-oc4sek"
+          ]
+        },
+        {
+          "teamName": "DIGGYDIGGYBAMBAM",
+          "teamColor": "red",
+          "shipType": "",
+          "players": [
+            "Bottomtickle"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match88_06-07-46",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "c0mbat_Barbi3",
+        "fartingPuppy",
+        "AlixThus",
+        "Tone"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "EXCESSIVEFIREWORKS",
+          "teamColor": "red",
+          "shipType": "",
+          "players": [
+            "Talespinner",
+            "ToadDeath9",
+            "Par-zivalx",
+            "Rodri_Gamer911"
+          ]
+        },
+        {
+          "teamName": "DESOLATEDINGO",
+          "teamColor": "goldenrod",
+          "shipType": "",
+          "players": [
+            "Pico De Gomez",
+            "Super_Ballzy",
+            "Its Clown Mouth9"
+          ]
+        },
+        {
+          "teamName": "GENERALAVERAGE",
+          "teamColor": "orange",
+          "shipType": "",
+          "players": [
+            "eet",
+            "AtInkys"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match78_00-53-56",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "BricksParts",
+        "StueGrifn",
+        "AlixThus",
+        "Xiphorix"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "METRONOME",
+          "teamColor": "red",
+          "shipType": "",
+          "players": [
+            "ghost916",
+            "Pinxitos St K_YT",
+            "Tgukr",
+            "Pu4uPu4u"
+          ]
+        },
+        {
+          "teamName": "MAXIMUMMOXIE",
+          "teamColor": "orange",
+          "shipType": "",
+          "players": [
+            "Dirty Dan PB"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match72_06-23-39",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "Germ Dawg Mi11",
+        "AlixThus",
+        "Xiphorix",
+        "Tone"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "Team 1",
+          "teamColor": "red",
+          "shipType": "",
+          "players": [
+            "OjuanBird",
+            "alxndr008",
+            "River.Banks",
+            "DokmyWok"
+          ]
+        },
+        {
+          "teamName": "OUTTAGAS",
+          "teamColor": "orange",
+          "shipType": "",
+          "players": [
+            "KutanKun"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match92_18-05-58",
+      "screenshotTypeHint": "crew_hub",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "MP2 Echoes Grenchler",
+        "Purple White Fo639",
+        "AlixThus19",
+        "Thought"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "WITCHESGETSTITCHES",
+          "teamColor": "red",
+          "shipType": "",
+          "players": [
+            "nijajgan",
+            "primord1",
+            "LordSpawn2k",
+            "Wobbly319"
+          ]
+        }
+      ],
+      "modifiers": [],
+      "yourShipType": ""
+    },
+    {
+      "sampleId": "match92_18-06-17",
+      "screenshotTypeHint": "tactical_map",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "MP2 Echoes Grenchler",
+        "Purple White Fo639",
+        "AlixThus"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "WITCHESGETSTITCHES",
+          "teamColor": "orange",
+          "shipType": "Hunter",
+          "players": []
+        },
+        {
+          "teamName": "BEGABEAR",
+          "teamColor": "unknown",
+          "shipType": "Scout",
+          "players": []
+        }
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Few Ships",
+        "Gloaming Expanse",
+        "Lava Epics",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Lots of Asteroids"
+      ],
+      "yourShipType": "Privateer"
+    }
+  ],
+  "failures": [
+    {
+      "sampleId": "match119_01-27-01_relinked",
+      "error": "Missing image: C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/119/capture_2026-02-21T01-27-01-487Z__relinked_2.png"
+    }
+  ]
+}

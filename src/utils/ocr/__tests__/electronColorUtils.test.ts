@@ -9,6 +9,12 @@ const { classifyTeamColorHSL, clusterByHue, nearestWildgateColor, __test__ } = r
   __test__: {
     circularHueMean: (data: Uint8Array, channels: number) => number | null;
     majorityDark: (data: Uint8Array, channels: number) => boolean;
+    classifyColorRegionData: (data: Uint8Array, channels: number) => {
+      color: string;
+      confidence: number;
+      rawHue: number | null;
+      rgb: { r: number; g: number; b: number };
+    };
   };
 };
 
@@ -182,6 +188,19 @@ describe('electron/colorUtils detectColorInRegion hybrid classifier', () => {
     expect(hslResult.color).toBe('unknown'); // confirms fast-path misses it
     const wgResult = nearestWildgateColor(331);
     expect(wgResult.name).toBe('hotPink'); // confirms fallback catches it
+  });
+
+  it('region classifier keeps a dominant orange cluster despite a few pink outliers', () => {
+    const pixels = new Uint8Array([
+      ...Array.from({ length: 24 }, () => [254, 94, 0]).flat(),
+      ...Array.from({ length: 4 }, () => [220, 37, 125]).flat(),
+      ...Array.from({ length: 4 }, () => [240, 240, 240]).flat(),
+    ]);
+
+    const result = __test__.classifyColorRegionData(pixels, 3);
+    expect(result.color).toBe('orange');
+    expect(result.confidence).toBeGreaterThan(60);
+    expect(result.rawHue).not.toBeNull();
   });
 });
 

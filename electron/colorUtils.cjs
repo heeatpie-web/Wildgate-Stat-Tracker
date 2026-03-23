@@ -154,7 +154,7 @@ function rgbToHsl(r, g, b) {
 // Achromatic entries (s < 10) get hue = null.
 const WILDGATE_COLORS_WITH_HUE = WILDGATE_COLORS.map(c => {
   const hsl = rgbToHsl(c.r, c.g, c.b);
-  return { ...c, hue: hsl.s < 10 ? null : hsl.h };
+  return { ...c, hsl, hue: hsl.s < 10 ? null : hsl.h };
 });
 
 /**
@@ -194,6 +194,205 @@ function nearestWildgateColor(hue) {
   // Confidence: 100 at dist=0, drops linearly, floor at 30
   const confidence = Math.max(30, Math.round(100 - bestDist * 2));
   return { name: bestName, confidence };
+}
+
+function nearestWildgateColorHsl(targetHsl) {
+  if (!targetHsl || !Number.isFinite(targetHsl.h) || !Number.isFinite(targetHsl.s) || !Number.isFinite(targetHsl.l)) {
+    return { name: 'unknown', confidence: 0, distance: Infinity };
+  }
+
+  let bestEntry = null;
+  let bestDistance = Infinity;
+
+  for (const entry of WILDGATE_COLORS_WITH_HUE) {
+    if (entry.hue === null) continue;
+    const distance = Math.sqrt(
+      (hueDistance(targetHsl.h, entry.hsl.h) ** 2) +
+      ((targetHsl.s - entry.hsl.s) ** 2) +
+      ((targetHsl.l - entry.hsl.l) ** 2)
+    );
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestEntry = entry;
+    }
+  }
+
+  if (!bestEntry) {
+    return { name: 'unknown', confidence: 0, distance: Infinity };
+  }
+
+  const confidence = Math.max(30, Math.round(100 - bestDistance * 1.5));
+  return { name: bestEntry.name, confidence, distance: Number(bestDistance.toFixed(2)) };
+}
+
+function lightnessBellCurve(lightness) {
+  if (!Number.isFinite(lightness)) return 0;
+  return lightness <= 50 ? lightness / 50 : (100 - lightness) / 50;
+}
+
+function normalizeHue(hue) {
+  if (!Number.isFinite(hue)) return 0;
+  return ((hue % 360) + 360) % 360;
+}
+
+function selectDominantHueCluster(items, getHue, getWeight, binSize = 8, neighborSpan = 1) {
+  if (!Array.isArray(items) || items.length === 0) return null;
+
+  const binCount = Math.max(1, Math.round(360 / binSize));
+  const bins = Array(binCount).fill(0);
+  const indexed = [];
+  let totalWeight = 0;
+
+  for (const item of items) {
+    const hue = normalizeHue(getHue(item));
+    const weight = Number(getWeight(item));
+    if (!Number.isFinite(weight) || weight <= 0) continue;
+    const bin = Math.floor(hue / binSize) % binCount;
+    bins[bin] += weight;
+    indexed.push({ item, bin, weight });
+    totalWeight += weight;
+  }
+
+  if (indexed.length === 0 || totalWeight <= 0) return null;
+
+  let dominantBin = 0;
+  for (let i = 1; i < bins.length; i += 1) {
+    if (bins[i] > bins[dominantBin]) dominantBin = i;
+  }
+
+  const cluster = indexed.filter(({ bin }) => {
+    const direct = Math.abs(bin - dominantBin);
+    const wrap = binCount - direct;
+    return Math.min(direct, wrap) <= neighborSpan;
+  });
+
+  const clusterWeight = cluster.reduce((sum, entry) => sum + entry.weight, 0);
+  return {
+    dominantBin,
+    totalWeight,
+    clusterWeight,
+    clusterItems: cluster.map(({ item }) => item),
+  };
+}
+
+function weightedHslCentroid(items, getHsl, getRgb, getWeight) {
+  let totalWeight = 0;
+  let sinSum = 0;
+  let cosSum = 0;
+  let satSum = 0;
+  let lightSum = 0;
+  let rSum = 0;
+  let gSum = 0;
+  let bSum = 0;
+
+  for (const item of items) {
+    const weight = Number(getWeight(item));
+    const hsl = getHsl(item);
+    const rgb = getRgb(item);
+    if (
+      !Number.isFinite(weight) || weight <= 0 ||
+      !hsl || !rgb ||
+      !Number.isFinite(hsl.h) || !Number.isFinite(hsl.s) || !Number.isFinite(hsl.l)
+    ) {
+      continue;
+    }
+
+    const hue = normalizeHue(hsl.h);
+    const rad = hue * (Math.PI / 180);
+    totalWeight += weight;
+    sinSum += Math.sin(rad) * weight;
+    cosSum += Math.cos(rad) * weight;
+    satSum += hsl.s * weight;
+    lightSum += hsl.l * weight;
+    rSum += rgb.r * weight;
+    gSum += rgb.g * weight;
+    bSum += rgb.b * weight;
+  }
+
+  if (totalWeight <= 0) return null;
+
+  const hue = normalizeHue(Math.atan2(sinSum / totalWeight, cosSum / totalWeight) * (180 / Math.PI));
+  return {
+    hsl: {
+      h: Number(hue.toFixed(2)),
+      s: Number((satSum / totalWeight).toFixed(2)),
+      l: Number((lightSum / totalWeight).toFixed(2)),
+    },
+    rgb: {
+      r: Math.round(rSum / totalWeight),
+      g: Math.round(gSum / totalWeight),
+      b: Math.round(bSum / totalWeight),
+    },
+    totalWeight,
+  };
+}
+
+function classifyColorRegionData(data, channels) {
+  const ch = Math.max(1, channels);
+  const pixelCount = data.length / ch;
+  if (pixelCount <= 0) {
+    return { color: 'unknown', confidence: 0, rawHue: null, rgb: { r: 0, g: 0, b: 0 } };
+  }
+
+  // If ≥ 70% of pixels are very dark, the region is a black/spectator card.
+  if (majorityDark(data, ch)) {
+    return { color: 'black', confidence: 80, rawHue: null, rgb: { r: 0, g: 0, b: 0 } };
+  }
+
+  const chromaticSamples = [];
+  for (let i = 0; i < data.length; i += ch) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    const hsl = rgbToHsl(r, g, b);
+
+    if (hsl.s < 15 || hsl.l > 90) continue;
+    const weight = (hsl.s / 100) * lightnessBellCurve(hsl.l);
+    if (!Number.isFinite(weight) || weight < 0.08) continue;
+
+    chromaticSamples.push({
+      rgb: { r, g, b },
+      hsl,
+      weight,
+    });
+  }
+
+  if (chromaticSamples.length === 0) {
+    return { color: 'unknown', confidence: 0, rawHue: null, rgb: { r: 0, g: 0, b: 0 } };
+  }
+
+  const dominantCluster = selectDominantHueCluster(
+    chromaticSamples,
+    (sample) => sample.hsl.h,
+    (sample) => sample.weight,
+    8,
+    1
+  );
+  if (!dominantCluster || dominantCluster.clusterItems.length === 0) {
+    return { color: 'unknown', confidence: 0, rawHue: null, rgb: { r: 0, g: 0, b: 0 } };
+  }
+
+  const centroid = weightedHslCentroid(
+    dominantCluster.clusterItems,
+    (sample) => sample.hsl,
+    (sample) => sample.rgb,
+    (sample) => sample.weight
+  );
+  if (!centroid) {
+    return { color: 'unknown', confidence: 0, rawHue: null, rgb: { r: 0, g: 0, b: 0 } };
+  }
+
+  const nearest = nearestWildgateColorHsl(centroid.hsl);
+  const dominanceRatio = dominantCluster.clusterWeight / dominantCluster.totalWeight;
+  const distanceScore = Math.max(0, 1 - (nearest.distance / 70));
+  const confidence = Math.max(35, Math.round((dominanceRatio * 0.7 + distanceScore * 0.3) * 100));
+
+  return {
+    color: nearest.name,
+    confidence,
+    rawHue: centroid.hsl.h,
+    rgb: centroid.rgb,
+  };
 }
 
 /**
@@ -409,79 +608,7 @@ async function detectColorInRegion(imageBuffer, region, sharpModule = null) {
       .toBuffer({ resolveWithObject: true });
 
     const { data, info } = extracted;
-    const pixelCount = info.width * info.height;
-
-    if (pixelCount === 0) {
-      return { color: 'unknown', confidence: 0, rawHue: null, rgb: { r: 0, g: 0, b: 0 } };
-    }
-
-    // ── Black-bar pre-check ───────────────────────────────────────────────────
-    // If ≥ 70% of pixels are very dark (lightness < 25%), the bar is a black/
-    // spectator card. Return early before the saturation race so a stray bright
-    // border pixel can't override the true bar colour.
-    if (majorityDark(data, info.channels)) {
-      return { color: 'black', confidence: 80, rawHue: null, rgb: { r: 0, g: 0, b: 0 } };
-    }
-
-    // ── Most-saturated-pixel sampling ─────────────────────────────────────────
-    // Find the pixel with the highest saturation × lightness-bell-curve score.
-    // Team colour bars are vivid and mid-lightness. Near-white pixels (badge text,
-    // UI chrome) and near-black pixels are explicitly de-weighted by the bell curve
-    // so they don't masquerade as highly-saturated colour signals.
-    // Bell curve: peaks at l=50%, → 0 as l→0% or l→100%.
-    const ch = Math.max(1, info.channels);
-    let bestScore = -1;
-    let bestR = 0, bestG = 0, bestB = 0;
-
-    for (let i = 0; i < data.length; i += ch) {
-      const r = data[i], g = data[i + 1], b = data[i + 2];
-      const hsl = rgbToHsl(r, g, b);
-      const lightnessScore = hsl.l <= 50 ? hsl.l / 50 : (100 - hsl.l) / 50;
-      const score = (hsl.s / 100) * lightnessScore;
-      if (score > bestScore) {
-        bestScore = score;
-        bestR = r; bestG = g; bestB = b;
-      }
-    }
-
-    if (bestScore < 0.01) {
-      return { color: 'unknown', confidence: 0, rawHue: null, rgb: { r: bestR, g: bestG, b: bestB } };
-    }
-
-    // Store the winning pixel's hue for clusterByHue downstream.
-    // Exclude near-white pixels (l > 90) — the HSL formula computes artifically
-    // high saturation at extreme lightness, making white text appear chromatic.
-    const winningHsl = rgbToHsl(bestR, bestG, bestB);
-    const rawHue = (winningHsl.s > 5 && winningHsl.l <= 90) ? winningHsl.h : null;
-
-    // ── Hybrid classifier ─────────────────────────────────────────────────────
-    // Fast path: classifyTeamColorHSL handles the four legacy game colours plus
-    // spectator/black detection. Return spectator immediately; return known
-    // non-black chromatic colours immediately.
-    const hslResult = classifyTeamColorHSL(bestR, bestG, bestB);
-    if (hslResult.color === 'spectator') {
-      return { color: 'spectator', confidence: hslResult.confidence, rawHue, rgb: { r: bestR, g: bestG, b: bestB } };
-    }
-    if (hslResult.color !== 'unknown' && hslResult.color !== 'black') {
-      return { color: hslResult.color, confidence: hslResult.confidence, rawHue, rgb: { r: bestR, g: bestG, b: bestB } };
-    }
-
-    // For 'unknown' or 'black': if the winning pixel has a detectable hue (S > 5%),
-    // use nearestWildgateColor to match against all 32 Wildgate team colors.
-    // This handles vivid colours classifyTeamColorHSL doesn't know (lime green,
-    // goldenrod, plum, grape, etc.) and dark-but-chromatic Wildgate colors.
-    if (rawHue !== null) {
-      const wg = nearestWildgateColor(rawHue);
-      return { color: wg.name, confidence: wg.confidence, rawHue, rgb: { r: bestR, g: bestG, b: bestB } };
-    }
-
-    // Truly achromatic pixel (S ≤ 5%) — keep black or return unknown.
-    return {
-      color: hslResult.color === 'black' ? 'black' : 'unknown',
-      confidence: hslResult.color === 'black' ? hslResult.confidence : 0,
-      rawHue,
-      rgb: { r: bestR, g: bestG, b: bestB },
-    };
+    return classifyColorRegionData(data, info.channels);
   } catch (error) {
     console.error('[ColorUtils] detectColorInRegion failed:', error.message);
     return { color: 'unknown', confidence: 0, rawHue: null, rgb: { r: 0, g: 0, b: 0 } };
@@ -576,16 +703,10 @@ async function detectTeamColorBarBelow(imageBuffer, bbox, scale = 1, sharpModule
     Math.round(verticalStep * 3),
   ];
 
-  // Collect ALL samples and return the highest-confidence result.
-  // Early-exit on first match would cause a dim edge pixel (e.g. pinkish s=36%)
-  // to beat a clean sample further right (e.g. pure orange s=100%) because the
-  // HSL saturation tolerance is wide enough to let marginal reads through.
-  let bestResult = { color: 'unknown', confidence: 0, rgb: null, xBase: 0, yOff: 0 };
-  // Track the best chromatic-unknown sample (rawHue non-null but classifyTeamColorHSL
-  // returned 'unknown' because the hue is a custom Wildgate color outside the 4-color bands).
-  // If ALL named-color attempts fail and bestResult ends up 'black', we prefer returning
-  // 'unknown'+rawHue so clusterByHue can group the card rather than skipping it as a spectator.
-  let bestChromaticUnknown = null; // { rawHue, rgb, score }
+  // Collect multiple samples and resolve them by dominant hue cluster instead of
+  // trusting a single high-saturation outlier from adjacent art or UI chrome.
+  const chromaticSamples = [];
+  let bestBlackResult = null;
 
   for (const xBase of xPositions) {
     for (const yOff of yOffsets) {
@@ -597,32 +718,30 @@ async function detectTeamColorBarBelow(imageBuffer, bbox, scale = 1, sharpModule
       };
       try {
         const result = await detectColorInRegion(imageBuffer, region, sharpModule);
-        if (result.color !== 'unknown' && result.color !== 'spectator') {
-          // Chromatic colors always beat 'black'; 'black' only wins over unknown/other black.
-          const curChromatic  = result.color !== 'black';
-          const bestChromatic = bestResult.color !== 'black' && bestResult.color !== 'unknown';
-          if (
-            (curChromatic  && (!bestChromatic || result.confidence > bestResult.confidence)) ||
-            (!curChromatic && !bestChromatic && result.confidence > bestResult.confidence)
-          ) {
-            bestResult = { ...result, xBase, yOff };
+        if (result.color === 'spectator') continue;
+
+        if (result.color === 'black') {
+          if (!bestBlackResult || result.confidence > bestBlackResult.confidence) {
+            bestBlackResult = { ...result, xBase, yOff };
           }
-        } else if (
-          result.color === 'unknown' && result.rawHue != null && result.rgb &&
-          xBase === xPositions[0]  // primary position only (text left edge, reliably on badge)
-        ) {
-          // A chromatic pixel was found at the primary x-position but didn't match any
-          // of the 4 standard colors — this is a custom Wildgate colour badge.
-          // Rightward samples are not used here: they can exit the card into the
-          // game background, whose green/yellow hues would contaminate the result.
-          // Score by saturation × lightness bell-curve (peaks at l=50%).
-          const hsl = rgbToHsl(result.rgb.r, result.rgb.g, result.rgb.b);
-          if (hsl.l > 85) continue; // near-white (UI chrome) — discard
-          const lightnessScore = hsl.l <= 50 ? hsl.l / 50 : (100 - hsl.l) / 50;
-          const score = (hsl.s / 100) * lightnessScore;
-          if (!bestChromaticUnknown || score > bestChromaticUnknown.score) {
-            bestChromaticUnknown = { rawHue: result.rawHue, rgb: result.rgb, score };
-          }
+          continue;
+        }
+
+        if (typeof result.rawHue === 'number' && result.rgb) {
+          const sampleHsl = rgbToHsl(result.rgb.r, result.rgb.g, result.rgb.b);
+          const xWeight = xBase === xPositions[0] ? 1.2 : xBase === xPositions[1] ? 1.0 : 0.8;
+          const yWeight = yOff === 0 ? 1.0 : Math.max(0.55, 1 - (Math.abs(yOff) / Math.max(sampleHeight * 3, 1)));
+          const weight = xWeight * yWeight * Math.max(0.35, result.confidence / 100);
+          chromaticSamples.push({
+            color: result.color,
+            confidence: result.confidence,
+            rawHue: result.rawHue,
+            rgb: result.rgb,
+            hsl: sampleHsl,
+            weight,
+            xBase,
+            yOff,
+          });
         }
       } catch (_) {
         // out of bounds — skip
@@ -630,23 +749,56 @@ async function detectTeamColorBarBelow(imageBuffer, bbox, scale = 1, sharpModule
     }
   }
 
-  // If the only "positive" result is black but we found a chromatic pixel somewhere
-  // on the card, the card is NOT a spectator — it uses a custom color outside the
-  // standard 4-color bands. Return unknown+rawHue so clusterByHue can handle it.
-  if (bestResult.color === 'black' && bestChromaticUnknown) {
-    dlog2(`[ColorUtils] Bar custom-color: returning unknown rawHue=${bestChromaticUnknown.rawHue} (was black, chromatic px found)`);
-    return { color: 'unknown', confidence: 0, rawHue: bestChromaticUnknown.rawHue, rgb: bestChromaticUnknown.rgb };
+  if (chromaticSamples.length > 0) {
+    const dominantCluster = selectDominantHueCluster(
+      chromaticSamples,
+      (sample) => sample.rawHue,
+      (sample) => sample.weight,
+      10,
+      1
+    );
+    const centroid = dominantCluster
+      ? weightedHslCentroid(
+        dominantCluster.clusterItems,
+        (sample) => sample.hsl,
+        (sample) => sample.rgb,
+        (sample) => sample.weight
+      )
+      : null;
+
+    if (dominantCluster && centroid) {
+      const nearest = nearestWildgateColorHsl(centroid.hsl);
+      const dominanceRatio = dominantCluster.clusterWeight / dominantCluster.totalWeight;
+      const weightedConfidence = dominantCluster.clusterItems.reduce(
+        (sum, sample) => sum + ((sample.confidence / 100) * sample.weight),
+        0
+      ) / dominantCluster.clusterWeight;
+      const distanceScore = Math.max(0, 1 - (nearest.distance / 70));
+      const confidence = Math.max(
+        35,
+        Math.round((dominanceRatio * 0.45 + weightedConfidence * 0.35 + distanceScore * 0.20) * 100)
+      );
+      dlog2(
+        `[ColorUtils] Bar consensus color=${nearest.name} conf=${confidence} hue=${centroid.hsl.h} ` +
+        `clusterWeight=${dominantCluster.clusterWeight.toFixed(2)}/${dominantCluster.totalWeight.toFixed(2)}`
+      );
+      return {
+        color: nearest.name,
+        confidence,
+        rgb: centroid.rgb,
+        rawHue: centroid.hsl.h,
+      };
+    }
   }
 
-  if (bestResult.confidence > 30) {
-    dlog2(`[ColorUtils] Bar color=${bestResult.color} conf=${bestResult.confidence} x=${bestResult.xBase} yOff=${bestResult.yOff} rgb=(${bestResult.rgb?.r},${bestResult.rgb?.g},${bestResult.rgb?.b})`);
-    return { color: bestResult.color, confidence: bestResult.confidence, rgb: bestResult.rgb, rawHue: bestResult.rawHue ?? null };
-  }
-
-  // All attempts failed — but still prefer a chromatic-unknown over a hard unknown
-  if (bestChromaticUnknown) {
-    dlog2(`[ColorUtils] Bar custom-color fallback: rawHue=${bestChromaticUnknown.rawHue}`);
-    return { color: 'unknown', confidence: 0, rawHue: bestChromaticUnknown.rawHue, rgb: bestChromaticUnknown.rgb };
+  if (bestBlackResult && bestBlackResult.confidence > 30) {
+    dlog2(`[ColorUtils] Bar color=black conf=${bestBlackResult.confidence} x=${bestBlackResult.xBase} yOff=${bestBlackResult.yOff}`);
+    return {
+      color: 'black',
+      confidence: bestBlackResult.confidence,
+      rgb: bestBlackResult.rgb,
+      rawHue: null,
+    };
   }
 
   // All attempts failed
@@ -828,5 +980,12 @@ module.exports = {
   findTeamColorRegions,
   getTeamColorInfo,
   clusterByHue,
-  __test__: { circularHueMean, majorityDark },
+  __test__: {
+    circularHueMean,
+    majorityDark,
+    nearestWildgateColorHsl,
+    classifyColorRegionData,
+    selectDominantHueCluster,
+    weightedHslCentroid,
+  },
 };
