@@ -3,12 +3,12 @@ import { getElectronAPI } from '../utils/electronAPI';
 
 export const DEFAULT_RESULT_TEXT_ARM_DELAY_MS = 45_000;
 export const RESULT_TEXT_SAMPLE_INTERVAL_MS = 100;
-// Spans x=478-1244, y=130-330 at 1920x1080 — boxes A/B/C cover left-anchored (2025) and center (2026) layouts.
+// Spans x=221-1315, y=103-297 at 1920x1080 — boxes A/B/C cover left-anchored (2025) and center (2026) layouts.
 export const RESULT_TEXT_SAMPLE_REGION = {
-    left: 0.2489,
-    top: 0.1204,
-    width: 0.3991,
-    height: 0.1852,
+    left: 0.115,
+    top: 0.095,
+    width: 0.57,
+    height: 0.18,
     normalized: true,
 } as const;
 
