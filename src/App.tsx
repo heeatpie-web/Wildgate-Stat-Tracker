@@ -2435,11 +2435,13 @@ const App: React.FC = () => {
         : resultMonitorArmAnchorAtState;
     const resultMonitorArmDelayMs = isArtifactsAndGates ? ARTIFACTS_AND_GATES_RESULT_ARM_DELAY_MS : 0;
     const resultMonitorEligible = fullAutoEnabled && shouldWatchResultScreens;
-    // Outside Artifacts & Gates we still restrict text sampling to the live phase so
-    // menu/postmatch transitions do not create false positives in the headline ROI.
-    const resultTextTripwireEnabled = isArtifactsAndGates
-        ? (resultMonitorEligible && !resultMonitorSuppression.text)
-        : (telemetryLifecycleStage === 'live' && !resultMonitorSuppression.text);
+    // Text tripwire is enabled whenever the monitor is eligible — both 'live' and 'menu'
+    // stages. Restricting to 'live' caused the combined monitor to restart on the
+    // 'live' → 'menu' transition (textEnabled flip), wiping flash cooldown state and
+    // letting the loading-screen brightness trigger a false positive capture.
+    // The 600ms consecutive-hit requirement on the text tripwire already guards
+    // against transient false positives from loading screens.
+    const resultTextTripwireEnabled = resultMonitorEligible && !resultMonitorSuppression.text;
 
     useEffect(() => {
         if (isArtifactsAndGates) {
