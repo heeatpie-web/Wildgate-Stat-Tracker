@@ -36,7 +36,7 @@ export interface ResultTextDetectionPayload {
     text?: string;
     activeBoxIds?: string[];
     tripwireActiveBoxCount?: number;
-    tripwireTotalWhiteDelta?: number;
+    tripwireTotalWhiteRatio?: number;
     armAt?: number;
     detectedAt?: number;
     captureRegion?: {
@@ -121,7 +121,7 @@ const normalizeDetectionPayload = (value: unknown): ResultTextDetectionPayload =
             ? record.activeBoxIds.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
             : undefined,
         tripwireActiveBoxCount: toFiniteNumber(record.tripwireActiveBoxCount) ?? undefined,
-        tripwireTotalWhiteDelta: toFiniteNumber(record.tripwireTotalWhiteDelta) ?? undefined,
+        tripwireTotalWhiteRatio: toFiniteNumber(record.tripwireTotalWhiteRatio) ?? undefined,
         armAt: toFiniteNumber(record.armAt) ?? undefined,
         detectedAt: toFiniteNumber(record.detectedAt) ?? undefined,
         captureRegion: record.captureRegion && typeof record.captureRegion === 'object'

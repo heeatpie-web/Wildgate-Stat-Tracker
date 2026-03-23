@@ -29,13 +29,10 @@ const FLASH_MIN_VALID_DURATION_MS = 100;
 const FLASH_MAX_VALID_DURATION_MS = 900;
 
 // ── Text tripwire constants ────────────────────────────────────────────────
-const TRIPWIRE_BASELINE_ALPHA = 0.18;
 const TEXT_TRIPWIRE_SUSTAIN_MS = 600;
 const TRIPWIRE_MIN_CONSECUTIVE_HITS = Math.max(1, Math.ceil(TEXT_TRIPWIRE_SUSTAIN_MS / SAMPLE_INTERVAL_MS));
 const TRIPWIRE_MIN_ACTIVE_BOXES = 1;
 const TRIPWIRE_MIN_BOX_WHITE_RATIO = 0.09;
-const TRIPWIRE_MIN_BOX_WHITE_DELTA = 0.045;
-const TRIPWIRE_MIN_TOTAL_WHITE_DELTA = 0.045;
 const TRIPWIRE_WHITE_MIN_CHANNEL = 240;
 const TRIPWIRE_WHITE_MAX_DRIFT = 30;
 // Three sub-boxes within the result headline region (relative to text crop).
@@ -202,46 +199,24 @@ function normalizeTripwireBox(box, imageWidth, imageHeight) {
   return { id: box.id, left, top, width, height };
 }
 
-function createTripwireBaseline(metrics) {
-  return metrics.map((m) => m.whiteRatio);
-}
-
-function createColdTripwireBaseline(metrics) {
-  return metrics.map(() => 0);
-}
-
-function updateTripwireBaseline(baseline, metrics) {
-  if (!Array.isArray(baseline) || baseline.length !== metrics.length) {
-    return createTripwireBaseline(metrics);
-  }
-  return metrics.map((m, i) => {
-    const prev = Number(baseline[i] || 0);
-    return prev * (1 - TRIPWIRE_BASELINE_ALPHA) + m.whiteRatio * TRIPWIRE_BASELINE_ALPHA;
-  });
-}
-
-function buildTripwireSnapshot(metrics, baseline) {
-  const boxMetrics = metrics.map((metric, i) => {
+function buildTripwireSnapshot(metrics) {
+  const boxMetrics = metrics.map((metric) => {
     const whiteRatio = Number(metric.whiteRatio || 0);
     const avgBrightness = Number(metric.avgBrightness || 0);
-    const baselineWhiteRatio = Number(Array.isArray(baseline) ? baseline[i] || 0 : 0);
-    const whiteDelta = Math.max(0, whiteRatio - baselineWhiteRatio);
     return {
       id: metric.id,
       whiteRatio,
       avgBrightness,
-      baselineWhiteRatio,
-      whiteDelta,
-      active: whiteRatio >= TRIPWIRE_MIN_BOX_WHITE_RATIO && whiteDelta >= TRIPWIRE_MIN_BOX_WHITE_DELTA,
+      active: whiteRatio >= TRIPWIRE_MIN_BOX_WHITE_RATIO,
     };
   });
 
   const activeBoxCount = boxMetrics.reduce((n, m) => n + (m.active ? 1 : 0), 0);
-  const totalWhiteDelta = boxMetrics.reduce((s, m) => s + m.whiteDelta, 0);
+  const totalWhiteRatio = boxMetrics.reduce((s, m) => s + m.whiteRatio, 0);
   return {
-    triggered: activeBoxCount >= TRIPWIRE_MIN_ACTIVE_BOXES && totalWhiteDelta >= TRIPWIRE_MIN_TOTAL_WHITE_DELTA,
+    triggered: activeBoxCount >= TRIPWIRE_MIN_ACTIVE_BOXES,
     activeBoxCount,
-    totalWhiteDelta,
+    totalWhiteRatio,
     boxes: boxMetrics,
   };
 }
@@ -285,7 +260,7 @@ function emitTextDebug(status, overrides = {}) {
     lastSignal: _text.lastSignal,
     lastError: _text.lastError,
     lastTripwireActiveBoxCount: _text.lastTripwire?.activeBoxCount || 0,
-    lastTripwireTotalWhiteDelta: _text.lastTripwire?.totalWhiteDelta || 0,
+    lastTripwireTotalWhiteRatio: _text.lastTripwire?.totalWhiteRatio || 0,
     lastTripwireBoxes: _text.lastTripwire?.boxes || [],
     lastUpdatedAt: _text.lastUpdatedAt,
     ...overrides,
@@ -299,85 +274,15 @@ function processTextRaw(raw, imageWidth, imageHeight, now) {
   try {
     const boxMetrics = analyzeTextBoxes(raw, imageWidth, imageHeight);
     const isArmed = now >= text.armAt;
-
-    if (!text.bootstrapHotStart && (!Array.isArray(text.baselineWhiteRatios) || text.baselineWhiteRatios.length !== boxMetrics.length)) {
-      if (isArmed) {
-        const coldBaseline = createColdTripwireBaseline(boxMetrics);
-        const bootstrapTripwire = buildTripwireSnapshot(boxMetrics, coldBaseline);
-
-        if (bootstrapTripwire.triggered) {
-          text.bootstrapHotStart = true;
-          text.lastTripwire = bootstrapTripwire;
-          text.tripwireConsecutiveHits = 1;
-          text.lastUpdatedAt = now;
-          emitTextDebug('sampling');
-          return;
-        }
-      }
-
-      text.baselineWhiteRatios = createTripwireBaseline(boxMetrics);
-      text.bootstrapHotStart = false;
-      text.lastTripwire = buildTripwireSnapshot(boxMetrics, text.baselineWhiteRatios);
-      text.tripwireConsecutiveHits = 0;
-      text.lastUpdatedAt = now;
-      emitTextDebug(isArmed ? 'sampling' : 'arming-delay');
-      return;
-    }
+    const tripwire = buildTripwireSnapshot(boxMetrics);
+    text.lastTripwire = tripwire;
 
     if (!isArmed) {
-      text.baselineWhiteRatios = updateTripwireBaseline(text.baselineWhiteRatios, boxMetrics);
-      text.lastTripwire = buildTripwireSnapshot(boxMetrics, text.baselineWhiteRatios);
       text.tripwireConsecutiveHits = 0;
       text.lastUpdatedAt = now;
       emitTextDebug('arming-delay');
       return;
     }
-
-    if (text.bootstrapHotStart) {
-      const bootstrapTripwire = buildTripwireSnapshot(boxMetrics, createColdTripwireBaseline(boxMetrics));
-      text.lastTripwire = bootstrapTripwire;
-
-      if (bootstrapTripwire.triggered) {
-        text.tripwireConsecutiveHits += 1;
-        if (text.tripwireConsecutiveHits >= TRIPWIRE_MIN_CONSECUTIVE_HITS) {
-          text.detected = true;
-          if (_flash) {
-            _flash.disabledForMatch = true;
-            _flash.brightSinceMs = null;
-            _flash.waitingForFlashEnd = false;
-            _flash.flashNotified = false;
-            _flash.lastUpdatedAt = now;
-          }
-          const activeBoxes = bootstrapTripwire.boxes.filter((b) => b.active);
-          text.lastSignal = {
-            detectionMethod: 'text',
-            result: null,
-            armAt: text.armAt,
-            detectedAt: now,
-            captureRegion: text.captureRegion,
-            activeBoxIds: activeBoxes.map((b) => b.id).filter(Boolean),
-            tripwireActiveBoxCount: bootstrapTripwire.activeBoxCount,
-            tripwireTotalWhiteDelta: bootstrapTripwire.totalWhiteDelta,
-          };
-          text.lastUpdatedAt = now;
-          text.onDetected?.(text.lastSignal);
-          emitTextDebug('detected');
-          return;
-        }
-      } else {
-        text.bootstrapHotStart = false;
-        text.baselineWhiteRatios = createTripwireBaseline(boxMetrics);
-        text.lastTripwire = buildTripwireSnapshot(boxMetrics, text.baselineWhiteRatios);
-        text.tripwireConsecutiveHits = 0;
-      }
-
-      text.lastUpdatedAt = now;
-      emitTextDebug('sampling');
-      return;
-    }
-
-    const tripwire = buildTripwireSnapshot(boxMetrics, text.baselineWhiteRatios);
-    text.lastTripwire = tripwire;
 
     if (tripwire.triggered) {
       text.tripwireConsecutiveHits += 1;
@@ -399,7 +304,7 @@ function processTextRaw(raw, imageWidth, imageHeight, now) {
           captureRegion: text.captureRegion,
           activeBoxIds: activeBoxes.map((b) => b.id).filter(Boolean),
           tripwireActiveBoxCount: tripwire.activeBoxCount,
-          tripwireTotalWhiteDelta: tripwire.totalWhiteDelta,
+          tripwireTotalWhiteRatio: tripwire.totalWhiteRatio,
         };
         text.lastUpdatedAt = now;
         text.onDetected?.(text.lastSignal);
@@ -408,8 +313,6 @@ function processTextRaw(raw, imageWidth, imageHeight, now) {
       }
     } else {
       text.tripwireConsecutiveHits = 0;
-      text.baselineWhiteRatios = updateTripwireBaseline(text.baselineWhiteRatios, boxMetrics);
-      text.lastTripwire = buildTripwireSnapshot(boxMetrics, text.baselineWhiteRatios);
     }
 
     text.lastUpdatedAt = now;
@@ -573,9 +476,7 @@ function startResultMonitor({
       captureRegion: textCaptureRegion,
       detected: false,
       disabledForMatch: false,
-      baselineWhiteRatios: null,
       tripwireConsecutiveHits: 0,
-      bootstrapHotStart: false,
       lastTripwire: null,
       lastRecognizedText: '',
       lastSignal: null,

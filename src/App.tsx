@@ -380,7 +380,7 @@ const isWatchingResultStatusPhase = (phase: TelemetryAutomationStatusPhase | nul
 );
 
 const isDefaultResultWatchStage = (stage: TelemetryLifecycleStage): boolean => (
-    stage === 'live' || stage === 'menu'
+    stage === 'pregame' || stage === 'live' || stage === 'menu'
 );
 
 const isArtifactsAndGatesResultWatchStage = (stage: TelemetryLifecycleStage): boolean => (
@@ -3368,7 +3368,7 @@ const App: React.FC = () => {
             delayMs: FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS,
             activeBoxIds: payload.activeBoxIds ?? [],
             activeBoxCount: payload.tripwireActiveBoxCount ?? 0,
-            totalWhiteDelta: payload.tripwireTotalWhiteDelta ?? 0,
+            totalWhiteRatio: payload.tripwireTotalWhiteRatio ?? 0,
         });
         if (fullAutoDetectionLockedRef.current) {
             console.log('[Brain] Text signal ignored because result detection is already locked', {
