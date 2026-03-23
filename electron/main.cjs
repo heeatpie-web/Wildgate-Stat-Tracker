@@ -24,9 +24,8 @@ const { registerArtifactHandlers, saveScreenshotImage } = require('./handlers/ar
 const { createAutoCaptureCoordinator } = require('./autoCaptureCoordinator.cjs');
 const { sampleRegion: sampleDxgiRegion } = require('./dxgiSampler.cjs');
 const { extractResultScreen } = require('./resultScreenExtractor.cjs');
-const { startResultFlashMonitor, stopResultFlashMonitor } = require('./resultFlashMonitor.cjs');
 const { cropImageBuffer, decodeImageBase64 } = require('./resultCaptureHelper.cjs');
-const { startResultTextMonitor, stopResultTextMonitor } = require('./resultTextMonitor.cjs');
+const { startResultMonitor, stopResultMonitor } = require('./resultCombinedMonitor.cjs');
 const { buildAutoCaptureRequestFromStateSnapshot } = require('./autoCaptureHotkeyState.cjs');
 const { clearGameWindowCache, holdGameKeySequence, lookupGameWindowCandidate, lookupGameWindowGeometry, sendGameKeySequence, setPersistentPSRunner, validateGameInputRuntime } = require('./gameInput.cjs');
 const { runPSWithEnv, startPersistentPS, killPersistentPS } = require('./persistentPowerShell.cjs');
@@ -3993,85 +3992,61 @@ async function loadResultScreenshotBuffer(request = {}) {
 }
 
 ipcMain.handle('result-flash-sample', async (_event, config) => sampleResultFlashRegion(config));
-ipcMain.on('result-flash-start', (event, config) => {
-    const normalizedRegion = normalizeResultFlashNormalizedRegion(config);
-    const absoluteRegion = convertResultFlashRegionToPrimaryDisplayAbsoluteRegion(normalizedRegion);
-    if (!normalizedRegion || !absoluteRegion) {
-        console.warn('[ResultFlash] Refusing to start DXGI monitor: invalid normalized region');
-        stopResultFlashMonitor();
-        return;
-    }
-
-    const armAt = Number.isFinite(Number(config?.armAt)) ? Math.round(Number(config.armAt)) : 0;
-    const armDelayMs = Math.max(0, armAt - Date.now());
-    const sender = event.sender;
-    console.log(`[ResultFlash] Starting DXGI monitor armAt=${armAt} armDelayMs=${armDelayMs} region=${JSON.stringify(absoluteRegion)}`);
-
-    startResultFlashMonitor({
-        armAt,
-        absoluteRegion,
-        onDetected: () => {
-            console.log('[ResultFlash] Flash detected - notifying renderer');
-            if (!sender.isDestroyed()) sender.send('result-flash-detected');
-        },
-        onResolved: () => {
-            console.log('[ResultFlash] Flash resolved - notifying renderer');
-            if (!sender.isDestroyed()) sender.send('result-flash-resolved');
-        },
-        onDebug: (snapshot) => {
-            if (!sender.isDestroyed()) sender.send('result-flash-debug', snapshot);
-        },
-    });
-});
-ipcMain.on('result-flash-stop', () => {
-    console.log('[ResultFlash] Stopping DXGI monitor');
-    stopResultFlashMonitor();
-});
-
-ipcMain.on('result-text-start', (event, config = {}) => {
+ipcMain.on('result-monitor-start', (event, config = {}) => {
     const sender = event.sender;
     const armAt = Number.isFinite(Number(config?.armAt)) ? Math.round(Number(config.armAt)) : 0;
-    const intervalMs = Number.isFinite(Number(config?.intervalMs))
-        ? Math.max(100, Math.round(Number(config.intervalMs)))
-        : 500;
-    const normalizedRegion = normalizeResultFlashNormalizedRegion({
-        normalizedRegion: config?.captureRegion || config?.textRegion || null,
-    });
-    const absoluteRegion = convertResultFlashRegionToPrimaryDisplayAbsoluteRegion(normalizedRegion);
 
-    if (!normalizedRegion || !absoluteRegion) {
-        console.warn('[ResultText] Refusing to start tripwire monitor: invalid normalized region');
-        stopResultTextMonitor();
+    const flashNormalized = normalizeResultFlashNormalizedRegion({ normalizedRegion: config?.flashRegion });
+    const flashAbsoluteRegion = convertResultFlashRegionToPrimaryDisplayAbsoluteRegion(flashNormalized);
+
+    const textNormalized = normalizeResultFlashNormalizedRegion({ normalizedRegion: config?.textRegion });
+    const textAbsoluteRegion = convertResultFlashRegionToPrimaryDisplayAbsoluteRegion(textNormalized);
+
+    if (!flashAbsoluteRegion && !textAbsoluteRegion) {
+        console.warn('[ResultMonitor] Refusing to start: no valid regions');
+        stopResultMonitor();
         return;
     }
 
     console.log(
-        `[ResultText] Starting tripwire monitor armAt=${armAt} intervalMs=${intervalMs} `
-        + `region=${JSON.stringify(absoluteRegion)}`
+        `[ResultMonitor] Starting combined monitor armAt=${armAt} `
+        + `flash=${JSON.stringify(flashAbsoluteRegion)} text=${JSON.stringify(textAbsoluteRegion)}`
     );
 
-    const started = startResultTextMonitor({
-        armAt,
-        intervalMs,
-        captureRegion: normalizedRegion,
-        absoluteRegion,
-        onDetected: (payload) => {
-            console.log('[ResultText] Text detected - notifying renderer');
+    const started = startResultMonitor({
+        flashArmAt: armAt,
+        flashAbsoluteRegion,
+        textArmAt: armAt,
+        textAbsoluteRegion,
+        textCaptureRegion: textNormalized,
+        onFlashDetected: (payload) => {
+            console.log('[ResultMonitor] Flash detected - notifying renderer', payload);
+            if (!sender.isDestroyed()) sender.send('result-flash-detected', payload);
+        },
+        onFlashResolved: () => {
+            console.log('[ResultMonitor] Flash resolved - notifying renderer');
+            if (!sender.isDestroyed()) sender.send('result-flash-resolved');
+        },
+        onFlashDebug: (snapshot) => {
+            if (!sender.isDestroyed()) sender.send('result-flash-debug', snapshot);
+        },
+        onTextDetected: (payload) => {
+            console.log('[ResultMonitor] Text detected - notifying renderer');
             if (!sender.isDestroyed()) sender.send('result-text-detected', payload);
         },
-        onDebug: (snapshot) => {
+        onTextDebug: (snapshot) => {
             if (!sender.isDestroyed()) sender.send('result-text-debug', snapshot);
         },
     });
 
     if (!started) {
-        console.warn('[ResultText] Refusing to start tripwire monitor');
-        stopResultTextMonitor();
+        console.warn('[ResultMonitor] Failed to start combined monitor');
+        stopResultMonitor();
     }
 });
-ipcMain.on('result-text-stop', () => {
-    console.log('[ResultText] Stopping tripwire monitor');
-    stopResultTextMonitor();
+ipcMain.on('result-monitor-stop', () => {
+    console.log('[ResultMonitor] Stopping combined monitor');
+    stopResultMonitor();
 });
 
 ipcMain.handle('capture-result-screen-region', async (_event, request = {}) => {

@@ -5,13 +5,10 @@ import { useGameData } from './providers/GameDataProvider';
 import { useUserPreferences } from './providers/UserPreferencesProvider';
 import { useLogMonitor } from './hooks/useLogMonitor';
 import {
-    useResultFlashMonitor,
+    useResultMonitor,
     type ResultFlashMonitorDebugSnapshot,
-} from './hooks/useResultFlashMonitor';
-import {
-    useResultTextMonitor,
     type ResultTextDetectionPayload,
-} from './hooks/useResultTextMonitor';
+} from './hooks/useResultMonitor';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useFocusTrap } from './hooks/useFocusTrap';
 import { useMatchSubmission } from './hooks/useMatchSubmission';
@@ -304,12 +301,16 @@ const TELEMETRY_AUTO_CAPTURE_ARTIFACT_TARGET = 3;
 const PREGAME_LOBBY_MACRO_DELAY_MS = 5_000;
 // `capture-screen` already hides the overlay window and waits about 300ms before grabbing the game frame.
 // Add a small extra buffer so the result flash fully clears before the OCR burst starts.
-const FULL_AUTO_RESULT_OCR_POST_FLASH_DELAY_MS = 250;
+// Known pure-white duration of the result flash. Detection fires ~100-200ms in,
+// so remaining = KNOWN_FLASH_PURE_WHITE_MS - elapsed gives a precise capture offset.
+const KNOWN_FLASH_PURE_WHITE_MS = 541;
+// Small buffer added after flash-end before capturing, to land in the fade-out.
+const POST_FLASH_CAPTURE_BUFFER_MS = 50;
 const FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS = 250;
 const FULL_AUTO_RESULT_OCR_RETRY_DELAY_MS = 300;
 const FULL_AUTO_RESULT_OCR_MAX_ATTEMPTS = 3;
 const FULL_AUTO_BACKGROUND_RESULT_OCR_INTERVAL_MS = 2_000;
-const FULL_AUTO_BACKGROUND_RESULT_OCR_MAX_ATTEMPTS = 30;
+const FULL_AUTO_BACKGROUND_RESULT_OCR_MAX_ATTEMPTS = 4;
 // Time to wait after result OCR for the damage panel to slide into position (~3s from text, ~2s from tripwire fire)
 const FULL_AUTO_FINAL_MOMENTS_SETTLE_MS = 2_000;
 // Time to wait after pressing ] before capturing tab 2
@@ -2799,12 +2800,13 @@ const App: React.FC = () => {
 
     const captureDamageSourcesArtifact = useCallback(async (
         api: NonNullable<ReturnType<typeof getElectronAPI>>,
-        resultImageBase64: string,
         matchId: number,
     ) => {
-        // --- Tab 1: Damage Sources (crop from original result screenshot) ---
+        // Settle: wait for damage panel to animate into position
+        await waitForDuration(FULL_AUTO_FINAL_MOMENTS_SETTLE_MS);
+
+        // --- Tab 1: Damage Sources (fresh capture) ---
         const tab1Capture = await api.invoke('capture-result-screen-region', {
-            imageBase64: resultImageBase64,
             cropRegion: FULL_AUTO_DAMAGE_SOURCES_CAPTURE_REGION,
         });
         const tab1Base64 = normalizeImageBase64Payload(tab1Capture?.imageBase64);
@@ -2813,38 +2815,15 @@ const App: React.FC = () => {
             return null;
         }
 
-        // Wait for damage panel to animate into position before pressing ]
-        await waitForDuration(FULL_AUTO_FINAL_MOMENTS_SETTLE_MS);
-
         // --- Switch to Tab 2: Enemy Ships ---
-        // Send ] multiple times with small gaps — single send is often missed
-        const toggleResult = await sendGameUiAction('show-damage-sources');
-        if (!toggleResult.success) {
-            console.warn('[FullAuto] Failed to toggle to enemy ships tab', { matchId, error: toggleResult.error ?? null });
-        } else {
-            await waitForDuration(150);
-            await sendGameUiAction('show-damage-sources');
-            await waitForDuration(150);
-            await sendGameUiAction('show-damage-sources');
-        }
-
+        await sendGameUiAction('show-damage-sources');
         await waitForDuration(FULL_AUTO_DAMAGE_SOURCES_TRANSITION_MS);
 
-        // --- Tab 2: Enemy Ships ---
+        // --- Tab 2: Enemy Ships (fresh capture) ---
         const tab2Capture = await api.invoke('capture-result-screen-region', {
             cropRegion: FULL_AUTO_DAMAGE_SOURCES_CAPTURE_REGION,
         });
         const tab2Base64 = normalizeImageBase64Payload(tab2Capture?.imageBase64);
-
-        // Post-capture discard check: scan tab 1 to verify damage panel was actually visible.
-        // If nothing detected (e.g. screenshot was the placement reveal screen), discard both.
-        const tab1Scan = await api.invoke('scan-result-screen', { imageBase64: tab1Base64 });
-        const tab1DamageTaken = tab1Scan?.data?.damageTaken ?? null;
-        const tab1HasDamage = tab1DamageTaken != null && Number.isFinite(Number(tab1DamageTaken));
-        if (!tab1HasDamage) {
-            console.warn('[FullAuto] No damage content in tab 1 — discarding damage capture', { matchId });
-            return null;
-        }
 
         if (!tab2Base64) {
             console.warn('[FullAuto] Unable to capture damage panel tab 2', { matchId });
@@ -2938,11 +2917,7 @@ const App: React.FC = () => {
         let currentDetectionMethod = options?.detectionMethod;
         const initialDelayMs = Math.max(0, Number(
             options?.initialDelayMs
-            ?? (
-                currentReason === 'flash'
-                    ? FULL_AUTO_RESULT_OCR_POST_FLASH_DELAY_MS
-                    : (currentReason === 'text' ? FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS : 0)
-            )
+            ?? (currentReason === 'text' ? FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS : 0)
         ) || 0);
         const shouldResumeWatchingOnFailure = currentReason === 'flash' || currentReason === 'text';
         const restoreWaitingStatus = () => {
@@ -3000,6 +2975,7 @@ const App: React.FC = () => {
 
             let shouldReturnToWatching = true;
             let finalFailureMessage = 'Automatic result capture failed';
+            let supplementalArtifacts: Array<{ imageBase64: string; kind: 'damage-sources' | 'damage-ships' }> = [];
 
             for (let attemptIndex = 0; attemptIndex < FULL_AUTO_RESULT_OCR_MAX_ATTEMPTS; attemptIndex += 1) {
                 if (attemptIndex > 0) {
@@ -3045,6 +3021,13 @@ const App: React.FC = () => {
                         });
                     }
                 }
+
+                // Take all damage screenshots before running any OCR.
+                // Only on the first attempt — the panel won't be available on retries.
+                if (attemptIndex === 0) {
+                    supplementalArtifacts = (await captureDamageSourcesArtifact(api, normalizedDraftMatchId)) ?? [];
+                }
+
                 const scanResult = await api.invoke('scan-result-screen', {
                     imageBase64,
                     detectionMethod: currentDetectionMethod,
@@ -3066,12 +3049,6 @@ const App: React.FC = () => {
                 if (!resultData.detectionMethod && currentDetectionMethod) {
                     resultData.detectionMethod = currentDetectionMethod;
                 }
-                const supplementalArtifacts = (
-                    resultData.result === 'Win'
-                    || resultData.result === 'Loss'
-                )
-                    ? (await captureDamageSourcesArtifact(api, imageBase64, normalizedDraftMatchId)) ?? []
-                    : [];
                 const finalized = await autoFinalizeResultScreenCapture({
                     imageBase64,
                     resultData,
@@ -3167,16 +3144,23 @@ const App: React.FC = () => {
         setResultFlashDebugEvents([]);
     }, [devMode]);
 
-    const handleResultFlashDetectedWithDebug = useCallback(async () => {
+    const handleResultFlashDetectedWithDebug = useCallback(async ({ brightSinceMs }: { brightSinceMs: number }) => {
         appendResultFlashDebugEvent('detected', 'Flash threshold held on the game capture; scheduling screenshot burst');
         const scheduledMatchId = normalizedActiveTelemetryDraftMatchId;
-        console.log(`[Brain] Flash signal received - scheduling result capture in ${FULL_AUTO_RESULT_OCR_POST_FLASH_DELAY_MS}ms`, {
+        // Calculate how much of the 541ms pure-white flash has already elapsed,
+        // then wait for the remainder + buffer so we capture just after flash-end.
+        const elapsed = Math.max(0, Date.now() - brightSinceMs);
+        const remaining = Math.max(0, KNOWN_FLASH_PURE_WHITE_MS - elapsed);
+        const initialDelayMs = remaining + POST_FLASH_CAPTURE_BUFFER_MS;
+        console.log(`[Brain] Flash signal received - scheduling result capture in ${initialDelayMs}ms`, {
             matchId: scheduledMatchId,
-            delayMs: FULL_AUTO_RESULT_OCR_POST_FLASH_DELAY_MS,
+            elapsed,
+            remaining,
+            delayMs: initialDelayMs,
         });
         if (!beginFullAutoResultDetection('Result flash detected', scheduledMatchId, 'flash')) return;
         await triggerFullAutoSave({
-            initialDelayMs: FULL_AUTO_RESULT_OCR_POST_FLASH_DELAY_MS,
+            initialDelayMs,
             reason: 'flash',
             detectionMethod: 'flash',
             matchId: scheduledMatchId,
@@ -3226,23 +3210,17 @@ const App: React.FC = () => {
         });
     }, [beginFullAutoResultDetection, normalizedActiveTelemetryDraftMatchId, triggerFullAutoSave]);
 
-    useResultFlashMonitor({
+    useResultMonitor({
         enabled: fullAutoEnabled && shouldWatchResultScreens,
         liveStartedAt: telemetryLiveStartedAt,
         armDelayMs: resultMonitorArmDelayMs,
         triggerLatched: fullAutoResultLatched || fullAutoDetectionLocked,
         onFlashDetected: handleResultFlashDetectedWithDebug,
         onFlashResolved: handleResultFlashResolvedWithDebug,
-        onDebugStateChange: IS_DEV_BUILD && devMode
+        onFlashDebugStateChange: IS_DEV_BUILD && devMode
             ? handleResultFlashDebugStateChange
             : undefined,
-    });
-    useResultTextMonitor({
-        enabled: fullAutoEnabled && shouldWatchResultScreens,
-        liveStartedAt: telemetryLiveStartedAt,
-        armDelayMs: resultMonitorArmDelayMs,
-        triggerLatched: fullAutoResultLatched || fullAutoDetectionLocked,
-        onResultDetected: handleResultTextDetected,
+        onTextDetected: handleResultTextDetected,
     });
 
     const handleApplyOCRData = useCallback((

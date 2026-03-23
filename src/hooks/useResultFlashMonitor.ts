@@ -80,12 +80,16 @@ export interface ResultFlashMonitorDebugSnapshot {
     lastUpdatedAt: number;
 }
 
+export interface ResultFlashDetectedPayload {
+    brightSinceMs: number;
+}
+
 export interface ResultFlashMonitorOptions {
     enabled: boolean;
     liveStartedAt: number | null;
     armDelayMs?: number;
     triggerLatched?: boolean;
-    onFlashDetected?: () => void | Promise<void>;
+    onFlashDetected?: (payload: ResultFlashDetectedPayload) => void | Promise<void>;
     onFlashResolved: () => void | Promise<void>;
     onDebugStateChange?: (state: ResultFlashMonitorDebugSnapshot) => void;
 }
@@ -318,8 +322,11 @@ export function useResultFlashMonitor({
 
         const armAt = normalizedLiveStartedAt + normalizedArmDelayMs;
 
-        const unsubDetected = api.on(RECEIVE_DETECTED, () => {
-            void onFlashDetectedRef.current?.();
+        const unsubDetected = api.on(RECEIVE_DETECTED, (payload: unknown) => {
+            const brightSinceMs = typeof (payload as Record<string, unknown>)?.brightSinceMs === 'number'
+                ? (payload as Record<string, unknown>).brightSinceMs as number
+                : Date.now();
+            void onFlashDetectedRef.current?.({ brightSinceMs });
         });
 
         const unsubResolved = api.on(RECEIVE_RESOLVED, () => {

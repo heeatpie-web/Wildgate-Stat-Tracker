@@ -16,6 +16,13 @@ const FLASH_BRIGHT_HOLD_MS = 100;
 const FLASH_WHITE_THRESHOLD = Math.ceil(255 * 0.9);
 const FLASH_COOLDOWN_MS = 15_000;
 const MIN_PRE_ARM_FLASHES_TO_SKIP = 1;
+// Known pure-white duration of the result flash. Used to schedule the capture
+// precisely at flash-end rather than mid-flash.
+const KNOWN_FLASH_PURE_WHITE_MS = 541;
+// Minimum / maximum plausible flash durations for validation.
+// A "flash" that resolves in under 200ms or runs longer than 900ms is not the result flash.
+const FLASH_MIN_VALID_DURATION_MS = 200;
+const FLASH_MAX_VALID_DURATION_MS = 900;
 
 let _timer = null;
 let _state = null;
@@ -140,15 +147,29 @@ async function pollOnce() {
 
     if (state.waitingForFlashEnd) {
       if (isWhiteFrame) {
+        // Bail early if the flash has run way past the expected duration —
+        // it's not a result flash and we shouldn't act on it.
+        const flashDuration = state.lastUpdatedAt - (state.brightSinceMs ?? state.lastUpdatedAt);
+        if (flashDuration > FLASH_MAX_VALID_DURATION_MS) {
+          state.waitingForFlashEnd = false;
+          state.brightSinceMs = null;
+          state.flashNotified = false;
+          state.cooldownUntil = 0;
+          emitDebug(getSamplingStatus(state));
+          return;
+        }
         emitDebug('waiting-flash-end');
         return;
       }
 
       const hadNotifiedFlash = state.flashNotified === true;
+      const flashDuration = state.lastUpdatedAt - (state.brightSinceMs ?? state.lastUpdatedAt);
+      const isValidDuration = flashDuration >= FLASH_MIN_VALID_DURATION_MS
+        && flashDuration <= FLASH_MAX_VALID_DURATION_MS;
       state.waitingForFlashEnd = false;
       state.brightSinceMs = null;
       state.flashNotified = false;
-      if (hadNotifiedFlash) {
+      if (hadNotifiedFlash && isValidDuration) {
         state.onResolved?.();
       }
       emitDebug(getSamplingStatus(state));
@@ -171,7 +192,9 @@ async function pollOnce() {
         if (state.lastUpdatedAt >= state.armAt && !state.flashNotified) {
           state.flashNotified = true;
           state.cooldownUntil = state.lastUpdatedAt + FLASH_COOLDOWN_MS;
-          state.onDetected?.();
+          // Pass brightSinceMs so the renderer can calculate how much of the
+          // 541ms flash has already elapsed and schedule capture at flash-end.
+          state.onDetected?.({ brightSinceMs: state.brightSinceMs });
         }
         emitDebug('waiting-flash-end');
         return;
@@ -255,4 +278,5 @@ function stopResultFlashMonitor() {
 module.exports = {
   startResultFlashMonitor,
   stopResultFlashMonitor,
+  KNOWN_FLASH_PURE_WHITE_MS,
 };

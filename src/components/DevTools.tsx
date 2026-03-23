@@ -383,6 +383,46 @@ export const DevTools: React.FC<DevToolsProps> = ({
                             </div>
 
                             <div className="rounded-lg bg-md-sys-surface1 px-3 py-2 text-xs space-y-1">
+                                <div className="font-bold uppercase opacity-60">Detection State</div>
+                                <div>
+                                    Notified: <span className={resultFlashDebug?.flashNotified ? 'text-success font-bold' : ''}>{resultFlashDebug?.flashNotified ? 'yes' : 'no'}</span>
+                                    {' | '}
+                                    Poll in flight: {resultFlashDebug?.pollInFlight ? 'yes' : 'no'}
+                                    {' | '}
+                                    Waiting end: <span className={resultFlashDebug?.waitingForFlashEnd ? 'text-warning font-bold' : ''}>{resultFlashDebug?.waitingForFlashEnd ? 'yes' : 'no'}</span>
+                                </div>
+                                {resultFlashDebug?.brightSinceMs != null && resultFlashDebug?.lastUpdatedAt != null ? (() => {
+                                    const elapsed = Math.max(0, resultFlashDebug.lastUpdatedAt - resultFlashDebug.brightSinceMs);
+                                    const KNOWN_FLASH_MS = 541;
+                                    const CAPTURE_BUFFER_MS = 50;
+                                    const remaining = Math.max(0, KNOWN_FLASH_MS - elapsed);
+                                    const captureIn = remaining + CAPTURE_BUFFER_MS;
+                                    const pct = Math.min(100, Math.round((elapsed / KNOWN_FLASH_MS) * 100));
+                                    return (
+                                        <div className="space-y-1">
+                                            <div>
+                                                Flash elapsed: <span className="font-bold">{elapsed}ms</span> / {KNOWN_FLASH_MS}ms
+                                                {' | '}
+                                                Remaining: <span className="font-bold">{remaining}ms</span>
+                                            </div>
+                                            <div>
+                                                Capture scheduled in: <span className={`font-bold ${captureIn < 100 ? 'text-warning' : ''}`}>{captureIn}ms</span>
+                                                {' '}(flash-end + {CAPTURE_BUFFER_MS}ms buffer)
+                                            </div>
+                                            <div className="h-1.5 rounded-full bg-md-sys-surface3 overflow-hidden">
+                                                <div
+                                                    className="h-full rounded-full bg-md-sys-primary transition-all"
+                                                    style={{ width: `${pct}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    );
+                                })() : (
+                                    <div className="opacity-50">No active brightness event.</div>
+                                )}
+                            </div>
+
+                            <div className="rounded-lg bg-md-sys-surface1 px-3 py-2 text-xs space-y-1">
                                 <div className="font-bold uppercase opacity-60">Last Hook Sample</div>
                                 {resultFlashDebug?.lastSampleResult?.success ? (
                                     <div className="space-y-1">
