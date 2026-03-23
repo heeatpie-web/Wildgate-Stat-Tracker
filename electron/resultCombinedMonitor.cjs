@@ -37,9 +37,9 @@ const TRIPWIRE_WHITE_MIN_CHANNEL = 240;
 const TRIPWIRE_WHITE_MAX_DRIFT = 30;
 // Three sub-boxes within the result headline region (relative to text crop).
 const TRIPWIRE_BOX_LAYOUT = Object.freeze([
-  { id: 'result-a', left: 0.0501, top: 0.6434, width: 0.2571, height: 0.3566 },
-  { id: 'result-b', left: 0.4357, top: 0.2868, width: 0.2571, height: 0.7132 },
-  { id: 'result-c', left: 0.6928, top: 0.2868, width: 0.2571, height: 0.7132 },
+  { id: 'result-a', left: 0.0501, top: 0, width: 0.2571, height: 1 },
+  { id: 'result-b', left: 0.4357, top: 0, width: 0.2571, height: 1 },
+  { id: 'result-c', left: 0.6928, top: 0, width: 0.2571, height: 1 },
 ]);
 
 // ── Module-level state ─────────────────────────────────────────────────────
