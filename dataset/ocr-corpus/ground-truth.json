@@ -210,7 +210,7 @@
         },
         {
           "teamName": "PROBY MCPROBE FACE",
-          "teamColor": "orange",
+          "teamColor": "goldenrod",
           "players": [
             "PoTayToes2010",
             "Krackpipe0"
@@ -375,15 +375,13 @@
         },
         {
           "teamName": "GAMMA GANG",
-          "teamColor": "cyan",
+          "teamColor": "orange",
           "players": [
             "Jackdaw",
             "WargasmAlert",
             "Tytan",
             "Ophelia074"
-          ],
-          "needsColorReview": true,
-          "colorReviewReason": "Legacy cyan centroid is ambiguous in HSL space: cyan=18.00, blueGreen=19.95."
+          ]
         }
       ],
       "modifiers": []
@@ -535,7 +533,7 @@
         },
         {
           "teamName": "SHIPPYMCSHIPFACE",
-          "teamColor": "goldenrod",
+          "teamColor": "orange",
           "shipType": "Hunter",
           "players": []
         }
@@ -630,17 +628,15 @@
       "opponentTeams": [
         {
           "teamName": "RAIDING RAINBOW",
-          "teamColor": "cyan",
+          "teamColor": "red",
           "players": [
             "JayMG6684",
             "Fabio171198"
-          ],
-          "needsColorReview": true,
-          "colorReviewReason": "Legacy cyan centroid is ambiguous in HSL space: cyan=18.00, blueGreen=19.95."
+          ]
         },
         {
           "teamName": "BELLPEPPER",
-          "teamColor": "red",
+          "teamColor": "orange",
           "players": [
             "Seoxys",
             "VulvyQueen",
@@ -672,15 +668,13 @@
         },
         {
           "teamName": "SEABISCUIT",
-          "teamColor": "cyan",
+          "teamColor": "orange",
           "players": [
             "bendist10",
             "i123KILL",
             "WowOkay",
             "Cowcrusader"
-          ],
-          "needsColorReview": true,
-          "colorReviewReason": "Legacy cyan centroid is ambiguous in HSL space: cyan=18.00, blueGreen=19.95."
+          ]
         }
       ],
       "modifiers": []

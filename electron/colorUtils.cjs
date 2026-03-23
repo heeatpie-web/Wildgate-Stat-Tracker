@@ -94,6 +94,24 @@ const WILDGATE_COLORS = [
   { name: 'lightNavyBlue', hex: '#2C6288', r:  44, g:  98, b: 136 },
 ];
 
+// The OCR corpus currently scores badge colours against the canonical in-game
+// team families. On real screenshots, shadowing and anti-aliasing can pull the
+// nearest 32-swatch match onto a neighboring tone (for example cognac instead
+// of orange). Snap only those well-understood neighbors back to their canonical
+// badge family so we keep the full palette available for other callers.
+const TEAM_BADGE_COLOR_ALIASES = {
+  hotPink: 'red',
+  dustyRose: 'red',
+  salmon: 'red',
+  magentaRed: 'red',
+  grape: 'red',
+  tangerine: 'orange',
+  cognac: 'orange',
+  marigold: 'goldenrod',
+  lightYellow: 'goldenrod',
+  mustard: 'goldenrod',
+};
+
 // Tolerance values for HSL matching
 // SAT_TOLERANCE is set wide because team name text on the bar dilutes average saturation
 const HUE_TOLERANCE = 12;
@@ -223,6 +241,155 @@ function nearestWildgateColorHsl(targetHsl) {
 
   const confidence = Math.max(30, Math.round(100 - bestDistance * 1.5));
   return { name: bestEntry.name, confidence, distance: Number(bestDistance.toFixed(2)) };
+}
+
+function snapDetectedTeamBadgeColor(colorName) {
+  const key = String(colorName || '').trim();
+  return TEAM_BADGE_COLOR_ALIASES[key] || key || 'unknown';
+}
+
+function maybePreferWarmBadgeFamily(samples, currentColor) {
+  if (!Array.isArray(samples) || samples.length === 0) return currentColor;
+  if (!['red', 'orange', 'goldenrod'].includes(currentColor)) return currentColor;
+
+  let redScore = 0;
+  let orangeScore = 0;
+  let goldenrodScore = 0;
+  let strongRedSamples = 0;
+
+  for (const sample of samples) {
+    const weight = Number(sample?.weight);
+    const rgb = sample?.rgb;
+    const hsl = sample?.hsl || (rgb ? rgbToHsl(rgb.r, rgb.g, rgb.b) : null);
+    if (
+      !Number.isFinite(weight) || weight <= 0 ||
+      !rgb || !hsl ||
+      !Number.isFinite(hsl.h) || !Number.isFinite(hsl.s) || !Number.isFinite(hsl.l)
+    ) {
+      continue;
+    }
+
+    const hue = normalizeHue(hsl.h);
+    const redDominance = rgb.r - rgb.g;
+    const strongRedLike =
+      hue >= 346 || hue <= 12 ||
+      (rgb.r >= 150 && rgb.g <= 80 && redDominance >= 120 && hsl.s >= 45);
+
+    if (strongRedLike) {
+      const greenPenaltyBonus = 1 + (Math.max(0, 80 - rgb.g) / 120);
+      redScore += weight * greenPenaltyBonus;
+      strongRedSamples += 1;
+      continue;
+    }
+
+    if (hue <= 35) {
+      orangeScore += weight;
+      continue;
+    }
+
+    if (hue <= 65) {
+      goldenrodScore += weight;
+    }
+  }
+
+  if (
+    currentColor !== 'red' &&
+    strongRedSamples > 0 &&
+    redScore > 0 &&
+    redScore >= Math.max(orangeScore, goldenrodScore) * 0.72
+  ) {
+    return 'red';
+  }
+
+  return currentColor;
+}
+
+function isStrongRedLikeSample(sample) {
+  const rgb = sample?.rgb;
+  const hsl = sample?.hsl || (rgb ? rgbToHsl(rgb.r, rgb.g, rgb.b) : null);
+  if (
+    !rgb || !hsl ||
+    !Number.isFinite(hsl.h) || !Number.isFinite(hsl.s) || !Number.isFinite(hsl.l)
+  ) {
+    return false;
+  }
+
+  const hue = normalizeHue(hsl.h);
+  return (
+    hue >= 346 || hue <= 12 ||
+    (rgb.r >= 150 && rgb.g <= 80 && (rgb.r - rgb.g) >= 120 && hsl.s >= 45)
+  );
+}
+
+function extendWarmClusterWithRedBridge(allSamples, dominantCluster, currentColor) {
+  const clusterItems = dominantCluster?.clusterItems;
+  if (!Array.isArray(allSamples) || !Array.isArray(clusterItems) || clusterItems.length === 0) {
+    return clusterItems || [];
+  }
+  if (currentColor !== 'orange') return clusterItems;
+
+  const clusterSet = new Set(clusterItems);
+  const bridgeCandidates = allSamples.filter((sample) => (
+    !clusterSet.has(sample) && isStrongRedLikeSample(sample)
+  ));
+  if (bridgeCandidates.length === 0) return clusterItems;
+
+  const bridgeWeight = bridgeCandidates.reduce((sum, sample) => sum + (Number(sample?.weight) || 0), 0);
+  if (!Number.isFinite(bridgeWeight) || bridgeWeight < dominantCluster.clusterWeight * 0.28) {
+    return clusterItems;
+  }
+
+  return [
+    ...clusterItems,
+    ...bridgeCandidates.map((sample) => ({ ...sample, weight: sample.weight * 1.15 })),
+  ];
+}
+
+function resolveBadgeColorFromCluster(allSamples, dominantCluster) {
+  if (!dominantCluster || !Array.isArray(dominantCluster.clusterItems) || dominantCluster.clusterItems.length === 0) {
+    return null;
+  }
+
+  let workingItems = dominantCluster.clusterItems;
+  let centroid = weightedHslCentroid(
+    workingItems,
+    (sample) => sample.hsl,
+    (sample) => sample.rgb,
+    (sample) => sample.weight
+  );
+  if (!centroid) return null;
+
+  let nearest = nearestWildgateColorHsl(centroid.hsl);
+  let snappedColor = maybePreferWarmBadgeFamily(
+    workingItems,
+    snapDetectedTeamBadgeColor(nearest.name)
+  );
+
+  const bridgedItems = extendWarmClusterWithRedBridge(allSamples, dominantCluster, snappedColor);
+  if (bridgedItems !== workingItems) {
+    const bridgedCentroid = weightedHslCentroid(
+      bridgedItems,
+      (sample) => sample.hsl,
+      (sample) => sample.rgb,
+      (sample) => sample.weight
+    );
+    if (bridgedCentroid) {
+      workingItems = bridgedItems;
+      centroid = bridgedCentroid;
+      nearest = nearestWildgateColorHsl(centroid.hsl);
+      snappedColor = maybePreferWarmBadgeFamily(
+        workingItems,
+        snapDetectedTeamBadgeColor(nearest.name)
+      );
+    }
+  }
+
+  return {
+    centroid,
+    nearest,
+    color: snappedColor,
+    clusterItems: workingItems,
+  };
 }
 
 function lightnessBellCurve(lightness) {
@@ -372,23 +539,18 @@ function classifyColorRegionData(data, channels) {
     return { color: 'unknown', confidence: 0, rawHue: null, rgb: { r: 0, g: 0, b: 0 } };
   }
 
-  const centroid = weightedHslCentroid(
-    dominantCluster.clusterItems,
-    (sample) => sample.hsl,
-    (sample) => sample.rgb,
-    (sample) => sample.weight
-  );
-  if (!centroid) {
+  const resolvedCluster = resolveBadgeColorFromCluster(chromaticSamples, dominantCluster);
+  if (!resolvedCluster) {
     return { color: 'unknown', confidence: 0, rawHue: null, rgb: { r: 0, g: 0, b: 0 } };
   }
 
-  const nearest = nearestWildgateColorHsl(centroid.hsl);
+  const { centroid, nearest, color } = resolvedCluster;
   const dominanceRatio = dominantCluster.clusterWeight / dominantCluster.totalWeight;
   const distanceScore = Math.max(0, 1 - (nearest.distance / 70));
   const confidence = Math.max(35, Math.round((dominanceRatio * 0.7 + distanceScore * 0.3) * 100));
 
   return {
-    color: nearest.name,
+    color,
     confidence,
     rawHue: centroid.hsl.h,
     rgb: centroid.rgb,
@@ -757,33 +919,28 @@ async function detectTeamColorBarBelow(imageBuffer, bbox, scale = 1, sharpModule
       10,
       1
     );
-    const centroid = dominantCluster
-      ? weightedHslCentroid(
-        dominantCluster.clusterItems,
-        (sample) => sample.hsl,
-        (sample) => sample.rgb,
-        (sample) => sample.weight
-      )
+    const resolvedCluster = dominantCluster
+      ? resolveBadgeColorFromCluster(chromaticSamples, dominantCluster)
       : null;
 
-    if (dominantCluster && centroid) {
-      const nearest = nearestWildgateColorHsl(centroid.hsl);
+    if (dominantCluster && resolvedCluster) {
+      const { centroid, nearest, color: snappedColor, clusterItems } = resolvedCluster;
       const dominanceRatio = dominantCluster.clusterWeight / dominantCluster.totalWeight;
-      const weightedConfidence = dominantCluster.clusterItems.reduce(
+      const weightedConfidence = clusterItems.reduce(
         (sum, sample) => sum + ((sample.confidence / 100) * sample.weight),
         0
-      ) / dominantCluster.clusterWeight;
+      ) / clusterItems.reduce((sum, sample) => sum + sample.weight, 0);
       const distanceScore = Math.max(0, 1 - (nearest.distance / 70));
       const confidence = Math.max(
         35,
         Math.round((dominanceRatio * 0.45 + weightedConfidence * 0.35 + distanceScore * 0.20) * 100)
       );
       dlog2(
-        `[ColorUtils] Bar consensus color=${nearest.name} conf=${confidence} hue=${centroid.hsl.h} ` +
+        `[ColorUtils] Bar consensus color=${snappedColor} raw=${nearest.name} conf=${confidence} hue=${centroid.hsl.h} ` +
         `clusterWeight=${dominantCluster.clusterWeight.toFixed(2)}/${dominantCluster.totalWeight.toFixed(2)}`
       );
       return {
-        color: nearest.name,
+        color: snappedColor,
         confidence,
         rgb: centroid.rgb,
         rawHue: centroid.hsl.h,
@@ -984,6 +1141,9 @@ module.exports = {
     circularHueMean,
     majorityDark,
     nearestWildgateColorHsl,
+    resolveBadgeColorFromCluster,
+    maybePreferWarmBadgeFamily,
+    snapDetectedTeamBadgeColor,
     classifyColorRegionData,
     selectDominantHueCluster,
     weightedHslCentroid,

@@ -26,7 +26,7 @@
         },
         {
           "teamName": "ATTACK-O-LANTERN",
-          "teamColor": "red",
+          "teamColor": "orange",
           "players": [
             "eneva_echo",
             "Drimakus",
@@ -240,14 +240,12 @@
         },
         {
           "teamName": "LIZARD LIZARD LIZARD",
-          "teamColor": "green",
+          "teamColor": "yellowGreen",
           "players": [
             "Pfannisher",
             "Daafin",
             "wavelen"
-          ],
-          "needsColorReview": true,
-          "colorReviewReason": "Legacy green centroid is ambiguous in HSL space: green=38.79, limeGreen=40.57."
+          ]
         }
       ],
       "modifiers": []

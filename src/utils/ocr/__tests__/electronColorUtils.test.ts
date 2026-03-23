@@ -9,6 +9,15 @@ const { classifyTeamColorHSL, clusterByHue, nearestWildgateColor, __test__ } = r
   __test__: {
     circularHueMean: (data: Uint8Array, channels: number) => number | null;
     majorityDark: (data: Uint8Array, channels: number) => boolean;
+    maybePreferWarmBadgeFamily: (
+      samples: Array<{
+        weight: number;
+        hsl: { h: number; s: number; l: number };
+        rgb: { r: number; g: number; b: number };
+      }>,
+      currentColor: string,
+    ) => string;
+    snapDetectedTeamBadgeColor: (color: string) => string;
     classifyColorRegionData: (data: Uint8Array, channels: number) => {
       color: string;
       confidence: number;
@@ -201,6 +210,84 @@ describe('electron/colorUtils detectColorInRegion hybrid classifier', () => {
     expect(result.color).toBe('orange');
     expect(result.confidence).toBeGreaterThan(60);
     expect(result.rawHue).not.toBeNull();
+  });
+
+  it('region classifier preserves red when orange-ish shadow pixels sit beside a red badge', () => {
+    const pixels = new Uint8Array([
+      ...Array.from({ length: 10 }, () => [220, 20, 20]).flat(),
+      ...Array.from({ length: 10 }, () => [151, 59, 19]).flat(),
+      ...Array.from({ length: 8 }, () => [254, 94, 0]).flat(),
+    ]);
+
+    const result = __test__.classifyColorRegionData(pixels, 3);
+    expect(result.color).toBe('red');
+    expect(result.rawHue).not.toBeNull();
+  });
+});
+
+describe('electron/colorUtils team badge family snapping', () => {
+  it('snaps near-red palette neighbors back to red', () => {
+    expect(__test__.snapDetectedTeamBadgeColor('salmon')).toBe('red');
+    expect(__test__.snapDetectedTeamBadgeColor('magentaRed')).toBe('red');
+    expect(__test__.snapDetectedTeamBadgeColor('grape')).toBe('red');
+  });
+
+  it('snaps near-orange and near-goldenrod neighbors back to canonical badge colors', () => {
+    expect(__test__.snapDetectedTeamBadgeColor('cognac')).toBe('orange');
+    expect(__test__.snapDetectedTeamBadgeColor('tangerine')).toBe('orange');
+    expect(__test__.snapDetectedTeamBadgeColor('mustard')).toBe('goldenrod');
+    expect(__test__.snapDetectedTeamBadgeColor('marigold')).toBe('goldenrod');
+  });
+
+  it('preserves canonical badge colors and unknown results', () => {
+    expect(__test__.snapDetectedTeamBadgeColor('red')).toBe('red');
+    expect(__test__.snapDetectedTeamBadgeColor('orange')).toBe('orange');
+    expect(__test__.snapDetectedTeamBadgeColor('goldenrod')).toBe('goldenrod');
+    expect(__test__.snapDetectedTeamBadgeColor('unknown')).toBe('unknown');
+  });
+
+  it('keeps red when strong red samples compete with orange-ish shadow pixels', () => {
+    const samples = [
+      ...Array.from({ length: 8 }, () => ({
+        weight: 1.2,
+        hsl: { h: 0, s: 90, l: 48 },
+        rgb: { r: 220, g: 20, b: 20 },
+      })),
+      ...Array.from({ length: 8 }, () => ({
+        weight: 1.0,
+        hsl: { h: 18, s: 78, l: 33 },
+        rgb: { r: 151, g: 59, b: 19 },
+      })),
+      ...Array.from({ length: 6 }, () => ({
+        weight: 1.0,
+        hsl: { h: 22, s: 100, l: 50 },
+        rgb: { r: 254, g: 94, b: 0 },
+      })),
+    ];
+
+    expect(__test__.maybePreferWarmBadgeFamily(samples, 'orange')).toBe('red');
+  });
+
+  it('does not flip a clearly orange cluster to red', () => {
+    const samples = [
+      ...Array.from({ length: 10 }, () => ({
+        weight: 1.0,
+        hsl: { h: 22, s: 100, l: 50 },
+        rgb: { r: 254, g: 94, b: 0 },
+      })),
+      ...Array.from({ length: 4 }, () => ({
+        weight: 0.9,
+        hsl: { h: 18, s: 78, l: 33 },
+        rgb: { r: 151, g: 59, b: 19 },
+      })),
+      ...Array.from({ length: 2 }, () => ({
+        weight: 0.8,
+        hsl: { h: 0, s: 90, l: 48 },
+        rgb: { r: 220, g: 20, b: 20 },
+      })),
+    ];
+
+    expect(__test__.maybePreferWarmBadgeFamily(samples, 'orange')).toBe('orange');
   });
 });
 

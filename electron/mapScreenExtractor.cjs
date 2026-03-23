@@ -8,7 +8,7 @@
  * - Player List: Bottom-left player names
  */
 
-const { detectBadgeColorNearText, detectColorInRegion } = require('./colorUtils.cjs');
+const { detectColorInRegion } = require('./colorUtils.cjs');
 const HAZARD_CATALOG = require('./hazardCatalog.json');
 const REFERENCE_WIDTH = 1920;
 const REFERENCE_HEIGHT = 1080;
@@ -713,6 +713,87 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
   };
 
   const shipWordCandidates = [];
+  const normalizeDetectedColor = (value) => String(value || '').trim().toLowerCase();
+  const isKnownDetectedColor = (value) => {
+    const normalized = normalizeDetectedColor(value);
+    return Boolean(normalized && normalized !== 'unknown' && normalized !== 'black' && normalized !== 'spectator');
+  };
+  const preferKnownDetectedColor = (existing, candidate) => (
+    isKnownDetectedColor(existing)
+      ? normalizeDetectedColor(existing)
+      : (isKnownDetectedColor(candidate) ? normalizeDetectedColor(candidate) : normalizeDetectedColor(existing || candidate))
+  );
+  const findSlotBoundsForY = (rowCenterY) => {
+    const numericY = Number(rowCenterY);
+    if (!Number.isFinite(numericY) || boundsList.length === 0) return boundsList[0] || null;
+    const exact = boundsList.find((bounds) => numericY >= bounds.yMin && numericY <= bounds.yMax);
+    if (exact) return exact;
+    return boundsList.reduce((best, bounds) => {
+      const centerY = (bounds.yMin + bounds.yMax) / 2;
+      const dist = Math.abs(centerY - numericY);
+      if (!best || dist < best.dist) return { bounds, dist };
+      return best;
+    }, null)?.bounds || boundsList[0] || null;
+  };
+  const detectMapRowColorAtY = async (rowCenterY, slotBounds) => {
+    if (!imageBuffer || !slotBounds) return { color: 'unknown', confidence: 0 };
+
+    const slotWidth = Math.max(1, Number(slotBounds.xMax) - Number(slotBounds.xMin));
+    const slotHeight = Math.max(1, Number(slotBounds.yMax) - Number(slotBounds.yMin));
+    const xPad = Math.max(scaleReferencePx(10, geometry, 'x', 1), Math.round(slotWidth * 0.03));
+    const minBandHeight = scaleReferencePx(52, geometry, 'y', 1);
+    const bandHeight = Math.max(minBandHeight, Math.round(slotHeight * 0.14));
+    const safeCenterY = Math.max(Number(slotBounds.yMin), Math.min(Number(slotBounds.yMax), Number(rowCenterY || 0)));
+    const bandTop = Math.max(Number(slotBounds.yMin), Math.floor(safeCenterY - (bandHeight * 0.5)));
+    const bandBottom = Math.min(Number(slotBounds.yMax), bandTop + bandHeight);
+    const regionWidth = Math.max(1, Math.floor(slotWidth - (xPad * 2)));
+    const regionHeight = Math.max(1, Math.floor(bandBottom - bandTop));
+    const regionX = Math.max(0, Math.floor(slotBounds.xMin + xPad));
+    const regionY = Math.max(0, Math.floor(bandTop));
+    const candidates = [
+      {
+        x: regionX,
+        y: regionY,
+        width: regionWidth,
+        height: regionHeight,
+      },
+      {
+        x: regionX + Math.floor(regionWidth * 0.32),
+        y: regionY,
+        width: Math.max(1, Math.floor(regionWidth * 0.40)),
+        height: regionHeight,
+      },
+      {
+        x: regionX + Math.floor(regionWidth * 0.62),
+        y: regionY,
+        width: Math.max(1, Math.floor(regionWidth * 0.22)),
+        height: regionHeight,
+      },
+    ];
+
+    let best = { color: 'unknown', confidence: 0 };
+    for (const region of candidates) {
+      try {
+        const result = await detectColorInRegion(imageBuffer, region);
+        if (!isKnownDetectedColor(result?.color)) continue;
+        if (!isKnownDetectedColor(best.color) || Number(result?.confidence || 0) > Number(best.confidence || 0)) {
+          best = {
+            color: normalizeDetectedColor(result.color),
+            confidence: Number(result.confidence || 0),
+          };
+        }
+      } catch (_) {}
+    }
+
+    return best;
+  };
+  const detectSlotColorFallback = async (slotBounds) => {
+    if (!imageBuffer || !slotBounds) return { color: 'unknown', confidence: 0 };
+
+    const slotCenterY = (Number(slotBounds.yMin) + Number(slotBounds.yMax)) / 2;
+    return detectMapRowColorAtY(slotCenterY, slotBounds);
+  };
+
   const isNoiseTeamLabel = (input) => {
     const t = String(input || '').toUpperCase().trim();
     if (!t) return true;
@@ -757,13 +838,22 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
     let bestColorConf = -1;
     if (imageBuffer) {
       for (const line of groupedLines) {
-        const firstWord = line.words[0];
-        if (!firstWord?.bbox) continue;
+        const rowCenterY = Number(line?.y);
+        if (!Number.isFinite(rowCenterY)) continue;
         try {
-          const colorResult = await detectBadgeColorNearText(imageBuffer, firstWord.bbox, 1);
-          if (colorResult.color !== 'unknown' && colorResult.confidence > bestColorConf) {
-            slotColor = colorResult.color;
+          const colorResult = await detectMapRowColorAtY(rowCenterY, slotBounds);
+          if (isKnownDetectedColor(colorResult?.color) && colorResult.confidence > bestColorConf) {
+            slotColor = normalizeDetectedColor(colorResult.color);
             bestColorConf = colorResult.confidence;
+          }
+        } catch (_) {}
+      }
+      if (slotColor === 'unknown') {
+        try {
+          const fallbackColor = await detectSlotColorFallback(slotBounds);
+          if (isKnownDetectedColor(fallbackColor?.color) && fallbackColor.confidence > bestColorConf) {
+            slotColor = normalizeDetectedColor(fallbackColor.color);
+            bestColorConf = fallbackColor.confidence;
           }
         } catch (_) {}
       }
@@ -1005,10 +1095,11 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
         const teamName = sanitizeExtractedTeamName(item.teamName, item.shipType);
         if (!teamName || isNoiseTeamLabel(teamName)) continue;
         let slotColor = 'unknown';
-        if (imageBuffer && item.firstWord?.bbox) {
+        if (imageBuffer) {
           try {
-            const colorResult = await detectBadgeColorNearText(imageBuffer, item.firstWord.bbox, 1);
-            if (colorResult?.color) slotColor = colorResult.color;
+            const slotBounds = findSlotBoundsForY(item.y);
+            const colorResult = await detectMapRowColorAtY(item.y, slotBounds);
+            if (isKnownDetectedColor(colorResult?.color)) slotColor = normalizeDetectedColor(colorResult.color);
           } catch (_) {}
         }
         out.push({
@@ -1040,8 +1131,8 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
             ...cur,
             teamName: (team.teamName?.length || 0) > (cur.teamName?.length || 0) ? team.teamName : cur.teamName,
             shipType: cur.shipType && cur.shipType !== 'Unknown' ? cur.shipType : team.shipType,
-            teamColor: cur.teamColor || team.teamColor,
-            color: cur.color || team.color,
+            teamColor: preferKnownDetectedColor(cur.teamColor, team.teamColor),
+            color: preferKnownDetectedColor(cur.color, team.color),
             confidence: Math.max(Number(cur.confidence || 0), Number(team.confidence || 0)),
           };
         }
@@ -1091,8 +1182,8 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
             shipType: preferYShipType
               ? yShipType
               : (isKnownShipType(curShip) ? curShip : yShipType || curShip),
-            teamColor: cur.teamColor || yShip.teamColor,
-            color: cur.color || yShip.color,
+            teamColor: preferKnownDetectedColor(cur.teamColor, yShip.teamColor),
+            color: preferKnownDetectedColor(cur.color, yShip.color),
             confidence: Math.max(Number(cur.confidence || 0), Number(yShip.confidence || 0)),
           };
         }
