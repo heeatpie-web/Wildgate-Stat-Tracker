@@ -4009,16 +4009,18 @@ ipcMain.on('result-monitor-start', (event, config = {}) => {
     }
 
     console.log(
-        `[ResultMonitor] Starting combined monitor armAt=${armAt} `
+        `[ResultMonitor] Starting combined result monitor armAt=${armAt} `
         + `flash=${JSON.stringify(flashAbsoluteRegion)} text=${JSON.stringify(textAbsoluteRegion)}`
     );
+
+    stopResultMonitor();
 
     const started = startResultMonitor({
         flashArmAt: armAt,
         flashAbsoluteRegion,
         textArmAt: armAt,
-        textAbsoluteRegion,
         textCaptureRegion: textNormalized,
+        textAbsoluteRegion,
         onFlashDetected: (payload) => {
             console.log('[ResultMonitor] Flash detected - notifying renderer', payload);
             if (!sender.isDestroyed()) sender.send('result-flash-detected', payload);
@@ -4040,12 +4042,15 @@ ipcMain.on('result-monitor-start', (event, config = {}) => {
     });
 
     if (!started) {
-        console.warn('[ResultMonitor] Failed to start combined monitor');
+        console.warn('[ResultMonitor] Failed to start combined result monitor', {
+            flashEnabled: !!flashAbsoluteRegion,
+            textEnabled: !!textAbsoluteRegion,
+        });
         stopResultMonitor();
     }
 });
 ipcMain.on('result-monitor-stop', () => {
-    console.log('[ResultMonitor] Stopping combined monitor');
+    console.log('[ResultMonitor] Stopping combined result monitor');
     stopResultMonitor();
 });
 
@@ -4085,4 +4090,3 @@ module.exports = {
   AUTO_CAPTURE_HOTKEY_STATE_MAX_AGE_MS,
   isAutoCaptureHotkeySnapshotStale,
 };
-

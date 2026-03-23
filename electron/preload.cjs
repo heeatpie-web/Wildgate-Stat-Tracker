@@ -40,6 +40,7 @@ const SEND_CHANNELS = [
   'set-ignore-mouse-events',
   'toggle-overlay', 'set-overlay-style', 'set-window-bounds',
   'sync-auto-capture-hotkey-state',
+  'result-monitor-start', 'result-monitor-stop',
   'result-flash-start', 'result-flash-stop',
   'result-text-start', 'result-text-stop',
 ];

@@ -187,4 +187,31 @@ describe('resultTextMonitor loop', () => {
     expect(sampler.mock.calls.length).toBeGreaterThanOrEqual(3);
     expect(onDetected).not.toHaveBeenCalled();
   });
+
+  it('detects sustained result text even when the first armed sample is already hot', async () => {
+    const hotMetrics = await __test__.analyzeTripwireBoxes(await createTripwireImage(['result-a']));
+    const sampler = vi.fn().mockResolvedValue(hotMetrics);
+    const onDetected = vi.fn();
+
+    startResultTextMonitor({
+      armAt: Date.now(),
+      intervalMs: 100,
+      absoluteRegion: { x: 10, y: 20, width: 800, height: 240 },
+      _sampler: sampler,
+      onDetected,
+    });
+
+    await sleep(260);
+    expect(onDetected).not.toHaveBeenCalled();
+
+    await sleep(420);
+
+    expect(onDetected).toHaveBeenCalledTimes(1);
+    expect(onDetected.mock.calls[0][0]).toMatchObject({
+      detectionMethod: 'text',
+      result: null,
+      tripwireActiveBoxCount: 1,
+      activeBoxIds: ['result-a'],
+    });
+  });
 });

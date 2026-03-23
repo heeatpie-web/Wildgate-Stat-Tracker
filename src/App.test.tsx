@@ -558,13 +558,13 @@ describe('App', () => {
       }));
     });
 
-    expect(screen.queryByRole('dialog', { name: /telemetry match ready/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /telemetry match ready/i })).not.toBeInTheDocument();
 
     act(() => {
       vi.advanceTimersByTime(15_000);
     });
 
-    expect(screen.getByRole('dialog', { name: /telemetry match ready/i })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: /telemetry match ready/i })).toBeInTheDocument();
     expect(screen.getByText(/automatic result capture did not finish in time/i)).toBeInTheDocument();
     vi.useRealTimers();
   });
@@ -586,7 +586,7 @@ describe('App', () => {
       vi.advanceTimersByTime(15_000);
     });
 
-    expect(screen.queryByRole('dialog', { name: /telemetry match ready/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /telemetry match ready/i })).not.toBeInTheDocument();
     vi.useRealTimers();
   });
 

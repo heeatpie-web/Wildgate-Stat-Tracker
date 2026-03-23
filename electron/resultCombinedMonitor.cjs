@@ -206,6 +206,10 @@ function createTripwireBaseline(metrics) {
   return metrics.map((m) => m.whiteRatio);
 }
 
+function createColdTripwireBaseline(metrics) {
+  return metrics.map(() => 0);
+}
+
 function updateTripwireBaseline(baseline, metrics) {
   if (!Array.isArray(baseline) || baseline.length !== metrics.length) {
     return createTripwireBaseline(metrics);
@@ -296,8 +300,23 @@ function processTextRaw(raw, imageWidth, imageHeight, now) {
     const boxMetrics = analyzeTextBoxes(raw, imageWidth, imageHeight);
     const isArmed = now >= text.armAt;
 
-    if (!Array.isArray(text.baselineWhiteRatios) || text.baselineWhiteRatios.length !== boxMetrics.length) {
+    if (!text.bootstrapHotStart && (!Array.isArray(text.baselineWhiteRatios) || text.baselineWhiteRatios.length !== boxMetrics.length)) {
+      if (isArmed) {
+        const coldBaseline = createColdTripwireBaseline(boxMetrics);
+        const bootstrapTripwire = buildTripwireSnapshot(boxMetrics, coldBaseline);
+
+        if (bootstrapTripwire.triggered) {
+          text.bootstrapHotStart = true;
+          text.lastTripwire = bootstrapTripwire;
+          text.tripwireConsecutiveHits = 1;
+          text.lastUpdatedAt = now;
+          emitTextDebug('sampling');
+          return;
+        }
+      }
+
       text.baselineWhiteRatios = createTripwireBaseline(boxMetrics);
+      text.bootstrapHotStart = false;
       text.lastTripwire = buildTripwireSnapshot(boxMetrics, text.baselineWhiteRatios);
       text.tripwireConsecutiveHits = 0;
       text.lastUpdatedAt = now;
@@ -311,6 +330,49 @@ function processTextRaw(raw, imageWidth, imageHeight, now) {
       text.tripwireConsecutiveHits = 0;
       text.lastUpdatedAt = now;
       emitTextDebug('arming-delay');
+      return;
+    }
+
+    if (text.bootstrapHotStart) {
+      const bootstrapTripwire = buildTripwireSnapshot(boxMetrics, createColdTripwireBaseline(boxMetrics));
+      text.lastTripwire = bootstrapTripwire;
+
+      if (bootstrapTripwire.triggered) {
+        text.tripwireConsecutiveHits += 1;
+        if (text.tripwireConsecutiveHits >= TRIPWIRE_MIN_CONSECUTIVE_HITS) {
+          text.detected = true;
+          if (_flash) {
+            _flash.disabledForMatch = true;
+            _flash.brightSinceMs = null;
+            _flash.waitingForFlashEnd = false;
+            _flash.flashNotified = false;
+            _flash.lastUpdatedAt = now;
+          }
+          const activeBoxes = bootstrapTripwire.boxes.filter((b) => b.active);
+          text.lastSignal = {
+            detectionMethod: 'text',
+            result: null,
+            armAt: text.armAt,
+            detectedAt: now,
+            captureRegion: text.captureRegion,
+            activeBoxIds: activeBoxes.map((b) => b.id).filter(Boolean),
+            tripwireActiveBoxCount: bootstrapTripwire.activeBoxCount,
+            tripwireTotalWhiteDelta: bootstrapTripwire.totalWhiteDelta,
+          };
+          text.lastUpdatedAt = now;
+          text.onDetected?.(text.lastSignal);
+          emitTextDebug('detected');
+          return;
+        }
+      } else {
+        text.bootstrapHotStart = false;
+        text.baselineWhiteRatios = createTripwireBaseline(boxMetrics);
+        text.lastTripwire = buildTripwireSnapshot(boxMetrics, text.baselineWhiteRatios);
+        text.tripwireConsecutiveHits = 0;
+      }
+
+      text.lastUpdatedAt = now;
+      emitTextDebug('sampling');
       return;
     }
 
@@ -513,6 +575,7 @@ function startResultMonitor({
       disabledForMatch: false,
       baselineWhiteRatios: null,
       tripwireConsecutiveHits: 0,
+      bootstrapHotStart: false,
       lastTripwire: null,
       lastRecognizedText: '',
       lastSignal: null,

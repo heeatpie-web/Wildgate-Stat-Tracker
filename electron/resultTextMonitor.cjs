@@ -67,6 +67,10 @@ function createTripwireBaseline(metrics) {
   return metrics.map((metric) => metric.whiteRatio);
 }
 
+function createColdTripwireBaseline(metrics) {
+  return metrics.map(() => 0);
+}
+
 function updateTripwireBaseline(currentBaseline, metrics) {
   if (!Array.isArray(currentBaseline) || currentBaseline.length !== metrics.length) {
     return createTripwireBaseline(metrics);
@@ -224,8 +228,26 @@ async function pollOnce() {
     }
     const isArmed = Date.now() >= state.armAt;
 
-    if (!Array.isArray(state.baselineWhiteRatios) || state.baselineWhiteRatios.length !== boxMetrics.length) {
+    if (!state.bootstrapHotStart && (!Array.isArray(state.baselineWhiteRatios) || state.baselineWhiteRatios.length !== boxMetrics.length)) {
+      // If the first armed frame already contains the result headline, seeding the
+      // baseline from that hot frame makes the signal invisible forever. Bootstrap
+      // those runs against a cold baseline until the text either latches or cools off.
+      if (isArmed) {
+        const coldBaseline = createColdTripwireBaseline(boxMetrics);
+        const bootstrapTripwire = buildTripwireSnapshot(boxMetrics, coldBaseline);
+
+        if (bootstrapTripwire.triggered) {
+          state.bootstrapHotStart = true;
+          state.lastTripwire = bootstrapTripwire;
+          state.tripwireConsecutiveHits = 1;
+          state.lastUpdatedAt = Date.now();
+          emitDebug('sampling');
+          return;
+        }
+      }
+
       state.baselineWhiteRatios = createTripwireBaseline(boxMetrics);
+      state.bootstrapHotStart = false;
       state.lastTripwire = buildTripwireSnapshot(boxMetrics, state.baselineWhiteRatios);
       state.tripwireConsecutiveHits = 0;
       state.lastUpdatedAt = Date.now();
@@ -239,6 +261,33 @@ async function pollOnce() {
       state.tripwireConsecutiveHits = 0;
       state.lastUpdatedAt = Date.now();
       emitDebug('arming-delay');
+      return;
+    }
+
+    if (state.bootstrapHotStart) {
+      const bootstrapTripwire = buildTripwireSnapshot(boxMetrics, createColdTripwireBaseline(boxMetrics));
+      state.lastTripwire = bootstrapTripwire;
+
+      if (bootstrapTripwire.triggered) {
+        state.tripwireConsecutiveHits += 1;
+
+        if (state.tripwireConsecutiveHits >= TRIPWIRE_MIN_CONSECUTIVE_HITS) {
+          state.detected = true;
+          state.lastSignal = createTripwireDetectionPayload(state);
+          state.lastUpdatedAt = Date.now();
+          state.onDetected?.(state.lastSignal);
+          emitDebug('detected');
+          return;
+        }
+      } else {
+        state.bootstrapHotStart = false;
+        state.baselineWhiteRatios = createTripwireBaseline(boxMetrics);
+        state.lastTripwire = buildTripwireSnapshot(boxMetrics, state.baselineWhiteRatios);
+        state.tripwireConsecutiveHits = 0;
+      }
+
+      state.lastUpdatedAt = Date.now();
+      emitDebug('sampling');
       return;
     }
 
@@ -327,6 +376,7 @@ function startResultTextMonitor({
     lastTripwire: null,
     tripwireConsecutiveHits: 0,
     baselineWhiteRatios: null,
+    bootstrapHotStart: false,
     lastUpdatedAt: Date.now(),
   };
 

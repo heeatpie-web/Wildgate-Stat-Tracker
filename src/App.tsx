@@ -4207,69 +4207,69 @@ const App: React.FC = () => {
             ), document.body)}
 
             {telemetryDraftPrompt && createPortal((
-                <div
-                    className="fixed inset-0 z-modal-top md3-dialog-scrim flex items-center justify-center p-4"
-                    onClick={handleTelemetryDraftLater}
+                <section
+                    aria-label="Telemetry match ready"
+                    aria-live="polite"
+                    className="fixed inset-x-4 bottom-4 z-modal-top flex justify-end pointer-events-none"
                 >
-                    <div
-                        role="dialog"
-                        aria-modal="true"
-                        aria-label="Telemetry match ready"
-                        className="md3-dialog rounded-modal w-full max-w-lg"
-                        onClick={(event) => event.stopPropagation()}
-                    >
-                        <div className="md3-dialog-title">Telemetry match ready</div>
-                        <div className="md3-dialog-content text-md-sys-on-surface/70 space-y-3">
+                    <div className="pointer-events-auto w-full max-w-lg rounded-modal border border-amber-400/30 bg-md-sys-surface/95 p-4 shadow-2xl backdrop-blur">
+                        <div className="flex items-start justify-between gap-3">
                             <div>
-                                Duration: {telemetryDraftPrompt.duration}. Automatic result capture did not finish in time, so this draft needs a manual result.
+                                <div className="text-[10px] font-black uppercase tracking-[0.28em] text-amber-200/80">
+                                    Manual Result Needed
+                                </div>
+                                <div className="mt-1 text-title-sm font-bold text-md-sys-on-surface">
+                                    Telemetry match ready
+                                </div>
                             </div>
-                            <div className="grid grid-cols-3 gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => handleTelemetryDraftResult('Win')}
-                                    disabled={telemetryDraftDiscarding}
-                                    className="md3-btn-filled"
-                                >
-                                    Win
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handleTelemetryDraftResult('Loss')}
-                                    disabled={telemetryDraftDiscarding}
-                                    className="md3-btn-tonal"
-                                >
-                                    Loss
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handleTelemetryDraftResult('Draw')}
-                                    disabled={telemetryDraftDiscarding}
-                                    className="md3-btn-tonal"
-                                >
-                                    Draw
-                                </button>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={handleTelemetryDraftDiscard}
-                                disabled={telemetryDraftDiscarding}
-                                className="w-full rounded-2xl border border-danger/35 px-3 py-2 text-label-sm font-bold text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                                {telemetryDraftDiscarding ? 'Discarding...' : 'Discard match'}
-                            </button>
-                        </div>
-                        <div className="md3-dialog-actions flex-col gap-2 sm:flex-row sm:justify-end">
                             <button
                                 type="button"
                                 onClick={handleTelemetryDraftLater}
                                 disabled={telemetryDraftDiscarding}
-                                className="md3-btn-outlined"
+                                className="md3-btn-outlined shrink-0"
                             >
                                 Later
                             </button>
                         </div>
+                        <div className="mt-3 text-sm leading-relaxed text-md-sys-on-surface/75">
+                            Duration: {telemetryDraftPrompt.duration}. Automatic result capture did not finish in time, so this draft needs a manual result.
+                        </div>
+                        <div className="mt-4 grid grid-cols-3 gap-2">
+                            <button
+                                type="button"
+                                onClick={() => handleTelemetryDraftResult('Win')}
+                                disabled={telemetryDraftDiscarding}
+                                className="md3-btn-filled"
+                            >
+                                Win
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleTelemetryDraftResult('Loss')}
+                                disabled={telemetryDraftDiscarding}
+                                className="md3-btn-tonal"
+                            >
+                                Loss
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleTelemetryDraftResult('Draw')}
+                                disabled={telemetryDraftDiscarding}
+                                className="md3-btn-tonal"
+                            >
+                                Draw
+                            </button>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleTelemetryDraftDiscard}
+                            disabled={telemetryDraftDiscarding}
+                            className="mt-3 w-full rounded-2xl border border-danger/35 px-3 py-2 text-label-sm font-bold text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            {telemetryDraftDiscarding ? 'Discarding...' : 'Discard match'}
+                        </button>
                     </div>
-                </div>
+                </section>
             ), document.body)}
 
         </div>
