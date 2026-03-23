@@ -1230,13 +1230,16 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
 }
 
 .ocr-assignment-team-card--color-red      { --team-accent-color: #ef4444; }
+.ocr-assignment-team-card--color-magenta  { --team-accent-color: #d946ef; }
 .ocr-assignment-team-card--color-orange   { --team-accent-color: #ea580c; }
+.ocr-assignment-team-card--color-goldenrod { --team-accent-color: #d4a017; }
 .ocr-assignment-team-card--color-yellow   { --team-accent-color: #fde047; }
 .ocr-assignment-team-card--color-yellowgreen { --team-accent-color: #84cc16; }
 .ocr-assignment-team-card--color-green    { --team-accent-color: #22c55e; }
 .ocr-assignment-team-card--color-blue     { --team-accent-color: #60a5fa; }
 .ocr-assignment-team-card--color-cyan     { --team-accent-color: #06b6d4; }
 .ocr-assignment-team-card--color-purple   { --team-accent-color: #a855f7; }
+.ocr-assignment-team-card--color-black    { --team-accent-color: #27272a; }
 .ocr-assignment-team-card--color-friendly { --team-accent-color: #2563eb; }
 .ocr-assignment-team-card--color-unknown  { --team-accent-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 40%); }
 
@@ -1294,6 +1297,7 @@ body[data-mode='twilight'] .ocr-assignment-team-card {
   width: 10px;
   height: 10px;
   border-radius: 999px;
+  background: var(--team-accent-color, color-mix(in srgb, var(--md-sys-color-outline), transparent 36%));
   border: 1.5px solid color-mix(in srgb, var(--md-sys-color-outline), transparent 52%);
   flex-shrink: 0;
 }
@@ -1307,8 +1311,16 @@ body[data-mode='twilight'] .ocr-assignment-team-card {
   background: #ef4444;
 }
 
+.ocr-assignment-team-dot--magenta {
+  background: #d946ef;
+}
+
 .ocr-assignment-team-dot--orange {
   background: #ea580c;
+}
+
+.ocr-assignment-team-dot--goldenrod {
+  background: #d4a017;
 }
 
 .ocr-assignment-team-dot--yellow {
@@ -1333,6 +1345,11 @@ body[data-mode='twilight'] .ocr-assignment-team-card {
 
 .ocr-assignment-team-dot--purple {
   background: #a855f7;
+}
+
+.ocr-assignment-team-dot--black {
+  background: #27272a;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14);
 }
 
 .ocr-assignment-team-dot--friendly {

@@ -94,23 +94,10 @@ const WILDGATE_COLORS = [
   { name: 'lightNavyBlue', hex: '#2C6288', r:  44, g:  98, b: 136 },
 ];
 
-// The OCR corpus currently scores badge colours against the canonical in-game
-// team families. On real screenshots, shadowing and anti-aliasing can pull the
-// nearest 32-swatch match onto a neighboring tone (for example cognac instead
-// of orange). Snap only those well-understood neighbors back to their canonical
-// badge family so we keep the full palette available for other callers.
-const TEAM_BADGE_COLOR_ALIASES = {
-  hotPink: 'red',
-  dustyRose: 'red',
-  salmon: 'red',
-  magentaRed: 'red',
-  grape: 'red',
-  tangerine: 'orange',
-  cognac: 'orange',
-  marigold: 'goldenrod',
-  lightYellow: 'goldenrod',
-  mustard: 'goldenrod',
-};
+// Raw palette names are now passed through unchanged so the front-end
+// normaliseColorToken can map them to the correct UI colour family.
+// Keeping the alias table empty retains the API surface for callers.
+const TEAM_BADGE_COLOR_ALIASES = {};
 
 // Tolerance values for HSL matching
 // SAT_TOLERANCE is set wide because team name text on the bar dilutes average saturation
@@ -557,6 +544,92 @@ function classifyColorRegionData(data, channels) {
   };
 }
 
+function resolveBadgeSampleConsensus(chromaticSamples = [], bestBlackResult = null, primarySample = null) {
+  let resolvedChromatic = null;
+
+  if (Array.isArray(chromaticSamples) && chromaticSamples.length > 0) {
+    const dominantCluster = selectDominantHueCluster(
+      chromaticSamples,
+      (sample) => sample.rawHue,
+      (sample) => sample.weight,
+      10,
+      1
+    );
+    const resolvedCluster = dominantCluster
+      ? resolveBadgeColorFromCluster(chromaticSamples, dominantCluster)
+      : null;
+
+    if (dominantCluster && resolvedCluster) {
+      const { centroid, nearest, color: snappedColor, clusterItems } = resolvedCluster;
+      const dominanceRatio = dominantCluster.clusterWeight / dominantCluster.totalWeight;
+      const weightedConfidence = clusterItems.reduce(
+        (sum, sample) => sum + ((sample.confidence / 100) * sample.weight),
+        0
+      ) / clusterItems.reduce((sum, sample) => sum + sample.weight, 0);
+      const distanceScore = Math.max(0, 1 - (nearest.distance / 70));
+      const confidence = Math.max(
+        35,
+        Math.round((dominanceRatio * 0.45 + weightedConfidence * 0.35 + distanceScore * 0.20) * 100)
+      );
+      resolvedChromatic = {
+        color: snappedColor,
+        confidence,
+        rgb: centroid.rgb,
+        rawHue: centroid.hsl.h,
+        clusterWeight: dominantCluster.clusterWeight,
+        totalWeight: dominantCluster.totalWeight,
+      };
+    }
+  }
+
+  const primaryLooksBlack = primarySample?.color === 'black' && Number(primarySample?.confidence || 0) >= 75;
+  if (primaryLooksBlack) {
+    const chromaticHsl = resolvedChromatic?.rgb
+      ? rgbToHsl(resolvedChromatic.rgb.r, resolvedChromatic.rgb.g, resolvedChromatic.rgb.b)
+      : null;
+    const chromaticLooksLikeWarmBleed = chromaticHsl
+      && chromaticHsl.l <= 45
+      && chromaticHsl.s <= 40;
+    if (!resolvedChromatic || resolvedChromatic.confidence < 85 || chromaticLooksLikeWarmBleed) {
+      const blackConfidence = Math.max(
+        Number(primarySample?.confidence || 0),
+        Number(bestBlackResult?.confidence || 0),
+      );
+      return {
+        color: 'black',
+        confidence: blackConfidence,
+        rgb: primarySample?.rgb || bestBlackResult?.rgb || { r: 0, g: 0, b: 0 },
+        rawHue: null,
+      };
+    }
+  }
+
+  if (resolvedChromatic) {
+    dlog2(
+      `[ColorUtils] Bar consensus color=${resolvedChromatic.color} conf=${resolvedChromatic.confidence} hue=${resolvedChromatic.rawHue} ` +
+      `clusterWeight=${resolvedChromatic.clusterWeight.toFixed(2)}/${resolvedChromatic.totalWeight.toFixed(2)}`
+    );
+    return {
+      color: resolvedChromatic.color,
+      confidence: resolvedChromatic.confidence,
+      rgb: resolvedChromatic.rgb,
+      rawHue: resolvedChromatic.rawHue,
+    };
+  }
+
+  if (bestBlackResult && bestBlackResult.confidence > 30) {
+    dlog2(`[ColorUtils] Bar color=black conf=${bestBlackResult.confidence} x=${bestBlackResult.xBase} yOff=${bestBlackResult.yOff}`);
+    return {
+      color: 'black',
+      confidence: bestBlackResult.confidence,
+      rgb: bestBlackResult.rgb,
+      rawHue: null,
+    };
+  }
+
+  return { color: 'unknown', confidence: 0, rawHue: null };
+}
+
 /**
  * Classify RGB color into team color using HSL with tolerance
  * @param {number} r - Red (0-255)
@@ -844,18 +917,18 @@ async function detectTeamColorBarBelow(imageBuffer, bbox, scale = 1, sharpModule
   const sampleHeight = Math.max(8, barHeight * 0.5);
   const sampleWidth = Math.max(40, textWidth * 0.5);
 
-  // The colored bar spans the full card width. The team name TEXT sits on the bar
-  // roughly aligned with the player name X position. Sample AT and to the RIGHT of
-  // the player name only — leftward positions reach into the player avatar column
-  // (typically 40-80px left of the text) whose character art contains high-scoring
-  // blue/cyan pixels that outcompete the actual team badge colour.
+  // The colored bar sits slightly left of some in-set OCR name boxes, especially
+  // on dark tags. Include a small left-biased probe, then sample at the OCR x0
+  // and one conservative step to the right. Avoid the older far-right probe,
+  // which often drifted into the brown card background and overpowered black tags.
   const rightStep = Math.max(sampleWidth * 0.65, textHeight * 2.5);
+  const leftBias = Math.max(4, Math.round(sampleWidth * 0.12));
   const verticalStep = Math.max(2, sampleHeight * 0.4);
-  const xPositions = [
+  const xPositions = [...new Set([
+    Math.max(0, Math.floor(origBbox.x0 - leftBias)),
     Math.max(0, Math.floor(origBbox.x0)),
     Math.max(0, Math.floor(origBbox.x0 + rightStep)),
-    Math.max(0, Math.floor(origBbox.x0 + rightStep * 2)),
-  ];
+  ])];
   const yOffsets = [
     0,
     Math.round(verticalStep),
@@ -869,6 +942,7 @@ async function detectTeamColorBarBelow(imageBuffer, bbox, scale = 1, sharpModule
   // trusting a single high-saturation outlier from adjacent art or UI chrome.
   const chromaticSamples = [];
   let bestBlackResult = null;
+  let primarySample = null;
 
   for (const xBase of xPositions) {
     for (const yOff of yOffsets) {
@@ -880,6 +954,9 @@ async function detectTeamColorBarBelow(imageBuffer, bbox, scale = 1, sharpModule
       };
       try {
         const result = await detectColorInRegion(imageBuffer, region, sharpModule);
+        if (xBase === xPositions[0] && yOff === yOffsets[0]) {
+          primarySample = result;
+        }
         if (result.color === 'spectator') continue;
 
         if (result.color === 'black') {
@@ -911,56 +988,13 @@ async function detectTeamColorBarBelow(imageBuffer, bbox, scale = 1, sharpModule
     }
   }
 
-  if (chromaticSamples.length > 0) {
-    const dominantCluster = selectDominantHueCluster(
-      chromaticSamples,
-      (sample) => sample.rawHue,
-      (sample) => sample.weight,
-      10,
-      1
-    );
-    const resolvedCluster = dominantCluster
-      ? resolveBadgeColorFromCluster(chromaticSamples, dominantCluster)
-      : null;
-
-    if (dominantCluster && resolvedCluster) {
-      const { centroid, nearest, color: snappedColor, clusterItems } = resolvedCluster;
-      const dominanceRatio = dominantCluster.clusterWeight / dominantCluster.totalWeight;
-      const weightedConfidence = clusterItems.reduce(
-        (sum, sample) => sum + ((sample.confidence / 100) * sample.weight),
-        0
-      ) / clusterItems.reduce((sum, sample) => sum + sample.weight, 0);
-      const distanceScore = Math.max(0, 1 - (nearest.distance / 70));
-      const confidence = Math.max(
-        35,
-        Math.round((dominanceRatio * 0.45 + weightedConfidence * 0.35 + distanceScore * 0.20) * 100)
-      );
-      dlog2(
-        `[ColorUtils] Bar consensus color=${snappedColor} raw=${nearest.name} conf=${confidence} hue=${centroid.hsl.h} ` +
-        `clusterWeight=${dominantCluster.clusterWeight.toFixed(2)}/${dominantCluster.totalWeight.toFixed(2)}`
-      );
-      return {
-        color: snappedColor,
-        confidence,
-        rgb: centroid.rgb,
-        rawHue: centroid.hsl.h,
-      };
-    }
+  const resolved = resolveBadgeSampleConsensus(chromaticSamples, bestBlackResult, primarySample);
+  if (resolved.color !== 'unknown') {
+    return resolved;
   }
 
-  if (bestBlackResult && bestBlackResult.confidence > 30) {
-    dlog2(`[ColorUtils] Bar color=black conf=${bestBlackResult.confidence} x=${bestBlackResult.xBase} yOff=${bestBlackResult.yOff}`);
-    return {
-      color: 'black',
-      confidence: bestBlackResult.confidence,
-      rgb: bestBlackResult.rgb,
-      rawHue: null,
-    };
-  }
-
-  // All attempts failed
   dlog2(`[ColorUtils] Bar color=unknown after all attempts. y1=${Math.round(origBbox.y1)} sampleY=${Math.round(sampleY)}`);
-  return { color: 'unknown', confidence: 0, rawHue: null };
+  return resolved;
 }
 
 /**
@@ -1145,6 +1179,7 @@ module.exports = {
     maybePreferWarmBadgeFamily,
     snapDetectedTeamBadgeColor,
     classifyColorRegionData,
+    resolveBadgeSampleConsensus,
     selectDominantHueCluster,
     weightedHslCentroid,
   },

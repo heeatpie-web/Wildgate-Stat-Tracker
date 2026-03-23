@@ -67,4 +67,52 @@ describe('OcrTeamAssignmentBoard', () => {
 
     expect(teamNameField).toContainElement(shipSelect);
   });
+
+  it('preserves detected accent colors for expanded OCR team palette entries', () => {
+    const { container } = render(
+      <OcrTeamAssignmentBoard
+        teams={[
+          {
+            key: 'black:Carefree',
+            color: 'black',
+            teamName: 'Carefree',
+            shipType: 'Scout',
+            players: ['SoulOkk'],
+          },
+          {
+            key: 'goldenrod:BananaCastle',
+            color: 'goldenrod',
+            teamName: 'BananaCastle',
+            shipType: 'Hunter',
+            players: ['Stoat'],
+          },
+          {
+            key: 'hotPink:Vanguard',
+            color: 'hotPink',
+            teamName: 'Vanguard',
+            shipType: 'Brig',
+            players: ['Jack'],
+          },
+        ]}
+        shipOptions={['Scout', 'Hunter', 'Brig']}
+        onTeamShipChange={vi.fn()}
+        onPlayerChange={vi.fn()}
+        onPlayerRemove={vi.fn()}
+        onPlayerAdd={vi.fn()}
+        onPlayerMove={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId('ocr-team-card-0')).toHaveClass('ocr-assignment-team-card--color-black');
+    expect(screen.getByTestId('ocr-team-card-1')).toHaveClass('ocr-assignment-team-card--color-goldenrod');
+    expect(screen.getByTestId('ocr-team-card-2')).toHaveClass('ocr-assignment-team-card--color-magenta');
+
+    const blackDot = container.querySelector('.ocr-assignment-team-dot--black');
+    const goldDot = container.querySelector('.ocr-assignment-team-dot--goldenrod');
+    const magentaDot = container.querySelector('.ocr-assignment-team-dot--magenta');
+
+    expect(blackDot).toBeInTheDocument();
+    expect(goldDot).toBeInTheDocument();
+    expect(magentaDot).toBeInTheDocument();
+  });
 });

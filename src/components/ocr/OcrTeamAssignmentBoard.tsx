@@ -52,8 +52,35 @@ interface OcrTeamAssignmentBoardProps {
     onAddToRoster?: (name: string) => void;
 }
 
-const TEAM_COLOR_OPTIONS = ['red', 'orange', 'yellow', 'yellowgreen', 'green', 'blue', 'cyan', 'purple', 'friendly', 'unknown'] as const;
-const TEAM_COLOR_CYCLE = ['red', 'orange', 'yellow', 'yellowgreen', 'green', 'blue', 'cyan', 'purple', 'unknown'] as const;
+const TEAM_COLOR_OPTIONS = [
+    'red',
+    'magenta',
+    'orange',
+    'goldenrod',
+    'yellow',
+    'yellowgreen',
+    'green',
+    'blue',
+    'cyan',
+    'purple',
+    'black',
+    'friendly',
+    'unknown',
+] as const;
+const TEAM_COLOR_CYCLE = [
+    'red',
+    'magenta',
+    'orange',
+    'goldenrod',
+    'yellow',
+    'yellowgreen',
+    'green',
+    'blue',
+    'cyan',
+    'purple',
+    'black',
+    'unknown',
+] as const;
 const DRAG_DATA_KEY = 'application/x-wildgate-player-drag';
 const TEAM_COLOR_OPTION_LIST = [...TEAM_COLOR_CYCLE];
 
@@ -62,6 +89,17 @@ const normalizeColorToken = (value: string): string => {
     if (!normalized) return 'unknown';
     const compact = normalized.replace(/[\s_-]+/g, '');
     if (compact.includes('yellowgreen') || compact.includes('chartreuse') || compact.includes('lime')) return 'yellowgreen';
+    if (compact.includes('goldenrod') || compact.includes('gold') || compact.includes('mustard') || compact.includes('marigold')) return 'goldenrod';
+    if (compact.includes('magenta') || compact.includes('hotpink') || compact.includes('fuchsia') || compact.includes('grape') || compact.includes('dustyrose')) return 'magenta';
+    if (compact.includes('black') || compact.includes('charcoal')) return 'black';
+    // Extended Wildgate palette — classifier now passes raw names through
+    if (compact === 'salmon') return 'red';
+    if (compact === 'tangerine' || compact === 'cognac') return 'orange';
+    if (compact === 'lightyellow') return 'yellow';
+    if (compact === 'bluegreen' || compact === 'seagreen' || compact === 'greenpea') return 'green';
+    if (compact === 'paleblue' || compact === 'periwinkle' || compact === 'lightnavyblue') return 'blue';
+    if (compact === 'skyblue') return 'cyan';
+    if (compact === 'plum' || compact === 'orchid' || compact === 'blueberry') return 'purple';
     if (TEAM_COLOR_OPTIONS.includes(normalized as typeof TEAM_COLOR_OPTIONS[number])) return normalized;
     return 'unknown';
 };
