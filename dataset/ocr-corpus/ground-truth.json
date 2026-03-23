@@ -1,0 +1,1429 @@
+{
+  "version": 1,
+  "_note": "Holdout policy: samples in dataset/ocr-corpus/ground-truth.holdout.json must never be used for tuning, heuristic/parameter iteration, or model selection. Use holdout only for final production gating.",
+  "samples": [
+    {
+      "sampleId": "match130_04-53-56",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/130/capture_2026-02-25T04-53-56-928Z.png",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "AlixThus",
+        "Xiphorix",
+        "fartingPuppy",
+        "H4VOK_XP"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "GOBLIN GARAGE",
+          "teamColor": "red",
+          "players": [
+            "Zha_Ha_Dum",
+            "DevilsDisciple33",
+            "eneva_echo",
+            "thunderj19"
+          ]
+        },
+        {
+          "teamName": "SHIPPY MCSHIPFACE",
+          "teamColor": "orange",
+          "players": [
+            "Hoff07",
+            "ShockethTheStorm",
+            "MrLemonWater"
+          ]
+        }
+      ],
+      "modifiers": []
+    },
+    {
+      "sampleId": "match129_03-45-23",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/129/capture_2026-02-25T03-45-23-385Z.png",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "AlixThus",
+        "Xiphorix",
+        "Lanky Bastard",
+        "H4VOK_XP"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": null,
+          "teamColor": "red",
+          "shipType": "",
+          "players": []
+        }
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "yourShipType": "Hunter",
+      "shipTypeReview": {
+        "needsManualReview": true,
+        "reasons": [
+          "opponent_shipType_missing_team_1",
+          "opponent_shipType_low_conf_team_1_66"
+        ]
+      }
+    },
+    {
+      "sampleId": "match128_03-12-24",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/128/capture_2026-02-25T03-12-24-496Z.png",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "AlixThus",
+        "Xiphorix",
+        "Lanky Bastard",
+        "H4VOK_XP"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "BATTERWING RAM",
+          "teamColor": "red",
+          "shipType": "Bastion",
+          "players": [
+            "Saln_Reclaimer",
+            "Sune",
+            "FennixGamingYT"
+          ]
+        },
+        {
+          "teamName": "ROCK LOBSTER",
+          "teamColor": "orange",
+          "shipType": "Hunter",
+          "players": [
+            "Seto_Kaiiba93",
+            "MightYgor09",
+            "JoeFro420",
+            "ricks-027"
+          ]
+        }
+      ],
+      "modifiers": [
+        "Healing Artifact",
+        "Rogue Turrets",
+        "Low Altitude Fog",
+        "Few Asteroids",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "imagePaths": [
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/128/capture_2026-02-25T03-12-24-496Z.png",
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/128/capture_2026-02-25T03-12-15-194Z.png"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match126_02-38-34",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/126/capture_2026-02-25T02-38-34-971Z.png",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "AlixThus",
+        "Xiphorix",
+        "H4VOK_XP"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "DAD JOKES",
+          "teamColor": "red",
+          "players": [
+            "justINCREDIBLE61",
+            "merion70",
+            "soccer8en10",
+            "jerion70"
+          ]
+        },
+        {
+          "teamName": "PARALLEL PORK",
+          "teamColor": "orange",
+          "players": [
+            "aabatteries2005",
+            "minikane",
+            "RancidAloner"
+          ]
+        }
+      ],
+      "modifiers": []
+    },
+    {
+      "sampleId": "match123_02-02-22",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/123/capture_2026-02-22T02-02-22-038Z.png",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "AlixThus",
+        "Stue Grifn",
+        "BricksParts",
+        "Rap1dWarrior"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "GENUINE RISK",
+          "teamColor": "red",
+          "players": [],
+          "shipType": "Hunter"
+        },
+        {
+          "teamName": "FILTHY THIEVES",
+          "teamColor": "orange",
+          "players": [],
+          "shipType": "Bastion"
+        }
+      ],
+      "modifiers": [
+        "Healing Artifact",
+        "Fast Gate",
+        "Rogue Turrets",
+        "Few Asteroids",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match121_01-10-33",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/121/capture_2026-02-22T01-10-33-494Z.png",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "AlixThus",
+        "Stue Grifn",
+        "BricksParts",
+        "Rap1dWarrior"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "WAYWARD",
+          "teamColor": "red",
+          "players": [
+            "GoblinaTTV",
+            "chrismario",
+            "Arbiter of Mercy",
+            "ZicZacCadillac"
+          ]
+        },
+        {
+          "teamName": "OLD LACE",
+          "teamColor": "orange",
+          "players": [
+            "eneva_echo",
+            "Zha_Ha_Dum"
+          ]
+        },
+        {
+          "teamName": "PROBY MCPROBE FACE",
+          "teamColor": "orange",
+          "players": [
+            "PoTayToes2010",
+            "Krackpipe0"
+          ]
+        }
+      ],
+      "modifiers": []
+    },
+    {
+      "sampleId": "match116_20-33-47",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/116/capture_2026-02-20T20-33-47-230Z.png",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "AlixThus",
+        "c0mbat_Barbi3",
+        "Stue Grifn",
+        "BricksParts"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "FALL Y'ALL",
+          "teamColor": "red",
+          "players": [
+            "dinosaur131048",
+            "xXxDackaxXx",
+            "TAKME_9mm",
+            "TheWaldmann995"
+          ]
+        },
+        {
+          "teamName": "CARL TURTLE",
+          "teamColor": "orange",
+          "players": [
+            "20Aira20",
+            "LuiscestMoumou",
+            "LuckyStrike_29"
+          ]
+        }
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "imagePaths": [
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/116/capture_2026-02-20T20-33-47-230Z.png",
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/116/capture_2026-02-20T20-33-34-674Z.png"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match115_20-00-27",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/115/capture_2026-02-20T20-00-27-263Z.png",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "AlixThus",
+        "c0mbat_Barbi3",
+        "Stue Grifn",
+        "BricksParts"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "ELDRITCH LUNAR CORE",
+          "teamColor": "red",
+          "players": [
+            "LordSpawn2k",
+            "GooseCraftKing",
+            "Amir9688",
+            "Soninho_S2"
+          ],
+          "shipType": "Hunter"
+        },
+        {
+          "teamName": "POCO DIABLO",
+          "teamColor": "orange",
+          "players": [
+            "Marquis_DeBlood",
+            "MegaOptimus"
+          ],
+          "shipType": "Outlaw"
+        }
+      ],
+      "modifiers": [
+        "Ice Artifact",
+        "Epic Loot",
+        "Low Altitude Fog",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "imagePaths": [
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/115/capture_2026-02-20T20-00-27-263Z.png",
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/115/capture_2026-02-20T20-00-19-022Z.png"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match114_19-21-48",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/114/capture_2026-02-20T19-21-48-928Z.png",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "AlixThus",
+        "c0mbat_Barbi3",
+        "Stue Grifn",
+        "BricksParts"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "TSUNAMI",
+          "teamColor": "red",
+          "players": [
+            "Alhasha",
+            "pedigree_floe",
+            "Mar4K",
+            "Sir Prigman"
+          ]
+        },
+        {
+          "teamName": "HAND TOSSED",
+          "teamColor": "orange",
+          "players": [
+            "Pir4niA",
+            "OmikronApex"
+          ],
+          "shipType": "Outlaw"
+        }
+      ],
+      "modifiers": [
+        "Healing Artifact",
+        "Ancient Vault",
+        "Rogue Turrets",
+        "Epic Loot",
+        "Lots of Asteroids",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "imagePaths": [
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/114/capture_2026-02-20T19-21-48-928Z.png",
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/114/capture_2026-02-20T19-21-28-479Z.png"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match113_02-35-34",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/113/capture_2026-02-20T02-35-34-106Z.png",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "AlixThus",
+        "c0mbat_Barbi3",
+        "Xiphorix",
+        "fartingPuppy"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "OUR NAME RAN OUT OF",
+          "teamColor": "red",
+          "players": [
+            "FrodoVINN",
+            "Sohailkhan99",
+            "Eizgan",
+            "frncrd"
+          ]
+        },
+        {
+          "teamName": "GAMMA GANG",
+          "teamColor": "cyan",
+          "players": [
+            "Jackdaw",
+            "WargasmAlert",
+            "Tytan",
+            "Ophelia074"
+          ],
+          "needsColorReview": true,
+          "colorReviewReason": "Legacy cyan centroid is ambiguous in HSL space: cyan=18.00, blueGreen=19.95."
+        }
+      ],
+      "modifiers": []
+    },
+    {
+      "sampleId": "match98_03-20-51",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/98/capture_2026-02-17T03-20-51-343Z.png",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "AlixThus",
+        "c0mbat_Barbi3",
+        "fartingPuppy",
+        "H4VOK_XP"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "555 TIMER",
+          "teamColor": "red",
+          "players": [
+            "LordSpawn2k",
+            "Samdhai02",
+            "IAH_11"
+          ],
+          "shipType": "Hunter"
+        },
+        {
+          "teamName": "COSMIC SANS",
+          "teamColor": "orange",
+          "players": [
+            "Fernanver09",
+            "ElmisterBadger",
+            "owes42",
+            "Alvaro_095"
+          ],
+          "shipType": "Hunter"
+        }
+      ],
+      "modifiers": [
+        "Healing Artifact",
+        "Ancient Vault",
+        "Cryon Rift",
+        "Few Ships",
+        "Legion Patrols",
+        "Low Altitude Fog"
+      ],
+      "imagePaths": [
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/98/capture_2026-02-17T03-20-51-343Z.png",
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/98/capture_2026-02-17T03-21-06-685Z.png"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match111_23-15-22",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/111/capture_2026-02-18T23-15-22-838Z.png",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "AlixThus",
+        "Ondra-ocásek",
+        "Rap1dWarrior",
+        "XxBeachbums01Xx"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "SCARING IS CARING",
+          "teamColor": "red",
+          "players": [
+            "Yabami",
+            "Mesemir",
+            "PuyuPu4U",
+            "Danielfnrk"
+          ],
+          "shipType": "Hunter"
+        },
+        {
+          "teamName": "CHECKMATE",
+          "teamColor": "orange",
+          "players": [
+            "go_sox16",
+            "Shplint",
+            "Faded_Hashira",
+            "going-ku"
+          ],
+          "shipType": "Hunter"
+        }
+      ],
+      "modifiers": [
+        "Healing Artifact",
+        "Fast Gate",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Lava Epics",
+        "Low Altitude Fog"
+      ],
+      "imagePaths": [
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/111/capture_2026-02-18T23-15-22-838Z.png",
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/111/capture_2026-02-18T23-15-14-312Z.png"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match109_21-26-16",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/109/capture_2026-02-18T21-26-16-649Z.png",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "AlixThus",
+        "Rine",
+        "RustyMcClean",
+        "BottomTickle"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "NO BOARDERS PLEASE",
+          "teamColor": "red",
+          "players": [
+            "LordSpawn2k",
+            "NigthmareGMC",
+            "Moistcable"
+          ]
+        },
+        {
+          "teamName": "OUR NAME RAN OUT OF",
+          "teamColor": "orange",
+          "players": [
+            "Zha_Ha_Dum",
+            "BruiserBingie",
+            "Amir9688"
+          ]
+        }
+      ],
+      "modifiers": []
+    },
+    {
+      "sampleId": "match112_23-48-20",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/112/capture_2026-02-18T23-48-20-581Z.png",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "AlixThus",
+        "Ondra-ocásek",
+        "Rap1dWarrior",
+        "XxBeachbums01Xx"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "LOW STANDARDS",
+          "teamColor": "red",
+          "shipType": "Hunter",
+          "players": []
+        },
+        {
+          "teamName": "SHIPPYMCSHIPFACE",
+          "teamColor": "goldenrod",
+          "shipType": "Hunter",
+          "players": []
+        }
+      ],
+      "modifiers": [
+        "Healing Artifact",
+        "Haunted Storm",
+        "Ancient Vault",
+        "Lava Epics",
+        "Low Altitude Fog",
+        "Blooming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match106_23-15-17",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/106/capture_2026-02-17T23-15-17-086Z.png",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "AlixThus",
+        "c0mbat_Barbi3",
+        "fartingPuppy",
+        "Rap1dWarrior"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "GAMMA GANG",
+          "teamColor": "red",
+          "players": [
+            "DracheLividus",
+            "Cardboardking24",
+            "PermanentWinner"
+          ]
+        },
+        {
+          "teamName": "ONE MORE ROLL",
+          "teamColor": "orange",
+          "players": [
+            "Montanaeltony562",
+            "PunantiEater",
+            "kwaaxooo"
+          ]
+        }
+      ],
+      "modifiers": []
+    },
+    {
+      "sampleId": "match96_23-28-52",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/96/capture_2026-02-16T23-28-52-236Z.png",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "AlixThus",
+        "c0mbat_Barbi3",
+        "IamthemilkmanTTV",
+        "frncrd"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "HEAVY METAL",
+          "teamColor": "red",
+          "players": [
+            "LOFYagy",
+            "SHTER",
+            "PermanentWinner",
+            "GeRicanDo"
+          ]
+        },
+        {
+          "teamName": "THE HOW",
+          "teamColor": "orange",
+          "players": [
+            "Alcoxofo",
+            "Zvajshtajger",
+            "Gerti_bdns"
+          ]
+        }
+      ],
+      "modifiers": []
+    },
+    {
+      "sampleId": "match93_18-24-45",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/93/capture_2026-02-16T18-24-45-297Z.png",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "AlixThus",
+        "Thought",
+        "PurpleWhiteFo639",
+        "MP2EchoesGrenchler"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "RAIDING RAINBOW",
+          "teamColor": "cyan",
+          "players": [
+            "JayMG6684",
+            "Fabio171198"
+          ],
+          "needsColorReview": true,
+          "colorReviewReason": "Legacy cyan centroid is ambiguous in HSL space: cyan=18.00, blueGreen=19.95."
+        },
+        {
+          "teamName": "BELLPEPPER",
+          "teamColor": "red",
+          "players": [
+            "Seoxys",
+            "VulvyQueen",
+            "Natsu"
+          ]
+        }
+      ],
+      "modifiers": []
+    },
+    {
+      "sampleId": "match89_06-35-35",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/89/capture_2026-02-16T06-35-35-046Z.png",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "AlixThus",
+        "c0mbat_Barbi3",
+        "Tone",
+        "fartingPuppy"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "COUNTERPOINT",
+          "teamColor": "red",
+          "players": [
+            "Melfice",
+            "hg12061",
+            "jdogood"
+          ]
+        },
+        {
+          "teamName": "SEABISCUIT",
+          "teamColor": "cyan",
+          "players": [
+            "bendist10",
+            "i123KILL",
+            "WowOkay",
+            "Cowcrusader"
+          ],
+          "needsColorReview": true,
+          "colorReviewReason": "Legacy cyan centroid is ambiguous in HSL space: cyan=18.00, blueGreen=19.95."
+        }
+      ],
+      "modifiers": []
+    },
+    {
+      "sampleId": "match87_05-01-38",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/87/capture_2026-02-16T05-31-42-029Z.png",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "AlixThus",
+        "c0mbat_Barbi3",
+        "Tone",
+        "fartingPuppy"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "BUNCH OF NODES",
+          "teamColor": "red",
+          "shipType": "Outlaw",
+          "players": [
+            "leet",
+            "Atlinkys"
+          ]
+        },
+        {
+          "teamName": "THE SEA CUCUMBER",
+          "teamColor": "orange",
+          "shipType": "Bastion",
+          "players": [
+            "thunderj19",
+            "steaming343",
+            "xPar-zivalx",
+            "GoGetter321"
+          ]
+        }
+      ],
+      "modifiers": [
+        "Weapon Artifact",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Lava Epics",
+        "Few Asteroids",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "imagePaths": [
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/87/capture_2026-02-16T05-31-42-029Z.png",
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/87/capture_2026-02-16T05-33-47-606Z.png"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match85_04-35-24",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/85/capture_2026-02-16T04-35-24-920Z.png",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "AlixThus",
+        "c0mbat_Barbi3",
+        "Xiphorix",
+        "fartingPuppy"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "LIVE LAUGH STEAL",
+          "teamColor": "red",
+          "players": [
+            "Cadian",
+            "DevilsDisciple33",
+            "CongoDuck",
+            "LuminantVibe"
+          ],
+          "shipType": "Hunter"
+        },
+        {
+          "teamName": "ATTACK-O-LANTERN",
+          "teamColor": "orange",
+          "players": [
+            "Frankmanuel3",
+            "paolo8282",
+            "JdotMdot",
+            "SHTER"
+          ],
+          "shipType": "Hunter"
+        }
+      ],
+      "modifiers": [
+        "Healing Artifact",
+        "Cosmic Storm",
+        "Easy Loot",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "imagePaths": [
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/85/capture_2026-02-16T04-35-24-920Z.png",
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/85/capture_2026-02-16T04-35-08-493Z.png"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match84_03-45-30",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/84/capture_2026-02-16T03-45-30-097Z.png",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "AlixThus",
+        "c0mbat_Barbi3",
+        "Xiphorix"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "POST CARDS",
+          "teamColor": "red",
+          "players": [
+            "Two XOne",
+            "NigthmareGMC",
+            "forgotten soul"
+          ]
+        },
+        {
+          "teamName": "ARTIFACTS PLEASE",
+          "teamColor": "orange",
+          "players": [
+            "DiscoChowder22",
+            "BigDustyLake",
+            "BIG TOWER",
+            "GodLinesGrhess"
+          ]
+        }
+      ],
+      "modifiers": []
+    },
+    {
+      "sampleId": "match79_02-03-19",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/79/capture_2026-02-16T02-03-19-871Z.png",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "AlixThus",
+        "c0mbat_Barbi3",
+        "Xiphorix",
+        "MP2EchoesGrenchler"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "HERO STAINS",
+          "teamColor": "red",
+          "players": [
+            "Crews",
+            "NigthmareGMC",
+            "CongoDuck",
+            "Thinkshooter"
+          ]
+        },
+        {
+          "teamName": "VANGUARD",
+          "teamColor": "orange",
+          "players": [
+            "soloslayer_21",
+            "Justaseal5",
+            "POTTLES22",
+            "immortal-zin85"
+          ]
+        }
+      ],
+      "modifiers": []
+    },
+    {
+      "sampleId": "match78_00-54-06",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/78/capture_2026-02-16T00-54-06-231Z.png",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "AlixThus",
+        "Xiphorix",
+        "Stue Grifn",
+        "BricksParts"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "METRONOME",
+          "teamColor": "red",
+          "shipType": "Hunter",
+          "players": []
+        },
+        {
+          "teamName": "MAXIMUMMOXIE",
+          "teamColor": "orange",
+          "shipType": "Solo Outlaw",
+          "players": []
+        }
+      ],
+      "modifiers": [
+        "Healing Artifact",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Lava Epics",
+        "Lots of Asteroids",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match77_23-05-13",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/77/capture_2026-02-14T23-05-13-162Z.png",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "AlixThus",
+        "fartingPuppy",
+        "Riv",
+        "GoblinaTTV"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "MINT VESSEL",
+          "teamColor": "red",
+          "players": [
+            "LuminantVibe",
+            "Przystojniaku",
+            "fifihaze",
+            "DAWDNR"
+          ]
+        },
+        {
+          "teamName": "S.S. BAD DECISIONS",
+          "teamColor": "orange",
+          "players": [
+            "River.Banks",
+            "Dok my Wok",
+            "alxndr008",
+            "OjuanBird"
+          ]
+        }
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "imagePaths": [
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/77/capture_2026-02-14T23-05-13-162Z.png",
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/77/capture_2026-02-14T23-04-50-618Z.png"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match75_21-57-06",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/75/capture_2026-02-14T21-57-06-036Z.png",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "AlixThus",
+        "GoblinaTTV",
+        "TheFl6",
+        "itamare84"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "OUR NAME RAN OUT OF",
+          "teamColor": "red",
+          "players": [
+            "Amir9688",
+            "NigthmareGMC",
+            "ObliqueState3485",
+            "Moistcable"
+          ],
+          "shipType": "Hunter"
+        },
+        {
+          "teamName": "UNSINKABLE II",
+          "teamColor": "orange",
+          "players": [
+            "Dam-ned1024xd",
+            "mikesauge"
+          ],
+          "shipType": "Hunter"
+        },
+        {
+          "teamName": "COZY MURDER",
+          "teamColor": "goldenrod",
+          "players": [
+            "Chase",
+            "Nathan Fielder"
+          ],
+          "shipType": "Outlaw"
+        }
+      ],
+      "modifiers": [
+        "Ice Artifact",
+        "Fast Gate",
+        "Rogue Turrets",
+        "Legion Patrols",
+        "Lava Epics",
+        "Few Asteroids",
+        "Gloaming Expanse",
+        "Few Ships"
+      ],
+      "imagePaths": [
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/75/capture_2026-02-14T21-57-06-036Z.png",
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/75/capture_2026-02-14T21-57-21-155Z.png"
+      ],
+      "yourShipType": "Bastion"
+    },
+    {
+      "sampleId": "match72_06-15-30",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/72/capture_2026-02-13T06-15-30-061Z.png",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "AlixThus",
+        "Tone",
+        "Xiphorix",
+        "Germ Dawg Mill"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "GLASS CANNON",
+          "teamColor": "red",
+          "players": [
+            "forgotten soul",
+            "chrismario",
+            "Oguri_Cap",
+            "Two t0ne"
+          ]
+        },
+        {
+          "teamName": "WITCHFUL THINKING",
+          "teamColor": "orange",
+          "players": [
+            "7VERTIGO",
+            "Icydeadpeople7",
+            "Sologray",
+            "MeMatiane22"
+          ]
+        }
+      ],
+      "modifiers": []
+    },
+    {
+      "sampleId": "match74_21-27-17",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/74/capture_2026-02-14T21-27-17-836Z.png",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "AlixThus",
+        "GoblinaTTV",
+        "TheFl6",
+        "itamare84"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "DANCE CRAB",
+          "teamColor": "red",
+          "shipType": "Scout",
+          "players": []
+        },
+        {
+          "teamName": "AFTERLIFE ASTRONAUTS",
+          "teamColor": "orange",
+          "shipType": "Hunter",
+          "players": []
+        }
+      ],
+      "modifiers": [
+        "Weapon Artifact",
+        "Ancient Vault",
+        "Lava Epics",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "yourShipType": "Bastion"
+    },
+    {
+      "sampleId": "match110_21-58-53",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/110/capture_2026-02-18T21-58-53-761Z.png",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "AlixThus",
+        "Rive",
+        "RustyMcClean",
+        "LuminantVibe"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "CRIMSON GUARD",
+          "teamColor": "red",
+          "players": [
+            "Zha_Ha_Dum",
+            "BruiserBingie",
+            "Genoharadan1135",
+            "eneva_echo"
+          ]
+        },
+        {
+          "teamName": "BATTERY",
+          "teamColor": "orange",
+          "players": [
+            "Ondra-ocásek",
+            "XxBeachbums01Xx",
+            "JrMJr"
+          ]
+        }
+      ],
+      "modifiers": []
+    },
+    {
+      "sampleId": "match91_17-32-01",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/91/capture_2026-02-16T17-32-01-423Z.png",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "AlixThus",
+        "IamthemilkmanTTV",
+        "Thought",
+        "PurpleWhiteFo639"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "DIGGYDIGGY BAMBAM",
+          "teamColor": "red",
+          "players": [
+            "Root Gorce",
+            "NigthmareGMC",
+            "Myst0gun1"
+          ]
+        },
+        {
+          "teamName": "ROUGH N' TUMBLE",
+          "teamColor": "orange",
+          "players": [
+            "BRT Easy",
+            "GooseCraftKing",
+            "JayMG6684",
+            "MP2EchoesGrenchler"
+          ]
+        }
+      ],
+      "modifiers": [
+        "Dead Sensors",
+        "Artifact",
+        "Special Loot",
+        "Wildgate",
+        "Resources"
+      ],
+      "imagePaths": [
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/91/capture_2026-02-16T17-32-01-423Z.png",
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/91/capture_2026-02-16T17-31-45-812Z.png"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match94_22-28-57",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/94/capture_2026-02-16T22-28-57-464Z.png",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "AlixThus",
+        "c0mbat_Barbi3",
+        "IamthemilkmanTTV",
+        "BricksParts"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "DANCECRAB",
+          "teamColor": "red",
+          "shipType": "Outlaw",
+          "players": []
+        },
+        {
+          "teamName": "LIZARDLIZARDLIZARD",
+          "teamColor": "orange",
+          "shipType": "Hunter",
+          "players": []
+        }
+      ],
+      "modifiers": [
+        "Healing Artifact",
+        "Fast Gate",
+        "Haunted Storm",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Lots of Asteroids",
+        "Gloaming Expanse",
+        "Legion Patrols"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match95_22-50-36",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/95/capture_2026-02-16T22-50-36-464Z.png",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "AlixThus",
+        "c0mbat_Barbi3",
+        "IamthemilkmanTTV",
+        "BricksParts"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "CRIMSON GUARD",
+          "teamColor": "red",
+          "players": [
+            "Genoharadan1135",
+            "BruiserBingie",
+            "Zha_Ha_Dum",
+            "eneva_echo"
+          ],
+          "shipType": "Privateer"
+        },
+        {
+          "teamName": "POCO DIABLO",
+          "teamColor": "orange",
+          "players": [
+            "Gerti_bdns",
+            "NonnaFranca32",
+            "Zvajshtajger",
+            "MeMatiane22"
+          ],
+          "shipType": "Bastion"
+        }
+      ],
+      "modifiers": [
+        "Ice Artifact",
+        "Sand Storm",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Lava Epics",
+        "Few Asteroids",
+        "Dead Worlds",
+        "Legion Patrols"
+      ],
+      "imagePaths": [
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/95/capture_2026-02-16T22-50-36-464Z.png",
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/95/capture_2026-02-16T22-50-26-720Z.png"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match97_23-50-19",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/97/capture_2026-02-16T23-50-19-439Z.png",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "AlixThus",
+        "c0mbat_Barbi3",
+        "IamthemilkmanTTV",
+        "frncrd"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "AGENTS OF CHAOS",
+          "teamColor": "red",
+          "players": [
+            "Genoharadan1135",
+            "Zha_Ha_Dum",
+            "eneva_echo"
+          ]
+        },
+        {
+          "teamName": "BUTTEROLOGY",
+          "teamColor": "orange",
+          "players": [
+            "PermanentWinner",
+            "Alcaxofo",
+            "Destrga"
+          ]
+        }
+      ],
+      "modifiers": []
+    },
+    {
+      "sampleId": "match99_03-46-28",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/99/capture_2026-02-17T03-46-28-378Z.png",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "AlixThus",
+        "c0mbat_Barbi3",
+        "fartingPuppy",
+        "H4VOK_XP"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "COZY MURDER",
+          "teamColor": "red",
+          "players": [
+            "gaowang134",
+            "luiso 2.4",
+            "justINCREDIBLE61",
+            "Raziel"
+          ]
+        },
+        {
+          "teamName": "COSMIC SANS",
+          "teamColor": "orange",
+          "players": [
+            "ElmisterBadger",
+            "Fernanver09",
+            "Alvaro_095",
+            "owes42"
+          ]
+        }
+      ],
+      "modifiers": []
+    },
+    {
+      "sampleId": "match100_04-09-18",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/100/capture_2026-02-17T04-09-18-711Z.png",
+      "screenshotType": "tactical_map",
+      "teammates": [
+        "AlixThus",
+        "c0mbat_Barbi3",
+        "fartingPuppy",
+        "H4VOK_XP"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "BLUES",
+          "teamColor": "red",
+          "players": [
+            "likely_asleep",
+            "justINCREDIBLE61",
+            "nullified(gmn.gg)",
+            "TheJayMahn"
+          ]
+        },
+        {
+          "teamName": "COSMIC SANS",
+          "teamColor": "orange",
+          "players": [
+            "Alvaro_095",
+            "Fernanver09",
+            "owes42",
+            "ElmisterBadger"
+          ],
+          "shipType": "Hunter"
+        }
+      ],
+      "modifiers": [
+        "Weapon Artifact",
+        "Cosmic Storm",
+        "Ancient Vault",
+        "Low Altitude Fog",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "imagePaths": [
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/100/capture_2026-02-17T04-09-18-711Z.png",
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/100/capture_2026-02-17T04-10-22-028Z.png"
+      ],
+      "yourShipType": "Hunter"
+    },
+    {
+      "sampleId": "match105_22-20-46",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/105/capture_2026-02-17T22-20-46-009Z.png",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "AlixThus",
+        "c0mbat_Barbi3",
+        "fartingPuppy",
+        "XxBeachbums01Xx"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "ZIRCONIA",
+          "teamColor": "red",
+          "players": [
+            "Dr. Wheeler",
+            "Warwas12",
+            "Shplint"
+          ]
+        },
+        {
+          "teamName": "GHOULS GALORE",
+          "teamColor": "orange",
+          "players": [
+            "Montanaeltony562",
+            "kwaaxooo"
+          ]
+        }
+      ],
+      "modifiers": []
+    },
+    {
+      "sampleId": "match119_23-03-22",
+      "imagePath": "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/119/capture_2026-02-20T23-03-22-013Z.png",
+      "screenshotType": "crew_hub",
+      "teammates": [
+        "AlixThus",
+        "JrMJr",
+        "Riv2",
+        "H4VOK_XP"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "BOREALIS",
+          "teamColor": "red",
+          "shipType": "Solo Outlaw",
+          "players": [
+            "fartingPuppy",
+            "Ledurricane",
+            "lirolake"
+          ]
+        },
+        {
+          "teamName": "FANCY GOOSE",
+          "teamColor": "orange",
+          "shipType": "Privateer",
+          "players": [
+            "Rive",
+            "Riv",
+            "Eudico",
+            "itamare84"
+          ]
+        },
+        {
+          "teamName": "VANGUARD",
+          "teamColor": "goldenrod",
+          "shipType": "Hunter",
+          "players": [
+            "[6*]Tiblolan",
+            "GoblinaTTV",
+            "Caziban",
+            "G4zZy"
+          ]
+        },
+        {
+          "teamName": "ESCAPE VELOCITY",
+          "teamColor": "yellowGreen",
+          "shipType": "Solo Outlaw",
+          "players": [
+            "Ondra-ocásek",
+            "Braiker",
+            "Capman",
+            "wootywoot"
+          ]
+        }
+      ],
+      "modifiers": [
+        "Weapon Artifact",
+        "Rogue Turrets",
+        "Epic Loot",
+        "Few Asteroids",
+        "Dead Worlds",
+        "Legion Patrols"
+      ],
+      "imagePaths": [
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/119/capture_2026-02-20T23-03-12-537Z.png",
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/119/capture_2026-02-20T23-03-22-013Z.png",
+        "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/119/capture_2026-02-20T23-03-29-646Z.png"
+      ],
+      "yourShipType": "Privateer"
+    }
+  ]
+}
