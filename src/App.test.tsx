@@ -1180,7 +1180,7 @@ describe('App', () => {
     }
   });
 
-  it('upgrades a pending flash detection to tripwire text before the delayed burst starts', async () => {
+  it('ignores text tripwire once flash detection has already won for the match', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
     uiState.telemetryLifecycleStage = 'live';
@@ -1204,13 +1204,7 @@ describe('App', () => {
     };
     gameDataState.matches = [draft];
     appStoreState.matches = [draft];
-    autoFinalizeResultScreenCaptureMock.mockImplementation(({ resultData }: any) => (
-      Promise.resolve(
-        resultData?.detectionMethod === 'text'
-          ? { success: true }
-          : { success: false, reason: 'unconfirmed' }
-      )
-    ));
+    autoFinalizeResultScreenCaptureMock.mockResolvedValue({ success: true });
 
     const api = {
       invoke: vi.fn((channel: string, payload?: any) => {
@@ -1223,13 +1217,11 @@ describe('App', () => {
             data: { filePath: 'C:\\match_artifacts\\4545\\capture_result.png' },
           });
         }
+        if (channel === 'capture-result-screen-region') {
+          return Promise.resolve({ success: false, imageBase64: null });
+        }
         if (channel === 'scan-result-screen') {
-          if (payload?.detectionMethod === 'text') {
-            return Promise.resolve({
-              data: { result: 'Loss', winType: 'combat', placement: 4, detectionMethod: 'text' },
-            });
-          }
-          return Promise.resolve({ data: { result: null, detectionMethod: 'flash' } });
+          return Promise.resolve({ data: { result: 'Loss', winType: 'combat', placement: 4, detectionMethod: 'flash' } });
         }
         if (channel === 'telemetry-retention-status') {
           return Promise.resolve(null);
@@ -1279,16 +1271,16 @@ describe('App', () => {
     });
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(300);
+      await vi.advanceTimersByTimeAsync(2500);
     });
     await flashPromise;
 
     const resultScanCalls = api.invoke.mock.calls.filter(([channel]) => channel === 'scan-result-screen');
     expect(resultScanCalls.length).toBeGreaterThan(0);
-    expect(resultScanCalls.every(([, payload]) => payload?.detectionMethod === 'text')).toBe(true);
+    expect(resultScanCalls.every(([, payload]) => payload?.detectionMethod === 'flash')).toBe(true);
     expect(autoFinalizeResultScreenCaptureMock).toHaveBeenCalledWith(expect.objectContaining({
       imageBase64: 'image-base64',
-      resultData: expect.objectContaining({ result: 'Loss', detectionMethod: 'text' }),
+      resultData: expect.objectContaining({ result: 'Loss', detectionMethod: 'flash' }),
       matchId: 4545,
       persistedPrimaryArtifactPath: 'C:\\match_artifacts\\4545\\capture_result.png',
     }));
@@ -1386,30 +1378,28 @@ describe('App', () => {
 
     expect(api.invoke).not.toHaveBeenCalledWith('capture-screen');
 
-    // Advance past the 250ms OCR delay so the initial result screenshot and scan can run.
+    // Advance past the 250ms OCR delay so the initial result screenshot can run.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(250);
+      await Promise.resolve();
+      await Promise.resolve();
     });
 
     expect(api.invoke).toHaveBeenCalledWith('capture-screen');
+
+    // After the initial capture, wait through the 2000ms settle before toggling to tab 2.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2500);
+      await Promise.resolve();
+      await Promise.resolve();
+      await triggerPromise;
+    });
+
     expect(api.invoke).toHaveBeenCalledWith('scan-result-screen', {
       imageBase64: 'image-base64',
       detectionMethod: 'text',
     });
-
-    // After the initial capture, wait through the 2000ms settle before toggling to tab 2.
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(2000);
-    });
-
-    // After settle + tab1 capture + tab1 scan, show-damage-sources should be called
     expect(sendGameUiActionMock).toHaveBeenCalledWith('show-damage-sources');
-
-    // Advance through the repeated ] taps (150ms + 150ms) and the final 100ms tab transition.
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(400);
-      await triggerPromise;
-    });
 
     // Tab 1 and tab 2 are both fresh captures (no imageBase64 in payload)
     expect(api.invoke).toHaveBeenCalledWith('capture-result-screen-region', expect.objectContaining({

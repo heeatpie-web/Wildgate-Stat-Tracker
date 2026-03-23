@@ -18,10 +18,10 @@ const FLASH_COOLDOWN_MS = 15_000;
 const MIN_PRE_ARM_FLASHES_TO_SKIP = 1;
 // Known pure-white duration of the result flash. Used to schedule the capture
 // precisely at flash-end rather than mid-flash.
-const KNOWN_FLASH_PURE_WHITE_MS = 541;
+const KNOWN_FLASH_PURE_WHITE_MS = 200;
 // Minimum / maximum plausible flash durations for validation.
-// A "flash" that resolves in under 200ms or runs longer than 900ms is not the result flash.
-const FLASH_MIN_VALID_DURATION_MS = 200;
+// A "flash" that resolves in under 100ms or runs longer than 900ms is not the result flash.
+const FLASH_MIN_VALID_DURATION_MS = 100;
 const FLASH_MAX_VALID_DURATION_MS = 900;
 
 let _timer = null;
@@ -193,7 +193,7 @@ async function pollOnce() {
           state.flashNotified = true;
           state.cooldownUntil = state.lastUpdatedAt + FLASH_COOLDOWN_MS;
           // Pass brightSinceMs so the renderer can calculate how much of the
-          // 541ms flash has already elapsed and schedule capture at flash-end.
+          // 200ms flash has already elapsed and schedule capture at flash-end.
           state.onDetected?.({ brightSinceMs: state.brightSinceMs });
         }
         emitDebug('waiting-flash-end');

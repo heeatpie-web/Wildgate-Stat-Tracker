@@ -24,13 +24,13 @@ const FLASH_BRIGHT_HOLD_MS = 100;
 const FLASH_WHITE_THRESHOLD = Math.ceil(255 * 0.9); // 230
 const FLASH_COOLDOWN_MS = 15_000;
 const MIN_PRE_ARM_FLASHES_TO_SKIP = 1;
-const KNOWN_FLASH_PURE_WHITE_MS = 541;
-const FLASH_MIN_VALID_DURATION_MS = 200;
+const KNOWN_FLASH_PURE_WHITE_MS = 200;
+const FLASH_MIN_VALID_DURATION_MS = 100;
 const FLASH_MAX_VALID_DURATION_MS = 900;
 
 // ── Text tripwire constants ────────────────────────────────────────────────
 const TRIPWIRE_BASELINE_ALPHA = 0.18;
-const TRIPWIRE_MIN_CONSECUTIVE_HITS = 2;
+const TRIPWIRE_MIN_CONSECUTIVE_HITS = Math.max(1, Math.ceil(KNOWN_FLASH_PURE_WHITE_MS / SAMPLE_INTERVAL_MS));
 const TRIPWIRE_MIN_ACTIVE_BOXES = 1;
 const TRIPWIRE_MIN_BOX_WHITE_RATIO = 0.09;
 const TRIPWIRE_MIN_BOX_WHITE_DELTA = 0.045;
@@ -86,6 +86,7 @@ function emitFlashDebug(status, overrides = {}) {
 
 function processFlashRaw(raw, now) {
   const flash = _flash;
+  if (flash?.disabledForMatch) return;
   if (!flash) return;
 
   const pixelCount = flash.absoluteRegion.width * flash.absoluteRegion.height;
@@ -171,6 +172,10 @@ function processFlashRaw(raw, now) {
       if (now >= flash.armAt && !flash.flashNotified) {
         flash.flashNotified = true;
         flash.cooldownUntil = now + FLASH_COOLDOWN_MS;
+        if (_text) {
+          _text.disabledForMatch = true;
+          _text.lastUpdatedAt = now;
+        }
         flash.onDetected?.({ brightSinceMs: flash.brightSinceMs });
       }
       emitFlashDebug('waiting-flash-end');
@@ -284,7 +289,7 @@ function emitTextDebug(status, overrides = {}) {
 
 function processTextRaw(raw, imageWidth, imageHeight, now) {
   const text = _text;
-  if (!text || text.detected) return;
+  if (!text || text.detected || text.disabledForMatch) return;
 
   try {
     const boxMetrics = analyzeTextBoxes(raw, imageWidth, imageHeight);
@@ -315,6 +320,13 @@ function processTextRaw(raw, imageWidth, imageHeight, now) {
       text.tripwireConsecutiveHits += 1;
       if (text.tripwireConsecutiveHits >= TRIPWIRE_MIN_CONSECUTIVE_HITS) {
         text.detected = true;
+        if (_flash) {
+          _flash.disabledForMatch = true;
+          _flash.brightSinceMs = null;
+          _flash.waitingForFlashEnd = false;
+          _flash.flashNotified = false;
+          _flash.lastUpdatedAt = now;
+        }
         const activeBoxes = tripwire.boxes.filter((b) => b.active);
         text.lastSignal = {
           detectionMethod: 'text',
@@ -355,11 +367,12 @@ async function pollOnce() {
   const now = Date.now();
 
   const flashInCooldown = _flash
+    && !_flash.disabledForMatch
     && !_flash.waitingForFlashEnd
     && now >= _flash.armAt
     && now < _flash.cooldownUntil;
-  const flashNeedsSample = Boolean(_flash) && !flashInCooldown;
-  const textNeedsSample = Boolean(_text) && !_text.detected;
+  const flashNeedsSample = Boolean(_flash) && !_flash.disabledForMatch && !flashInCooldown;
+  const textNeedsSample = Boolean(_text) && !_text.detected && !_text.disabledForMatch;
 
   if (!flashNeedsSample && !textNeedsSample) {
     if (_flash) {
@@ -477,6 +490,7 @@ function startResultMonitor({
       brightSinceMs: null,
       waitingForFlashEnd: false,
       flashNotified: false,
+      disabledForMatch: false,
       preArmFlashCount: 0,
       cooldownUntil: 0,
       lastSampleResult: null,
@@ -495,6 +509,7 @@ function startResultMonitor({
       absoluteRegion: textAbsoluteRegion,
       captureRegion: textCaptureRegion,
       detected: false,
+      disabledForMatch: false,
       baselineWhiteRatios: null,
       tripwireConsecutiveHits: 0,
       lastTripwire: null,

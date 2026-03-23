@@ -30,7 +30,7 @@ export const RESULT_TEXT_SAMPLE_REGION = {
 } as const;
 
 export const DEFAULT_RESULT_MONITOR_ARM_DELAY_MS = 45_000;
-export const KNOWN_FLASH_PURE_WHITE_MS = 541;
+export const KNOWN_FLASH_PURE_WHITE_MS = 200;
 
 const SEND_START = 'result-monitor-start';
 const SEND_STOP = 'result-monitor-stop';
@@ -121,8 +121,10 @@ export interface ResultTextDetectionPayload {
 
 export interface ResultMonitorOptions {
     enabled: boolean;
+    flashEnabled?: boolean;
     liveStartedAt: number | null;
     armDelayMs?: number;
+    textEnabled?: boolean;
     triggerLatched?: boolean;
     onFlashDetected?: (payload: ResultFlashDetectedPayload) => void | Promise<void>;
     onFlashResolved: () => void | Promise<void>;
@@ -257,8 +259,10 @@ const createEmptyFlashDebugState = (): RuntimeFlashDebugState => ({
 
 export function useResultMonitor({
     enabled,
+    flashEnabled = true,
     liveStartedAt,
     armDelayMs = DEFAULT_RESULT_MONITOR_ARM_DELAY_MS,
+    textEnabled = true,
     triggerLatched = false,
     onFlashDetected,
     onFlashResolved,
@@ -355,6 +359,13 @@ export function useResultMonitor({
             return;
         }
 
+        if (!flashEnabled && !textEnabled) {
+            api.send(SEND_STOP);
+            flashRuntimeDebugRef.current = createEmptyFlashDebugState();
+            emitFlashDebugState('disabled');
+            return;
+        }
+
         const normalizedLiveStartedAt = Number.isFinite(Number(liveStartedAt)) && Number(liveStartedAt) > 0
             ? Number(liveStartedAt)
             : null;
@@ -367,18 +378,18 @@ export function useResultMonitor({
 
         const armAt = normalizedLiveStartedAt + normalizedArmDelayMs;
 
-        const unsubFlashDetected = api.on(RECEIVE_FLASH_DETECTED, (payload: unknown) => {
+        const unsubFlashDetected = flashEnabled ? api.on(RECEIVE_FLASH_DETECTED, (payload: unknown) => {
             const brightSinceMs = typeof (payload as Record<string, unknown>)?.brightSinceMs === 'number'
                 ? (payload as Record<string, unknown>).brightSinceMs as number
                 : Date.now();
             void onFlashDetectedRef.current?.({ brightSinceMs });
-        });
+        }) : null;
 
-        const unsubFlashResolved = api.on(RECEIVE_FLASH_RESOLVED, () => {
+        const unsubFlashResolved = flashEnabled ? api.on(RECEIVE_FLASH_RESOLVED, () => {
             void onFlashResolvedRef.current?.();
-        });
+        }) : null;
 
-        const unsubFlashDebug = api.on(RECEIVE_FLASH_DEBUG, (snapshot: MainFlashDebugSnapshot) => {
+        const unsubFlashDebug = flashEnabled ? api.on(RECEIVE_FLASH_DEBUG, (snapshot: MainFlashDebugSnapshot) => {
             const lastSampleResult = snapshot.lastSampleResult == null
                 ? null
                 : normalizePixelMonitorSampleResult(snapshot.lastSampleResult);
@@ -399,22 +410,22 @@ export function useResultMonitor({
                 lastIsWhiteFrame: snapshot.lastIsWhiteFrame == null ? null : snapshot.lastIsWhiteFrame === true,
                 lastUpdatedAt,
             });
-        });
+        }) : null;
 
-        const unsubTextDetected = api.on(RECEIVE_TEXT_DETECTED, (payload: unknown) => {
+        const unsubTextDetected = textEnabled ? api.on(RECEIVE_TEXT_DETECTED, (payload: unknown) => {
             void onTextDetectedRef.current?.(normalizeTextPayload(payload));
-        });
+        }) : null;
 
         // text debug events are only consumed if a consumer is attached (dev mode)
-        const unsubTextDebug = api.on(RECEIVE_TEXT_DEBUG, () => {
+        const unsubTextDebug = textEnabled ? api.on(RECEIVE_TEXT_DEBUG, () => {
             // Text debug state is not currently surfaced in the UI — hook exists
             // so the IPC channel is properly unsubscribed on cleanup.
-        });
+        }) : null;
 
         api.send(SEND_START, {
             armAt,
-            flashRegion: FLASH_SAMPLE_REGION,
-            textRegion: RESULT_TEXT_SAMPLE_REGION,
+            flashRegion: flashEnabled ? FLASH_SAMPLE_REGION : null,
+            textRegion: textEnabled ? RESULT_TEXT_SAMPLE_REGION : null,
         });
 
         emitFlashDebugState(Date.now() < armAt ? 'arming-delay' : 'sampling');
@@ -428,5 +439,5 @@ export function useResultMonitor({
             unsubTextDebug?.();
             flashRuntimeDebugRef.current = createEmptyFlashDebugState();
         };
-    }, [enabled, liveStartedAt, normalizedArmDelayMs, triggerLatched]);
+    }, [enabled, flashEnabled, liveStartedAt, normalizedArmDelayMs, textEnabled, triggerLatched]);
 }

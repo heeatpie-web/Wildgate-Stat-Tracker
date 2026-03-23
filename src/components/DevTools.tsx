@@ -393,7 +393,7 @@ export const DevTools: React.FC<DevToolsProps> = ({
                                 </div>
                                 {resultFlashDebug?.brightSinceMs != null && resultFlashDebug?.lastUpdatedAt != null ? (() => {
                                     const elapsed = Math.max(0, resultFlashDebug.lastUpdatedAt - resultFlashDebug.brightSinceMs);
-                                    const KNOWN_FLASH_MS = 541;
+                                    const KNOWN_FLASH_MS = 200;
                                     const CAPTURE_BUFFER_MS = 50;
                                     const remaining = Math.max(0, KNOWN_FLASH_MS - elapsed);
                                     const captureIn = remaining + CAPTURE_BUFFER_MS;
