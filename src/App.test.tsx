@@ -232,6 +232,23 @@ vi.mock('./utils/electronBridge', () => ({
   sendGameUiAction: (...args: unknown[]) => sendGameUiActionMock(...args),
 }));
 
+vi.mock('./hooks/useResultMonitor', () => ({
+  useResultMonitor: (options: Record<string, unknown>) => {
+    useResultFlashMonitorMock({
+      ...options,
+      onFlashDetected: (payload?: { brightSinceMs?: number }) => (
+        options?.onFlashDetected as ((payload: { brightSinceMs: number }) => void | Promise<void>) | undefined
+      )?.({
+        brightSinceMs: typeof payload?.brightSinceMs === 'number' ? payload.brightSinceMs : Date.now(),
+      }),
+    });
+    useResultTextMonitorMock({
+      ...options,
+      onResultDetected: options?.onTextDetected,
+    });
+  },
+}));
+
 vi.mock('./hooks/useResultFlashMonitor', () => ({
   useResultFlashMonitor: (...args: unknown[]) => useResultFlashMonitorMock(...args),
 }));
@@ -573,7 +590,7 @@ describe('App', () => {
     vi.useRealTimers();
   });
 
-  it('keeps running automatic result OCR in the background after telemetry draft ready', async () => {
+  it('waits for a real result signal after telemetry draft ready instead of capturing immediately', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
     uiState.telemetryLifecycleStage = 'result';
@@ -596,22 +613,8 @@ describe('App', () => {
     };
     gameDataState.matches = [draft];
     appStoreState.matches = [draft];
-    autoFinalizeResultScreenCaptureMock.mockResolvedValue({ success: false, reason: 'unconfirmed' });
-
     const api = {
       invoke: vi.fn((channel: string, payload?: unknown) => {
-        if (channel === 'capture-screen') {
-          return Promise.resolve('image-base64');
-        }
-        if (channel === 'save-screenshot') {
-          return Promise.resolve({
-            success: true,
-            data: { filePath: 'C:\\match_artifacts\\321\\capture_result.png' },
-          });
-        }
-        if (channel === 'scan-result-screen') {
-          return Promise.resolve({ data: { result: null } });
-        }
         if (channel === 'telemetry-retention-status') {
           return Promise.resolve(null);
         }
@@ -628,13 +631,11 @@ describe('App', () => {
 
     await act(async () => {
       window.dispatchEvent(new CustomEvent('telemetry:draft-ready', {
-        detail: { matchId: 321, duration: '12:34' },
+        detail: { matchId: 321, duration: '12:34', readyTrigger: 'session-end' },
       }));
       await Promise.resolve();
       await Promise.resolve();
     });
-
-    expect(api.invoke).toHaveBeenCalledWith('capture-screen');
 
     await act(async () => {
       vi.advanceTimersByTime(4_000);
@@ -643,7 +644,7 @@ describe('App', () => {
     });
 
     const captureCallsBeforeResolve = api.invoke.mock.calls.filter(([channel]) => channel === 'capture-screen').length;
-    expect(captureCallsBeforeResolve).toBeGreaterThanOrEqual(2);
+    expect(captureCallsBeforeResolve).toBe(0);
 
     await act(async () => {
       window.dispatchEvent(new CustomEvent('telemetry-draft:resolved', {
@@ -660,7 +661,7 @@ describe('App', () => {
     });
 
     const captureCallsShortlyAfterResolve = api.invoke.mock.calls.filter(([channel]) => channel === 'capture-screen').length;
-    expect(captureCallsShortlyAfterResolve).toBeLessThanOrEqual(captureCallsBeforeResolve + 1);
+    expect(captureCallsShortlyAfterResolve).toBe(0);
 
     await act(async () => {
       vi.advanceTimersByTime(4_000);
@@ -669,7 +670,66 @@ describe('App', () => {
     });
 
     const captureCallsAfterResolve = api.invoke.mock.calls.filter(([channel]) => channel === 'capture-screen').length;
-    expect(captureCallsAfterResolve).toBe(captureCallsShortlyAfterResolve);
+    expect(captureCallsAfterResolve).toBe(0);
+    vi.useRealTimers();
+  });
+
+  it('skips background result OCR when telemetry draft ready came from a frontend return', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
+    uiState.telemetryLifecycleStage = 'result';
+    const draft = {
+      id: 654,
+      timestamp: Date.now(),
+      date: '3/22/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'ready',
+      artifacts: [],
+    };
+    gameDataState.matches = [draft];
+    appStoreState.matches = [draft];
+
+    const api = {
+      invoke: vi.fn(() => Promise.resolve(null)),
+      send: vi.fn(),
+      on: vi.fn(() => vi.fn()),
+      removeAllListeners: vi.fn(),
+    };
+    getElectronAPIMock.mockReturnValue(api);
+
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('telemetry:draft-ready', {
+        detail: { matchId: 654, duration: '12:34', readyTrigger: 'frontend' },
+      }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(8_000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'capture-screen')).toHaveLength(0);
+    expect(uiState.setTelemetryAutomationStatus).toHaveBeenCalledWith(expect.objectContaining({
+      phase: 'manual-result-needed',
+      message: 'Returned to menu before a result screen was confirmed',
+      matchId: 654,
+      level: 'warning',
+    }));
     vi.useRealTimers();
   });
 

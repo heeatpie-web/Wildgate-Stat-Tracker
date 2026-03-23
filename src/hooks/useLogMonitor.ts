@@ -381,6 +381,8 @@ const TELEMETRY_LIFECYCLE_STAGE_RANK: Record<TelemetryLifecycleStage, number> = 
     result: 4,
 };
 
+type TelemetryDraftReadyTrigger = 'frontend' | 'session-end' | 'unknown';
+
 const classifyTelemetryLifecycleStageFromMap = (
     mapName: unknown,
     matchState?: unknown,
@@ -910,7 +912,11 @@ export const useLogMonitor = (activeUser?: string) => {
         });
     }, [updateMatch, updatePendingTelemetryConsistency]);
 
-    const finalizeTelemetryDraft = useCallback((gameTime: number, durationOverrideSeconds?: number | null) => {
+    const finalizeTelemetryDraft = useCallback((
+        gameTime: number,
+        durationOverrideSeconds?: number | null,
+        readyTrigger: TelemetryDraftReadyTrigger = 'unknown',
+    ) => {
         console.trace('Telemetry draft finalization trace');
         const draftId = telemetryDraftMatchIdRef.current;
         if (!draftId) {
@@ -947,9 +953,12 @@ export const useLogMonitor = (activeUser?: string) => {
                 telemetryConsistency: nextConsistency,
             });
             window.dispatchEvent(new CustomEvent('telemetry:draft-ready', {
-                detail: { matchId: draftId, duration: durationSummary.duration },
+                detail: { matchId: draftId, duration: durationSummary.duration, readyTrigger },
             }));
-            Logger.info('LogMonitor', `Telemetry draft finalized (matchId=${draftId}, duration=${durationSummary.duration})`);
+            Logger.info(
+                'LogMonitor',
+                `Telemetry draft finalized (matchId=${draftId}, duration=${durationSummary.duration}, trigger=${readyTrigger})`,
+            );
         }
         telemetryDraftMatchIdRef.current = null;
         telemetryDraftMatchModeRef.current = 'custom';
@@ -976,7 +985,7 @@ export const useLogMonitor = (activeUser?: string) => {
         nextStage: Exclude<TelemetryLifecycleStage, 'idle'>,
         gameTime: number,
         durationOverrideSeconds?: number | null,
-        options?: { isPracticeRange?: boolean },
+        options?: { isPracticeRange?: boolean; readyTrigger?: TelemetryDraftReadyTrigger },
     ) => {
         const currentStage = telemetryLifecycleStageRef.current;
         const nextPracticeRange = nextStage === 'live' && options?.isPracticeRange === true;
@@ -1034,7 +1043,11 @@ export const useLogMonitor = (activeUser?: string) => {
         if (!telemetryDraftMatchIdRef.current) {
             createTelemetryDraftIfNeeded(gameTime, currentLoadoutRef.current || null);
         }
-        const finalized = finalizeTelemetryDraft(gameTime, durationOverrideSeconds);
+        const finalized = finalizeTelemetryDraft(
+            gameTime,
+            durationOverrideSeconds,
+            options?.readyTrigger ?? 'unknown',
+        );
         applyTelemetryTimerValue(finalized.duration);
         setIsMatchInProgress(false);
         setMatchStartTime(null);
@@ -1472,8 +1485,12 @@ export const useLogMonitor = (activeUser?: string) => {
                         Logger.info('LogMonitor', `Treating practice-range telemetry as live lifecycle stage: ${loadingMapName || String(matchPoolValue || '')}`);
                     }
                     if (nextLifecycleStage) {
+                        const readyTrigger: TelemetryDraftReadyTrigger = mapEndSignal
+                            ? 'frontend'
+                            : (sessionEndSignal ? 'session-end' : 'unknown');
                         transitionTelemetryLifecycleStage(nextLifecycleStage, gameTime, payloadDurationSeconds, {
                             isPracticeRange: practiceRangeSignal && nextLifecycleStage === 'live',
+                            readyTrigger: nextLifecycleStage === 'result' ? readyTrigger : 'unknown',
                         });
                     }
 

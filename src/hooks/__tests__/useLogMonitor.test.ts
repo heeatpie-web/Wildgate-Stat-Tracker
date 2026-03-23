@@ -1243,10 +1243,14 @@ describe('useLogMonitor', () => {
     const finalizedDraft = updateMatch.mock.calls
       .map(([match]) => match as { id?: number; telemetryDraftState?: string; matchMode?: string })
       .find((match) => match.id === createdDraft?.id && match.telemetryDraftState === 'ready');
+    const readyEvent = dispatchSpy.mock.calls
+      .map(([event]) => event as CustomEvent<{ readyTrigger?: string }> | undefined)
+      .find((event) => event?.type === 'telemetry:draft-ready');
 
     expect(finalizedDraft).toBeTruthy();
     expect(finalizedDraft?.matchMode).toBe('practice range');
     expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-ready' }));
+    expect(readyEvent?.detail?.readyTrigger).toBe('frontend');
     dispatchSpy.mockRestore();
   });
 

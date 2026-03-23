@@ -522,7 +522,6 @@ const App: React.FC = () => {
     const handledTelemetryDraftPostmatchPromptIdsRef = React.useRef<Set<number>>(new Set());
     const telemetryDraftFallbackTimersRef = React.useRef<Map<number, number>>(new Map());
     const telemetryBackgroundResultOcrTimersRef = React.useRef<Map<number, number>>(new Map());
-    const telemetryBackgroundResultOcrAttemptsRef = React.useRef<Map<number, number>>(new Map());
     const telemetryLobbyCaptureTimersRef = React.useRef<Map<number, number>>(new Map());
     const telemetryLobbyCaptureAttemptedRef = React.useRef<Set<number>>(new Set());
     const telemetryLobbyCaptureSkipLoggedRef = React.useRef<Set<number>>(new Set());
@@ -2199,16 +2198,14 @@ const App: React.FC = () => {
         if (Number.isInteger(normalizedMatchId) && normalizedMatchId > 0) {
             const timerId = telemetryBackgroundResultOcrTimersRef.current.get(normalizedMatchId);
             if (typeof timerId === 'number') {
-                window.clearInterval(timerId);
+                window.clearTimeout(timerId);
                 telemetryBackgroundResultOcrTimersRef.current.delete(normalizedMatchId);
             }
-            telemetryBackgroundResultOcrAttemptsRef.current.delete(normalizedMatchId);
             return;
         }
 
-        telemetryBackgroundResultOcrTimersRef.current.forEach((timerId) => window.clearInterval(timerId));
+        telemetryBackgroundResultOcrTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
         telemetryBackgroundResultOcrTimersRef.current.clear();
-        telemetryBackgroundResultOcrAttemptsRef.current.clear();
     }, []);
 
     const clearTelemetryLobbyCaptureTimer = useCallback((matchId?: number | null) => {
@@ -2620,13 +2617,18 @@ const App: React.FC = () => {
 
     useEffect(() => {
         const onTelemetryDraftReady = (evt: Event) => {
-            const customEvt = evt as CustomEvent<{ matchId?: number; duration?: string }>;
+            const customEvt = evt as CustomEvent<{
+                matchId?: number;
+                duration?: string;
+                readyTrigger?: 'frontend' | 'session-end' | 'unknown';
+            }>;
             const matchId = Number(customEvt?.detail?.matchId || 0);
             if (!Number.isInteger(matchId) || matchId <= 0) return;
             if (handledTelemetryDraftPostmatchPromptIdsRef.current.has(matchId)) return;
             clearTelemetryBackgroundResultOcrTimer(matchId);
             clearTelemetryDraftFallbackTimer(matchId);
             const duration = customEvt?.detail?.duration || '00:00';
+            const readyTrigger = customEvt?.detail?.readyTrigger || 'unknown';
             if (!fullAutoEnabled) {
                 setTelemetryDraftPrompt({
                     matchId,
@@ -2646,7 +2648,9 @@ const App: React.FC = () => {
                 if (handledTelemetryDraftPostmatchPromptIdsRef.current.has(matchId)) return;
                 setTelemetryAutomationStatus(createTelemetryAutomationStatus({
                     phase: 'manual-result-needed',
-                    message: 'Manual result needed',
+                    message: readyTrigger === 'frontend'
+                        ? 'Returned to menu before a result screen was confirmed'
+                        : 'Manual result needed',
                     matchId,
                     level: 'warning',
                 }));
@@ -2656,42 +2660,40 @@ const App: React.FC = () => {
                     phase: 'postmatch',
                 });
             };
-
-            telemetryBackgroundResultOcrAttemptsRef.current.set(matchId, 1);
-            void triggerFullAutoSaveRef.current({
-                initialDelayMs: 0,
-                reason: 'background',
-                matchId,
-            });
-
-            const backgroundTimerId = window.setInterval(() => {
-                if (!fullAutoEnabledRef.current) {
+            const scheduleManualFallbackCheck = (delayMs: number) => {
+                const backgroundTimerId = window.setTimeout(() => {
+                    if (!fullAutoEnabledRef.current) {
+                        clearTelemetryBackgroundResultOcrTimer(matchId);
+                        showManualFallback();
+                        return;
+                    }
+                    if (handledTelemetryDraftPostmatchPromptIdsRef.current.has(matchId)) {
+                        clearTelemetryBackgroundResultOcrTimer(matchId);
+                        return;
+                    }
+                    if (latestTelemetryDraftIdRef.current != null && latestTelemetryDraftIdRef.current !== matchId) {
+                        clearTelemetryBackgroundResultOcrTimer(matchId);
+                        return;
+                    }
+                    if (fullAutoCaptureInFlightRef.current || fullAutoDetectionLockedRef.current) {
+                        clearTelemetryBackgroundResultOcrTimer(matchId);
+                        scheduleManualFallbackCheck(FULL_AUTO_BACKGROUND_RESULT_OCR_INTERVAL_MS);
+                        return;
+                    }
                     clearTelemetryBackgroundResultOcrTimer(matchId);
                     showManualFallback();
-                    return;
-                }
-                if (handledTelemetryDraftPostmatchPromptIdsRef.current.has(matchId)) {
-                    clearTelemetryBackgroundResultOcrTimer(matchId);
-                    return;
-                }
-                if (latestTelemetryDraftIdRef.current != null && latestTelemetryDraftIdRef.current !== matchId) {
-                    clearTelemetryBackgroundResultOcrTimer(matchId);
-                    return;
-                }
-                const currentAttempts = Number(telemetryBackgroundResultOcrAttemptsRef.current.get(matchId) || 0);
-                if (currentAttempts >= FULL_AUTO_BACKGROUND_RESULT_OCR_MAX_ATTEMPTS) {
-                    clearTelemetryBackgroundResultOcrTimer(matchId);
-                    showManualFallback();
-                    return;
-                }
-                telemetryBackgroundResultOcrAttemptsRef.current.set(matchId, currentAttempts + 1);
-                void triggerFullAutoSaveRef.current({
-                    initialDelayMs: 0,
-                    reason: 'background',
-                    matchId,
-                });
-            }, FULL_AUTO_BACKGROUND_RESULT_OCR_INTERVAL_MS);
-            telemetryBackgroundResultOcrTimersRef.current.set(matchId, backgroundTimerId);
+                }, delayMs);
+                telemetryBackgroundResultOcrTimersRef.current.set(matchId, backgroundTimerId);
+            };
+
+            if (readyTrigger === 'frontend') {
+                showManualFallback();
+                return;
+            }
+
+            scheduleManualFallbackCheck(
+                FULL_AUTO_BACKGROUND_RESULT_OCR_INTERVAL_MS * FULL_AUTO_BACKGROUND_RESULT_OCR_MAX_ATTEMPTS,
+            );
         };
 
         window.addEventListener('telemetry:draft-ready', onTelemetryDraftReady as EventListener);
