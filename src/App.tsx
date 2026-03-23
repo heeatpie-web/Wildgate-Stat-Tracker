@@ -305,11 +305,13 @@ const PREGAME_LOBBY_MACRO_DELAY_MS = 5_000;
 const KNOWN_FLASH_PURE_WHITE_MS = 200;
 // Small buffer added after the flash settles before capturing, to land in the fade-out.
 const POST_FLASH_CAPTURE_BUFFER_MS = 50;
-const FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS = KNOWN_FLASH_PURE_WHITE_MS + POST_FLASH_CAPTURE_BUFFER_MS;
-const FULL_AUTO_RESULT_OCR_RETRY_DELAY_MS = 300;
-const FULL_AUTO_RESULT_OCR_MAX_ATTEMPTS = 3;
+const FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS = POST_FLASH_CAPTURE_BUFFER_MS;
+// Only take one automatic result screenshot per trigger. If OCR cannot confirm it,
+// fall back to waiting/manual flow instead of silently spamming retries.
+const FULL_AUTO_RESULT_OCR_MAX_ATTEMPTS = 1;
 const FULL_AUTO_BACKGROUND_RESULT_OCR_INTERVAL_MS = 2_000;
 const FULL_AUTO_BACKGROUND_RESULT_OCR_MAX_ATTEMPTS = 4;
+const FULL_AUTO_FRONTEND_RESULT_CONFIRM_GRACE_MS = 2_000;
 // Time to wait after result OCR for the damage panel to slide into position (~3s from text, ~2s from tripwire fire)
 const FULL_AUTO_FINAL_MOMENTS_SETTLE_MS = 2_000;
 // Time to wait after pressing ] before capturing tab 2
@@ -2340,13 +2342,15 @@ const App: React.FC = () => {
     const lobbyCaptureCompletedAt = normalizedActiveTelemetryDraftMatchId != null
         ? (telemetryLobbyCaptureCompletedAtRef.current.get(normalizedActiveTelemetryDraftMatchId) ?? null)
         : null;
-    const resultMonitorArmDelayMs = isTelemetryPracticeRange
-        ? 0
-        : isArtifactsAndGates
-            ? (lobbyCaptureCompletedAt != null && telemetryLiveStartedAt != null
-                ? Math.max(0, 120_000 - (telemetryLiveStartedAt - lobbyCaptureCompletedAt))
-                : 120_000)
-            : undefined;
+    const resultMonitorArmDelayMs = isArtifactsAndGates
+        ? (lobbyCaptureCompletedAt != null && telemetryLiveStartedAt != null
+            ? Math.max(0, 120_000 - (telemetryLiveStartedAt - lobbyCaptureCompletedAt))
+            : 120_000)
+        : 0;
+    // Keep the text tripwire to the live phase. Once telemetry has already moved to
+    // result/postmatch, non-result screens like loading/menu are too likely to produce
+    // false positives in the headline ROI.
+    const resultTextTripwireEnabled = telemetryLifecycleStage === 'live' && !resultMonitorSuppression.text;
 
     useEffect(() => {
         if (!shouldWatchResultScreens) {
@@ -2701,13 +2705,10 @@ const App: React.FC = () => {
                 telemetryBackgroundResultOcrTimersRef.current.set(matchId, backgroundTimerId);
             };
 
-            if (readyTrigger === 'frontend') {
-                showManualFallback();
-                return;
-            }
-
             scheduleManualFallbackCheck(
-                FULL_AUTO_BACKGROUND_RESULT_OCR_INTERVAL_MS * FULL_AUTO_BACKGROUND_RESULT_OCR_MAX_ATTEMPTS,
+                readyTrigger === 'frontend'
+                    ? FULL_AUTO_FRONTEND_RESULT_CONFIRM_GRACE_MS
+                    : (FULL_AUTO_BACKGROUND_RESULT_OCR_INTERVAL_MS * FULL_AUTO_BACKGROUND_RESULT_OCR_MAX_ATTEMPTS),
             );
         };
 
@@ -2960,6 +2961,14 @@ const App: React.FC = () => {
             if (!shouldResumeWatchingOnFailure) return;
             setFullAutoDetectionLocked(false);
         };
+        const disableTextFallbackIfNeeded = () => {
+            if (currentReason !== 'text') return;
+            setResultMonitorSuppression((current) => (
+                current.text && !current.flash
+                    ? current
+                    : { flash: false, text: true }
+            ));
+        };
 
         fullAutoCaptureInFlightRef.current = true;
         try {
@@ -2978,10 +2987,6 @@ const App: React.FC = () => {
             let supplementalArtifacts: Array<{ imageBase64: string; kind: 'damage-sources' | 'damage-ships' }> = [];
 
             for (let attemptIndex = 0; attemptIndex < FULL_AUTO_RESULT_OCR_MAX_ATTEMPTS; attemptIndex += 1) {
-                if (attemptIndex > 0) {
-                    await waitForDuration(FULL_AUTO_RESULT_OCR_RETRY_DELAY_MS);
-                }
-
                 const capture = await api.invoke('capture-screen');
                 if (!capture) {
                     if (currentReason !== 'background') {
@@ -3093,6 +3098,7 @@ const App: React.FC = () => {
             }
 
             if (shouldReturnToWatching) {
+                disableTextFallbackIfNeeded();
                 unlockDetectionIfNeeded();
                 restoreWaitingStatus();
                 return;
@@ -3128,6 +3134,7 @@ const App: React.FC = () => {
         fullAutoResultLatched,
         normalizedActiveTelemetryDraftMatchId,
         saveFullAutoDebugCapture,
+        setResultMonitorSuppression,
         setFullAutoDetectionLocked,
         setTelemetryAutomationStatus,
         setToast,
@@ -3200,7 +3207,7 @@ const App: React.FC = () => {
         flashEnabled: !resultMonitorSuppression.flash,
         liveStartedAt: telemetryLiveStartedAt,
         armDelayMs: resultMonitorArmDelayMs,
-        textEnabled: !resultMonitorSuppression.text,
+        textEnabled: resultTextTripwireEnabled,
         triggerLatched: fullAutoResultLatched || fullAutoDetectionLocked,
         onFlashDetected: handleResultFlashDetectedWithDebug,
         onFlashResolved: handleResultFlashResolvedWithDebug,

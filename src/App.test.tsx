@@ -674,7 +674,7 @@ describe('App', () => {
     vi.useRealTimers();
   });
 
-  it('skips background result OCR when telemetry draft ready came from a frontend return', async () => {
+  it('waits briefly before showing manual fallback when telemetry draft ready came from a frontend return', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
     uiState.telemetryLifecycleStage = 'result';
@@ -718,12 +718,25 @@ describe('App', () => {
     });
 
     await act(async () => {
-      vi.advanceTimersByTime(8_000);
+      vi.advanceTimersByTime(1_999);
       await Promise.resolve();
       await Promise.resolve();
     });
 
     expect(api.invoke.mock.calls.filter(([channel]) => channel === 'capture-screen')).toHaveLength(0);
+    expect(uiState.setTelemetryAutomationStatus).not.toHaveBeenCalledWith(expect.objectContaining({
+      phase: 'manual-result-needed',
+      message: 'Returned to menu before a result screen was confirmed',
+      matchId: 654,
+      level: 'warning',
+    }));
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
     expect(uiState.setTelemetryAutomationStatus).toHaveBeenCalledWith(expect.objectContaining({
       phase: 'manual-result-needed',
       message: 'Returned to menu before a result screen was confirmed',
@@ -760,16 +773,18 @@ describe('App', () => {
     const { default: App } = await import('./App');
     render(<App />);
 
-    // armDelayMs is undefined (uses hook default of 45s) for normal matches in result stage.
-    // We do NOT pass 0 here — doing so would cause the monitor to restart and reset its
-    // baseline at the moment telemetry transitions to 'result', blinding it to text that
-    // is already on screen.
     expect(useResultFlashMonitorMock).toHaveBeenCalledWith(expect.objectContaining({
       enabled: true,
+      armDelayMs: 0,
+      flashEnabled: true,
+      textEnabled: false,
       liveStartedAt: expect.any(Number),
     }));
     expect(useResultTextMonitorMock).toHaveBeenCalledWith(expect.objectContaining({
       enabled: true,
+      armDelayMs: 0,
+      flashEnabled: true,
+      textEnabled: false,
       liveStartedAt: expect.any(Number),
     }));
     vi.useRealTimers();
@@ -897,6 +912,16 @@ describe('App', () => {
     });
 
     expect(startAutoCaptureMock).not.toHaveBeenCalled();
+    expect(useResultFlashMonitorMock).toHaveBeenCalledWith(expect.objectContaining({
+      enabled: true,
+      armDelayMs: 120_000,
+      liveStartedAt: expect.any(Number),
+    }));
+    expect(useResultTextMonitorMock).toHaveBeenCalledWith(expect.objectContaining({
+      enabled: true,
+      armDelayMs: 120_000,
+      liveStartedAt: expect.any(Number),
+    }));
     expect(uiState.setTelemetryAutomationStatus).toHaveBeenCalledWith(expect.objectContaining({
       phase: 'watching-result-flash',
       message: 'Watching for match-end flash or result text',
@@ -1180,6 +1205,83 @@ describe('App', () => {
     }
   });
 
+  it('does not take fallback retry screenshots after one failed flash OCR pass', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
+    uiState.telemetryLifecycleStage = 'live';
+    const draft = {
+      id: 4322,
+      timestamp: Date.now(),
+      date: '3/20/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      artifacts: [],
+    };
+    gameDataState.matches = [draft];
+    appStoreState.matches = [draft];
+    autoFinalizeResultScreenCaptureMock.mockResolvedValue({ success: false, reason: 'unconfirmed' });
+
+    const api = {
+      invoke: vi.fn((channel: string) => {
+        if (channel === 'capture-screen') {
+          return Promise.resolve('image-base64');
+        }
+        if (channel === 'save-screenshot') {
+          return Promise.resolve({
+            success: true,
+            data: { filePath: 'C:\\match_artifacts\\4322\\capture_result.png' },
+          });
+        }
+        if (channel === 'scan-result-screen') {
+          return Promise.resolve({ data: { result: null } });
+        }
+        if (channel === 'capture-result-screen-region') {
+          return Promise.resolve({ success: false, imageBase64: null });
+        }
+        if (channel === 'telemetry-retention-status') {
+          return Promise.resolve(null);
+        }
+        return Promise.resolve(null);
+      }),
+      send: vi.fn(),
+      on: vi.fn(() => () => {}),
+      removeAllListeners: vi.fn(),
+    };
+    getElectronAPIMock.mockReturnValue(api);
+
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    const flashOptions = useResultFlashMonitorMock.mock.calls.at(-1)?.[0] as {
+      onFlashDetected?: () => Promise<void>;
+    };
+    expect(flashOptions?.onFlashDetected).toBeTypeOf('function');
+
+    let triggerPromise: Promise<void> | undefined;
+    await act(async () => {
+      triggerPromise = flashOptions.onFlashDetected?.();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    await triggerPromise;
+
+    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'capture-screen')).toHaveLength(1);
+    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'save-screenshot')).toHaveLength(1);
+    vi.useRealTimers();
+  });
+
   it('ignores text tripwire once flash detection has already won for the match', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
@@ -1378,9 +1480,9 @@ describe('App', () => {
 
     expect(api.invoke).not.toHaveBeenCalledWith('capture-screen');
 
-    // Advance past the 250ms OCR delay so the initial result screenshot can run.
+    // Advance past the 50ms OCR delay so the initial result screenshot can run.
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(250);
+      await vi.advanceTimersByTimeAsync(50);
       await Promise.resolve();
       await Promise.resolve();
     });

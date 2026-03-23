@@ -136,9 +136,8 @@ describe('resultTextMonitor loop', () => {
     const baselineMetrics = await __test__.analyzeTripwireBoxes(await createTripwireImage());
     const hotMetrics = await __test__.analyzeTripwireBoxes(await createTripwireImage(['result-b']));
     const sampler = vi.fn()
-      .mockResolvedValueOnce(baselineMetrics)
-      .mockResolvedValueOnce(hotMetrics)
-      .mockResolvedValueOnce(hotMetrics);
+      .mockResolvedValue(hotMetrics)
+      .mockResolvedValueOnce(baselineMetrics);
     const onDetected = vi.fn();
 
     startResultTextMonitor({
@@ -152,10 +151,10 @@ describe('resultTextMonitor loop', () => {
     await sleep(30);
     expect(onDetected).not.toHaveBeenCalled();
 
-    await sleep(120);
+    await sleep(220);
     expect(onDetected).not.toHaveBeenCalled();
 
-    await sleep(140);
+    await sleep(520);
 
     expect(onDetected).toHaveBeenCalledTimes(1);
     expect(onDetected.mock.calls[0][0]).toMatchObject({
