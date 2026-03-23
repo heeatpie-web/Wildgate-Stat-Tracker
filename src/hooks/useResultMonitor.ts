@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { getElectronAPI } from '../utils/electronAPI';
+import { Logger } from '../utils/logger';
 import type { DeviceDisplayInfo, GameResolution } from '../store/slices/createDataSlice';
 import {
     normalizePixelMonitorSampleMeta,
@@ -63,7 +64,7 @@ export type ResultFlashMonitorDebugStatus =
     | 'latched'
     | 'no-regions'
     | 'no-api'
-    | 'waiting-live-start'
+    | 'waiting-arm-anchor'
     | 'arming-delay'
     | 'sampling'
     | 'waiting-flash-end';
@@ -72,8 +73,8 @@ export interface ResultFlashMonitorDebugSnapshot {
     status: ResultFlashMonitorDebugStatus;
     enabled: boolean;
     triggerLatched: boolean;
-    liveStartedAt: number | null;
-    liveElapsedMs: number | null;
+    armAnchorAt: number | null;
+    armElapsedMs: number | null;
     armDelayMs: number;
     armRemainingMs: number | null;
     isArmed: boolean;
@@ -122,7 +123,7 @@ export interface ResultTextDetectionPayload {
 export interface ResultMonitorOptions {
     enabled: boolean;
     flashEnabled?: boolean;
-    liveStartedAt: number | null;
+    armAnchorAt: number | null;
     armDelayMs?: number;
     textEnabled?: boolean;
     triggerLatched?: boolean;
@@ -260,7 +261,7 @@ const createEmptyFlashDebugState = (): RuntimeFlashDebugState => ({
 export function useResultMonitor({
     enabled,
     flashEnabled = true,
-    liveStartedAt,
+    armAnchorAt,
     armDelayMs = DEFAULT_RESULT_MONITOR_ARM_DELAY_MS,
     textEnabled = true,
     triggerLatched = false,
@@ -284,6 +285,7 @@ export function useResultMonitor({
     const onFlashDebugStateChangeRef = useRef(onFlashDebugStateChange);
     const onTextDetectedRef = useRef(onTextDetected);
     const flashRegionsRef = useRef(flashRegions);
+    const lastArmStateLogKeyRef = useRef('');
     const flashRuntimeDebugRef = useRef<RuntimeFlashDebugState>(createEmptyFlashDebugState());
 
     useEffect(() => { onFlashDetectedRef.current = onFlashDetected; }, [onFlashDetected]);
@@ -291,6 +293,24 @@ export function useResultMonitor({
     useEffect(() => { onFlashDebugStateChangeRef.current = onFlashDebugStateChange; }, [onFlashDebugStateChange]);
     useEffect(() => { onTextDetectedRef.current = onTextDetected; }, [onTextDetected]);
     useEffect(() => { flashRegionsRef.current = flashRegions; }, [flashRegions]);
+
+    const logArmState = (
+        message: string,
+        payload: Record<string, unknown>,
+    ) => {
+        const key = JSON.stringify({
+            message,
+            enabled: payload.enabled,
+            flashEnabled: payload.flashEnabled,
+            textEnabled: payload.textEnabled,
+            triggerLatched: payload.triggerLatched,
+            armAnchorAt: payload.armAnchorAt,
+            armAt: payload.armAt,
+        });
+        if (lastArmStateLogKeyRef.current === key) return;
+        lastArmStateLogKeyRef.current = key;
+        Logger.info('ResultMonitor', message, payload);
+    };
 
     useEffect(() => {
         const emitFlashDebugState = (
@@ -303,25 +323,25 @@ export function useResultMonitor({
             const nextState = { ...flashRuntimeDebugRef.current, ...overrides };
             flashRuntimeDebugRef.current = nextState;
 
-            const normalizedLiveStartedAt = Number.isFinite(Number(liveStartedAt)) && Number(liveStartedAt) > 0
-                ? Number(liveStartedAt)
+            const normalizedArmAnchorAt = Number.isFinite(Number(armAnchorAt)) && Number(armAnchorAt) > 0
+                ? Number(armAnchorAt)
                 : null;
-            const liveElapsedMs = normalizedLiveStartedAt == null
+            const armElapsedMs = normalizedArmAnchorAt == null
                 ? null
-                : Math.max(0, Date.now() - normalizedLiveStartedAt);
-            const armRemainingMs = normalizedLiveStartedAt == null
+                : Math.max(0, Date.now() - normalizedArmAnchorAt);
+            const armRemainingMs = normalizedArmAnchorAt == null
                 ? normalizedArmDelayMs
-                : Math.max(0, (normalizedLiveStartedAt + normalizedArmDelayMs) - Date.now());
+                : Math.max(0, (normalizedArmAnchorAt + normalizedArmDelayMs) - Date.now());
 
             callback({
                 status,
                 enabled,
                 triggerLatched,
-                liveStartedAt: normalizedLiveStartedAt,
-                liveElapsedMs,
+                armAnchorAt: normalizedArmAnchorAt,
+                armElapsedMs,
                 armDelayMs: normalizedArmDelayMs,
                 armRemainingMs,
-                isArmed: normalizedLiveStartedAt != null && armRemainingMs <= 0,
+                isArmed: normalizedArmAnchorAt != null && armRemainingMs <= 0,
                 regions: flashRegionsRef.current,
                 sampleIntervalMs: 100,
                 brightHoldMs: 100,
@@ -338,8 +358,20 @@ export function useResultMonitor({
         };
 
         const api = getElectronAPI();
+        const normalizedArmAnchorAt = Number.isFinite(Number(armAnchorAt)) && Number(armAnchorAt) > 0
+            ? Number(armAnchorAt)
+            : null;
+        const diagnosticState = {
+            enabled,
+            flashEnabled,
+            textEnabled,
+            triggerLatched,
+            armAnchorAt: normalizedArmAnchorAt,
+            armDelayMs: normalizedArmDelayMs,
+        };
 
         if (!enabled) {
+            logArmState('Stopped combined result monitor: disabled', diagnosticState);
             api?.send(SEND_STOP);
             flashRuntimeDebugRef.current = createEmptyFlashDebugState();
             emitFlashDebugState('disabled');
@@ -347,6 +379,7 @@ export function useResultMonitor({
         }
 
         if (triggerLatched) {
+            logArmState('Stopped combined result monitor: trigger latched', diagnosticState);
             api?.send(SEND_STOP);
             flashRuntimeDebugRef.current = createEmptyFlashDebugState();
             emitFlashDebugState('latched');
@@ -354,29 +387,36 @@ export function useResultMonitor({
         }
 
         if (!api) {
+            logArmState('Stopped combined result monitor: electron API unavailable', diagnosticState);
             flashRuntimeDebugRef.current = createEmptyFlashDebugState();
             emitFlashDebugState('no-api');
             return;
         }
 
         if (!flashEnabled && !textEnabled) {
+            logArmState('Stopped combined result monitor: no active detectors', diagnosticState);
             api.send(SEND_STOP);
             flashRuntimeDebugRef.current = createEmptyFlashDebugState();
             emitFlashDebugState('disabled');
             return;
         }
 
-        const normalizedLiveStartedAt = Number.isFinite(Number(liveStartedAt)) && Number(liveStartedAt) > 0
-            ? Number(liveStartedAt)
-            : null;
-        if (normalizedLiveStartedAt == null) {
+        if (normalizedArmAnchorAt == null) {
+            logArmState('Stopped combined result monitor: waiting for arm anchor', diagnosticState);
             api.send(SEND_STOP);
             flashRuntimeDebugRef.current = createEmptyFlashDebugState();
-            emitFlashDebugState('waiting-live-start');
+            emitFlashDebugState('waiting-arm-anchor');
             return;
         }
 
-        const armAt = normalizedLiveStartedAt + normalizedArmDelayMs;
+        const armAt = normalizedArmAnchorAt + normalizedArmDelayMs;
+        logArmState('Starting combined result monitor', {
+            ...diagnosticState,
+            armAnchorAt: normalizedArmAnchorAt,
+            armAt,
+            flashRegion: flashEnabled ? FLASH_SAMPLE_REGION : null,
+            textRegion: textEnabled ? RESULT_TEXT_SAMPLE_REGION : null,
+        });
 
         const unsubFlashDetected = flashEnabled ? api.on(RECEIVE_FLASH_DETECTED, (payload: unknown) => {
             const brightSinceMs = typeof (payload as Record<string, unknown>)?.brightSinceMs === 'number'
@@ -439,5 +479,5 @@ export function useResultMonitor({
             unsubTextDebug?.();
             flashRuntimeDebugRef.current = createEmptyFlashDebugState();
         };
-    }, [enabled, flashEnabled, liveStartedAt, normalizedArmDelayMs, textEnabled, triggerLatched]);
+    }, [armAnchorAt, enabled, flashEnabled, normalizedArmDelayMs, textEnabled, triggerLatched]);
 }

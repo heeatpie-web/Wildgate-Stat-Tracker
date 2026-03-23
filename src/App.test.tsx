@@ -75,8 +75,8 @@ const uiState = {
   showReviewQueue: false,
   setShowReviewQueue: vi.fn(),
   requestSmartCapture: vi.fn().mockReturnValue('req_1'),
-  telemetryLifecycleStage: 'idle' as 'idle' | 'loading' | 'pregame' | 'live' | 'result',
-  setTelemetryLifecycleStage: vi.fn((stage: 'idle' | 'loading' | 'pregame' | 'live' | 'result') => {
+  telemetryLifecycleStage: 'idle' as 'idle' | 'loading' | 'pregame' | 'live' | 'menu',
+  setTelemetryLifecycleStage: vi.fn((stage: 'idle' | 'loading' | 'pregame' | 'live' | 'menu') => {
     uiState.telemetryLifecycleStage = stage;
   }),
   telemetryLifecycleIsPracticeRange: false,
@@ -593,7 +593,7 @@ describe('App', () => {
   it('waits for a real result signal after telemetry draft ready instead of capturing immediately', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
-    uiState.telemetryLifecycleStage = 'result';
+    uiState.telemetryLifecycleStage = 'menu';
     const draft = {
       id: 321,
       timestamp: Date.now(),
@@ -677,7 +677,7 @@ describe('App', () => {
   it('waits briefly before showing manual fallback when telemetry draft ready came from a frontend return', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
-    uiState.telemetryLifecycleStage = 'result';
+    uiState.telemetryLifecycleStage = 'menu';
     const draft = {
       id: 654,
       timestamp: Date.now(),
@@ -746,10 +746,10 @@ describe('App', () => {
     vi.useRealTimers();
   });
 
-  it('keeps result watchers enabled during telemetry result stage for an active draft', async () => {
+  it('keeps result watchers enabled during telemetry menu stage for an active draft', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
-    uiState.telemetryLifecycleStage = 'result';
+    uiState.telemetryLifecycleStage = 'menu';
     const draft = {
       id: 9876,
       timestamp: Date.now(),
@@ -778,14 +778,14 @@ describe('App', () => {
       armDelayMs: 0,
       flashEnabled: true,
       textEnabled: false,
-      liveStartedAt: expect.any(Number),
+      armAnchorAt: expect.any(Number),
     }));
     expect(useResultTextMonitorMock).toHaveBeenCalledWith(expect.objectContaining({
       enabled: true,
       armDelayMs: 0,
       flashEnabled: true,
       textEnabled: false,
-      liveStartedAt: expect.any(Number),
+      armAnchorAt: expect.any(Number),
     }));
     vi.useRealTimers();
   });
@@ -821,12 +821,12 @@ describe('App', () => {
     expect(useResultFlashMonitorMock).toHaveBeenCalledWith(expect.objectContaining({
       enabled: true,
       armDelayMs: 0,
-      liveStartedAt: expect.any(Number),
+      armAnchorAt: expect.any(Number),
     }));
     expect(useResultTextMonitorMock).toHaveBeenCalledWith(expect.objectContaining({
       enabled: true,
       armDelayMs: 0,
-      liveStartedAt: expect.any(Number),
+      armAnchorAt: expect.any(Number),
     }));
 
     expect(startAutoCaptureMock).not.toHaveBeenCalled();
@@ -865,12 +865,12 @@ describe('App', () => {
     expect(useResultFlashMonitorMock).toHaveBeenCalledWith(expect.objectContaining({
       enabled: true,
       armDelayMs: 0,
-      liveStartedAt: expect.any(Number),
+      armAnchorAt: expect.any(Number),
     }));
     expect(useResultTextMonitorMock).toHaveBeenCalledWith(expect.objectContaining({
       enabled: true,
       armDelayMs: 0,
-      liveStartedAt: expect.any(Number),
+      armAnchorAt: expect.any(Number),
     }));
 
     expect(startAutoCaptureMock).not.toHaveBeenCalled();
@@ -898,7 +898,7 @@ describe('App', () => {
       subType: 'Telemetry Draft',
       telemetryDraftState: 'active',
       artifacts: [],
-      matchMode: 'artifactsandgates',
+      matchMode: 'custom',
     };
     gameDataState.matches = [draft];
     appStoreState.matches = [draft];
@@ -914,13 +914,13 @@ describe('App', () => {
     expect(startAutoCaptureMock).not.toHaveBeenCalled();
     expect(useResultFlashMonitorMock).toHaveBeenCalledWith(expect.objectContaining({
       enabled: true,
-      armDelayMs: 120_000,
-      liveStartedAt: expect.any(Number),
+      armDelayMs: 0,
+      armAnchorAt: expect.any(Number),
     }));
     expect(useResultTextMonitorMock).toHaveBeenCalledWith(expect.objectContaining({
       enabled: true,
-      armDelayMs: 120_000,
-      liveStartedAt: expect.any(Number),
+      armDelayMs: 0,
+      armAnchorAt: expect.any(Number),
     }));
     expect(uiState.setTelemetryAutomationStatus).toHaveBeenCalledWith(expect.objectContaining({
       phase: 'watching-result-flash',
@@ -930,6 +930,177 @@ describe('App', () => {
     expect(uiState.setTelemetryAutomationStatus).not.toHaveBeenCalledWith(expect.objectContaining({
       phase: 'capturing-live-fallback',
     }));
+    vi.useRealTimers();
+  });
+
+  it('arms Artifacts & Gates result monitoring from the first pregame detection without waiting for live', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
+    uiState.telemetryLifecycleStage = 'pregame';
+    const draft = {
+      id: 7171,
+      timestamp: Date.now(),
+      date: '3/21/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      artifacts: [],
+      matchMode: 'artifactsandgates',
+    };
+    gameDataState.matches = [draft];
+    appStoreState.matches = [draft];
+
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    expect(useResultFlashMonitorMock).toHaveBeenCalledWith(expect.objectContaining({
+      enabled: true,
+      armDelayMs: 120_000,
+      flashEnabled: true,
+      textEnabled: true,
+      armAnchorAt: expect.any(Number),
+    }));
+    expect(useResultTextMonitorMock).toHaveBeenCalledWith(expect.objectContaining({
+      enabled: true,
+      armDelayMs: 120_000,
+      flashEnabled: true,
+      textEnabled: true,
+      armAnchorAt: expect.any(Number),
+    }));
+    vi.useRealTimers();
+  });
+
+  it('restores Artifacts & Gates result monitoring at the five-minute fallback for the same draft', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
+    uiState.telemetryLifecycleStage = 'pregame';
+    const draft = {
+      id: 7272,
+      timestamp: Date.now(),
+      date: '3/21/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      artifacts: [],
+      matchMode: 'artifactsandgates',
+    };
+    gameDataState.matches = [draft];
+    appStoreState.matches = [draft];
+
+    const { default: App } = await import('./App');
+    const { rerender } = render(<App />);
+
+    const initialOptions = useResultFlashMonitorMock.mock.calls.at(-1)?.[0] as {
+      armAnchorAt?: number | null;
+    };
+    expect(initialOptions.armAnchorAt).toEqual(expect.any(Number));
+    const initialArmAnchorAt = Number(initialOptions.armAnchorAt);
+
+    await act(async () => {
+      uiState.telemetryLifecycleStage = 'loading';
+      rerender(<App />);
+      await Promise.resolve();
+    });
+
+    expect(useResultFlashMonitorMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      enabled: false,
+      armDelayMs: 120_000,
+      armAnchorAt: initialArmAnchorAt,
+    }));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(useResultFlashMonitorMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      enabled: true,
+      armDelayMs: 120_000,
+      armAnchorAt: initialArmAnchorAt,
+      textEnabled: true,
+    }));
+    expect(loggerInfo).toHaveBeenCalledWith(
+      'ResultMonitor',
+      'Artifacts & Gates fallback restored result monitoring',
+      expect.objectContaining({
+        matchId: 7272,
+        action: 'restore',
+      }),
+    );
+    vi.useRealTimers();
+  });
+
+  it('clears the old Artifacts & Gates pregame anchor when the active draft changes', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
+    uiState.telemetryLifecycleStage = 'pregame';
+    const firstDraft = {
+      id: 7373,
+      timestamp: Date.now(),
+      date: '3/21/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      artifacts: [],
+      matchMode: 'artifactsandgates',
+    };
+    gameDataState.matches = [firstDraft];
+    appStoreState.matches = [firstDraft];
+
+    const { default: App } = await import('./App');
+    const { rerender } = render(<App />);
+
+    const firstAnchorAt = Number((useResultFlashMonitorMock.mock.calls.at(-1)?.[0] as {
+      armAnchorAt?: number | null;
+    }).armAnchorAt);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+
+    const nextDraft = {
+      ...firstDraft,
+      id: 7474,
+      timestamp: Date.now() + 1_000,
+    };
+    gameDataState.matches = [nextDraft];
+    appStoreState.matches = [nextDraft];
+
+    await act(async () => {
+      rerender(<App />);
+      await Promise.resolve();
+    });
+
+    const secondAnchorAt = Number((useResultFlashMonitorMock.mock.calls.at(-1)?.[0] as {
+      armAnchorAt?: number | null;
+    }).armAnchorAt);
+    expect(secondAnchorAt).toEqual(expect.any(Number));
+    expect(secondAnchorAt).not.toBe(firstAnchorAt);
     vi.useRealTimers();
   });
 
@@ -991,6 +1162,78 @@ describe('App', () => {
       await Promise.resolve();
     });
     expect(startAutoCaptureMock).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  it('moves Artifacts & Gates into watching-result as soon as lobby auto-capture completes', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
+    uiState.telemetryLifecycleStage = 'pregame';
+    const draft = {
+      id: 8123,
+      timestamp: Date.now(),
+      date: '3/22/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      artifacts: [],
+      matchMode: 'artifactsandgates',
+    };
+    gameDataState.matches = [draft];
+    appStoreState.matches = [draft];
+
+    const handlers: Record<string, (...args: unknown[]) => void> = {};
+    const api = {
+      invoke: vi.fn(() => Promise.resolve(null)),
+      on: vi.fn((channel: string, callback: (...args: unknown[]) => void) => {
+        handlers[channel] = callback;
+        return vi.fn();
+      }),
+      send: vi.fn(),
+      removeAllListeners: vi.fn(),
+    };
+    getElectronAPIMock.mockReturnValue(api);
+
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(startAutoCaptureMock).toHaveBeenCalledWith(expect.objectContaining({
+      matchId: 8123,
+      telemetryLifecycleStage: 'pregame',
+    }));
+    expect(handlers['auto-capture-status']).toBeTypeOf('function');
+
+    act(() => {
+      handlers['auto-capture-status']({
+        phase: 'started',
+        matchId: 8123,
+      });
+      handlers['auto-capture-status']({
+        phase: 'completed',
+        matchId: 8123,
+      });
+    });
+
+    expect(uiState.setTelemetryAutomationStatus).toHaveBeenCalledWith(expect.objectContaining({
+      phase: 'watching-result-flash',
+      message: 'Watching for match-end flash or result text',
+      matchId: 8123,
+      level: 'info',
+    }));
     vi.useRealTimers();
   });
 

@@ -7,11 +7,11 @@ import type { DeviceDisplayInfo, GameResolution } from '../store/slices/createDa
 import { Match, SHIPS, CHARACTERS, UI_REACH_MODIFIERS } from '../types';
 import { getElectronAPI } from '../utils/electronAPI';
 import {
-    FLASH_SAMPLE_REGION,
     buildResultFlashSampleRegions,
+    FLASH_SAMPLE_REGION,
     isNearWhiteSample,
-    type ResultFlashMonitorDebugSnapshot,
 } from '../hooks/useResultFlashMonitor';
+import type { ResultFlashMonitorDebugSnapshot } from '../hooks/useResultMonitor';
 import {
     normalizePixelMonitorSampleResult,
     type PixelMonitorSampleMeta,
@@ -81,8 +81,8 @@ const getDebugStatusLabel = (status: ResultFlashMonitorDebugSnapshot['status']) 
             return 'Missing ROI';
         case 'no-api':
             return 'IPC unavailable';
-        case 'waiting-live-start':
-            return 'Waiting for live start';
+        case 'waiting-arm-anchor':
+            return 'Waiting for arm anchor';
         case 'arming-delay':
             return 'Arm delay';
         case 'waiting-flash-end':
@@ -206,13 +206,27 @@ export const DevTools: React.FC<DevToolsProps> = ({
             readyOngoing,
         };
     }, [matches, sessionStartTime]);
-    const resultFlashWatcherEnabled = fullAutoEnabled
-        && telemetryLifecycleStage === 'live'
-        && normalizedActiveTelemetryDraftMatchId != null;
+    const resultFlashWatcherEnabled = Boolean(
+        resultFlashDebug
+        && resultFlashDebug.enabled
+        && !resultFlashDebug.triggerLatched
+        && resultFlashDebug.status !== 'disabled'
+        && resultFlashDebug.status !== 'latched'
+        && resultFlashDebug.status !== 'no-api'
+        && resultFlashDebug.status !== 'waiting-arm-anchor'
+    );
     const resultFlashWatcherDisabledReasons = [
         !fullAutoEnabled ? 'Full Auto toggle is off.' : null,
-        telemetryLifecycleStage !== 'live' ? `Lifecycle is ${telemetryLifecycleStage}, not live.` : null,
         normalizedActiveTelemetryDraftMatchId == null ? 'No active telemetry draft match exists yet.' : null,
+        resultFlashDebug?.status === 'waiting-arm-anchor' ? 'Waiting for arm anchor.' : null,
+        resultFlashDebug?.triggerLatched || resultFlashDebug?.status === 'latched'
+            ? 'Result detection is latched.'
+            : null,
+        resultFlashDebug?.status === 'no-api' ? 'Electron IPC is unavailable.' : null,
+        resultFlashDebug?.status === 'disabled' && fullAutoEnabled && normalizedActiveTelemetryDraftMatchId != null
+            ? 'The combined result monitor is currently disabled.'
+            : null,
+        !resultFlashDebug ? 'Result monitor debug snapshot unavailable.' : null,
     ].filter((reason): reason is string => Boolean(reason));
 
     const handleSampleResultFlashRegion = useCallback(async () => {
@@ -284,7 +298,7 @@ export const DevTools: React.FC<DevToolsProps> = ({
                             <div>
                                 <div className="text-label-sm font-black uppercase tracking-wide opacity-60">Result Flash Debug</div>
                                 <div className="text-xs opacity-70">
-                                    Watches the live full-auto ROI and mirrors the real hook integration path.
+                                    Watches the full-auto ROI and mirrors the real hook integration path.
                                 </div>
                             </div>
 
@@ -374,7 +388,7 @@ export const DevTools: React.FC<DevToolsProps> = ({
                                     Enabled: {resultFlashDebug?.enabled ? 'yes' : 'no'} | Latched: {resultFlashDebug?.triggerLatched ? 'yes' : 'no'} | Waiting end: {resultFlashDebug?.waitingForFlashEnd ? 'yes' : 'no'}
                                 </div>
                                 <div className="opacity-70">
-                                    Live elapsed: {formatDurationMs(resultFlashDebug?.liveElapsedMs ?? null)} | Bright for: {formatDurationMs(
+                                    Arm-anchor elapsed: {formatDurationMs(resultFlashDebug?.armElapsedMs ?? null)} | Bright for: {formatDurationMs(
                                         resultFlashDebug?.brightSinceMs == null || resultFlashDebug?.lastUpdatedAt == null
                                             ? null
                                             : resultFlashDebug.lastUpdatedAt - resultFlashDebug.brightSinceMs

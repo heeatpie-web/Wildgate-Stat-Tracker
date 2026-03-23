@@ -105,13 +105,13 @@ describe('DevTools', () => {
 
     const { DevTools } = await import('./DevTools');
     render(
-      <DevTools
+        <DevTools
         resultFlashDebug={{
           status: 'sampling',
           enabled: true,
           triggerLatched: false,
-          liveStartedAt: Date.now() - 50_000,
-          liveElapsedMs: 50_000,
+          armAnchorAt: Date.now() - 50_000,
+          armElapsedMs: 50_000,
           armDelayMs: 45_000,
           armRemainingMs: 0,
           isArmed: true,
@@ -142,7 +142,7 @@ describe('DevTools', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /result flash debug/i }));
 
-    expect(screen.getByText(/watches the live full-auto roi/i)).toBeInTheDocument();
+    expect(screen.getByText(/watches the full-auto roi/i)).toBeInTheDocument();
     expect(screen.getByText(/sampling/i)).toBeInTheDocument();
     expect(screen.getByText(/all watcher gates are open/i)).toBeInTheDocument();
     expect(screen.getByText(/active draft: #321/i)).toBeInTheDocument();
@@ -196,13 +196,13 @@ describe('DevTools', () => {
 
     const { DevTools } = await import('./DevTools');
     render(
-      <DevTools
+        <DevTools
         resultFlashDebug={{
           status: 'disabled',
           enabled: false,
           triggerLatched: false,
-          liveStartedAt: null,
-          liveElapsedMs: null,
+          armAnchorAt: null,
+          armElapsedMs: null,
           armDelayMs: 45_000,
           armRemainingMs: 45_000,
           isArmed: false,
@@ -225,7 +225,6 @@ describe('DevTools', () => {
 
     expect(screen.getByText(/watcher enabled: no/i)).toBeInTheDocument();
     expect(screen.getByText(/full auto toggle is off/i)).toBeInTheDocument();
-    expect(screen.getByText(/lifecycle is pregame, not live/i)).toBeInTheDocument();
     expect(screen.getByText(/active draft: #98/i)).toBeInTheDocument();
     expect(screen.getByText(/store drafts: 0 recent active, 1 stale active, 1 ready ongoing/i)).toBeInTheDocument();
   });
@@ -239,13 +238,13 @@ describe('DevTools', () => {
 
     const { DevTools } = await import('./DevTools');
     render(
-      <DevTools
+        <DevTools
         resultFlashDebug={{
           status: 'sampling',
           enabled: true,
           triggerLatched: false,
-          liveStartedAt: Date.now() - 50_000,
-          liveElapsedMs: 50_000,
+          armAnchorAt: Date.now() - 50_000,
+          armElapsedMs: 50_000,
           armDelayMs: 45_000,
           armRemainingMs: 0,
           isArmed: true,

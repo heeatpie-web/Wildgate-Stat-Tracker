@@ -372,6 +372,21 @@ const getWatchingResultStatusMessage = (fullAutoEnabled: boolean): string => (
     fullAutoEnabled ? 'Watching for match-end flash or result text' : 'Watching for result screen'
 );
 
+const ARTIFACTS_AND_GATES_RESULT_ARM_DELAY_MS = 120_000;
+const ARTIFACTS_AND_GATES_RESULT_FALLBACK_DELAY_MS = 300_000;
+
+const isWatchingResultStatusPhase = (phase: TelemetryAutomationStatusPhase | null | undefined): boolean => (
+    phase === 'watching-result' || phase === 'watching-result-flash'
+);
+
+const isDefaultResultWatchStage = (stage: TelemetryLifecycleStage): boolean => (
+    stage === 'live' || stage === 'menu'
+);
+
+const isArtifactsAndGatesResultWatchStage = (stage: TelemetryLifecycleStage): boolean => (
+    stage === 'pregame' || stage === 'live' || stage === 'menu'
+);
+
 const getTelemetryAutoCaptureStartFailure = (result: StartAutoCaptureResult): {
     message: string;
     level: TelemetryAutomationStatusState['level'];
@@ -527,11 +542,14 @@ const App: React.FC = () => {
     const telemetryLobbyCaptureAttemptedRef = React.useRef<Set<number>>(new Set());
     const telemetryLobbyCaptureSkipLoggedRef = React.useRef<Set<number>>(new Set());
     const telemetryLobbyCaptureCompletedAtRef = React.useRef<Map<number, number>>(new Map());
+    const telemetryFirstPregameAtRef = React.useRef<Map<number, number>>(new Map());
     const telemetryAutoCaptureInFlightRef = React.useRef<Set<number>>(new Set());
     const telemetryAutoCaptureCompletedRef = React.useRef<Set<number>>(new Set());
     const telemetryAutoCaptureOriginRef = React.useRef<Map<number, 'pregame'>>(new Map());
     const latestTelemetryDraftIdRef = React.useRef<number | null>(null);
-    const telemetryLiveStageMatchIdRef = React.useRef<number | null>(null);
+    const resultMonitorArmAnchorMatchIdRef = React.useRef<number | null>(null);
+    const artifactsAndGatesFallbackWatchTimerRef = React.useRef<number | null>(null);
+    const artifactsAndGatesFallbackWatchMatchIdRef = React.useRef<number | null>(null);
     const telemetryPruneNotificationKeyRef = React.useRef<string | null>(null);
     const fuzzyPromptNotificationCountRef = React.useRef(0);
     const idPromptNotificationCountRef = React.useRef(0);
@@ -540,7 +558,9 @@ const App: React.FC = () => {
     /** Tracks when the changelog was last dismissed. Tips are suppressed for 10 s after this. */
     const changelogDismissedAtRef = React.useRef<number>(0);
     const [changelogEntries, setChangelogEntries] = useState<string[]>([]);
-    const [telemetryLiveStartedAt, setTelemetryLiveStartedAt] = useState<number | null>(null);
+    const [activeTelemetryDraftFirstPregameAt, setActiveTelemetryDraftFirstPregameAt] = useState<number | null>(null);
+    const [resultMonitorArmAnchorAtState, setResultMonitorArmAnchorAtState] = useState<number | null>(null);
+    const [artifactsAndGatesFallbackWatchMatchId, setArtifactsAndGatesFallbackWatchMatchId] = useState<number | null>(null);
     const [resultFlashDebugState, setResultFlashDebugState] = useState<ResultFlashMonitorDebugSnapshot | null>(null);
     const [resultFlashDebugEvents, setResultFlashDebugEvents] = useState<ResultFlashDebugEvent[]>([]);
 
@@ -716,6 +736,10 @@ const App: React.FC = () => {
         telemetryLifecycleStageValueRef.current = telemetryLifecycleStage;
     }, [telemetryLifecycleStage]);
 
+    useEffect(() => {
+        artifactsAndGatesFallbackWatchMatchIdRef.current = artifactsAndGatesFallbackWatchMatchId;
+    }, [artifactsAndGatesFallbackWatchMatchId]);
+
     const activeTelemetryDraftMatch = React.useMemo(() => (
         findActiveTelemetryDraftMatch({
             activeUser,
@@ -729,6 +753,7 @@ const App: React.FC = () => {
         ? activeTelemetryDraftMatchId
         : null;
     const isTelemetryPracticeRange = telemetryLifecycleIsPracticeRange || activeTelemetryDraftMatch?.isPracticeRange === true;
+    const isArtifactsAndGates = activeTelemetryDraftMatch?.matchMode === 'artifactsandgates';
 
     const countTelemetryCaptureArtifacts = useCallback((matchId: number | null | undefined) => {
         const numericMatchId = Number(matchId || 0);
@@ -2031,7 +2056,10 @@ const App: React.FC = () => {
                     telemetryAutoCaptureOriginRef.current.delete(normalizedMatchId);
                 }
                 playAutomationComplete();
-                const stayWatchingResult = telemetryLifecycleStage === 'live';
+                const stayWatchingResult = (
+                    telemetryLifecycleStage === 'live'
+                    || (isLobbyCapture && normalizedMatchId != null && telemetryFirstPregameAtRef.current.has(normalizedMatchId))
+                );
                 setTelemetryAutomationStatus(createTelemetryAutomationStatus({
                     phase: stayWatchingResult
                         ? getWatchingResultStatusPhase(fullAutoEnabledRef.current)
@@ -2237,6 +2265,14 @@ const App: React.FC = () => {
         telemetryLobbyCaptureTimersRef.current.clear();
     }, []);
 
+    const clearArtifactsAndGatesFallbackWatchTimer = useCallback(() => {
+        const timerId = artifactsAndGatesFallbackWatchTimerRef.current;
+        if (timerId != null) {
+            window.clearTimeout(timerId);
+            artifactsAndGatesFallbackWatchTimerRef.current = null;
+        }
+    }, []);
+
     const handleTelemetryDraftLater = useCallback(() => {
         if (!telemetryDraftPrompt) return;
         handledTelemetryDraftPostmatchPromptIdsRef.current.add(telemetryDraftPrompt.matchId);
@@ -2302,31 +2338,51 @@ const App: React.FC = () => {
         clearTelemetryDraftFallbackTimer();
         clearTelemetryBackgroundResultOcrTimer();
         clearTelemetryLobbyCaptureTimer();
-    }, [clearTelemetryBackgroundResultOcrTimer, clearTelemetryDraftFallbackTimer, clearTelemetryLobbyCaptureTimer]);
+        clearArtifactsAndGatesFallbackWatchTimer();
+    }, [
+        clearArtifactsAndGatesFallbackWatchTimer,
+        clearTelemetryBackgroundResultOcrTimer,
+        clearTelemetryDraftFallbackTimer,
+        clearTelemetryLobbyCaptureTimer,
+    ]);
 
     useEffect(() => {
         const nextDraftId = Number(activeTelemetryDraftMatch?.id || 0);
+        const previousDraftId = latestTelemetryDraftIdRef.current;
         if (!Number.isInteger(nextDraftId) || nextDraftId <= 0) {
-            if (telemetryLifecycleStage === 'idle' || telemetryLifecycleStage === 'result') {
-                clearTelemetryBackgroundResultOcrTimer(latestTelemetryDraftIdRef.current);
-                clearTelemetryLobbyCaptureTimer(latestTelemetryDraftIdRef.current);
-                latestTelemetryDraftIdRef.current = null;
-                telemetryLiveStageMatchIdRef.current = null;
-                setTelemetryLiveStartedAt(null);
+            clearTelemetryBackgroundResultOcrTimer(previousDraftId);
+            clearTelemetryLobbyCaptureTimer(previousDraftId);
+            clearArtifactsAndGatesFallbackWatchTimer();
+            latestTelemetryDraftIdRef.current = null;
+            telemetryFirstPregameAtRef.current.clear();
+            setActiveTelemetryDraftFirstPregameAt(null);
+            artifactsAndGatesFallbackWatchMatchIdRef.current = null;
+            setArtifactsAndGatesFallbackWatchMatchId(null);
+            resultMonitorArmAnchorMatchIdRef.current = null;
+            setResultMonitorArmAnchorAtState(null);
+            if (telemetryLifecycleStage === 'idle' || telemetryLifecycleStage === 'menu') {
                 setFullAutoDetectionLocked(false);
                 resetResultMonitorSuppression();
             }
             return;
         }
-        if (latestTelemetryDraftIdRef.current === nextDraftId) return;
-        clearTelemetryBackgroundResultOcrTimer(latestTelemetryDraftIdRef.current);
-        clearTelemetryLobbyCaptureTimer(latestTelemetryDraftIdRef.current);
+        if (previousDraftId === nextDraftId) return;
+        clearTelemetryBackgroundResultOcrTimer(previousDraftId);
+        clearTelemetryLobbyCaptureTimer(previousDraftId);
+        clearArtifactsAndGatesFallbackWatchTimer();
         latestTelemetryDraftIdRef.current = nextDraftId;
+        telemetryFirstPregameAtRef.current.clear();
+        setActiveTelemetryDraftFirstPregameAt(null);
+        artifactsAndGatesFallbackWatchMatchIdRef.current = null;
+        setArtifactsAndGatesFallbackWatchMatchId(null);
+        resultMonitorArmAnchorMatchIdRef.current = null;
+        setResultMonitorArmAnchorAtState(null);
         setFullAutoResultLatched(false);
         setFullAutoDetectionLocked(false);
         resetResultMonitorSuppression();
     }, [
         activeTelemetryDraftMatch?.id,
+        clearArtifactsAndGatesFallbackWatchTimer,
         clearTelemetryBackgroundResultOcrTimer,
         clearTelemetryLobbyCaptureTimer,
         resetResultMonitorSuppression,
@@ -2334,53 +2390,144 @@ const App: React.FC = () => {
         telemetryLifecycleStage,
     ]);
 
-    const shouldWatchResultScreens = (
+    useEffect(() => {
+        if (!isArtifactsAndGates || normalizedActiveTelemetryDraftMatchId == null) return;
+        const existingAnchorAt = telemetryFirstPregameAtRef.current.get(normalizedActiveTelemetryDraftMatchId) ?? null;
+        if (existingAnchorAt != null) {
+            if (activeTelemetryDraftFirstPregameAt !== existingAnchorAt) {
+                setActiveTelemetryDraftFirstPregameAt(existingAnchorAt);
+            }
+            return;
+        }
+        if (telemetryLifecycleStage !== 'pregame') return;
+        const seededAt = Date.now();
+        telemetryFirstPregameAtRef.current.set(normalizedActiveTelemetryDraftMatchId, seededAt);
+        setActiveTelemetryDraftFirstPregameAt(seededAt);
+        Logger.info('ResultMonitor', 'Seeded Artifacts & Gates pregame arm anchor', {
+            matchId: normalizedActiveTelemetryDraftMatchId,
+            armAnchorAt: seededAt,
+            primaryArmAt: seededAt + ARTIFACTS_AND_GATES_RESULT_ARM_DELAY_MS,
+            fallbackEligibleAt: seededAt + ARTIFACTS_AND_GATES_RESULT_FALLBACK_DELAY_MS,
+        });
+    }, [
+        activeTelemetryDraftFirstPregameAt,
+        isArtifactsAndGates,
+        normalizedActiveTelemetryDraftMatchId,
+        telemetryLifecycleStage,
+    ]);
+
+    const artifactsAndGatesNormalWatchActive = (
         normalizedActiveTelemetryDraftMatchId != null
-        && (telemetryLifecycleStage === 'live' || telemetryLifecycleStage === 'result')
+        && isArtifactsAndGatesResultWatchStage(telemetryLifecycleStage)
     );
-    const isArtifactsAndGates = activeTelemetryDraftMatch?.matchMode === 'artifactsandgates';
-    const lobbyCaptureCompletedAt = normalizedActiveTelemetryDraftMatchId != null
-        ? (telemetryLobbyCaptureCompletedAtRef.current.get(normalizedActiveTelemetryDraftMatchId) ?? null)
-        : null;
-    const resultMonitorArmDelayMs = isArtifactsAndGates
-        ? (lobbyCaptureCompletedAt != null && telemetryLiveStartedAt != null
-            ? Math.max(0, 120_000 - (telemetryLiveStartedAt - lobbyCaptureCompletedAt))
-            : 120_000)
-        : 0;
-    // Keep the text tripwire to the live phase. Once telemetry has already moved to
-    // result/postmatch, non-result screens like loading/menu are too likely to produce
-    // false positives in the headline ROI.
-    const resultTextTripwireEnabled = telemetryLifecycleStage === 'live' && !resultMonitorSuppression.text;
+    const artifactsAndGatesFallbackWatchActive = (
+        isArtifactsAndGates
+        && normalizedActiveTelemetryDraftMatchId != null
+        && artifactsAndGatesFallbackWatchMatchId === normalizedActiveTelemetryDraftMatchId
+    );
+    const shouldWatchResultScreens = normalizedActiveTelemetryDraftMatchId != null && (
+        isArtifactsAndGates
+            ? (artifactsAndGatesNormalWatchActive || artifactsAndGatesFallbackWatchActive)
+            : isDefaultResultWatchStage(telemetryLifecycleStage)
+    );
+    const resultMonitorArmAnchorAt = isArtifactsAndGates
+        ? activeTelemetryDraftFirstPregameAt
+        : resultMonitorArmAnchorAtState;
+    const resultMonitorArmDelayMs = isArtifactsAndGates ? ARTIFACTS_AND_GATES_RESULT_ARM_DELAY_MS : 0;
+    const resultMonitorEligible = fullAutoEnabled && shouldWatchResultScreens;
+    // Outside Artifacts & Gates we still restrict text sampling to the live phase so
+    // menu/postmatch transitions do not create false positives in the headline ROI.
+    const resultTextTripwireEnabled = isArtifactsAndGates
+        ? (resultMonitorEligible && !resultMonitorSuppression.text)
+        : (telemetryLifecycleStage === 'live' && !resultMonitorSuppression.text);
 
     useEffect(() => {
-        if (!shouldWatchResultScreens) {
-            telemetryLiveStageMatchIdRef.current = null;
-            setTelemetryLiveStartedAt(null);
+        if (isArtifactsAndGates) {
+            resultMonitorArmAnchorMatchIdRef.current = null;
+            setResultMonitorArmAnchorAtState(null);
             return;
         }
-        if (telemetryLiveStageMatchIdRef.current !== normalizedActiveTelemetryDraftMatchId) {
-            telemetryLiveStageMatchIdRef.current = normalizedActiveTelemetryDraftMatchId;
-            console.log('[LifecycleStage] live entered', {
-                matchId: normalizedActiveTelemetryDraftMatchId,
-                matchMode: activeTelemetryDraftMatch?.matchMode || (isTelemetryPracticeRange ? 'practice range' : 'unknown'),
-                at: new Date().toISOString(),
-            });
-            setTelemetryLiveStartedAt(Date.now());
+        if (!shouldWatchResultScreens || normalizedActiveTelemetryDraftMatchId == null) {
+            resultMonitorArmAnchorMatchIdRef.current = null;
+            setResultMonitorArmAnchorAtState(null);
             return;
         }
-        setTelemetryLiveStartedAt((current) => current ?? Date.now());
+        if (resultMonitorArmAnchorMatchIdRef.current !== normalizedActiveTelemetryDraftMatchId) {
+            resultMonitorArmAnchorMatchIdRef.current = normalizedActiveTelemetryDraftMatchId;
+            setResultMonitorArmAnchorAtState(Date.now());
+            return;
+        }
+        setResultMonitorArmAnchorAtState((current) => current ?? Date.now());
     }, [
-        activeTelemetryDraftMatch?.matchMode,
-        isTelemetryPracticeRange,
+        isArtifactsAndGates,
         normalizedActiveTelemetryDraftMatchId,
         shouldWatchResultScreens,
-        telemetryLifecycleStage,
+    ]);
+
+    useEffect(() => {
+        clearArtifactsAndGatesFallbackWatchTimer();
+        if (
+            !isArtifactsAndGates
+            || normalizedActiveTelemetryDraftMatchId == null
+            || activeTelemetryDraftFirstPregameAt == null
+            || artifactsAndGatesFallbackWatchMatchId === normalizedActiveTelemetryDraftMatchId
+        ) {
+            return;
+        }
+        const matchId = normalizedActiveTelemetryDraftMatchId;
+        const fallbackEligibleAt = activeTelemetryDraftFirstPregameAt + ARTIFACTS_AND_GATES_RESULT_FALLBACK_DELAY_MS;
+        const delayMs = Math.max(0, fallbackEligibleAt - Date.now());
+        artifactsAndGatesFallbackWatchTimerRef.current = window.setTimeout(() => {
+            artifactsAndGatesFallbackWatchTimerRef.current = null;
+            if (latestTelemetryDraftIdRef.current !== matchId) return;
+            const armAnchorAt = telemetryFirstPregameAtRef.current.get(matchId) ?? null;
+            const normalWatchStageActive = isArtifactsAndGatesResultWatchStage(telemetryLifecycleStageValueRef.current);
+            const fallbackAlreadyActive = artifactsAndGatesFallbackWatchMatchIdRef.current === matchId;
+            const isEffectivelyArmed = (
+                fullAutoEnabledRef.current
+                && armAnchorAt != null
+                && Date.now() >= armAnchorAt + ARTIFACTS_AND_GATES_RESULT_ARM_DELAY_MS
+                && (normalWatchStageActive || fallbackAlreadyActive)
+            );
+            if (isEffectivelyArmed) return;
+            setArtifactsAndGatesFallbackWatchMatchId((current) => current === matchId ? current : matchId);
+            Logger.info(
+                'ResultMonitor',
+                normalWatchStageActive
+                    ? 'Artifacts & Gates fallback kept result monitoring active'
+                    : 'Artifacts & Gates fallback restored result monitoring',
+                {
+                    matchId,
+                    lifecycleStage: telemetryLifecycleStageValueRef.current,
+                    armAnchorAt,
+                    primaryArmAt: armAnchorAt != null
+                        ? armAnchorAt + ARTIFACTS_AND_GATES_RESULT_ARM_DELAY_MS
+                        : null,
+                    fallbackEligibleAt,
+                    action: normalWatchStageActive ? 'keep' : 'restore',
+                },
+            );
+        }, delayMs);
+        return clearArtifactsAndGatesFallbackWatchTimer;
+    }, [
+        activeTelemetryDraftFirstPregameAt,
+        artifactsAndGatesFallbackWatchMatchId,
+        clearArtifactsAndGatesFallbackWatchTimer,
+        isArtifactsAndGates,
+        normalizedActiveTelemetryDraftMatchId,
     ]);
 
     useEffect(() => {
         const currentStatus = useAppStore.getState().telemetryAutomationStatus;
         const activeMatchId = Number(normalizedActiveTelemetryDraftMatchId || telemetryDraftPrompt?.matchId || 0);
         const normalizedMatchId = Number.isInteger(activeMatchId) && activeMatchId > 0 ? activeMatchId : null;
+        const hasTelemetryCaptureBundle = hasCompleteTelemetryCaptureBundle(normalizedMatchId);
+        const shouldShowArtifactsAndGatesWatchingResult = (
+            isArtifactsAndGates
+            && normalizedMatchId != null
+            && shouldWatchResultScreens
+            && hasTelemetryCaptureBundle
+        );
         const shouldPreserveCurrentStatus = currentStatus && (
             currentStatus.phase === 'capturing-lobby'
             || currentStatus.phase === 'capturing-manual'
@@ -2412,6 +2559,14 @@ const App: React.FC = () => {
             }
             setTelemetryAutomationStatus(nextStatus);
         };
+        const applyWatchingResultStatus = () => {
+            applyBaselineStatus(createTelemetryAutomationStatus({
+                phase: getWatchingResultStatusPhase(fullAutoEnabled),
+                message: getWatchingResultStatusMessage(fullAutoEnabled),
+                matchId: normalizedMatchId,
+                level: 'info',
+            }));
+        };
 
         if (telemetryLifecycleStage === 'loading') {
             applyBaselineStatus(createTelemetryAutomationStatus({
@@ -2424,7 +2579,17 @@ const App: React.FC = () => {
         }
 
         if (telemetryLifecycleStage === 'pregame') {
-            if (!currentStatus || currentStatus.phase !== 'lobby-complete') {
+            if (shouldShowArtifactsAndGatesWatchingResult) {
+                applyWatchingResultStatus();
+                return;
+            }
+            if (
+                !currentStatus
+                || (
+                    currentStatus.phase !== 'lobby-complete'
+                    && !isWatchingResultStatusPhase(currentStatus.phase)
+                )
+            ) {
                 applyBaselineStatus(createTelemetryAutomationStatus({
                     phase: 'pregame-detected',
                     message: 'Pregame lobby detected',
@@ -2436,12 +2601,12 @@ const App: React.FC = () => {
         }
 
         if (telemetryLifecycleStage === 'live') {
-            applyBaselineStatus(createTelemetryAutomationStatus({
-                phase: getWatchingResultStatusPhase(fullAutoEnabled),
-                message: getWatchingResultStatusMessage(fullAutoEnabled),
-                matchId: normalizedMatchId,
-                level: 'info',
-            }));
+            applyWatchingResultStatus();
+            return;
+        }
+
+        if (shouldShowArtifactsAndGatesWatchingResult) {
+            applyWatchingResultStatus();
             return;
         }
 
@@ -2459,7 +2624,9 @@ const App: React.FC = () => {
         normalizedActiveTelemetryDraftMatchId,
         setTelemetryAutomationStatus,
         telemetryDraftPrompt,
+        isArtifactsAndGates,
         isTelemetryPracticeRange,
+        shouldWatchResultScreens,
         telemetryLifecycleStage,
     ]);
 
@@ -2940,8 +3107,23 @@ const App: React.FC = () => {
         ) || 0);
         const shouldResumeWatchingOnFailure = currentReason === 'flash' || currentReason === 'text';
         const restoreWaitingStatus = () => {
+            const hasArtifactsAndGatesAnchor = (
+                normalizedDraftMatchId != null
+                && telemetryFirstPregameAtRef.current.has(normalizedDraftMatchId)
+            );
+            const shouldResumeWatching = (
+                currentReason !== 'background'
+                && (
+                    hasArtifactsAndGatesAnchor
+                        ? (
+                            isArtifactsAndGatesResultWatchStage(telemetryLifecycleStageValueRef.current)
+                            || artifactsAndGatesFallbackWatchMatchIdRef.current === normalizedDraftMatchId
+                        )
+                        : telemetryLifecycleStageValueRef.current === 'live'
+                )
+            );
             const status = (
-                currentReason === 'background' || telemetryLifecycleStageValueRef.current !== 'live'
+                !shouldResumeWatching
             )
                 ? createTelemetryAutomationStatus({
                     phase: 'result-ocr',
@@ -3203,9 +3385,9 @@ const App: React.FC = () => {
     }, [beginFullAutoResultDetection, normalizedActiveTelemetryDraftMatchId, triggerFullAutoSave]);
 
     useResultMonitor({
-        enabled: fullAutoEnabled && shouldWatchResultScreens,
+        enabled: resultMonitorEligible,
         flashEnabled: !resultMonitorSuppression.flash,
-        liveStartedAt: telemetryLiveStartedAt,
+        armAnchorAt: resultMonitorArmAnchorAt,
         armDelayMs: resultMonitorArmDelayMs,
         textEnabled: resultTextTripwireEnabled,
         triggerLatched: fullAutoResultLatched || fullAutoDetectionLocked,
