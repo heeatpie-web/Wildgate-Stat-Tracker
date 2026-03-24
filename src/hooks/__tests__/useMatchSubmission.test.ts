@@ -956,6 +956,35 @@ describe('useMatchSubmission', () => {
     expect(submitted.eliminatedByTeam).toBe('red');
   });
 
+  it('forces artifact defeats to save zero damage taken on final submission', async () => {
+    mockStoreState.activeUser = 'Tester';
+    mockStoreState.showWizard = 'Loss';
+    mockStoreState.damageTaken = '91';
+    mockStoreState.pendingArtifactType = 'healing';
+    mockStoreState.pendingMatchData = {
+      mode: 'Artifact Brawl',
+      player: 'Tester',
+      teammates: [],
+      opponents: [],
+      kills: {},
+      reachModifiers: [],
+      damageTaken: 57,
+      time: '08:00',
+    };
+
+    const { result } = renderHook(() => useMatchSubmission());
+
+    await act(async () => {
+      await result.current.processFinalSubmission('Artifact');
+    });
+
+    expect(addMatch).toHaveBeenCalled();
+    const [submitted] = addMatch.mock.calls[0];
+    expect(submitted.result).toBe('Loss');
+    expect(submitted.subType).toBe('Artifact');
+    expect(submitted.damageTaken).toBe(0);
+  });
+
   it('persists reviewed OCR state when finalizing a match', async () => {
     mockStoreState.activeUser = 'Tester';
     mockStoreState.showWizard = 'Win';
@@ -1036,6 +1065,7 @@ describe('useMatchSubmission', () => {
   it('saveResultDraft uses pending draft result precedence and skips artifact bundling', async () => {
     mockStoreState.activeUser = 'Tester';
     mockStoreState.showWizard = 'Loss';
+    mockStoreState.damageTaken = '99';
     mockStoreState.pendingMatchData = {
       id: 222,
       timestamp: 1_700_000_000_000,
@@ -1048,6 +1078,7 @@ describe('useMatchSubmission', () => {
       kills: {},
       reachModifiers: [],
       result: 'Win',
+      damageTaken: 77,
       time: '06:30',
       artifacts: ['capture.png'],
       ocrState: 'reviewing',
@@ -1080,6 +1111,7 @@ describe('useMatchSubmission', () => {
     const [savedMatch] = updateMatch.mock.calls[0];
     expect(savedMatch.result).toBe('Win');
     expect(savedMatch.subType).toBe('Artifact');
+    expect(savedMatch.damageTaken).toBe(0);
     expect(savedMatch.ocrState).toBe('reviewing');
     expect(bundleMatchArtifacts).not.toHaveBeenCalled();
     expect(mockStoreState.discardMatch).toHaveBeenCalledTimes(1);
@@ -1602,6 +1634,7 @@ describe('useMatchSubmission', () => {
     expect(updatedMatch.id).toBe(activeDraftId);
     expect(updatedMatch.result).toBe('Win');
     expect(updatedMatch.subType).toBe('Artifact');
+    expect(updatedMatch.damageTaken).toBe(0);
     expect(updatedMatch.resultDetectionMethod).toBeUndefined();
     expect(updatedMatch.artifacts).toEqual([
       'existing_capture.png',

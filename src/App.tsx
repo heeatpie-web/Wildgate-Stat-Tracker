@@ -319,10 +319,10 @@ const FULL_AUTO_RESULT_MAX_BURSTS_PER_MATCH = 2;
 const FULL_AUTO_BACKGROUND_RESULT_OCR_INTERVAL_MS = 2_000;
 const FULL_AUTO_BACKGROUND_RESULT_OCR_MAX_ATTEMPTS = 4;
 const FULL_AUTO_FRONTEND_RESULT_CONFIRM_GRACE_MS = 8_000;
-// Time to wait after result OCR for the damage panel to slide into position (~3s from text, ~2s from tripwire fire)
-const FULL_AUTO_FINAL_MOMENTS_SETTLE_MS = 2_000;
-// Time to wait after pressing ] before capturing tab 2
-const FULL_AUTO_DAMAGE_SOURCES_TRANSITION_MS = 100;
+// Grab the first loss recap panel aggressively so quick exits still preserve tab 1.
+const FULL_AUTO_DAMAGE_SOURCES_INITIAL_CAPTURE_DELAY_MS = 500;
+// Time to wait after pressing ] before capturing tab 2.
+const FULL_AUTO_DAMAGE_SOURCES_TRANSITION_MS = 125;
 // Damage panel region: x=1010, y=100, w=880, h=720 at 1920x1080 — fits the FINAL MOMENTS RECAP panel
 const FULL_AUTO_DAMAGE_SOURCES_CAPTURE_REGION = {
     left: 0.526,
@@ -332,23 +332,26 @@ const FULL_AUTO_DAMAGE_SOURCES_CAPTURE_REGION = {
     normalized: true,
 } as const;
 
-const hasRecognizedResultContext = (value: {
+type FullAutoResultContext = {
     result?: 'Win' | 'Loss' | 'Draw' | null;
     winType?: 'combat' | 'artifact';
     placement?: number | null;
-} | null | undefined): boolean => {
+};
+
+const hasRecognizedResultContext = (value: FullAutoResultContext | null | undefined): boolean => {
     if (value?.result === 'Win' || value?.result === 'Loss' || value?.result === 'Draw') return true;
     if (value?.winType === 'combat' || value?.winType === 'artifact') return true;
     const placement = Number(value?.placement);
     return Number.isInteger(placement) && placement >= 1 && placement <= 5;
 };
 
-const shouldCaptureDamageSourcesFollowUp = (value: {
-    result?: 'Win' | 'Loss' | 'Draw' | null;
-    winType?: 'combat' | 'artifact';
-} | null | undefined): boolean => (
-    value?.result === 'Loss' && value?.winType !== 'artifact'
-);
+const shouldCaptureDamageSourcesFollowUp = (value: FullAutoResultContext | null | undefined): boolean => {
+    if (value?.result !== 'Loss') return false;
+    if (value?.winType === 'artifact') return false;
+    if (value?.winType === 'combat') return true;
+    const placement = Number(value?.placement);
+    return Number.isInteger(placement) && placement >= 2 && placement <= 5;
+};
 
 const isImageArtifactEntry = (value: unknown): value is string => {
     const normalized = String(value || '').trim();
@@ -3063,8 +3066,9 @@ const App: React.FC = () => {
         api: NonNullable<ReturnType<typeof getElectronAPI>>,
         matchId: number,
     ) => {
-        // Settle: wait for damage panel to animate into position
-        await waitForDuration(FULL_AUTO_FINAL_MOMENTS_SETTLE_MS);
+        // The first recap tab is often visible shortly after the result screen lands.
+        // Capture it early so players who back out quickly still preserve the loss recap.
+        await waitForDuration(FULL_AUTO_DAMAGE_SOURCES_INITIAL_CAPTURE_DELAY_MS);
 
         // --- Tab 1: Damage Sources (fresh capture) ---
         const tab1Capture = await api.invoke('capture-result-screen-region', {
@@ -3170,6 +3174,7 @@ const App: React.FC = () => {
         reason?: FullAutoSaveReason;
         detectionMethod?: FullAutoDetectionMethod;
         matchId?: number | null;
+        resultHint?: FullAutoResultContext | null;
     }) => {
         const api = getElectronAPI();
         if (!api || fullAutoResultLatched || fullAutoCaptureInFlightRef.current) return;
@@ -3250,6 +3255,7 @@ const App: React.FC = () => {
             let shouldReturnToWatching = true;
             let finalFailureMessage = 'Automatic result capture failed';
             let supplementalArtifacts: Array<{ imageBase64: string; kind: 'damage-sources' | 'damage-ships' }> = [];
+            let supplementalArtifactsPromise: Promise<Array<{ imageBase64: string; kind: 'damage-sources' | 'damage-ships' }> | null> | null = null;
 
             for (let attemptIndex = 0; attemptIndex < FULL_AUTO_RESULT_OCR_MAX_ATTEMPTS; attemptIndex += 1) {
                 const capture = await api.invoke('capture-screen');
@@ -3263,6 +3269,13 @@ const App: React.FC = () => {
 
                 const imageBase64 = capture as string;
                 const normalizedCaptureBase64 = normalizeImageBase64Payload(imageBase64);
+                if (
+                    attemptIndex === 0
+                    && !supplementalArtifactsPromise
+                    && shouldCaptureDamageSourcesFollowUp(options?.resultHint)
+                ) {
+                    supplementalArtifactsPromise = captureDamageSourcesArtifact(api, normalizedDraftMatchId);
+                }
                 const scanResult = await api.invoke('scan-result-screen', {
                     imageBase64,
                     detectionMethod: currentDetectionMethod,
@@ -3283,6 +3296,13 @@ const App: React.FC = () => {
                     : (scanResult?.data ?? { result: null });
                 if (!resultData.detectionMethod && currentDetectionMethod) {
                     resultData.detectionMethod = currentDetectionMethod;
+                }
+                if (
+                    attemptIndex === 0
+                    && !supplementalArtifactsPromise
+                    && shouldCaptureDamageSourcesFollowUp(resultData)
+                ) {
+                    supplementalArtifactsPromise = captureDamageSourcesArtifact(api, normalizedDraftMatchId);
                 }
 
                 let persistedPrimaryArtifactPath: string | null = null;
@@ -3322,10 +3342,10 @@ const App: React.FC = () => {
                     });
                 }
 
-                // Only grab the speculative damage follow-up once the primary
-                // frame already looks like a believable combat-loss result.
-                if (attemptIndex === 0 && shouldCaptureDamageSourcesFollowUp(resultData)) {
-                    supplementalArtifacts = (await captureDamageSourcesArtifact(api, normalizedDraftMatchId)) ?? [];
+                // Only keep the speculative damage follow-up on the first burst.
+                // It may have already started from the text tripwire's provisional loss hint.
+                if (attemptIndex === 0 && supplementalArtifactsPromise) {
+                    supplementalArtifacts = (await supplementalArtifactsPromise) ?? [];
                 }
 
                 const finalized = await autoFinalizeResultScreenCapture({
@@ -3515,6 +3535,7 @@ const App: React.FC = () => {
             reason: 'text',
             detectionMethod: 'text',
             matchId: scheduledMatchId,
+            resultHint: payload,
         });
     }, [beginFullAutoResultDetection, normalizedActiveTelemetryDraftMatchId, triggerFullAutoSave]);
 

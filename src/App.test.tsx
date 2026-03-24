@@ -1437,7 +1437,7 @@ describe('App', () => {
         matchId: 4321,
       });
 
-      // Advance past FULL_AUTO_FINAL_MOMENTS_SETTLE_MS (2000ms) so captureDamageSourcesArtifact completes.
+      // Advance far enough for any speculative damage follow-up to finish.
       // capture-result-screen-region is not mocked here so tab1Base64 is null → returns null → [] artifacts.
       await act(async () => {
         await vi.advanceTimersByTimeAsync(2500);
@@ -2078,7 +2078,7 @@ describe('App', () => {
 
     expect(api.invoke).toHaveBeenCalledWith('capture-screen');
 
-    // After the initial capture, wait through the 2000ms settle before toggling to tab 2.
+    // Advance far enough for the early loss recap capture and the tab-2 toggle to complete.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2500);
       await Promise.resolve();
@@ -2111,6 +2111,149 @@ describe('App', () => {
       }),
       matchId: 5432,
       persistedPrimaryArtifactPath: 'C:\\match_artifacts\\5432\\capture_result.png',
+      supplementalArtifacts: [
+        { imageBase64: 'damage-region', kind: 'damage-sources' },
+        { imageBase64: 'damage-region', kind: 'damage-ships' },
+      ],
+    }));
+    vi.useRealTimers();
+  });
+
+  it('starts the combat-loss damage follow-up before result OCR finishes when text already identified the loss', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
+    uiState.telemetryLifecycleStage = 'live';
+    const draft = {
+      id: 5444,
+      timestamp: Date.now(),
+      date: '3/24/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      artifacts: [],
+    };
+    gameDataState.matches = [draft];
+    appStoreState.matches = [draft];
+    autoFinalizeResultScreenCaptureMock.mockResolvedValue({ success: true });
+
+    let resolveScanResult: ((value: any) => void) | null = null;
+    const scanResultPromise = new Promise<any>((resolve) => {
+      resolveScanResult = resolve;
+    });
+    const api = {
+      invoke: vi.fn((channel: string, payload?: any) => {
+        if (channel === 'capture-screen') {
+          return Promise.resolve('image-base64');
+        }
+        if (channel === 'save-screenshot') {
+          return Promise.resolve({
+            success: true,
+            data: { filePath: 'C:\\match_artifacts\\5444\\capture_result.png' },
+          });
+        }
+        if (channel === 'scan-result-screen') {
+          return scanResultPromise;
+        }
+        if (channel === 'capture-result-screen-region') {
+          return Promise.resolve({ success: true, imageBase64: 'damage-region' });
+        }
+        if (channel === 'telemetry-retention-status') {
+          return Promise.resolve(null);
+        }
+        return Promise.resolve(null);
+      }),
+      send: vi.fn(),
+      on: vi.fn(() => () => {}),
+      removeAllListeners: vi.fn(),
+    };
+    getElectronAPIMock.mockReturnValue(api);
+
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    const textOptions = useResultTextMonitorMock.mock.calls.at(-1)?.[0] as {
+      onResultDetected?: (payload: {
+        detectionMethod: 'text';
+        result: 'Win' | 'Loss' | null;
+        winType?: 'combat' | 'artifact';
+        placement?: number;
+        text?: string;
+      }) => Promise<void>;
+    };
+    expect(textOptions?.onResultDetected).toBeTypeOf('function');
+
+    let triggerPromise: Promise<void> | undefined;
+    await act(async () => {
+      triggerPromise = textOptions.onResultDetected?.({
+        detectionMethod: 'text',
+        result: 'Loss',
+        winType: 'combat',
+        placement: 4,
+        text: '4TH PLACE',
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(api.invoke).toHaveBeenCalledWith('capture-screen');
+    expect(api.invoke).not.toHaveBeenCalledWith('capture-result-screen-region', expect.anything());
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(api.invoke).toHaveBeenCalledWith('capture-result-screen-region', expect.objectContaining({
+      cropRegion: expect.objectContaining({
+        left: expect.any(Number),
+        top: expect.any(Number),
+        width: expect.any(Number),
+        height: expect.any(Number),
+        normalized: true,
+      }),
+    }));
+    expect(sendGameUiActionMock).toHaveBeenCalledWith('show-damage-sources');
+
+    await act(async () => {
+      resolveScanResult?.({
+        data: { result: 'Loss', winType: 'combat', placement: 4, detectionMethod: 'text' },
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+      await Promise.resolve();
+      await Promise.resolve();
+      await triggerPromise;
+    });
+
+    expect(autoFinalizeResultScreenCaptureMock).toHaveBeenCalledWith(expect.objectContaining({
+      imageBase64: 'image-base64',
+      resultData: expect.objectContaining({
+        result: 'Loss',
+        winType: 'combat',
+        placement: 4,
+        detectionMethod: 'text',
+      }),
+      matchId: 5444,
+      persistedPrimaryArtifactPath: 'C:\\match_artifacts\\5444\\capture_result.png',
       supplementalArtifacts: [
         { imageBase64: 'damage-region', kind: 'damage-sources' },
         { imageBase64: 'damage-region', kind: 'damage-ships' },

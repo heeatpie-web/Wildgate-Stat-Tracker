@@ -169,6 +169,20 @@ const normalizeResultSubType = (
     return null;
 };
 
+const resolveFinalDamageTaken = (
+    subType: 'Artifact' | 'Combat' | null | undefined,
+    ...values: unknown[]
+): number => {
+    if (subType === 'Artifact') return 0;
+    return Math.max(
+        0,
+        ...values.map((value) => {
+            const normalized = Number.parseInt(String(value ?? ''), 10);
+            return Number.isFinite(normalized) ? normalized : 0;
+        }),
+    );
+};
+
 const resolveSavedOcrMeta = (
     pendingMatchData: Partial<Match> | null | undefined,
     existingMatch: Match | null | undefined,
@@ -970,9 +984,13 @@ export const useMatchSubmission = () => {
                 if (parsed > 0) acc[ship] = parsed;
                 return acc;
             }, {});
-            const finalDamageTaken = Math.max(
-                Number(pendingMatchData.damageTaken) || 0,
-                Number.parseInt(String(damageTaken || ''), 10) || 0
+            const normalizedSubType = (subType === 'Artifact' || subType === 'Combat')
+                ? subType
+                : null;
+            const finalDamageTaken = resolveFinalDamageTaken(
+                normalizedSubType,
+                pendingMatchData.damageTaken,
+                damageTaken,
             );
             const finalPoiEasy = Math.max(Number(pendingMatchData.poiEasy) || 0, Number(poiEasy) || 0);
             const finalPoiMedium = Math.max(Number(pendingMatchData.poiMedium) || 0, Number(poiMedium) || 0);
@@ -1248,9 +1266,13 @@ export const useMatchSubmission = () => {
                 if (parsed > 0) acc[ship] = parsed;
                 return acc;
             }, {});
-            const finalDamageTaken = Math.max(
-                Number(pendingMatchData.damageTaken) || 0,
-                Number.parseInt(String(damageTaken || ''), 10) || 0
+            const normalizedSubType = (subType === 'Artifact' || subType === 'Combat')
+                ? subType
+                : null;
+            const finalDamageTaken = resolveFinalDamageTaken(
+                normalizedSubType,
+                pendingMatchData.damageTaken,
+                damageTaken,
             );
             const finalPoiEasy = Math.max(Number(pendingMatchData.poiEasy) || 0, Number(poiEasy) || 0);
             const finalPoiMedium = Math.max(Number(pendingMatchData.poiMedium) || 0, Number(poiMedium) || 0);
@@ -1539,11 +1561,12 @@ export const useMatchSubmission = () => {
                 if (parsed > 0) acc[ship] = parsed;
                 return acc;
             }, {});
-            const finalDamageTaken = Math.max(
-                Number(existingMatch.damageTaken) || 0,
-                Number(resolvedPendingMatchData.damageTaken) || 0,
-                Number.parseInt(String(damageTaken || ''), 10) || 0,
-                Number(resultData.damageTaken) || 0
+            const finalDamageTaken = resolveFinalDamageTaken(
+                normalizedSubType,
+                existingMatch.damageTaken,
+                resolvedPendingMatchData.damageTaken,
+                damageTaken,
+                resultData.damageTaken,
             );
             const finalPoiEasy = Math.max(Number(existingMatch.poiEasy) || 0, Number(resolvedPendingMatchData.poiEasy) || 0, Number(poiEasy) || 0);
             const finalPoiMedium = Math.max(Number(existingMatch.poiMedium) || 0, Number(resolvedPendingMatchData.poiMedium) || 0, Number(poiMedium) || 0);
