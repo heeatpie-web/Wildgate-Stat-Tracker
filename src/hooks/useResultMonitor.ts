@@ -20,13 +20,13 @@ export const FLASH_SAMPLE_REGION = {
 } as const;
 
 // ── Text region ─────────────────────────────────────────────────────────────
-// Spans x=478-1244, y=113-243 at 1920×1080 — boxes A/B/C cover left-anchored
+// Spans x=478-1244, y=113-270 at 1920×1080 — boxes A/B/C cover left-anchored
 // (2025) and center (2026) layouts without diluting white ratio with background.
 export const RESULT_TEXT_SAMPLE_REGION = {
     left: 0.2489,
     top: 0.105,
     width: 0.3991,
-    height: 0.12,
+    height: 0.145,
     normalized: true,
 } as const;
 
