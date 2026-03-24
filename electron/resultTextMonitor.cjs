@@ -3,7 +3,7 @@
 const { sampleBoxes: dxgiSampleBoxes } = require('./dxgiSampler.cjs');
 
 const DEFAULT_SAMPLE_INTERVAL_MS = 100;
-const TEXT_TRIPWIRE_SUSTAIN_MS = 600;
+const TEXT_TRIPWIRE_SUSTAIN_MS = 300;
 const TRIPWIRE_BASELINE_ALPHA = 0.18;
 const TRIPWIRE_MIN_CONSECUTIVE_HITS = Math.max(1, Math.ceil(TEXT_TRIPWIRE_SUSTAIN_MS / DEFAULT_SAMPLE_INTERVAL_MS));
 const TRIPWIRE_MIN_ACTIVE_BOXES = 1;

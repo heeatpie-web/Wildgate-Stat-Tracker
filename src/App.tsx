@@ -301,8 +301,8 @@ const TELEMETRY_AUTO_CAPTURE_ARTIFACT_TARGET = 3;
 const PREGAME_LOBBY_MACRO_DELAY_MS = 5_000;
 // `capture-screen` already hides the overlay window and waits briefly before grabbing the game frame.
 // The actual result flash is much shorter than the old 541ms assumption, so keep both
-// flash and text captures keyed off the same 200ms settle window.
-const KNOWN_FLASH_PURE_WHITE_MS = 200;
+// flash and text captures keyed off the same 100ms settle window.
+const KNOWN_FLASH_PURE_WHITE_MS = 100;
 // Extra settle time after the flash window ends before we take the first
 // full-screen result capture. This is intentionally looser than the text path.
 const POST_FLASH_CAPTURE_BUFFER_MS = 200;
