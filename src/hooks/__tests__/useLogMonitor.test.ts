@@ -1311,7 +1311,7 @@ describe('useLogMonitor', () => {
     expect(finalizedDraft?.result).toBe('Ongoing');
     expect(gameDataState.setIsMatchInProgress).toHaveBeenCalledWith(false);
     expect(gameDataState.setMatchStartTime).toHaveBeenCalledWith(null);
-    expect(uiState.setOverlayPhase).toHaveBeenCalledWith('Result');
+    expect(uiState.setOverlayPhase).toHaveBeenCalledWith('Menu');
     expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-ready' }));
     dispatchSpy.mockRestore();
   });
