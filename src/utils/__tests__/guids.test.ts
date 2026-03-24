@@ -29,4 +29,11 @@ describe('guid mapping aliases', () => {
     expect(EQUIPMENT_GUIDS[guid.toLowerCase()]).toBe('Repair Drone');
     expect(EQUIPMENT_GUIDS[guid.toUpperCase()]).toBe('Repair Drone');
   });
+
+  it('includes Repulsor in the built-in equipment GUID table', () => {
+    const guid = 'D758D49F45005A77CB13ABAE81E204EB';
+    expect(EQUIPMENT_GUIDS[guid]).toBe('Repulsor');
+    expect(EQUIPMENT_GUIDS[guid.toLowerCase()]).toBe('Repulsor');
+    expect(EQUIPMENT_GUIDS[guid.toUpperCase()]).toBe('Repulsor');
+  });
 });

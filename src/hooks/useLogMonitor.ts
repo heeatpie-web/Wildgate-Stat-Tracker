@@ -13,7 +13,7 @@ import { isNonMatchMap, isPregameLobbyMap } from '../utils/nonMatchMaps';
 import Logger from '../utils/logger';
 import { getElectronAPI } from '../utils/electronAPI';
 import { runtimeConfig } from '../config/runtimeConfig';
-import { buildActiveWeaponsFromLoadout, buildLoadoutSignature, cloneLoadout, sanitizeLoadout } from '../utils/loadout';
+import { buildActiveWeaponsFromLoadout, buildLoadoutSignature, cloneLoadout, isBogusTertiaryLoadoutEntry, sanitizeLoadout } from '../utils/loadout';
 import type { TelemetryLifecycleStage } from '../store/slices/createUISlice';
 import {
     DEFAULT_DURATION_TOLERANCE_SECONDS,
@@ -2137,6 +2137,7 @@ export const useLogMonitor = (activeUser?: string) => {
                                 }
                                 return null;
                             }
+                            if (isBogusTertiaryLoadoutEntry(name)) return null;
                             return name;
                         };
                         const weaponGuidCandidates = extractByKeys(loadoutData, [
@@ -2234,6 +2235,7 @@ export const useLogMonitor = (activeUser?: string) => {
                             candidates.forEach((candidate) => {
                                 const raw = String(candidate || '').trim();
                                 if (!raw) return;
+                                if (isBogusTertiaryLoadoutEntry(raw)) return;
                                 const canonical = type === 'Weapon'
                                     ? toCanonicalProspectorWeaponName(raw)
                                     : (type === 'Equipment'

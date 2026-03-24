@@ -49,6 +49,7 @@ export const WEAPON_GUIDS: Record<string, string> = withGuidCaseAliases({
 
 export const EQUIPMENT_GUIDS: Record<string, string> = withGuidCaseAliases({
     'F2B54FEC47BBDBEA641EB9AD846A0A8D': 'Repair Drone',
+    'D758D49F45005A77CB13ABAE81E204EB': 'Repulsor',
     '6EEA22004EA2D98A46779A9592E0C4B2': 'Teleport Reloader',
     '7331F55044069CD1196C43883CD12EDF': 'Shield Wall',
     '990B68A64D67094FADE3D3B4E229D6F4': 'Rock!',

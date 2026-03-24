@@ -3,13 +3,18 @@ import type { Loadout, ShipWeaponEntry } from '../types';
 const MAX_SHIP_WEAPON_SLOTS = 10;
 const MAX_PROSPECTOR_LOADOUT_SLOTS = 2;
 const MAX_PERK_SLOTS = 2;
+const TERTIARY_PLACEHOLDER_PATTERN = /^tertiary\s+(weapon|equipment)$/i;
+
+export const isBogusTertiaryLoadoutEntry = (value: unknown): boolean => (
+  TERTIARY_PLACEHOLDER_PATTERN.test(String(value || '').trim())
+);
 
 const sanitizeSlotList = (entries: unknown, maxSlots: number): string[] => (
   Array.isArray(entries)
     ? entries
       .map((entry) => String(entry || '').trim())
       .filter(Boolean)
-      .filter((entry) => !/tertiary\s+(weapon|equipment)/i.test(entry))
+      .filter((entry) => !isBogusTertiaryLoadoutEntry(entry))
       .slice(0, Math.max(1, maxSlots))
     : []
 );

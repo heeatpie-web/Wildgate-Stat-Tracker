@@ -9,6 +9,7 @@
  */
 import { StateCreator } from 'zustand';
 import Logger from '../../utils/logger';
+import { isBogusTertiaryLoadoutEntry } from '../../utils/loadout';
 import { normalizeOcrName } from '../../utils/stringUtils';
 import type { DetectedUnknownMapping, MappingEntityType } from '../../types';
 import { normalizeDetectedUnknownMappings, normalizeSharedUidMappings } from '../../services/mappingContract';
@@ -263,6 +264,13 @@ const removeLegacyCorrection = (
     const { [key]: _removed, ...rest } = map;
     return rest;
 };
+
+const sanitizeImportedUidDomain = (
+    entries: Record<string, string> | undefined,
+    stripBogusTertiary = false,
+): Record<string, string> => Object.fromEntries(
+    Object.entries(entries || {}).filter(([, name]) => !stripBogusTertiary || !isBogusTertiaryLoadoutEntry(name))
+);
 
 const normalizeTeamIdentityName = (value: string): string =>
     normalizeOcrName(value || '').toLowerCase();
@@ -998,7 +1006,20 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
     setUidMapping: (domain, id, name) => set((state) => {
         const normalizedId = normalizeGuidLikeId(id);
         if (!normalizedId) return {};
-        const nextDomain = { ...state.uidMappings[domain], [normalizedId]: name };
+        const trimmedName = String(name || '').trim();
+        if (!trimmedName) return {};
+        if (domain !== 'players' && isBogusTertiaryLoadoutEntry(trimmedName)) {
+            const rest = Object.fromEntries(
+                Object.entries(state.uidMappings[domain]).filter(([key]) => !idsEquivalent(key, normalizedId))
+            );
+            return {
+                uidMappings: { ...state.uidMappings, [domain]: rest },
+                detectedUnknowns: Object.fromEntries(
+                    Object.entries(state.detectedUnknowns).filter(([k]) => !idsEquivalent(k, normalizedId))
+                )
+            } as Partial<MappingSlice>;
+        }
+        const nextDomain = { ...state.uidMappings[domain], [normalizedId]: trimmedName };
         const base: Partial<MappingSlice> = {
             uidMappings: { ...state.uidMappings, [domain]: nextDomain },
             detectedUnknowns: Object.fromEntries(
@@ -1012,8 +1033,8 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
             const existing = existingProfileEntry?.[1] || createEmptyProfile(profileKey);
             return {
                 ...base,
-                knownMappings: { ...state.knownMappings, [normalizedId]: name },
-                playerProfiles: { ...state.playerProfiles, [profileKey]: { ...existing, id: profileKey, name } }
+                knownMappings: { ...state.knownMappings, [normalizedId]: trimmedName },
+                playerProfiles: { ...state.playerProfiles, [profileKey]: { ...existing, id: profileKey, name: trimmedName } }
             };
         }
         return {
@@ -1038,11 +1059,13 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
     }),
 
     importUidMappings: (mappings) => set((state) => {
+        const sanitizedWeapons = sanitizeImportedUidDomain(mappings.weapons, true);
+        const sanitizedEquipment = sanitizeImportedUidDomain(mappings.equipment, true);
         const merged: UidMappings = normalizeSharedUidMappings({
             players: { ...state.uidMappings.players, ...(mappings.players || {}) },
             ships: { ...state.uidMappings.ships, ...(mappings.ships || {}) },
-            weapons: { ...state.uidMappings.weapons, ...(mappings.weapons || {}) },
-            equipment: { ...state.uidMappings.equipment, ...(mappings.equipment || {}) },
+            weapons: { ...sanitizeImportedUidDomain(state.uidMappings.weapons, true), ...sanitizedWeapons },
+            equipment: { ...sanitizeImportedUidDomain(state.uidMappings.equipment, true), ...sanitizedEquipment },
             perks: { ...state.uidMappings.perks, ...(mappings.perks || {}) },
         });
         return {

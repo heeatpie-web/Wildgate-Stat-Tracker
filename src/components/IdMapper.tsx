@@ -180,7 +180,7 @@ export const IdMapper: React.FC = () => {
         if (normalizedType.includes('perk') || normalizedType.includes('trait')) {
             return 'perks';
         }
-        if (normalizedType.includes('weapon') || normalizedType.includes('tertiary')) {
+        if (normalizedType.includes('weapon')) {
             return 'weapons';
         }
         if (normalizedType.includes('equipment') || normalizedType.includes('gear') || normalizedType.includes('utility')) {

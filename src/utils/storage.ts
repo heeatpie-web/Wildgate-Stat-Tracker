@@ -9,6 +9,7 @@ import type {
 } from '../store/slices/createMappingSlice';
 import type { OcrAliasModel, OcrLearningEvent, OcrLearningQueueItem } from './ocrAliasEngine';
 import { normalizeSharedUidMappings } from '../services/mappingContract';
+import { isBogusTertiaryLoadoutEntry, sanitizeUnknownLoadout } from './loadout';
 import Logger from './logger';
 import { runtimeConfig } from '../config/runtimeConfig';
 
@@ -133,6 +134,12 @@ const toStringMap = (value: unknown): StringMap => {
   return map;
 };
 
+const stripBogusTertiaryUidEntries = (value: unknown): StringMap => (
+  Object.fromEntries(
+    Object.entries(toStringMap(value)).filter(([, rawName]) => !isBogusTertiaryLoadoutEntry(rawName))
+  )
+);
+
 const toLayouts = (value: unknown): StorageLayouts => {
   if (!isRecord(value)) return {};
   const layouts: StorageLayouts = {};
@@ -201,8 +208,8 @@ const toUidMappings = (value: unknown): UidMappings => {
   return normalizeSharedUidMappings({
     players: toStringMap(value.players),
     ships: toStringMap(value.ships),
-    weapons: toStringMap(value.weapons),
-    equipment: toStringMap(value.equipment),
+    weapons: stripBogusTertiaryUidEntries(value.weapons),
+    equipment: stripBogusTertiaryUidEntries(value.equipment),
     perks: toStringMap(value.perks),
   });
 };
@@ -274,7 +281,12 @@ const coerceStorageData = (value: unknown): StorageData | null => {
     : defaults.matches;
   const matches = rawMatches.map((m) => {
     const cleaned = stripTelemetryNotes(m.notes);
-    return cleaned !== (m.notes || '') ? { ...m, notes: cleaned } : m;
+    const sanitizedLoadout = sanitizeUnknownLoadout(m.loadout);
+    return {
+      ...m,
+      ...(cleaned !== (m.notes || '') ? { notes: cleaned } : {}),
+      ...(m.loadout !== undefined ? { loadout: sanitizedLoadout || undefined } : {}),
+    };
   });
   return {
     ...defaults,

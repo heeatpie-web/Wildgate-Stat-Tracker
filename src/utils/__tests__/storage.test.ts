@@ -285,4 +285,53 @@ describe('StorageService', () => {
     expect(loaded?.uidMappings.equipment[THUNDER_DASH_GUID]).toBe('Thunder Dash');
     expect(loaded?.uidMappings.equipment[ATTACK_DRONE_GUID]).toBe('Attack Drone');
   });
+
+  it('strips bogus tertiary placeholder mappings and loadout entries during hydration', async () => {
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'db-read') {
+        return createStorageData({
+          matches: [{
+            id: 1,
+            notes: '',
+            loadout: {
+              hero: 'Adrian',
+              ship: 'Hunter',
+              perks: [],
+              shipPerks: [],
+              characterPerks: [],
+              shipWeapons: [],
+              weapons: ['Tertiary Weapon'],
+              equipment: ['Tertiary Equipment'],
+              characterWeapons: ['The Doctor', 'Tertiary Weapon'],
+              characterEquipment: ['Repair Drone', 'Tertiary Equipment'],
+            },
+          } as unknown as StorageData['matches'][number]],
+          uidMappings: {
+            players: {},
+            ships: {},
+            weapons: {
+              B1B367B8429C67883B88D5B315F997B0: 'Tertiary Weapon',
+            },
+            equipment: {
+              B1B367B8429C67883B88D5B315F997B0: 'Tertiary Equipment',
+              D758D49F45005A77CB13ABAE81E204EB: 'Repulsor',
+            },
+            perks: {},
+          },
+        });
+      }
+      return null;
+    });
+    const { StorageService } = await loadStorageModule({ invoke });
+
+    const loaded = await StorageService.init();
+
+    expect(loaded?.uidMappings.weapons.B1B367B8429C67883B88D5B315F997B0).toBeUndefined();
+    expect(loaded?.uidMappings.equipment.B1B367B8429C67883B88D5B315F997B0).toBeUndefined();
+    expect(loaded?.uidMappings.equipment.D758D49F45005A77CB13ABAE81E204EB).toBe('Repulsor');
+    expect(loaded?.matches[0]?.loadout?.weapons || []).toEqual([]);
+    expect(loaded?.matches[0]?.loadout?.equipment || []).toEqual([]);
+    expect(loaded?.matches[0]?.loadout?.characterWeapons || []).toEqual(['The Doctor']);
+    expect(loaded?.matches[0]?.loadout?.characterEquipment || []).toEqual(['Repair Drone']);
+  });
 });

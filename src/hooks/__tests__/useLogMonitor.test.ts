@@ -1600,6 +1600,67 @@ describe('useLogMonitor', () => {
     expect(latestLoadout?.characterEquipment).toEqual(expect.arrayContaining(['Repair Drone']));
   });
 
+  it('ignores bogus tertiary weapon and equipment placeholders in telemetry loadouts', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'CharacterLoadoutChanged',
+          Payload: {
+            isLocalPlayer: true,
+            hero: 'Adrian',
+            ship: 'Hunter',
+            weapons: [
+              { weaponName: 'Double Whammy' },
+              { displayName: 'Tertiary Weapon' },
+            ],
+            equipmentSlots: [
+              { name: 'Repair Drone' },
+              { name: 'Tertiary Equipment' },
+            ],
+          },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    const latestLoadout = gameDataState.setCurrentLoadout.mock.calls.at(-1)?.[0] as {
+      characterWeapons?: string[];
+      characterEquipment?: string[];
+    };
+    expect(latestLoadout?.characterWeapons || []).toEqual(['Double Whammy']);
+    expect(latestLoadout?.characterEquipment || []).toEqual(['Repair Drone']);
+  });
+
+  it('resolves the built-in Repulsor equipment GUID into the current loadout', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'CharacterLoadoutChanged',
+          Payload: {
+            isLocalPlayer: true,
+            hero: 'Adrian',
+            ship: 'Hunter',
+            equipmentIds: [
+              'NebEquipmentAsset:D758D49F45005A77CB13ABAE81E204EB',
+            ],
+          },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    const latestLoadout = gameDataState.setCurrentLoadout.mock.calls.at(-1)?.[0] as {
+      characterEquipment?: string[];
+    };
+    expect(latestLoadout?.characterEquipment || []).toEqual(['Repulsor']);
+  });
+
   it('sets hero and ship from nested loadout payloads after lifecycle start', async () => {
     const nowSec = Math.floor(Date.now() / 1000);
     const { useLogMonitor } = await import('../useLogMonitor');

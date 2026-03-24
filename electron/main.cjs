@@ -2904,6 +2904,9 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       webSecurity: true,
+      // Keep renderer timers/heartbeats alive while the app is minimized so
+      // pregame auto-capture and hotkey state sync do not stall until F9 shows the window.
+      backgroundThrottling: false,
       preload: path.join(__dirname, 'preload.cjs'),
     },
     icon: iconPath,
