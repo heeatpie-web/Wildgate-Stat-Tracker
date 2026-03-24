@@ -24,6 +24,32 @@ const { classifyTeamColorHSL, clusterByHue, nearestWildgateColor, __test__ } = r
       rawHue: number | null;
       rgb: { r: number; g: number; b: number };
     };
+    resolveBadgeSampleConsensus: (
+      chromaticSamples: Array<{
+        confidence: number;
+        rawHue: number;
+        rgb: { r: number; g: number; b: number };
+        hsl: { h: number; s: number; l: number };
+        weight: number;
+      }>,
+      bestBlackResult: {
+        color: string;
+        confidence: number;
+        rgb: { r: number; g: number; b: number };
+        rawHue: null;
+      } | null,
+      primarySample: {
+        color: string;
+        confidence: number;
+        rgb: { r: number; g: number; b: number };
+        rawHue: number | null;
+      } | null,
+    ) => {
+      color: string;
+      confidence: number;
+      rawHue: number | null;
+      rgb?: { r: number; g: number; b: number };
+    };
   };
 };
 
@@ -288,6 +314,38 @@ describe('electron/colorUtils team badge family snapping', () => {
     ];
 
     expect(__test__.maybePreferWarmBadgeFamily(samples, 'orange')).toBe('orange');
+  });
+});
+
+describe('electron/colorUtils black badge consensus', () => {
+  it('prefers a strong primary black sample over dark warm background bleed', () => {
+    const warmBleedSamples = Array.from({ length: 6 }, () => ({
+      confidence: 80,
+      rawHue: 4,
+      rgb: { r: 94, g: 70, b: 68 },
+      hsl: { h: 4, s: 16, l: 32 },
+      weight: 1,
+    }));
+
+    const result = __test__.resolveBadgeSampleConsensus(
+      warmBleedSamples,
+      {
+        color: 'black',
+        confidence: 80,
+        rgb: { r: 0, g: 0, b: 0 },
+        rawHue: null,
+      },
+      {
+        color: 'black',
+        confidence: 80,
+        rgb: { r: 0, g: 0, b: 0 },
+        rawHue: null,
+      },
+    );
+
+    expect(result.color).toBe('black');
+    expect(result.confidence).toBeGreaterThanOrEqual(80);
+    expect(result.rawHue).toBeNull();
   });
 });
 

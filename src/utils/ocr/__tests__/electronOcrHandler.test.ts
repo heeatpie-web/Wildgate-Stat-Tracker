@@ -122,6 +122,37 @@ describe('electron/ocrHandler crew-hub teammate cleanup', () => {
     });
   });
 
+  it('preserves every detected enemy team when crew-hub OCR finds more than four', () => {
+    const result = __test__.convertCrewHubToLegacy(
+      {
+        yourTeam: {
+          name: 'Friendly',
+          shipType: 'Hunter',
+          players: ['PilotOne'],
+        },
+        enemyTeams: [
+          { name: 'Team Red', color: 'red', players: ['EnemyA'], confidence: 81 },
+          { name: 'Team Orange', color: 'orange', players: ['EnemyB'], confidence: 82 },
+          { name: 'Team Black', color: 'black', players: ['EnemyC'], confidence: 83 },
+          { name: 'Team Lime', color: 'limeGreen', players: ['EnemyD'], confidence: 84 },
+          { name: 'Team Gold', color: 'goldenrod', players: ['EnemyE'], confidence: 85 },
+        ],
+        hazards: [],
+        confidence: 80,
+      },
+      ''
+    );
+
+    expect(result.opponentTeams).toHaveLength(5);
+    expect(result.opponentTeams?.map((team: Record<string, any>) => team.teamName)).toEqual([
+      'Team Red',
+      'Team Orange',
+      'Team Black',
+      'Team Lime',
+      'Team Gold',
+    ]);
+  });
+
   it('still applies ship-capacity cleanup to tactical-map teammate lists', () => {
     expect(__test__.getMaxTeammatesForShipType('Outlaw')).toBe(1);
 

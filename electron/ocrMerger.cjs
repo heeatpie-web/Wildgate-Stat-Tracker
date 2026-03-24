@@ -12,7 +12,7 @@
  */
 
 const MAX_TEAM_PLAYERS = 4;
-const TEAM_COLOR_ORDER = ['red', 'orange', 'yellow', 'yellowgreen', 'green', 'blue', 'purple', 'unknown'];
+const TEAM_COLOR_ORDER = ['red', 'orange', 'goldenrod', 'yellow', 'yellowgreen', 'limegreen', 'green', 'blue', 'purple', 'black', 'unknown'];
 
 function capPlayerEntries(players = [], maxPlayers = MAX_TEAM_PLAYERS) {
   if (!Array.isArray(players) || players.length <= maxPlayers) return players || [];
@@ -259,7 +259,7 @@ function mergeLegacyCrewHub(existing, newData) {
         players: capPlayerEntries(mergePlayers(et.players || [], nt.players || [])),
         confidence: Math.round(((et.confidence || 0) + (nt.confidence || 0)) / 2),
       };
-    } else if (mergedTeams.length < 4) {
+    } else {
       mergedTeams.push({ ...nt, players: capPlayerEntries(nt.players || []) });
     }
   }
@@ -907,38 +907,31 @@ function mergeEnemyTeams(existingTeams = [], newTeams = []) {
         ((existingTeam.confidence || 0) + (newTeam.confidence || 0)) / 2
       );
     } else {
-      // Add as new team (if under limit)
-      if (mergedTeams.length < 4) {
-        // Before adding, check if this team's name is a near-duplicate (≤15% edit
-        // distance) of a name already claimed by a DIFFERENT color.  This happens
-        // in 4-enemy-team matches where the scrolled crew2 screenshot still shows
-        // the previous team's banner at the top — e.g. "EANCY GOOSE" (misread of
-        // "FANCY GOOSE") gets assigned to yellowGreen while yellow already owns
-        // "FANCY GOOSE".  Clear the bogus name so the map-screen name wins later.
-        let cleanedName = newTeam.name || '';
-        if (cleanedName && newTeam.color && newTeam.color !== 'unknown') {
-          const normNew = normalizeTeamName(cleanedName);
-          for (const existing of mergedTeams) {
-            if (!existing.name || existing.color === newTeam.color) continue;
-            const normEx = normalizeTeamName(existing.name);
-            if (normEx.length >= 6 && normNew.length >= 6) {
-              const ratio = levenshteinDistance(normNew, normEx) / Math.max(normNew.length, normEx.length);
-              if (ratio <= 0.15) {
-                console.warn('[Merger] Cleared leaked banner name "' + cleanedName + '" (near-dup of "' + existing.name + '" for color=' + existing.color + ')');
-                cleanedName = '';
-                break;
-              }
+      // Before adding, check if this team's name is a near-duplicate (≤15% edit
+      // distance) of a name already claimed by a DIFFERENT color. This handles
+      // leaked banner names between adjacent rows without dropping legitimate
+      // overflow teams from multi-scroll captures.
+      let cleanedName = newTeam.name || '';
+      if (cleanedName && newTeam.color && newTeam.color !== 'unknown') {
+        const normNew = normalizeTeamName(cleanedName);
+        for (const existing of mergedTeams) {
+          if (!existing.name || existing.color === newTeam.color) continue;
+          const normEx = normalizeTeamName(existing.name);
+          if (normEx.length >= 6 && normNew.length >= 6) {
+            const ratio = levenshteinDistance(normNew, normEx) / Math.max(normNew.length, normEx.length);
+            if (ratio <= 0.15) {
+              console.warn('[Merger] Cleared leaked banner name "' + cleanedName + '" (near-dup of "' + existing.name + '" for color=' + existing.color + ')');
+              cleanedName = '';
+              break;
             }
           }
         }
-        mergedTeams.push({
-          ...newTeam,
-          name: cleanedName,
-          players: capPlayerEntries(newTeam.players || []),
-        });
-      } else {
-        console.warn('[Merger] Max 4 teams reached, ignoring additional team:', newTeam.name);
       }
+      mergedTeams.push({
+        ...newTeam,
+        name: cleanedName,
+        players: capPlayerEntries(newTeam.players || []),
+      });
     }
   }
 

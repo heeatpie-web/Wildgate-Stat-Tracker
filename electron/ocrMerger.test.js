@@ -125,3 +125,43 @@ describe('ocrMerger legacy crew_hub + tactical_map merge', () => {
     expect(orangeTeam.players).toEqual(['MizzleMist']);
   });
 });
+
+describe('ocrMerger legacy crew_hub overflow preservation', () => {
+  it('keeps additional enemy teams instead of dropping the fifth team during scroll merges', () => {
+    const existing = {
+      screenshotType: 'crew_hub',
+      playerTeamName: 'Friendly',
+      teammates: ['PilotOne'],
+      opponentTeams: [
+        { teamName: 'Team Red', color: 'red', players: ['EnemyA'], confidence: 81 },
+        { teamName: 'Team Orange', color: 'orange', players: ['EnemyB'], confidence: 82 },
+        { teamName: 'Team Black', color: 'black', players: ['EnemyC'], confidence: 83 },
+        { teamName: 'Team Lime', color: 'limeGreen', players: ['EnemyD'], confidence: 84 },
+      ],
+      reachModifiers: [],
+      overallConfidence: 80,
+    };
+
+    const incoming = {
+      screenshotType: 'crew_hub',
+      playerTeamName: 'Friendly',
+      teammates: ['PilotOne'],
+      opponentTeams: [
+        { teamName: 'Team Gold', color: 'goldenrod', players: ['EnemyE'], confidence: 85 },
+      ],
+      reachModifiers: [],
+      overallConfidence: 82,
+    };
+
+    const merged = mergeCaptures(existing, incoming);
+
+    expect(merged.opponentTeams).toHaveLength(5);
+    expect(merged.opponentTeams.map((team) => team.teamName)).toEqual(expect.arrayContaining([
+      'Team Red',
+      'Team Orange',
+      'Team Black',
+      'Team Lime',
+      'Team Gold',
+    ]));
+  });
+});

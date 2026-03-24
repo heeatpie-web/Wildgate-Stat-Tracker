@@ -2607,8 +2607,7 @@ function cleanupLegacyOpponentTeams(opponentTeams) {
         confidence: Number(team?.confidence || 0) || 0,
       };
     })
-    .filter((team) => team.players.length > 0 || (!!team.shipType && team.color !== 'unknown') || !/^enemy team \d+$/i.test(team.teamName))
-    .slice(0, 4);
+    .filter((team) => team.players.length > 0 || (!!team.shipType && team.color !== 'unknown') || !/^enemy team \d+$/i.test(team.teamName));
 }
 
 function cleanupLegacyEnemyShips(enemyShips) {
@@ -2639,7 +2638,6 @@ function cleanupLegacyEnemyShips(enemyShips) {
       shipType,
       confidence,
     });
-    if (deduped.length >= 4) break;
   }
   return deduped;
 }
@@ -2691,7 +2689,7 @@ function convertCrewHubToLegacy(crewHubData, rawText) {
     isTeammate: true,
   })), LEGACY_MAX_TEAMMATES);
 
-  const opponentTeams = (crewHubData.enemyTeams || []).slice(0, 4).map(team => ({
+  const opponentTeams = (crewHubData.enemyTeams || []).map(team => ({
     teamName: team.name || 'Unknown Team',
     teamNameSource: team.nameSource || 'fallback',
     shipType: team.shipType || '',

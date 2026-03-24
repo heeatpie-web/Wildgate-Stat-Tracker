@@ -1025,7 +1025,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
 
   const cards = []; // { y, name, color, confidence, bbox }
   const capturedTeamNames = new Map(); // color → cleanest team name seen
-  const spectatorCardYs = []; // Y positions of skipped spectator/black cards
+  const spectatorCardYs = []; // Y positions of skipped spectator cards
   const skippedSpectatorNameKeys = new Set();
 
   // Helper: extract the raw team name text from a line's word list
@@ -1189,7 +1189,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
           try {
             const barColorDetectBbox = buildTightColorDetectBbox(line.words, rawName, lineBbox);
             const cr = await detectTeamColorBarBelow(colorImageBuffer, barColorDetectBbox, scale);
-            if (cr.color !== 'unknown' && cr.color !== 'spectator' && cr.color !== 'black') {
+            if (cr.color !== 'unknown' && cr.color !== 'spectator') {
               // Prefer the LONGEST captured name for each color (most complete read)
               const existing = capturedTeamNames.get(cr.color);
               // Don't register the same team name under two different colors
@@ -1295,11 +1295,11 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
         } else {
           const cr = await detectTeamColorBarBelow(colorImageBuffer, colorDetectBbox, scale);
           rawHue = typeof cr?.rawHue === 'number' ? cr.rawHue : null;
-          if (cr.color !== 'unknown' && cr.color !== 'spectator' && cr.color !== 'black' && cr.confidence > 30) {
+          if (cr.color !== 'unknown' && cr.color !== 'spectator' && cr.confidence > 30) {
             detectedColor = cr.color;
             colorConfidence = cr.confidence;
-          } else if (cr.color === 'spectator' || cr.color === 'black') {
-            console.log('[CrewHub] Skipping spectator/black card:', playerName);
+          } else if (cr.color === 'spectator') {
+            console.log('[CrewHub] Skipping spectator card:', playerName);
             spectatorCardYs.push(line.y);
             skippedSpectatorNameKeys.add(normalizeNameKey(playerName));
             continue;
@@ -1542,7 +1542,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     const rawTeamName = extractRawTeamNameFromLine(tLine.words);
     if (!rawTeamName) continue;
     if (!isTeamName(rawTeamName) && !/^[A-Z0-9]+(-[A-Z0-9]+)+$/.test(rawTeamName)) continue;
-    // Skip badge lines whose Y falls within the bar zone of a skipped spectator/black card.
+    // Skip badge lines whose Y falls within the bar zone of a skipped spectator card.
     const isSpectatorBadge = spectatorCardYs.some(sy => {
       const barMin = sy + BAR_OFFSET - sameColorSplitBaseHeight * 0.2;
       const barMax = sy + BAR_OFFSET + BAR_HEIGHT + sameColorSplitBaseHeight * 0.2;
@@ -1729,14 +1729,16 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     }
 
     const chromaticCards = uniqueCards.filter(c => typeof c.rawHue === 'number');
-    const achromaticCards = uniqueCards.filter(c => typeof c.rawHue !== 'number' && c.color === 'unknown');
+    const achromaticNamedCards = uniqueCards.filter(c => typeof c.rawHue !== 'number' && c.color && c.color !== 'unknown');
+    const achromaticUnknownCards = uniqueCards.filter(c => typeof c.rawHue !== 'number' && c.color === 'unknown');
 
     knownGroups = [];
 
     if (chromaticCards.length > 0) {
       const huePlayers = chromaticCards.map(c => ({ name: c.name, hue: c.rawHue, card: c }));
-      // maxTeams=5: one more than the game max (4) to allow edge-case overflow
-      const hueClusters = clusterByHue(huePlayers, 5, 15);
+      // Keep every distinct hue cluster we can separate instead of truncating to
+      // the old four-enemy-team assumption.
+      const hueClusters = clusterByHue(huePlayers, Math.max(5, huePlayers.length), 15);
 
       for (const hueCluster of hueClusters) {
         const clusterCards = hueCluster.map(p => p.card);
@@ -1779,9 +1781,20 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
       }
     }
 
-    // Cards with no hue (truly black/undetectable bars that slipped through)
-    // create isolated unknown groups as before.
-    for (const card of achromaticCards) {
+    // Cards with a known achromatic color (currently black) should still form a
+    // named team group even though hue-based clustering cannot place them.
+    for (const card of achromaticNamedCards) {
+      knownGroups.push({
+        color: card.color,
+        cards: [card],
+        minY: card.y,
+        maxY: card.y,
+        confidence: card.confidence || 0,
+      });
+    }
+
+    // Cards with no hue and no resolved color create isolated unknown groups.
+    for (const card of achromaticUnknownCards) {
       knownGroups.push({ color: 'unknown', cards: [card], minY: card.y, maxY: card.y, confidence: 0 });
     }
   }
@@ -2135,24 +2148,13 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     }
   }
 
-  // Sort by player count (most players first), cap at 4 teams
+  // Sort by player count (most players first) while preserving every detected team.
   enemyTeams.sort((a, b) => b.players.length - a.players.length);
   logCrewHubLayoutDebug(debugLayout, 'finalTeamGrouping', enemyTeams.map((team) => ({
     teamName: team.name || '',
     color: team.color,
     players: [...(team.players || [])],
   })));
-  if (enemyTeams.length > 4) {
-    console.warn('[CrewHub] More than 4 enemy teams detected, merging overflow into top 4');
-    const kept = enemyTeams.slice(0, 4);
-    const overflow = enemyTeams.slice(4);
-    for (const spill of overflow) {
-      let target = kept.find(t => t.color !== 'unknown' && spill.color !== 'unknown' && t.color === spill.color);
-      if (!target) target = kept.reduce((best, t) => (t.players.length < best.players.length ? t : best), kept[0]);
-      for (const p of spill.players || []) pushUniquePlayerName(target.players, p);
-    }
-    return kept;
-  }
 
   console.log('[CrewHub] Enemy teams found:', enemyTeams.length, enemyTeams.map(t => `${t.color}(${t.players.length})`).join(', '));
   return enemyTeams;
