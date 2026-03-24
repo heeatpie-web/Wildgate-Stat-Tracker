@@ -2851,27 +2851,35 @@ const App: React.FC = () => {
                 matchId,
                 level: 'info',
             }));
-            const showManualFallback = () => {
+            const showManualFallback = (openPrompt: boolean) => {
                 if (handledTelemetryDraftPostmatchPromptIdsRef.current.has(matchId)) return;
+                const fallbackMessage = readyTrigger === 'frontend'
+                    ? 'Returned to menu before a result screen was confirmed'
+                    : 'Manual result needed';
                 setTelemetryAutomationStatus(createTelemetryAutomationStatus({
                     phase: 'manual-result-needed',
-                    message: readyTrigger === 'frontend'
-                        ? 'Returned to menu before a result screen was confirmed'
-                        : 'Manual result needed',
+                    message: fallbackMessage,
                     matchId,
                     level: 'warning',
                 }));
-                setTelemetryDraftPrompt({
-                    matchId,
-                    duration,
-                    phase: 'postmatch',
+                if (openPrompt) {
+                    setTelemetryDraftPrompt({
+                        matchId,
+                        duration,
+                        phase: 'postmatch',
+                    });
+                    return;
+                }
+                setToast({
+                    message: `${fallbackMessage}. Use the recording view buttons if you want to finalize it manually.`,
+                    type: 'warning',
                 });
             };
             const scheduleManualFallbackCheck = (delayMs: number) => {
                 const backgroundTimerId = window.setTimeout(() => {
                     if (!fullAutoEnabledRef.current) {
                         clearTelemetryBackgroundResultOcrTimer(matchId);
-                        showManualFallback();
+                        showManualFallback(true);
                         return;
                     }
                     if (handledTelemetryDraftPostmatchPromptIdsRef.current.has(matchId)) {
@@ -2888,7 +2896,7 @@ const App: React.FC = () => {
                         return;
                     }
                     clearTelemetryBackgroundResultOcrTimer(matchId);
-                    showManualFallback();
+                    showManualFallback(false);
                 }, delayMs);
                 telemetryBackgroundResultOcrTimersRef.current.set(matchId, backgroundTimerId);
             };
@@ -2904,7 +2912,7 @@ const App: React.FC = () => {
         return () => {
             window.removeEventListener('telemetry:draft-ready', onTelemetryDraftReady as EventListener);
         };
-    }, [clearTelemetryBackgroundResultOcrTimer, clearTelemetryDraftFallbackTimer, fullAutoEnabled, setTelemetryAutomationStatus]);
+    }, [clearTelemetryBackgroundResultOcrTimer, clearTelemetryDraftFallbackTimer, fullAutoEnabled, setTelemetryAutomationStatus, setToast]);
 
     useEffect(() => {
         const onTelemetryPruneOpen = () => {

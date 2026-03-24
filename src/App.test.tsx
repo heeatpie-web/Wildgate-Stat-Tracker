@@ -546,7 +546,7 @@ describe('App', () => {
     confirmSpy.mockRestore();
   });
 
-  it('defers the telemetry-ready prompt when full auto is enabled', async () => {
+  it('suppresses the telemetry-ready prompt when full auto falls back to manual handling', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
     const { default: App } = await import('./App');
@@ -564,8 +564,17 @@ describe('App', () => {
       vi.advanceTimersByTime(15_000);
     });
 
-    expect(screen.getByRole('region', { name: /telemetry match ready/i })).toBeInTheDocument();
-    expect(screen.getByText(/automatic result capture did not finish in time/i)).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /telemetry match ready/i })).not.toBeInTheDocument();
+    expect(uiState.setTelemetryAutomationStatus).toHaveBeenCalledWith(expect.objectContaining({
+      phase: 'manual-result-needed',
+      message: 'Manual result needed',
+      matchId: 321,
+      level: 'warning',
+    }));
+    expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({
+      message: expect.stringContaining('Use the recording view buttons if you want to finalize it manually.'),
+      type: 'warning',
+    }));
     vi.useRealTimers();
   });
 

@@ -1,4 +1,10 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.5.0": [
+    "Release: Version 3.5.0 rolls in the minimized auto-capture reliability fix, result-screen OCR cleanup, and telemetry loadout mapping fixes.",
+    "Automation: Full Auto no longer opens the blocking telemetry result popup when automatic result capture times out and instead falls back to non-modal manual guidance.",
+    "Reliability: Result OCR better recognizes artifact defeats, ignores transition frames with no result context, and keeps damage follow-up captures scoped to real combat losses.",
+    "Fix: Telemetry loadout hydration now strips bogus tertiary equipment and weapon placeholders, and Repulsor resolves by GUID for new and existing installs."
+  ],
   "v3.4.3": [
     "Fix placement reveal OCR missing centered text",
     "simplify damage capture (take both screenshots, discard if no damage detected)",
