@@ -1004,6 +1004,35 @@ describe('useMatchSubmission', () => {
     expect(submitted.ocrReviewedAt).toBe(1_700_000_123_000);
   });
 
+  it('marks finalized matches as saved even without an OCR review timestamp', async () => {
+    mockStoreState.activeUser = 'Tester';
+    mockStoreState.showWizard = 'Win';
+    mockStoreState.pendingMatchData = {
+      mode: 'Artifact Brawl',
+      player: 'Tester',
+      teammates: [],
+      opponents: ['EnemyOne'],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      kills: {},
+      reachModifiers: [],
+      result: 'Win',
+      time: '06:30',
+      ocrState: 'ready',
+    };
+
+    const { result } = renderHook(() => useMatchSubmission());
+
+    await act(async () => {
+      await result.current.processFinalSubmission('Combat');
+    });
+
+    expect(addMatch).toHaveBeenCalled();
+    const [submitted] = addMatch.mock.calls[0];
+    expect(submitted.ocrState).toBe('saved');
+    expect(submitted.ocrReviewedAt).toBeUndefined();
+  });
+
   it('saveResultDraft uses pending draft result precedence and skips artifact bundling', async () => {
     mockStoreState.activeUser = 'Tester';
     mockStoreState.showWizard = 'Loss';
@@ -1414,6 +1443,8 @@ describe('useMatchSubmission', () => {
     expect(updatedMatch.subType).toBe('Combat');
     expect(updatedMatch.placement).toBe(2);
     expect(updatedMatch.damageTaken).toBe(114);
+    expect(updatedMatch.ocrState).toBe('saved');
+    expect(updatedMatch.ocrReviewedAt).toBeUndefined();
     expect(updatedMatch.resultDetectionMethod).toBeUndefined();
     expect(updatedMatch.artifacts).toEqual([
       'existing_capture.png',
@@ -1500,6 +1531,90 @@ describe('useMatchSubmission', () => {
     expect(updatedMatch.artifacts).toEqual([
       'existing_capture.png',
       'C:\\match_artifacts\\9191\\capture_result.png',
+    ]);
+  });
+
+  it('autoFinalizeResultScreenCapture drops speculative damage follow-up artifacts for wins', async () => {
+    const draftId = 9292;
+    const draftTimestamp = 1_700_000_889_000;
+    mockStoreState.activeUser = 'Tester';
+    mockStoreState.pendingMatchData = {
+      timestamp: draftTimestamp,
+      player: 'Tester',
+      mode: 'Artifact Brawl',
+      artifacts: ['existing_capture.png'],
+      damageSourcesText: ['Stale Damage Panel'],
+      ocrState: 'reviewing',
+    };
+    mockStoreState.matches = [{
+      id: draftId,
+      timestamp: draftTimestamp,
+      date: '3/21/2026',
+      mode: 'Artifact Brawl',
+      player: 'Tester',
+      teammates: ['Teammate One'],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      damageTaken: 12,
+      time: '00:00',
+      notes: '',
+      artifacts: ['existing_capture.png'],
+      telemetryDraftState: 'active',
+      ocrState: 'queued',
+      damageSourcesAvailable: true,
+      damageSourcesText: ['Stale Damage Panel'],
+    }];
+    vi.mocked(getMatchArtifactsStructured).mockResolvedValue({
+      images: ['existing_capture.png', 'C:\\match_artifacts\\9292\\capture_result.png'],
+      imageFiles: [],
+      telemetry: [],
+    });
+
+    const { result } = renderHook(() => useMatchSubmission());
+
+    let finalized;
+    await act(async () => {
+      finalized = await result.current.autoFinalizeResultScreenCapture({
+        imageBase64: 'data:image/png;base64,ZmFrZQ==',
+        resultData: {
+          result: 'Win',
+          winType: 'artifact',
+          placement: 1,
+          damageSourcesAvailable: true,
+        },
+        matchId: draftId,
+        persistedPrimaryArtifactPath: 'C:\\match_artifacts\\9292\\capture_result.png',
+        supplementalArtifacts: [
+          {
+            imageBase64: 'data:image/png;base64,ZGFtYWdlMQ==',
+            kind: 'damage-sources',
+          },
+          {
+            imageBase64: 'data:image/png;base64,ZGFtYWdlMg==',
+            kind: 'damage-ships',
+          },
+        ],
+      });
+    });
+
+    expect(finalized).toEqual({
+      success: true,
+      matchId: draftId,
+      artifactPath: 'C:\\match_artifacts\\9292\\capture_result.png',
+      artifactPaths: ['C:\\match_artifacts\\9292\\capture_result.png'],
+    });
+    expect(electronInvokeMock).not.toHaveBeenCalled();
+    const [updatedMatch] = updateMatch.mock.calls[0];
+    expect(updatedMatch.damageSourcesAvailable).toBe(false);
+    expect(updatedMatch.damageSourcesText).toBeUndefined();
+    expect(updatedMatch.artifacts).toEqual([
+      'existing_capture.png',
+      'C:\\match_artifacts\\9292\\capture_result.png',
     ]);
   });
 

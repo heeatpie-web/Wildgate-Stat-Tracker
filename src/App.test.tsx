@@ -777,14 +777,14 @@ describe('App', () => {
       enabled: true,
       armDelayMs: 0,
       flashEnabled: true,
-      textEnabled: false,
+      textEnabled: true,
       armAnchorAt: expect.any(Number),
     }));
     expect(useResultTextMonitorMock).toHaveBeenCalledWith(expect.objectContaining({
       enabled: true,
       armDelayMs: 0,
       flashEnabled: true,
-      textEnabled: false,
+      textEnabled: true,
       armAnchorAt: expect.any(Number),
     }));
     vi.useRealTimers();
@@ -1346,7 +1346,7 @@ describe('App', () => {
     vi.useRealTimers();
   });
 
-  it('starts the result screenshot burst 250ms after flash detection', async () => {
+  it('starts the result screenshot burst 400ms after flash detection', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
     uiState.telemetryLifecycleStage = 'live';
@@ -1413,13 +1413,13 @@ describe('App', () => {
       });
 
       expect(consoleLogSpy).toHaveBeenCalledWith(
-        '[Brain] Flash signal received - scheduling result capture in 250ms',
-        expect.objectContaining({ matchId: 4321, delayMs: 250 }),
+        '[Brain] Flash signal received - scheduling result capture in 400ms',
+        expect.objectContaining({ matchId: 4321, delayMs: 400 }),
       );
       expect(api.invoke).not.toHaveBeenCalledWith('capture-screen');
 
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(250);
+        await vi.advanceTimersByTimeAsync(400);
       });
 
       expect(api.invoke).toHaveBeenCalledWith('capture-screen');
@@ -1442,13 +1442,14 @@ describe('App', () => {
         persistedPrimaryArtifactPath: 'C:\\match_artifacts\\4321\\capture_result.png',
         supplementalArtifacts: [],
       }));
+      expect(api.invoke).not.toHaveBeenCalledWith('capture-result-screen-region', expect.anything());
     } finally {
       consoleLogSpy.mockRestore();
       vi.useRealTimers();
     }
   });
 
-  it('does not take fallback retry screenshots after one failed flash OCR pass', async () => {
+  it('skips saving transition frames and loss follow-up crops when the primary flash capture has no result context', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
     uiState.telemetryLifecycleStage = 'live';
@@ -1521,7 +1522,10 @@ describe('App', () => {
     await triggerPromise;
 
     expect(api.invoke.mock.calls.filter(([channel]) => channel === 'capture-screen')).toHaveLength(1);
-    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'save-screenshot')).toHaveLength(1);
+    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'scan-result-screen')).toHaveLength(1);
+    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'save-screenshot')).toHaveLength(0);
+    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'capture-result-screen-region')).toHaveLength(0);
+    expect(autoFinalizeResultScreenCaptureMock).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
 

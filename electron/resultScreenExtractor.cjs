@@ -50,6 +50,9 @@ const RESULT_REGIONS = {
   // The standard placement region only covers the left 34%, missing centered text.
   placementFullWidth: { left: 0.0, top: 0.02, width: 1.0, height: 0.45 },
   statusLine: { left: 0.09, top: 0.08, width: 0.58, height: 0.18 },
+  // Focused lower-centre crop for the small blue outcome label shown under
+  // artifact banners on widescreen captures (for example "DEFEAT").
+  statusSubline: { left: 0.38, top: 0.22, width: 0.24, height: 0.09 },
   victoryLine: { left: 0.14, top: 0.03, width: 0.36, height: 0.13 },
   rightPanel: { left: 0.57, top: 0.17, width: 0.34, height: 0.56 },
   damageWide: { left: 0.70, top: 0.56, width: 0.18, height: 0.12 },
@@ -259,6 +262,7 @@ function parseResultSignals({
   const hasVictory = joined.includes('VICTORY') || joined.includes('VICTOR');
   const hasArtifact = joined.includes('ARTIFACT') || joined.includes('TIFACT');
   const hasArtifactRecovered = joined.includes('ARTIFACTRECOVERED') || joined.includes('RTIFACTRECOVERED') || joined.includes('ARTIFACTRECOVERE');
+  const hasArtifactSignal = hasArtifact || hasArtifactRecovered;
   const hasCombatWin = joined.includes('RIVALSELIMINATED') || joined.includes('IVALSELIMINAT');
   const hasEliminated = joined.includes('ELIMINATED') || joined.includes('LIMINATED');
   const hasVanguardWins = joined.includes('VANGUARDWINS') || joined.includes('ANGUARDWINS');
@@ -275,6 +279,16 @@ function parseResultSignals({
     ? damageTaken
     : undefined;
   const resolvedDamageSourcesAvailable = hasDamageSourcesSignal || damageTaken != null;
+
+  if (hasDefeat && hasArtifactSignal) {
+    return {
+      result: 'Loss',
+      winType: 'artifact',
+      detectionMethod,
+      damageTaken: resolvedDamageTaken,
+      damageSourcesAvailable: resolvedDamageSourcesAvailable,
+    };
+  }
 
   if (hasArtifactRecovered || (hasVictory && hasArtifact && !hasCombatWin)) {
     return {
@@ -320,7 +334,7 @@ function parseResultSignals({
     };
   }
 
-  if (hasDefeat && hasArtifact) {
+  if (hasDefeat && hasArtifactSignal) {
     return {
       result: 'Loss',
       winType: 'artifact',
@@ -390,7 +404,13 @@ async function extractResultScreen(imageBuffer, options = {}) {
     collectRecognizedTexts(imageBuffer, meta, RESULT_REGIONS.resultCenter, LINE_SCAN_VARIANTS, recognizeText),
     collectRecognizedTexts(imageBuffer, meta, RESULT_REGIONS.resultLeft, LINE_SCAN_VARIANTS, recognizeText),
     collectRecognizedTextsFromRegions(imageBuffer, meta, [RESULT_REGIONS.placement, RESULT_REGIONS.placementFullWidth], LINE_SCAN_VARIANTS, recognizeText),
-    collectRecognizedTexts(imageBuffer, meta, RESULT_REGIONS.statusLine, LINE_SCAN_VARIANTS, recognizeText),
+    collectRecognizedTextsFromRegions(
+      imageBuffer,
+      meta,
+      [RESULT_REGIONS.statusLine, RESULT_REGIONS.statusSubline],
+      LINE_SCAN_VARIANTS,
+      recognizeText
+    ),
     collectRecognizedTexts(imageBuffer, meta, RESULT_REGIONS.victoryLine, LINE_SCAN_VARIANTS, recognizeText),
     collectDetectedTextsFromRegions(imageBuffer, meta, [RESULT_REGIONS.rightPanel], OCR_SCAN_VARIANTS, {
       allText: true,

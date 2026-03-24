@@ -50,6 +50,18 @@ describe('resultScreenExtractor heuristics', () => {
     });
   });
 
+  it('treats artifact recovered plus defeat as an artifact loss', () => {
+    expect(__test__.parseResultSignals({
+      statusTexts: ['ARTIFACTRECOVERED', 'DEFEAT'],
+    }, { detectionMethod: 'text' })).toEqual({
+      result: 'Loss',
+      winType: 'artifact',
+      detectionMethod: 'text',
+      damageTaken: undefined,
+      damageSourcesAvailable: false,
+    });
+  });
+
   it('accepts truncated placement OCR like 2NDPLA as a combat-loss placement signal', () => {
     expect(__test__.parseResultSignals({
       placementTexts: ['OND', '2NDPLA'],
@@ -102,14 +114,44 @@ describe('resultScreenExtractor heuristics', () => {
     expect(__test__.parseDamageTaken(['I14', 'AFINALDAMAGETAKEN114'])).toBe(114);
   });
 
+  it('extracts artifact losses when the smaller centered DEFEAT label is recognized separately', async () => {
+    const recognizeText = async (buffer) => {
+      const meta = await sharp(buffer).metadata();
+      if (meta.width === 3342 && meta.height === 582) return 'ARTIFACT RECOVERED';
+      if (meta.width === 1383 && meta.height === 291) return 'DEFEAT';
+      return '';
+    };
+
+    const imageBuffer = await sharp({
+      create: {
+        width: 1920,
+        height: 1080,
+        channels: 3,
+        background: { r: 0, g: 0, b: 0 },
+      },
+    }).png().toBuffer();
+
+    await expect(extractResultScreen(imageBuffer, {
+      detectionMethod: 'text',
+      paddleOcrBuffer: async () => [],
+      paddleRecognizeBuffer: recognizeText,
+    })).resolves.toEqual({
+      result: 'Loss',
+      winType: 'artifact',
+      detectionMethod: 'text',
+      damageTaken: undefined,
+      damageSourcesAvailable: false,
+    });
+  });
+
   it('extracts combat-loss results without crashing when both damage OCR buckets are present', async () => {
     let recognizeCallCount = 0;
     const recognizeText = async () => {
       recognizeCallCount += 1;
       if (recognizeCallCount <= 9) return '4TH PLACE';
-      if (recognizeCallCount <= 12) return 'DEFEAT';
-      if (recognizeCallCount <= 15) return '';
-      if (recognizeCallCount <= 18) return 'FINAL DAMAGE TAKEN 114';
+      if (recognizeCallCount <= 15) return 'DEFEAT';
+      if (recognizeCallCount <= 18) return '';
+      if (recognizeCallCount <= 21) return 'FINAL DAMAGE TAKEN 114';
       return '114';
     };
 

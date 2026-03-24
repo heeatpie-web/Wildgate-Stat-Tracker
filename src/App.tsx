@@ -303,9 +303,10 @@ const PREGAME_LOBBY_MACRO_DELAY_MS = 5_000;
 // The actual result flash is much shorter than the old 541ms assumption, so keep both
 // flash and text captures keyed off the same 200ms settle window.
 const KNOWN_FLASH_PURE_WHITE_MS = 200;
-// Small buffer added after the flash settles before capturing, to land in the fade-out.
-const POST_FLASH_CAPTURE_BUFFER_MS = 50;
-const FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS = POST_FLASH_CAPTURE_BUFFER_MS;
+// Extra settle time after the flash window ends before we take the first
+// full-screen result capture. This is intentionally looser than the text path.
+const POST_FLASH_CAPTURE_BUFFER_MS = 200;
+const FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS = 50;
 // Only take one automatic result screenshot per trigger. If OCR cannot confirm it,
 // fall back to waiting/manual flow instead of silently spamming retries.
 const FULL_AUTO_RESULT_OCR_MAX_ATTEMPTS = 1;
@@ -324,6 +325,24 @@ const FULL_AUTO_DAMAGE_SOURCES_CAPTURE_REGION = {
     height: 0.667,
     normalized: true,
 } as const;
+
+const hasRecognizedResultContext = (value: {
+    result?: 'Win' | 'Loss' | null;
+    winType?: 'combat' | 'artifact';
+    placement?: number | null;
+} | null | undefined): boolean => {
+    if (value?.result === 'Win' || value?.result === 'Loss') return true;
+    if (value?.winType === 'combat' || value?.winType === 'artifact') return true;
+    const placement = Number(value?.placement);
+    return Number.isInteger(placement) && placement >= 1 && placement <= 5;
+};
+
+const shouldCaptureDamageSourcesFollowUp = (value: {
+    result?: 'Win' | 'Loss' | null;
+    winType?: 'combat' | 'artifact';
+} | null | undefined): boolean => (
+    value?.result === 'Loss' && value?.winType !== 'artifact'
+);
 
 const isImageArtifactEntry = (value: unknown): value is string => {
     const normalized = String(value || '').trim();
@@ -3182,6 +3201,43 @@ const App: React.FC = () => {
 
                 const imageBase64 = capture as string;
                 const normalizedCaptureBase64 = normalizeImageBase64Payload(imageBase64);
+                const scanResult = await api.invoke('scan-result-screen', {
+                    imageBase64,
+                    detectionMethod: currentDetectionMethod,
+                });
+                if (scanResult?.success === false) {
+                    console.warn('[FullAuto] Result screen scan failed', {
+                        matchId: normalizedDraftMatchId,
+                        detectionMethod: currentDetectionMethod,
+                        error: scanResult?.error || 'unknown error',
+                    });
+                }
+                const resultData = scanResult?.success === false
+                    ? {
+                        result: null,
+                        detectionMethod: currentDetectionMethod || undefined,
+                        damageSourcesAvailable: false,
+                    }
+                    : (scanResult?.data ?? { result: null });
+                if (!resultData.detectionMethod && currentDetectionMethod) {
+                    resultData.detectionMethod = currentDetectionMethod;
+                }
+
+                if (!hasRecognizedResultContext(resultData)) {
+                    console.warn('[FullAuto] Ignoring automated result capture with no recognizable result signals', {
+                        matchId: normalizedDraftMatchId,
+                        detectionMethod: currentDetectionMethod,
+                        reason: currentReason,
+                    });
+                    if (currentReason !== 'background') {
+                        await saveFullAutoDebugCapture(
+                            imageBase64,
+                            `no-result-signal-attempt-${attemptIndex + 1}`
+                        );
+                    }
+                    continue;
+                }
+
                 let persistedPrimaryArtifactPath: string | null = null;
                 if (normalizedCaptureBase64) {
                     try {
@@ -3210,33 +3266,12 @@ const App: React.FC = () => {
                     }
                 }
 
-                // Take all damage screenshots before running any OCR.
-                // Only on the first attempt — the panel won't be available on retries.
-                if (attemptIndex === 0) {
+                // Only grab the speculative damage follow-up once the primary
+                // frame already looks like a believable combat-loss result.
+                if (attemptIndex === 0 && shouldCaptureDamageSourcesFollowUp(resultData)) {
                     supplementalArtifacts = (await captureDamageSourcesArtifact(api, normalizedDraftMatchId)) ?? [];
                 }
 
-                const scanResult = await api.invoke('scan-result-screen', {
-                    imageBase64,
-                    detectionMethod: currentDetectionMethod,
-                });
-                if (scanResult?.success === false) {
-                    console.warn('[FullAuto] Result screen scan failed', {
-                        matchId: normalizedDraftMatchId,
-                        detectionMethod: currentDetectionMethod,
-                        error: scanResult?.error || 'unknown error',
-                    });
-                }
-                const resultData = scanResult?.success === false
-                    ? {
-                        result: null,
-                        detectionMethod: currentDetectionMethod || undefined,
-                        damageSourcesAvailable: false,
-                    }
-                    : (scanResult?.data ?? { result: null });
-                if (!resultData.detectionMethod && currentDetectionMethod) {
-                    resultData.detectionMethod = currentDetectionMethod;
-                }
                 const finalized = await autoFinalizeResultScreenCapture({
                     imageBase64,
                     resultData,

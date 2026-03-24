@@ -29,12 +29,15 @@ const FLASH_MIN_VALID_DURATION_MS = 100;
 const FLASH_MAX_VALID_DURATION_MS = 900;
 
 // ── Text tripwire constants ────────────────────────────────────────────────
-const TEXT_TRIPWIRE_SUSTAIN_MS = 600;
+const TEXT_TRIPWIRE_SUSTAIN_MS = 400;
 const TRIPWIRE_MIN_CONSECUTIVE_HITS = Math.max(1, Math.ceil(TEXT_TRIPWIRE_SUSTAIN_MS / SAMPLE_INTERVAL_MS));
-const TRIPWIRE_MIN_ACTIVE_BOXES = 1;
+const TRIPWIRE_MIN_ACTIVE_BOXES = 2;
 const TRIPWIRE_MIN_BOX_WHITE_RATIO = 0.09;
 const TRIPWIRE_WHITE_MIN_CHANNEL = 252;
 const TRIPWIRE_WHITE_MAX_DRIFT = 5;
+// If more than this fraction of the full text region is pure white, the screen
+// is in a pure-white flash transition rather than showing the result screen.
+const TRIPWIRE_FLASH_GUARD_RATIO = 0.60;
 // Three sub-boxes within the result headline region (relative to text crop).
 const TRIPWIRE_BOX_LAYOUT = Object.freeze([
   { id: 'result-a', left: 0.04, top: 0.12, width: 0.12, height: 0.76 },
@@ -246,6 +249,22 @@ function analyzeTextBoxes(raw, imageWidth, imageHeight) {
   });
 }
 
+function computeRegionWhiteRatio(raw, imageWidth, imageHeight) {
+  const channels = 4;
+  const total = imageWidth * imageHeight;
+  let whiteCount = 0;
+  for (let i = 0; i < total; i++) {
+    const offset = i * channels;
+    const r = raw[offset];
+    const g = raw[offset + 1];
+    const b = raw[offset + 2];
+    if (Math.min(r, g, b) >= TRIPWIRE_WHITE_MIN_CHANNEL && (Math.max(r, g, b) - Math.min(r, g, b)) <= TRIPWIRE_WHITE_MAX_DRIFT) {
+      whiteCount += 1;
+    }
+  }
+  return whiteCount / Math.max(1, total);
+}
+
 function emitTextDebug(status, overrides = {}) {
   if (!_text?.onDebug) return;
   _text.onDebug({
@@ -285,6 +304,15 @@ function processTextRaw(raw, imageWidth, imageHeight, now) {
     }
 
     if (tripwire.triggered) {
+      // Guard: if the entire capture region is overwhelmingly pure white the
+      // screen is mid-transition (white flash), not showing the result screen.
+      const regionWhiteRatio = computeRegionWhiteRatio(raw, imageWidth, imageHeight);
+      if (regionWhiteRatio >= TRIPWIRE_FLASH_GUARD_RATIO) {
+        text.tripwireConsecutiveHits = 0;
+        text.lastUpdatedAt = now;
+        emitTextDebug('flash-guard', { regionWhiteRatio });
+        return;
+      }
       text.tripwireConsecutiveHits += 1;
       if (text.tripwireConsecutiveHits >= TRIPWIRE_MIN_CONSECUTIVE_HITS) {
         text.detected = true;

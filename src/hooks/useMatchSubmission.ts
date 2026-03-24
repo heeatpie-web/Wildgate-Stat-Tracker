@@ -166,13 +166,14 @@ const normalizeResultSubType = (winType: string | null | undefined, placement?: 
 
 const resolveSavedOcrMeta = (
     pendingMatchData: Partial<Match> | null | undefined,
-    existingMatch: Match | null | undefined
+    existingMatch: Match | null | undefined,
+    options?: { forceSaved?: boolean }
 ): Pick<Match, 'ocrState' | 'ocrReviewedAt'> => {
     const reviewedAtRaw = Number(pendingMatchData?.ocrReviewedAt ?? existingMatch?.ocrReviewedAt ?? 0);
     const ocrReviewedAt = Number.isFinite(reviewedAtRaw) && reviewedAtRaw > 0
         ? reviewedAtRaw
         : undefined;
-    if (ocrReviewedAt) {
+    if (options?.forceSaved || ocrReviewedAt) {
         return {
             ocrState: 'saved',
             ocrReviewedAt,
@@ -989,7 +990,7 @@ export const useMatchSubmission = () => {
                 if (selectedResult !== 'Loss' || !stored) return undefined;
                 return stored;
             })();
-            const savedOcrMeta = resolveSavedOcrMeta(pendingMatchData, existingMatch);
+            const savedOcrMeta = resolveSavedOcrMeta(pendingMatchData, existingMatch, { forceSaved: true });
             const matchId = existingMatch?.id || Date.now();
             const matchTimestamp = existingMatch?.timestamp || pendingMatchData.timestamp || Date.now();
             const rawMergedLoadout = sanitizeLoadout(pendingMatchData.loadout || currentLoadout);
@@ -1421,19 +1422,24 @@ export const useMatchSubmission = () => {
                 playDefeat();
             }
 
+            const retainedSupplementalArtifacts = (supplementalArtifacts || []).filter((artifact) => (
+                normalizedResult !== 'Win'
+                || (artifact?.kind !== 'damage-sources' && artifact?.kind !== 'damage-ships')
+            ));
+
             const artifactsToSave: Array<{ rawBase64: string; kind?: AutoResultCaptureArtifact['kind'] }> = [
                 ...(!normalizedPersistedPrimaryArtifactPath ? [{
                     rawBase64: String(imageBase64 || '').replace(/^data:image\/\w+;base64,/, '').trim(),
                 }] : []),
-                ...((supplementalArtifacts || []).map((artifact) => ({
+                ...((retainedSupplementalArtifacts).map((artifact) => ({
                     rawBase64: String(artifact?.imageBase64 || '').replace(/^data:image\/\w+;base64,/, '').trim(),
                     kind: artifact?.kind,
                 }))),
             ].filter((artifact) => artifact.rawBase64.length > 0);
 
-            // If damage crops succeeded, the primary artifact is superseded — don't include it
-            // as a named artifact (the crops are smaller and contain the same info).
-            const hasDamageSourcesArtifact = (supplementalArtifacts || []).some(
+            // On losses, damage crops can supersede the full result capture. On wins, those
+            // follow-up panels are speculative and get dropped once OCR confirms victory.
+            const hasDamageSourcesArtifact = retainedSupplementalArtifacts.some(
                 (a) => a?.kind === 'damage-sources'
             );
             const savedArtifactPaths: string[] = normalizedPersistedPrimaryArtifactPath && !hasDamageSourcesArtifact
@@ -1546,18 +1552,22 @@ export const useMatchSubmission = () => {
                 ? sanitizeLoadout({ ...rawMergedLoadout, ship: resolvedShip })
                 : rawMergedLoadout;
             const baseTelemetryConsistency = resolvedPendingMatchData.telemetryConsistency || existingMatch.telemetryConsistency;
-            const savedOcrMeta = resolveSavedOcrMeta(resolvedPendingMatchData, existingMatch);
-            const mergedDamageSourcesText = mergeTextLines(
-                existingMatch.damageSourcesText,
-                resolvedPendingMatchData.damageSourcesText,
-                damageSourcesOcrLines,
-            );
-            const finalDamageSourcesAvailable = (
-                resultData.damageSourcesAvailable === true
-                || savedArtifactPaths.length > 1
-                || mergedDamageSourcesText.length > 0
-                || existingMatch.damageSourcesAvailable === true
-            );
+            const savedOcrMeta = resolveSavedOcrMeta(resolvedPendingMatchData, existingMatch, { forceSaved: true });
+            const mergedDamageSourcesText = normalizedResult === 'Win'
+                ? []
+                : mergeTextLines(
+                    existingMatch.damageSourcesText,
+                    resolvedPendingMatchData.damageSourcesText,
+                    damageSourcesOcrLines,
+                );
+            const finalDamageSourcesAvailable = normalizedResult === 'Win'
+                ? false
+                : (
+                    resultData.damageSourcesAvailable === true
+                    || savedArtifactPaths.length > 1
+                    || mergedDamageSourcesText.length > 0
+                    || existingMatch.damageSourcesAvailable === true
+                );
             const finalTelemetryConsistency = baseTelemetryConsistency
                 ? (() => {
                     const evaluated = evaluateTelemetryConsistencyChecks(baseTelemetryConsistency, {
