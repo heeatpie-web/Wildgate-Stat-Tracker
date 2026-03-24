@@ -81,6 +81,42 @@ const normalizeDetectionMethod = (value) => (String(value || '').trim().toLowerC
   ? 'text'
   : 'flash');
 
+const includesAnyToken = (joined, patterns) => patterns.some((pattern) => joined.includes(pattern));
+
+const hasStrongPlacementContext = (joined) => includesAnyToken(joined, [
+  'DEFEAT',
+  'ELIMINATED',
+  'LIMINATED',
+  'VANGUARDWINS',
+  'ANGUARDWINS',
+  'FINALMOMENTSRECAP',
+  'NALMOMENTSRECA',
+  'SHIPWINS',
+  'LEGIONSHIPWINS',
+  'GIONSHIPWIN',
+]);
+
+const hasOverlayOrMenuSignal = (joined) => includesAnyToken(joined, [
+  'WILDGATESTATTRACKER',
+  'VILDGATESTATTRACKER',
+  'SMARTCAP',
+  'SMARTCAR',
+  'SMARTCAPTURES',
+  'STARLOGS',
+  'TARLOGS',
+  'RUNOCR',
+  'QUEUESTOOLS',
+  'REVIEWSHOTS',
+  'SEARCHPLAYERS',
+  'ANALYZE',
+  'LOADOUT',
+  'CUSTOMIZE',
+  'PATCHNOTES',
+  'MISSIONS',
+  'CONNECTING',
+  'SETTING',
+]);
+
 const toRegionPixels = (meta, region) => {
   const width = Math.max(1, Math.round((meta.width || 0) * region.width));
   const height = Math.max(1, Math.round((meta.height || 0) * region.height));
@@ -161,22 +197,16 @@ function parsePlacement(texts, options = {}) {
   const contextTexts = Array.isArray(options.contextTexts)
     ? options.contextTexts
     : [];
-  const normalizedContext = uniqueStrings([
-    ...texts,
-    ...contextTexts,
-  ]).map(normalizeToken).filter(Boolean);
+  const normalizedContext = contextTexts.map(normalizeToken).filter(Boolean);
   const joined = normalizedContext.join('|');
-  const placementContext = joined.includes('PLACE')
-    || joined.includes('PLACED')
-    || joined.includes('POSITION')
-    || joined.includes('FINISH')
-    || joined.includes('RANK');
+  const joinedSelf = normalized.join('|');
+  const placementContext = joinedSelf.includes('PLACE')
+    || joinedSelf.includes('PLACED')
+    || joinedSelf.includes('POSITION')
+    || joinedSelf.includes('FINISH')
+    || joinedSelf.includes('RANK');
   const contextualHints = placementContext
-    || joined.includes('DEFEAT')
-    || joined.includes('ELIMINATED')
-    || joined.includes('VANGUARDWINS')
-    || joined.includes('ANGUARDWINS')
-    || joined.includes('FINALMOMENTSRECAP')
+    || hasStrongPlacementContext(joined)
     || joined.includes('DAMAGETAKENINLAST2MIN')
     || joined.includes('DAMAGETAKENINLAST2MINUTES');
 
@@ -268,17 +298,35 @@ function parseResultSignals({
   const hasVanguardWins = joined.includes('VANGUARDWINS') || joined.includes('ANGUARDWINS');
   const hasFinalMoments = joined.includes('FINALMOMENTSRECAP') || joined.includes('NALMOMENTSRECA');
   const hasDefeat = joined.includes('DEFEAT');
+  const hasShipWins = joined.includes('SHIPWINS') || joined.includes('LEGIONSHIPWINS') || joined.includes('GIONSHIPWIN');
   const hasDamagePanel = joined.includes('DAMAGETAKEN') || joined.includes('INLAST2MIN') || joined.includes('FINALDAMAGETAKEN');
+  const hasExplicitResultSignal = hasVictory
+    || hasArtifactSignal
+    || hasCombatWin
+    || hasEliminated
+    || hasVanguardWins
+    || hasFinalMoments
+    || hasDefeat
+    || hasShipWins;
+  const hasRejectedOverlaySignal = hasOverlayOrMenuSignal(joined) && !hasExplicitResultSignal;
   const hasDamageSourcesSignal = damageTaken != null
     || hasEliminated
     || hasVanguardWins
     || hasFinalMoments
-    || hasDamagePanel
-    || (placement != null && placement >= 2 && placement <= 5);
+    || hasDamagePanel;
   const resolvedDamageTaken = hasDamageSourcesSignal
     ? damageTaken
     : undefined;
   const resolvedDamageSourcesAvailable = hasDamageSourcesSignal || damageTaken != null;
+
+  if (hasRejectedOverlaySignal) {
+    return {
+      result: null,
+      detectionMethod,
+      damageTaken: undefined,
+      damageSourcesAvailable: false,
+    };
+  }
 
   if (hasDefeat && hasArtifactSignal) {
     return {
@@ -312,14 +360,14 @@ function parseResultSignals({
     };
   }
 
-  if (placement && placement >= 2 && placement <= 5) {
+  if (placement && placement >= 2 && placement <= 5 && (hasDefeat || hasEliminated || hasVanguardWins || hasFinalMoments || hasShipWins)) {
     return {
       result: 'Loss',
       winType: 'combat',
       placement,
       detectionMethod,
       damageTaken: resolvedDamageTaken,
-      damageSourcesAvailable: true,
+      damageSourcesAvailable: resolvedDamageSourcesAvailable,
     };
   }
 
@@ -330,7 +378,7 @@ function parseResultSignals({
       placement,
       detectionMethod,
       damageTaken: resolvedDamageTaken,
-      damageSourcesAvailable: true,
+      damageSourcesAvailable: resolvedDamageSourcesAvailable,
     };
   }
 

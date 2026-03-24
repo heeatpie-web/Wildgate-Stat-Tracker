@@ -62,16 +62,17 @@ describe('resultScreenExtractor heuristics', () => {
     });
   });
 
-  it('accepts truncated placement OCR like 2NDPLA as a combat-loss placement signal', () => {
+  it('accepts truncated placement OCR like 2NDPLA when ship-wins context confirms a combat loss', () => {
     expect(__test__.parseResultSignals({
       placementTexts: ['OND', '2NDPLA'],
+      headlineTexts: ['LEGIONSHIPWINS'],
     }, { detectionMethod: 'text' })).toEqual({
       result: 'Loss',
       winType: 'combat',
       placement: 2,
       detectionMethod: 'text',
       damageTaken: undefined,
-      damageSourcesAvailable: true,
+      damageSourcesAvailable: false,
     });
   });
 
@@ -103,6 +104,50 @@ describe('resultScreenExtractor heuristics', () => {
       detectionMethod: 'text',
       damageTaken: undefined,
       damageSourcesAvailable: true,
+    });
+  });
+
+  it('rejects tracker and menu overlay OCR that only looks like placement context', () => {
+    expect(__test__.parseResultSignals({
+      headlineTexts: [
+        'PLay',
+        'TARLOGS',
+        'DOU',
+        'LDGATESTa',
+        '(SmartCar',
+        'WILDGATESTATTRACKERvV3.5.OBETA',
+        'Match271',
+        'RunOCI',
+        '2',
+        ':QUEUESTOOLS',
+        '6Seting',
+        'SrartCaptures',
+      ],
+      statusTexts: ['"92290', 'O', '.9229'],
+      panelTexts: [
+        'Open',
+        'ReviewShots',
+        'More',
+        'naPre-',
+        '2',
+        'Bs:0/40',
+        '0Analyze',
+        'Folder',
+        'ou',
+        'ORD',
+        'Mage',
+        'KILLS',
+        'PLACE',
+        'Analyze',
+        'ADD',
+        'ClearAll',
+      ],
+      damageTexts: ['0'],
+    }, { detectionMethod: 'text' })).toEqual({
+      result: null,
+      detectionMethod: 'text',
+      damageTaken: undefined,
+      damageSourcesAvailable: false,
     });
   });
 

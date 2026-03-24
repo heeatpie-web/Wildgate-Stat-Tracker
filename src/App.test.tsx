@@ -1642,6 +1642,126 @@ describe('App', () => {
     vi.useRealTimers();
   });
 
+  it('lets a later flash override a pending text-triggered capture grace window', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
+    uiState.telemetryLifecycleStage = 'live';
+    const draft = {
+      id: 4466,
+      timestamp: Date.now(),
+      date: '3/22/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      artifacts: [],
+    };
+    gameDataState.matches = [draft];
+    appStoreState.matches = [draft];
+    autoFinalizeResultScreenCaptureMock.mockResolvedValue({ success: true });
+
+    const api = {
+      invoke: vi.fn((channel: string, payload?: any) => {
+        if (channel === 'capture-screen') {
+          return Promise.resolve('image-base64');
+        }
+        if (channel === 'save-screenshot') {
+          return Promise.resolve({
+            success: true,
+            data: { filePath: 'C:\\match_artifacts\\4466\\capture_result.png' },
+          });
+        }
+        if (channel === 'capture-result-screen-region') {
+          return Promise.resolve({ success: false, imageBase64: null });
+        }
+        if (channel === 'scan-result-screen') {
+          return Promise.resolve({ data: { result: 'Loss', winType: 'combat', placement: 4, detectionMethod: 'flash' } });
+        }
+        if (channel === 'telemetry-retention-status') {
+          return Promise.resolve(null);
+        }
+        return Promise.resolve(null);
+      }),
+      send: vi.fn(),
+      on: vi.fn(() => () => {}),
+      removeAllListeners: vi.fn(),
+    };
+    getElectronAPIMock.mockReturnValue(api);
+
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    const flashOptions = useResultFlashMonitorMock.mock.calls.at(-1)?.[0] as {
+      onFlashDetected?: () => Promise<void>;
+    };
+    const textOptions = useResultTextMonitorMock.mock.calls.at(-1)?.[0] as {
+      onResultDetected?: (payload: {
+        detectionMethod: 'text';
+        result: 'Win' | 'Loss' | null;
+        placement?: number;
+        text?: string;
+      }) => Promise<void>;
+    };
+    expect(flashOptions?.onFlashDetected).toBeTypeOf('function');
+    expect(textOptions?.onResultDetected).toBeTypeOf('function');
+
+    let textPromise: Promise<void> | undefined;
+    await act(async () => {
+      textPromise = textOptions.onResultDetected?.({
+        detectionMethod: 'text',
+        result: 'Loss',
+        placement: 4,
+        text: '4TH PLACE',
+      });
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(150);
+    });
+    expect(api.invoke).not.toHaveBeenCalledWith('capture-screen');
+
+    let flashPromise: Promise<void> | undefined;
+    await act(async () => {
+      flashPromise = flashOptions.onFlashDetected?.();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(api.invoke).toHaveBeenCalledWith('capture-screen');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2500);
+      await Promise.resolve();
+      await Promise.resolve();
+      await textPromise;
+      await flashPromise;
+    });
+
+    const resultScanCalls = api.invoke.mock.calls.filter(([channel]) => channel === 'scan-result-screen');
+    expect(resultScanCalls.length).toBeGreaterThan(0);
+    expect(resultScanCalls.every(([, payload]) => payload?.detectionMethod === 'flash')).toBe(true);
+    expect(autoFinalizeResultScreenCaptureMock).toHaveBeenCalledWith(expect.objectContaining({
+      imageBase64: 'image-base64',
+      resultData: expect.objectContaining({ result: 'Loss', detectionMethod: 'flash' }),
+      matchId: 4466,
+      persistedPrimaryArtifactPath: 'C:\\match_artifacts\\4466\\capture_result.png',
+    }));
+    vi.useRealTimers();
+  });
+
   it('ignores text tripwire once flash detection has already won for the match', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
@@ -1840,9 +1960,9 @@ describe('App', () => {
 
     expect(api.invoke).not.toHaveBeenCalledWith('capture-screen');
 
-    // Advance past the 50ms OCR delay so the initial result screenshot can run.
+    // Advance past the 300ms text grace so the initial result screenshot can run.
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(50);
+      await vi.advanceTimersByTimeAsync(300);
       await Promise.resolve();
       await Promise.resolve();
     });

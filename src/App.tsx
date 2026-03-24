@@ -306,7 +306,10 @@ const KNOWN_FLASH_PURE_WHITE_MS = 100;
 // Extra settle time after the flash window ends before we take the first
 // full-screen result capture. This is intentionally looser than the text path.
 const POST_FLASH_CAPTURE_BUFFER_MS = 200;
-const FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS = 50;
+// Text can appear shortly before the white-out transition on some result flows.
+// Hold the text-trigger path long enough for the flash path to supersede it,
+// or for the flash to finish before we grab the first screenshot.
+const FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS = KNOWN_FLASH_PURE_WHITE_MS + POST_FLASH_CAPTURE_BUFFER_MS;
 // Take a short bounded burst per trigger so a bad early frame does not end
 // the automatic path while the result screen is still visible.
 const FULL_AUTO_RESULT_OCR_MAX_ATTEMPTS = 3;
@@ -853,6 +856,8 @@ const App: React.FC = () => {
     const fullAutoCaptureInFlightRef = useRef(false);
     const fullAutoDetectionMethodRef = useRef<FullAutoDetectionMethod | null>(null);
     const fullAutoDetectionMatchIdRef = useRef<number | null>(null);
+    const pendingTextDetectionTokenRef = useRef(0);
+    const pendingTextDetectionMatchIdRef = useRef<number | null>(null);
     const fullAutoEnabledRef = useRef(fullAutoEnabled);
     const telemetryLifecycleStageValueRef = useRef<TelemetryLifecycleStage>(telemetryLifecycleStage);
     const triggerFullAutoSaveRef = useRef<(options?: {
@@ -883,6 +888,10 @@ const App: React.FC = () => {
         setResultMonitorSuppression((current) => (
             current.flash || current.text ? { flash: false, text: false } : current
         ));
+    }, []);
+    const cancelPendingTextDetection = useCallback(() => {
+        pendingTextDetectionTokenRef.current += 1;
+        pendingTextDetectionMatchIdRef.current = null;
     }, []);
 
     const fuzzyRosterCandidates = React.useMemo(() => (
@@ -2380,6 +2389,7 @@ const App: React.FC = () => {
             setArtifactsAndGatesFallbackWatchMatchId(null);
             resultMonitorArmAnchorMatchIdRef.current = null;
             setResultMonitorArmAnchorAtState(null);
+            cancelPendingTextDetection();
             if (telemetryLifecycleStage === 'idle' || telemetryLifecycleStage === 'menu') {
                 setFullAutoDetectionLocked(false);
                 resetResultMonitorSuppression();
@@ -2397,6 +2407,7 @@ const App: React.FC = () => {
         setArtifactsAndGatesFallbackWatchMatchId(null);
         resultMonitorArmAnchorMatchIdRef.current = null;
         setResultMonitorArmAnchorAtState(null);
+        cancelPendingTextDetection();
         setFullAutoResultLatched(false);
         setFullAutoDetectionLocked(false);
         resetResultMonitorSuppression();
@@ -2405,6 +2416,7 @@ const App: React.FC = () => {
         clearArtifactsAndGatesFallbackWatchTimer,
         clearTelemetryBackgroundResultOcrTimer,
         clearTelemetryLobbyCaptureTimer,
+        cancelPendingTextDetection,
         resetResultMonitorSuppression,
         setFullAutoDetectionLocked,
         telemetryLifecycleStage,
@@ -2467,11 +2479,13 @@ const App: React.FC = () => {
         if (isArtifactsAndGates) {
             resultMonitorArmAnchorMatchIdRef.current = null;
             setResultMonitorArmAnchorAtState(null);
+            cancelPendingTextDetection();
             return;
         }
         if (!shouldWatchResultScreens || normalizedActiveTelemetryDraftMatchId == null) {
             resultMonitorArmAnchorMatchIdRef.current = null;
             setResultMonitorArmAnchorAtState(null);
+            cancelPendingTextDetection();
             return;
         }
         if (resultMonitorArmAnchorMatchIdRef.current !== normalizedActiveTelemetryDraftMatchId) {
@@ -2484,6 +2498,7 @@ const App: React.FC = () => {
     }, [
         isArtifactsAndGates,
         normalizedActiveTelemetryDraftMatchId,
+        cancelPendingTextDetection,
         resetResultMonitorSuppression,
         shouldWatchResultScreens,
     ]);
@@ -3067,6 +3082,7 @@ const App: React.FC = () => {
         }
 
         const normalizedMatchId = Number(matchId || 0);
+        cancelPendingTextDetection();
         fullAutoDetectionMethodRef.current = detectionMethod ?? null;
         fullAutoDetectionMatchIdRef.current = Number.isInteger(normalizedMatchId) && normalizedMatchId > 0
             ? normalizedMatchId
@@ -3083,6 +3099,7 @@ const App: React.FC = () => {
     }, [
         fullAutoResultLatched,
         normalizedActiveTelemetryDraftMatchId,
+        cancelPendingTextDetection,
         setFullAutoDetectionLocked,
         setTelemetryAutomationStatus,
         suppressLosingResultDetector,
@@ -3386,6 +3403,7 @@ const App: React.FC = () => {
 
     const handleResultFlashDetectedWithDebug = useCallback(async ({ brightSinceMs }: { brightSinceMs: number }) => {
         appendResultFlashDebugEvent('detected', 'Flash threshold held on the game capture; scheduling screenshot burst');
+        cancelPendingTextDetection();
         const scheduledMatchId = normalizedActiveTelemetryDraftMatchId;
         // Calculate how much of the 200ms pure-white flash has already elapsed,
         // then wait for the remainder + buffer so we capture just after flash-end.
@@ -3405,7 +3423,7 @@ const App: React.FC = () => {
             detectionMethod: 'flash',
             matchId: scheduledMatchId,
         });
-    }, [appendResultFlashDebugEvent, beginFullAutoResultDetection, normalizedActiveTelemetryDraftMatchId, triggerFullAutoSave]);
+    }, [appendResultFlashDebugEvent, beginFullAutoResultDetection, cancelPendingTextDetection, normalizedActiveTelemetryDraftMatchId, triggerFullAutoSave]);
 
     const handleResultFlashResolvedWithDebug = useCallback(async () => {
         appendResultFlashDebugEvent('resolved', 'Brightness dropped; flash watcher reset');
@@ -3427,9 +3445,35 @@ const App: React.FC = () => {
             });
             return;
         }
+        if (
+            scheduledMatchId != null
+            && pendingTextDetectionMatchIdRef.current === scheduledMatchId
+        ) {
+            console.log('[Brain] Text signal ignored because a pending text-triggered capture is already queued', {
+                matchId: scheduledMatchId,
+            });
+            return;
+        }
+
+        const pendingToken = pendingTextDetectionTokenRef.current + 1;
+        pendingTextDetectionTokenRef.current = pendingToken;
+        pendingTextDetectionMatchIdRef.current = scheduledMatchId;
+        await waitForDuration(FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS);
+
+        if (
+            pendingTextDetectionTokenRef.current !== pendingToken
+            || pendingTextDetectionMatchIdRef.current !== scheduledMatchId
+        ) {
+            return;
+        }
+
+        pendingTextDetectionMatchIdRef.current = null;
+        if (fullAutoDetectionLockedRef.current || fullAutoCaptureInFlightRef.current) {
+            return;
+        }
         if (!beginFullAutoResultDetection('Result text detected', scheduledMatchId, 'text')) return;
         await triggerFullAutoSave({
-            initialDelayMs: FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS,
+            initialDelayMs: 0,
             reason: 'text',
             detectionMethod: 'text',
             matchId: scheduledMatchId,
