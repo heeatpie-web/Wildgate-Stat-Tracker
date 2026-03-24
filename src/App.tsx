@@ -307,12 +307,13 @@ const KNOWN_FLASH_PURE_WHITE_MS = 100;
 // full-screen result capture. This is intentionally looser than the text path.
 const POST_FLASH_CAPTURE_BUFFER_MS = 200;
 const FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS = 50;
-// Only take one automatic result screenshot per trigger. If OCR cannot confirm it,
-// fall back to waiting/manual flow instead of silently spamming retries.
-const FULL_AUTO_RESULT_OCR_MAX_ATTEMPTS = 1;
+// Take a short bounded burst per trigger so a bad early frame does not end
+// the automatic path while the result screen is still visible.
+const FULL_AUTO_RESULT_OCR_MAX_ATTEMPTS = 3;
+const FULL_AUTO_RESULT_OCR_RETRY_INTERVAL_MS = 250;
 const FULL_AUTO_BACKGROUND_RESULT_OCR_INTERVAL_MS = 2_000;
 const FULL_AUTO_BACKGROUND_RESULT_OCR_MAX_ATTEMPTS = 4;
-const FULL_AUTO_FRONTEND_RESULT_CONFIRM_GRACE_MS = 2_000;
+const FULL_AUTO_FRONTEND_RESULT_CONFIRM_GRACE_MS = 8_000;
 // Time to wait after result OCR for the damage panel to slide into position (~3s from text, ~2s from tripwire fire)
 const FULL_AUTO_FINAL_MOMENTS_SETTLE_MS = 2_000;
 // Time to wait after pressing ] before capturing tab 2
@@ -2458,7 +2459,7 @@ const App: React.FC = () => {
     // stages. Restricting to 'live' caused the combined monitor to restart on the
     // 'live' → 'menu' transition (textEnabled flip), wiping flash cooldown state and
     // letting the loading-screen brightness trigger a false positive capture.
-    // The 600ms consecutive-hit requirement on the text tripwire already guards
+    // The 300ms consecutive-hit requirement on the text tripwire already guards
     // against transient false positives from loading screens.
     const resultTextTripwireEnabled = resultMonitorEligible && !resultMonitorSuppression.text;
 
@@ -2483,6 +2484,7 @@ const App: React.FC = () => {
     }, [
         isArtifactsAndGates,
         normalizedActiveTelemetryDraftMatchId,
+        resetResultMonitorSuppression,
         shouldWatchResultScreens,
     ]);
 
@@ -3173,13 +3175,9 @@ const App: React.FC = () => {
             if (!shouldResumeWatchingOnFailure) return;
             setFullAutoDetectionLocked(false);
         };
-        const disableTextFallbackIfNeeded = () => {
-            if (currentReason !== 'text') return;
-            setResultMonitorSuppression((current) => (
-                current.text && !current.flash
-                    ? current
-                    : { flash: false, text: true }
-            ));
+        const restoreDetectorSuppressionIfNeeded = () => {
+            if (!shouldResumeWatchingOnFailure) return;
+            resetResultMonitorSuppression();
         };
 
         fullAutoCaptureInFlightRef.current = true;
@@ -3232,21 +3230,6 @@ const App: React.FC = () => {
                     resultData.detectionMethod = currentDetectionMethod;
                 }
 
-                if (!hasRecognizedResultContext(resultData)) {
-                    console.warn('[FullAuto] Ignoring automated result capture with no recognizable result signals', {
-                        matchId: normalizedDraftMatchId,
-                        detectionMethod: currentDetectionMethod,
-                        reason: currentReason,
-                    });
-                    if (currentReason !== 'background') {
-                        await saveFullAutoDebugCapture(
-                            imageBase64,
-                            `no-result-signal-attempt-${attemptIndex + 1}`
-                        );
-                    }
-                    continue;
-                }
-
                 let persistedPrimaryArtifactPath: string | null = null;
                 if (normalizedCaptureBase64) {
                     try {
@@ -3273,6 +3256,15 @@ const App: React.FC = () => {
                             error: error instanceof Error ? error.message : String(error),
                         });
                     }
+                }
+
+                if (!hasRecognizedResultContext(resultData)) {
+                    console.warn('[FullAuto] Preserving automated result capture with no recognizable result signals', {
+                        matchId: normalizedDraftMatchId,
+                        detectionMethod: currentDetectionMethod,
+                        reason: currentReason,
+                        attempt: attemptIndex + 1,
+                    });
                 }
 
                 // Only grab the speculative damage follow-up once the primary
@@ -3304,6 +3296,8 @@ const App: React.FC = () => {
                     currentReason !== 'background'
                     && finalized.reason !== 'busy'
                     && finalized.reason !== 'ipc-unavailable'
+                    && finalized.reason !== 'unconfirmed'
+                    && finalized.reason !== 'incomplete'
                 ) {
                     await saveFullAutoDebugCapture(
                         imageBase64,
@@ -3323,10 +3317,22 @@ const App: React.FC = () => {
                     shouldReturnToWatching = false;
                     finalFailureMessage = 'Automatic result capture failed';
                 }
+
+                const hasAnotherAttempt = attemptIndex + 1 < FULL_AUTO_RESULT_OCR_MAX_ATTEMPTS;
+                const shouldRetryAfterRecoverableMiss = (
+                    hasAnotherAttempt
+                    && (
+                        finalized.reason === 'unconfirmed'
+                        || finalized.reason === 'incomplete'
+                    )
+                );
+                if (shouldRetryAfterRecoverableMiss) {
+                    await waitForDuration(FULL_AUTO_RESULT_OCR_RETRY_INTERVAL_MS);
+                }
             }
 
             if (shouldReturnToWatching) {
-                disableTextFallbackIfNeeded();
+                restoreDetectorSuppressionIfNeeded();
                 unlockDetectionIfNeeded();
                 restoreWaitingStatus();
                 return;
@@ -3361,8 +3367,8 @@ const App: React.FC = () => {
         captureDamageSourcesArtifact,
         fullAutoResultLatched,
         normalizedActiveTelemetryDraftMatchId,
+        resetResultMonitorSuppression,
         saveFullAutoDebugCapture,
-        setResultMonitorSuppression,
         setFullAutoDetectionLocked,
         setTelemetryAutomationStatus,
         setToast,

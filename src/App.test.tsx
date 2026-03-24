@@ -683,7 +683,7 @@ describe('App', () => {
     vi.useRealTimers();
   });
 
-  it('waits briefly before showing manual fallback when telemetry draft ready came from a frontend return', async () => {
+  it('waits longer before showing manual fallback when telemetry draft ready came from a frontend return', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
     uiState.telemetryLifecycleStage = 'menu';
@@ -727,7 +727,7 @@ describe('App', () => {
     });
 
     await act(async () => {
-      vi.advanceTimersByTime(1_999);
+      vi.advanceTimersByTime(7_999);
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -1355,7 +1355,7 @@ describe('App', () => {
     vi.useRealTimers();
   });
 
-  it('starts the result screenshot burst 400ms after flash detection', async () => {
+  it('starts the result screenshot burst 300ms after flash detection', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
     uiState.telemetryLifecycleStage = 'live';
@@ -1422,13 +1422,13 @@ describe('App', () => {
       });
 
       expect(consoleLogSpy).toHaveBeenCalledWith(
-        '[Brain] Flash signal received - scheduling result capture in 400ms',
-        expect.objectContaining({ matchId: 4321, delayMs: 400 }),
+        '[Brain] Flash signal received - scheduling result capture in 300ms',
+        expect.objectContaining({ matchId: 4321, delayMs: 300 }),
       );
       expect(api.invoke).not.toHaveBeenCalledWith('capture-screen');
 
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(400);
+        await vi.advanceTimersByTimeAsync(300);
       });
 
       expect(api.invoke).toHaveBeenCalledWith('capture-screen');
@@ -1458,7 +1458,7 @@ describe('App', () => {
     }
   });
 
-  it('skips saving transition frames and loss follow-up crops when the primary flash capture has no result context', async () => {
+  it('preserves no-result flash captures as artifacts and retries without saving duplicate debug copies', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
     uiState.telemetryLifecycleStage = 'live';
@@ -1530,11 +1530,115 @@ describe('App', () => {
     });
     await triggerPromise;
 
-    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'capture-screen')).toHaveLength(1);
-    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'scan-result-screen')).toHaveLength(1);
-    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'save-screenshot')).toHaveLength(0);
+    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'capture-screen')).toHaveLength(3);
+    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'scan-result-screen')).toHaveLength(3);
+    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'save-screenshot')).toHaveLength(3);
     expect(api.invoke.mock.calls.filter(([channel]) => channel === 'capture-result-screen-region')).toHaveLength(0);
-    expect(autoFinalizeResultScreenCaptureMock).not.toHaveBeenCalled();
+    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'save-ocr-debug')).toHaveLength(0);
+    expect(autoFinalizeResultScreenCaptureMock).toHaveBeenCalledTimes(3);
+    expect(autoFinalizeResultScreenCaptureMock).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      imageBase64: 'image-base64',
+      resultData: expect.objectContaining({ result: null, detectionMethod: 'flash' }),
+      matchId: 4322,
+      persistedPrimaryArtifactPath: 'C:\\match_artifacts\\4322\\capture_result.png',
+      supplementalArtifacts: [],
+    }));
+    vi.useRealTimers();
+  });
+
+  it('restores both result detectors after an unconfirmed flash-triggered attempt', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
+    uiState.telemetryLifecycleStage = 'live';
+    const draft = {
+      id: 4323,
+      timestamp: Date.now(),
+      date: '3/20/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      artifacts: [],
+    };
+    gameDataState.matches = [draft];
+    appStoreState.matches = [draft];
+    autoFinalizeResultScreenCaptureMock.mockResolvedValue({ success: false, reason: 'unconfirmed' });
+
+    const api = {
+      invoke: vi.fn((channel: string) => {
+        if (channel === 'capture-screen') {
+          return Promise.resolve('image-base64');
+        }
+        if (channel === 'save-screenshot') {
+          return Promise.resolve({
+            success: true,
+            data: { filePath: 'C:\\match_artifacts\\4323\\capture_result.png' },
+          });
+        }
+        if (channel === 'scan-result-screen') {
+          return Promise.resolve({ data: { result: null } });
+        }
+        if (channel === 'telemetry-retention-status') {
+          return Promise.resolve(null);
+        }
+        return Promise.resolve(null);
+      }),
+      send: vi.fn(),
+      on: vi.fn(() => () => {}),
+      removeAllListeners: vi.fn(),
+    };
+    getElectronAPIMock.mockReturnValue(api);
+
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    const flashOptions = useResultFlashMonitorMock.mock.calls.at(-1)?.[0] as {
+      onFlashDetected?: () => Promise<void>;
+    };
+    expect(flashOptions?.onFlashDetected).toBeTypeOf('function');
+
+    let triggerPromise: Promise<void> | undefined;
+    await act(async () => {
+      triggerPromise = flashOptions.onFlashDetected?.();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(useResultFlashMonitorMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      enabled: true,
+      flashEnabled: true,
+      textEnabled: false,
+    }));
+    expect(useResultTextMonitorMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      enabled: true,
+      flashEnabled: true,
+      textEnabled: false,
+    }));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await triggerPromise;
+
+    expect(useResultFlashMonitorMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      enabled: true,
+      flashEnabled: true,
+      textEnabled: true,
+    }));
+    expect(useResultTextMonitorMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      enabled: true,
+      flashEnabled: true,
+      textEnabled: true,
+    }));
     vi.useRealTimers();
   });
 

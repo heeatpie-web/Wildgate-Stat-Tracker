@@ -201,10 +201,10 @@ describe('resultTextMonitor loop', () => {
       onDetected,
     });
 
-    await sleep(260);
+    await sleep(120);
     expect(onDetected).not.toHaveBeenCalled();
 
-    await sleep(420);
+    await sleep(260);
 
     expect(onDetected).toHaveBeenCalledTimes(1);
     expect(onDetected.mock.calls[0][0]).toMatchObject({
