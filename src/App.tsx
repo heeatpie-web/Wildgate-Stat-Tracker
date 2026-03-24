@@ -2476,6 +2476,7 @@ const App: React.FC = () => {
         if (resultMonitorArmAnchorMatchIdRef.current !== normalizedActiveTelemetryDraftMatchId) {
             resultMonitorArmAnchorMatchIdRef.current = normalizedActiveTelemetryDraftMatchId;
             setResultMonitorArmAnchorAtState(Date.now());
+            resetResultMonitorSuppression();
             return;
         }
         setResultMonitorArmAnchorAtState((current) => current ?? Date.now());
