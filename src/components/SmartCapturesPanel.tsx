@@ -3310,7 +3310,7 @@ const SmartMatchDetail: React.FC<{
         const dedupeBoardNames = useCallback((names: string[]): string[] => Array.from(new Set(
             names
                 .map((name) => normalizeOcrName(String(name || '')))
-                .filter(Boolean)
+                .filter((name) => !!name && !UNKNOWN_PLAYER_LABELS.has(name.toLowerCase()))
         )), []);
         const assignmentBoardTeams = useMemo<OcrTeamAssignmentTeam[]>(() => {
             const friendlyTeamName = getSmartCaptureFriendlyTeamName(match);

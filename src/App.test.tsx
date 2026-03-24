@@ -2309,6 +2309,61 @@ describe('App', () => {
     }));
   });
 
+  it('does not add Unknown Player when promoting the friendly OCR team into teammates', async () => {
+    const { default: App } = await import('./App');
+    appStoreState.selectedTeammates = ['Wing1'];
+    appStoreState.pendingMatchData = {
+      teammates: ['Wing1'],
+      ship: 'Hunter',
+    };
+
+    render(<App />);
+
+    const ocrPayload = {
+      screenshotType: 'crew_hub',
+      playerShip: { shipType: 'Hunter', teamName: 'Starlight', confidence: 92 },
+      playerTeamName: 'Starlight',
+      playerShipName: "Starlight's Crew",
+      reachModifiers: [],
+      enemyShips: [],
+      teammates: [],
+      opponentTeams: [
+        {
+          teamName: 'Starlight',
+          shipType: 'Hunter',
+          color: 'blue',
+          players: [
+            { name: 'Pilot', confidence: 93 },
+            { name: 'Wing1', confidence: 90 },
+            { name: 'Unknown Player', confidence: 90 },
+            { name: 'Wing2', confidence: 89 },
+          ],
+          confidence: 90,
+        },
+      ],
+      artifacts: ['ocr.png'],
+      overallConfidence: 90,
+      captureTimestamp: Date.now(),
+    } as const;
+
+    window.dispatchEvent(new CustomEvent('submission:ocr-gate', {
+      detail: {
+        result: 'Win',
+        data: ocrPayload,
+      },
+    }));
+
+    await waitFor(() => {
+      expect(gameDataState.setSelectedTeammates).toHaveBeenCalledWith(['Wing1', 'Wing2']);
+    });
+
+    expect(appStoreState.setPendingMatchData).toHaveBeenCalledWith(expect.objectContaining({
+      teammates: ['Wing1', 'Wing2'],
+      opponentTeams: [],
+      ocrState: 'reviewing',
+    }));
+  });
+
   it('uses the latest active user when OCR gate data arrives after a user switch', async () => {
     const { default: App } = await import('./App');
     const { rerender } = render(<App />);

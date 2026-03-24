@@ -25,7 +25,7 @@ import { getElectronAPI } from '../utils/electronAPI';
 import { findClosestMatch, normalizeOcrName, similarityScore } from '../utils/stringUtils';
 import { OcrTeamAssignmentBoard } from './ocr/OcrTeamAssignmentBoard';
 import { WorkspaceImageViewer } from './media/WorkspaceImageViewer';
-import { UI_REACH_MODIFIERS } from '../utils/constants';
+import { UI_REACH_MODIFIERS, UNKNOWN_PLAYER_LABELS } from '../utils/constants';
 import {
     extractArtifactSourceFromReachModifiers,
     formatArtifactSourceModifier,
@@ -166,6 +166,15 @@ const dedupeNames = (names: string[]): string[] => {
     return out;
 };
 
+const isPlaceholderPlayerLabel = (name: string): boolean =>
+    UNKNOWN_PLAYER_LABELS.has(normalizeOcrName(String(name || '')).toLowerCase());
+
+const sanitizePlayerNames = (names: Array<string | null | undefined>): string[] => dedupeNames(
+    names
+        .map((name) => normalizeSubmittedName(String(name || '')))
+        .filter((name) => !!name && !isPlaceholderPlayerLabel(name))
+);
+
 const dedupeModifierNames = (names: string[]): string[] => {
     const seen = new Set<string>();
     const out: string[] = [];
@@ -229,7 +238,7 @@ const buildTeamDraft = (
     const activeUserKey = normalizeNameKey(activeUser || '');
     return Object.entries(sessionTeams).map(([teamKey, teamPlayers], index) => {
         const { color, teamName } = parseTeamKey(teamKey, index);
-        const players = dedupeNames(
+        const players = sanitizePlayerNames(
             (teamPlayers || [])
                 .map((name) => String(name || '').trim())
                 .filter(Boolean)
@@ -279,7 +288,7 @@ const buildTeamDraftFromPendingData = (
     const parsedFriendlyLabel = seededFriendlyLabel
         ? parseTeamKey(seededFriendlyLabel, 0).teamName
         : '';
-    const baseFriendlyPlayers = dedupeNames([
+    const baseFriendlyPlayers = sanitizePlayerNames([
         ...((pendingMatchData?.teammates || [])
             .map((name) => normalizeSubmittedName(String(name || '')))
             .filter((name) => !isActiveUserCandidate(name))),
@@ -293,9 +302,9 @@ const buildTeamDraftFromPendingData = (
             teamName: String(team?.teamName || '').trim() || '',
             shipType: String(team?.shipType || '').trim(),
             color: String(team?.color || '').trim() || 'unknown',
-            players: (team?.players || [])
+            players: sanitizePlayerNames((team?.players || [])
                 .map((name) => normalizeSubmittedName(String(name || '')))
-                .filter((name) => !isActiveUserCandidate(name)),
+                .filter((name) => !isActiveUserCandidate(name))),
         })),
         activeUser: activeUserSeed,
         friendlyPlayers: baseFriendlyPlayers,
@@ -306,7 +315,7 @@ const buildTeamDraftFromPendingData = (
             parsedFriendlyLabel,
         ],
     });
-    const friendlyPlayers = dedupeNames([
+    const friendlyPlayers = sanitizePlayerNames([
         ...baseFriendlyPlayers,
         ...sanitizedPendingOpponents.promotedFriendlyPlayers,
     ]);
@@ -324,7 +333,7 @@ const buildTeamDraftFromPendingData = (
     sanitizedPendingOpponents.teams.forEach((team, index) => {
         const teamColor = String(team?.color || '').trim() || 'unknown';
         const teamName = String(team?.teamName || '').trim() || `Enemy Team ${index + 1}`;
-        const players = dedupeNames(team?.players || []);
+        const players = sanitizePlayerNames(team?.players || []);
         const shipType = normalizeSubmittedName(String(team?.shipType || ''))
             || resolveInitialTeamShip(`${teamColor}:${teamName}`, teamColor, players, sessionShipTypes);
         teams.push({
@@ -344,13 +353,13 @@ const serializeTeamDraftSnapshot = (
     opponentTeams: Array<{ teamName: string; shipType: string; color: string; players: string[] }>,
     friendlyShip: string
 ): string => JSON.stringify({
-    teammates: dedupeNames(teammates),
+    teammates: sanitizePlayerNames(teammates),
     friendlyShip: normalizeSubmittedName(friendlyShip),
     opponentTeams: opponentTeams.map((team) => ({
         teamName: normalizeSubmittedName(team.teamName),
         shipType: normalizeSubmittedName(team.shipType),
         color: normalizeSubmittedName(team.color) || 'unknown',
-        players: dedupeNames(team.players),
+        players: sanitizePlayerNames(team.players),
     })),
 });
 
@@ -360,7 +369,7 @@ const serializeTeamDraftSeed = (teams: TeamDraft[]): string => JSON.stringify(
         color: normalizeSubmittedName(team.color) || 'unknown',
         teamName: normalizeSubmittedName(team.teamName),
         shipType: normalizeSubmittedName(team.shipType),
-        players: dedupeNames(team.players),
+        players: sanitizePlayerNames(team.players),
     }))
 );
 
@@ -1067,7 +1076,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
 
         const resolvedTeams = teamDraft
             .map((team) => {
-                const normalizedPlayers = dedupeNames(
+                const normalizedPlayers = sanitizePlayerNames(
                     team.players
                         .map((rawName) => {
                             const correctedName = ignored.has(rawName)
@@ -1178,14 +1187,14 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         const friendlyPlayers = friendlyTeamIndex >= 0
             ? resolvedTeams[friendlyTeamIndex].players
             : [];
-        const nextTeammates = dedupeNames(
+        const nextTeammates = sanitizePlayerNames(
             friendlyPlayers.filter((name) => {
                 const key = normalizeNameKey(name);
                 if (!key) return false;
                 return activeUserKey ? key !== activeUserKey : true;
             })
         );
-        const nextOpponents = dedupeNames(
+        const nextOpponents = sanitizePlayerNames(
             resolvedTeams.flatMap((team, index) => (
                 index === friendlyTeamIndex ? [] : team.players
             )).filter((name) => {
@@ -1383,7 +1392,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         if (!normalizedPlayer) return;
         setTeamDraft((prev) => prev.map((team, index) => {
             if (index !== teamIndex) return team;
-            const nextPlayers = dedupeNames([...(team.players || []), normalizedPlayer]);
+            const nextPlayers = sanitizePlayerNames([...(team.players || []), normalizedPlayer]);
             return { ...team, players: nextPlayers };
         }));
     };

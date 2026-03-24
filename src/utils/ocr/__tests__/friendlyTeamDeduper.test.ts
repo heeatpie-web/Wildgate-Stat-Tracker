@@ -51,4 +51,33 @@ describe('sanitizeOpponentTeamsAgainstFriendlyRoster', () => {
             players: ['Enemy1', 'Enemy2'],
         }]);
     });
+
+    it('drops placeholder player labels instead of promoting them onto the friendly roster', () => {
+        const result = sanitizeOpponentTeamsAgainstFriendlyRoster({
+            teams: [
+                {
+                    teamName: 'Starlight',
+                    shipType: 'Hunter',
+                    players: ['Pilot', 'Wing1', 'Unknown Player'],
+                },
+                {
+                    teamName: 'Enemy Team',
+                    shipType: 'Scout',
+                    players: ['Enemy1', 'Unknown Player'],
+                },
+            ],
+            activeUser: 'Pilot',
+            friendlyPlayers: ['Wing1'],
+            friendlyTeamLabels: ['Starlight', 'Hunter'],
+        });
+
+        expect(result.promotedFriendlyPlayers).toEqual(['Wing1']);
+        expect(result.teams).toEqual([
+            {
+                teamName: 'Enemy Team',
+                shipType: 'Scout',
+                players: ['Enemy1'],
+            },
+        ]);
+    });
 });

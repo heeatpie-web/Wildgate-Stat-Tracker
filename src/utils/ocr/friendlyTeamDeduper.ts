@@ -1,3 +1,4 @@
+import { UNKNOWN_PLAYER_LABELS } from '../constants';
 import { combinedNameSimilarityScore, normalizeOcrName } from '../stringUtils';
 
 export interface FriendlyRosterTeamLike {
@@ -24,13 +25,16 @@ const FRIENDLY_LABEL_SIMILARITY_THRESHOLD = 90;
 const normalizeNameKey = (value: string | null | undefined): string =>
     normalizeOcrName(String(value || '')).toLowerCase();
 
+const isPlaceholderPlayerLabel = (value: string | null | undefined): boolean =>
+    UNKNOWN_PLAYER_LABELS.has(normalizeNameKey(value));
+
 const dedupeNames = (values: Array<string | null | undefined>): string[] => {
     const seen = new Set<string>();
     const unique: string[] = [];
     values.forEach((value) => {
         const cleaned = normalizeOcrName(String(value || ''));
         const key = cleaned.toLowerCase();
-        if (!cleaned || seen.has(key)) return;
+        if (!cleaned || isPlaceholderPlayerLabel(cleaned) || seen.has(key)) return;
         seen.add(key);
         unique.push(cleaned);
     });
