@@ -29,7 +29,7 @@ const FLASH_MIN_VALID_DURATION_MS = 100;
 const FLASH_MAX_VALID_DURATION_MS = 900;
 
 // ── Text tripwire constants ────────────────────────────────────────────────
-const TEXT_TRIPWIRE_SUSTAIN_MS = 400;
+const TEXT_TRIPWIRE_SUSTAIN_MS = 300;
 const TRIPWIRE_MIN_CONSECUTIVE_HITS = Math.max(1, Math.ceil(TEXT_TRIPWIRE_SUSTAIN_MS / SAMPLE_INTERVAL_MS));
 const TRIPWIRE_MIN_ACTIVE_BOXES = 2;
 const TRIPWIRE_MIN_BOX_WHITE_RATIO = 0.09;
@@ -216,8 +216,11 @@ function buildTripwireSnapshot(metrics) {
 
   const activeBoxCount = boxMetrics.reduce((n, m) => n + (m.active ? 1 : 0), 0);
   const totalWhiteRatio = boxMetrics.reduce((s, m) => s + m.whiteRatio, 0);
+  // result-a alone is sufficient: left-anchored placement text (e.g. 2nd place loss)
+  // only lights up the leftmost box. B+C (centered headline) still require 2 boxes.
+  const aOnlyActive = activeBoxCount === 1 && boxMetrics.some((m) => m.id === 'result-a' && m.active);
   return {
-    triggered: activeBoxCount >= TRIPWIRE_MIN_ACTIVE_BOXES,
+    triggered: activeBoxCount >= TRIPWIRE_MIN_ACTIVE_BOXES || aOnlyActive,
     activeBoxCount,
     totalWhiteRatio,
     boxes: boxMetrics,
