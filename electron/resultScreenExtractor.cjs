@@ -14,7 +14,7 @@ const { paddleOcrBuffer, paddleRecognizeBuffer } = require('./paddleOcrHandler.c
 
 /**
  * @typedef {{
- *   result: 'Win'|'Loss'|null,
+ *   result: 'Win'|'Loss'|'Draw'|null,
  *   winType?: 'combat'|'artifact',
  *   placement?: number,
  *   detectionMethod: 'flash'|'text',
@@ -94,6 +94,12 @@ const hasStrongPlacementContext = (joined) => includesAnyToken(joined, [
   'SHIPWINS',
   'LEGIONSHIPWINS',
   'GIONSHIPWIN',
+]);
+
+const hasReachWinsSignal = (joined) => includesAnyToken(joined, [
+  'REACHWINS',
+  'EACHWINS',
+  'REACHWIN',
 ]);
 
 const hasOverlayOrMenuSignal = (joined) => includesAnyToken(joined, [
@@ -299,6 +305,7 @@ function parseResultSignals({
   const hasFinalMoments = joined.includes('FINALMOMENTSRECAP') || joined.includes('NALMOMENTSRECA');
   const hasDefeat = joined.includes('DEFEAT');
   const hasShipWins = joined.includes('SHIPWINS') || joined.includes('LEGIONSHIPWINS') || joined.includes('GIONSHIPWIN');
+  const hasReachWins = hasReachWinsSignal(joined);
   const hasDamagePanel = joined.includes('DAMAGETAKEN') || joined.includes('INLAST2MIN') || joined.includes('FINALDAMAGETAKEN');
   const hasExplicitResultSignal = hasVictory
     || hasArtifactSignal
@@ -307,7 +314,8 @@ function parseResultSignals({
     || hasVanguardWins
     || hasFinalMoments
     || hasDefeat
-    || hasShipWins;
+    || hasShipWins
+    || hasReachWins;
   const hasRejectedOverlaySignal = hasOverlayOrMenuSignal(joined) && !hasExplicitResultSignal;
   const hasDamageSourcesSignal = damageTaken != null
     || hasEliminated
@@ -357,6 +365,16 @@ function parseResultSignals({
       detectionMethod,
       damageTaken: resolvedDamageTaken,
       damageSourcesAvailable: resolvedDamageSourcesAvailable,
+    };
+  }
+
+  if (hasReachWins) {
+    return {
+      result: 'Draw',
+      winType: 'combat',
+      detectionMethod,
+      damageTaken: undefined,
+      damageSourcesAvailable: false,
     };
   }
 

@@ -312,8 +312,10 @@ const POST_FLASH_CAPTURE_BUFFER_MS = 200;
 const FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS = KNOWN_FLASH_PURE_WHITE_MS + POST_FLASH_CAPTURE_BUFFER_MS;
 // Take a short bounded burst per trigger so a bad early frame does not end
 // the automatic path while the result screen is still visible.
-const FULL_AUTO_RESULT_OCR_MAX_ATTEMPTS = 3;
+const FULL_AUTO_RESULT_OCR_MAX_ATTEMPTS = 2;
 const FULL_AUTO_RESULT_OCR_RETRY_INTERVAL_MS = 250;
+// Prevent a failed result phase from re-triggering forever on menus/loading screens.
+const FULL_AUTO_RESULT_MAX_BURSTS_PER_MATCH = 2;
 const FULL_AUTO_BACKGROUND_RESULT_OCR_INTERVAL_MS = 2_000;
 const FULL_AUTO_BACKGROUND_RESULT_OCR_MAX_ATTEMPTS = 4;
 const FULL_AUTO_FRONTEND_RESULT_CONFIRM_GRACE_MS = 8_000;
@@ -331,18 +333,18 @@ const FULL_AUTO_DAMAGE_SOURCES_CAPTURE_REGION = {
 } as const;
 
 const hasRecognizedResultContext = (value: {
-    result?: 'Win' | 'Loss' | null;
+    result?: 'Win' | 'Loss' | 'Draw' | null;
     winType?: 'combat' | 'artifact';
     placement?: number | null;
 } | null | undefined): boolean => {
-    if (value?.result === 'Win' || value?.result === 'Loss') return true;
+    if (value?.result === 'Win' || value?.result === 'Loss' || value?.result === 'Draw') return true;
     if (value?.winType === 'combat' || value?.winType === 'artifact') return true;
     const placement = Number(value?.placement);
     return Number.isInteger(placement) && placement >= 1 && placement <= 5;
 };
 
 const shouldCaptureDamageSourcesFollowUp = (value: {
-    result?: 'Win' | 'Loss' | null;
+    result?: 'Win' | 'Loss' | 'Draw' | null;
     winType?: 'combat' | 'artifact';
 } | null | undefined): boolean => (
     value?.result === 'Loss' && value?.winType !== 'artifact'
@@ -858,6 +860,8 @@ const App: React.FC = () => {
     const fullAutoDetectionMatchIdRef = useRef<number | null>(null);
     const pendingTextDetectionTokenRef = useRef(0);
     const pendingTextDetectionMatchIdRef = useRef<number | null>(null);
+    const fullAutoResultBurstMatchIdRef = useRef<number | null>(null);
+    const fullAutoResultBurstCountRef = useRef(0);
     const fullAutoEnabledRef = useRef(fullAutoEnabled);
     const telemetryLifecycleStageValueRef = useRef<TelemetryLifecycleStage>(telemetryLifecycleStage);
     const triggerFullAutoSaveRef = useRef<(options?: {
@@ -892,6 +896,28 @@ const App: React.FC = () => {
     const cancelPendingTextDetection = useCallback(() => {
         pendingTextDetectionTokenRef.current += 1;
         pendingTextDetectionMatchIdRef.current = null;
+    }, []);
+    const resetFullAutoResultBurstBudget = useCallback((matchId?: number | null) => {
+        const normalizedMatchId = Number(matchId || 0);
+        fullAutoResultBurstMatchIdRef.current = Number.isInteger(normalizedMatchId) && normalizedMatchId > 0
+            ? normalizedMatchId
+            : null;
+        fullAutoResultBurstCountRef.current = 0;
+    }, []);
+    const consumeFullAutoResultBurstBudget = useCallback((matchId?: number | null) => {
+        const normalizedMatchId = Number(matchId || 0);
+        if (!Number.isInteger(normalizedMatchId) || normalizedMatchId <= 0) {
+            return true;
+        }
+        if (fullAutoResultBurstMatchIdRef.current !== normalizedMatchId) {
+            fullAutoResultBurstMatchIdRef.current = normalizedMatchId;
+            fullAutoResultBurstCountRef.current = 0;
+        }
+        if (fullAutoResultBurstCountRef.current >= FULL_AUTO_RESULT_MAX_BURSTS_PER_MATCH) {
+            return false;
+        }
+        fullAutoResultBurstCountRef.current += 1;
+        return true;
     }, []);
 
     const fuzzyRosterCandidates = React.useMemo(() => (
@@ -2390,6 +2416,7 @@ const App: React.FC = () => {
             resultMonitorArmAnchorMatchIdRef.current = null;
             setResultMonitorArmAnchorAtState(null);
             cancelPendingTextDetection();
+            resetFullAutoResultBurstBudget(null);
             if (telemetryLifecycleStage === 'idle' || telemetryLifecycleStage === 'menu') {
                 setFullAutoDetectionLocked(false);
                 resetResultMonitorSuppression();
@@ -2408,6 +2435,7 @@ const App: React.FC = () => {
         resultMonitorArmAnchorMatchIdRef.current = null;
         setResultMonitorArmAnchorAtState(null);
         cancelPendingTextDetection();
+        resetFullAutoResultBurstBudget(nextDraftId);
         setFullAutoResultLatched(false);
         setFullAutoDetectionLocked(false);
         resetResultMonitorSuppression();
@@ -2417,6 +2445,7 @@ const App: React.FC = () => {
         clearTelemetryBackgroundResultOcrTimer,
         clearTelemetryLobbyCaptureTimer,
         cancelPendingTextDetection,
+        resetFullAutoResultBurstBudget,
         resetResultMonitorSuppression,
         setFullAutoDetectionLocked,
         telemetryLifecycleStage,
@@ -3082,6 +3111,14 @@ const App: React.FC = () => {
         }
 
         const normalizedMatchId = Number(matchId || 0);
+        if (!consumeFullAutoResultBurstBudget(normalizedMatchId)) {
+            Logger.info('ResultMonitor', 'Ignoring result detection because the retry budget is exhausted for this match', {
+                matchId: normalizedMatchId,
+                detectionMethod,
+                maxBurstsPerMatch: FULL_AUTO_RESULT_MAX_BURSTS_PER_MATCH,
+            });
+            return false;
+        }
         cancelPendingTextDetection();
         fullAutoDetectionMethodRef.current = detectionMethod ?? null;
         fullAutoDetectionMatchIdRef.current = Number.isInteger(normalizedMatchId) && normalizedMatchId > 0
@@ -3097,6 +3134,7 @@ const App: React.FC = () => {
         }));
         return true;
     }, [
+        consumeFullAutoResultBurstBudget,
         fullAutoResultLatched,
         normalizedActiveTelemetryDraftMatchId,
         cancelPendingTextDetection,

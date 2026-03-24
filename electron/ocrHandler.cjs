@@ -59,6 +59,20 @@ function ensureCorpusArchiveDir() {
   }
 }
 
+function restoreHiddenCaptureWindow(mainWindow, options = {}) {
+  const wasVisible = options?.wasVisible === true;
+  if (!wasVisible || !mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  if (typeof mainWindow.showInactive === 'function') {
+    mainWindow.showInactive();
+    return;
+  }
+
+  mainWindow.show();
+}
+
 // ─── OCR Result Cache (LRU, max 50 entries) ───
 const OCR_CACHE_MAX = Math.min(500, Math.max(10, parseInt(process.env.WILDGATE_OCR_CACHE_MAX || '50', 10) || 50));
 const LOW_WORD_CONFIDENCE_THRESHOLD = Math.min(80, Math.max(0, parseInt(process.env.WILDGATE_OCR_WORD_CONF_MIN || '15', 10) || 15));
@@ -2833,10 +2847,7 @@ function registerOCRHandlers(mainWindow) {
       }
       return await captureGameWindow();
     } finally {
-      if (wasVisible && mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.show();
-        mainWindow.focus();
-      }
+      restoreHiddenCaptureWindow(mainWindow, { wasVisible });
     }
   }
 
@@ -3014,5 +3025,6 @@ module.exports = {
     convertCrewHubToLegacy,
     detectAspectProfile,
     getMaxTeammatesForShipType,
+    restoreHiddenCaptureWindow,
   },
 };

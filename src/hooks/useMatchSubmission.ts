@@ -135,7 +135,7 @@ export const removeMatchArtifactsThenDelete = async ({
 };
 
 type AutoResultScreenData = {
-    result: 'Win' | 'Loss' | null;
+    result: 'Win' | 'Loss' | 'Draw' | null;
     winType?: string | null;
     placement?: number | null;
     detectionMethod?: 'flash' | 'text';
@@ -156,7 +156,12 @@ type AutoFinalizeResultStatus = {
     artifactPaths?: string[];
 };
 
-const normalizeResultSubType = (winType: string | null | undefined, placement?: number | null): 'Artifact' | 'Combat' | null => {
+const normalizeResultSubType = (
+    result: 'Win' | 'Loss' | 'Draw' | null | undefined,
+    winType: string | null | undefined,
+    placement?: number | null,
+): 'Artifact' | 'Combat' | null => {
+    if (result === 'Draw') return 'Combat';
     const normalized = String(winType || '').trim().toLowerCase();
     if (normalized === 'artifact') return 'Artifact';
     if (normalized === 'combat') return 'Combat';
@@ -1409,7 +1414,7 @@ export const useMatchSubmission = () => {
         const normalizedPlacement = rawPlacement != null && Number.isInteger(Number(rawPlacement))
             ? Math.min(5, Math.max(2, Number(rawPlacement)))
             : null;
-        const normalizedSubType = normalizeResultSubType(resultData?.winType, normalizedPlacement);
+        const normalizedSubType = normalizeResultSubType(normalizedResult, resultData?.winType, normalizedPlacement);
         const normalizedPersistedPrimaryArtifactPath = String(persistedPrimaryArtifactPath || '').trim();
 
         try {
@@ -1418,12 +1423,12 @@ export const useMatchSubmission = () => {
             if (normalizedResult === 'Win') {
                 launchVictoryConfetti();
                 playVictory();
-            } else {
+            } else if (normalizedResult === 'Loss') {
                 playDefeat();
             }
 
             const retainedSupplementalArtifacts = (supplementalArtifacts || []).filter((artifact) => (
-                normalizedResult !== 'Win'
+                normalizedResult !== 'Win' && normalizedResult !== 'Draw'
                 || (artifact?.kind !== 'damage-sources' && artifact?.kind !== 'damage-ships')
             ));
 
@@ -1496,7 +1501,7 @@ export const useMatchSubmission = () => {
                 };
             };
 
-            if (normalizedResult !== 'Win' && normalizedResult !== 'Loss') {
+            if (normalizedResult !== 'Win' && normalizedResult !== 'Loss' && normalizedResult !== 'Draw') {
                 return syncDraftArtifactsOnly('unconfirmed');
             }
 
@@ -1546,6 +1551,8 @@ export const useMatchSubmission = () => {
             const finalNotes = currentNote || resolvedPendingMatchData.notes || existingMatch.notes || '';
             const finalPlacement = normalizedResult === 'Win'
                 ? 1
+                : normalizedResult === 'Draw'
+                    ? undefined
                 : (normalizedSubType === 'Combat' ? (normalizedPlacement ?? undefined) : undefined);
             const rawMergedLoadout = sanitizeLoadout(resolvedPendingMatchData.loadout || currentLoadout || existingMatch.loadout);
             const mergedLoadout = (rawMergedLoadout && resolvedShip)
@@ -1553,14 +1560,14 @@ export const useMatchSubmission = () => {
                 : rawMergedLoadout;
             const baseTelemetryConsistency = resolvedPendingMatchData.telemetryConsistency || existingMatch.telemetryConsistency;
             const savedOcrMeta = resolveSavedOcrMeta(resolvedPendingMatchData, existingMatch, { forceSaved: true });
-            const mergedDamageSourcesText = normalizedResult === 'Win'
+            const mergedDamageSourcesText = normalizedResult === 'Win' || normalizedResult === 'Draw'
                 ? []
                 : mergeTextLines(
                     existingMatch.damageSourcesText,
                     resolvedPendingMatchData.damageSourcesText,
                     damageSourcesOcrLines,
                 );
-            const finalDamageSourcesAvailable = normalizedResult === 'Win'
+            const finalDamageSourcesAvailable = normalizedResult === 'Win' || normalizedResult === 'Draw'
                 ? false
                 : (
                     resultData.damageSourcesAvailable === true

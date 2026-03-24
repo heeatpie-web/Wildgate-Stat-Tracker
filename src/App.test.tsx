@@ -1530,12 +1530,12 @@ describe('App', () => {
     });
     await triggerPromise;
 
-    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'capture-screen')).toHaveLength(3);
-    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'scan-result-screen')).toHaveLength(3);
-    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'save-screenshot')).toHaveLength(3);
+    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'capture-screen')).toHaveLength(2);
+    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'scan-result-screen')).toHaveLength(2);
+    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'save-screenshot')).toHaveLength(2);
     expect(api.invoke.mock.calls.filter(([channel]) => channel === 'capture-result-screen-region')).toHaveLength(0);
     expect(api.invoke.mock.calls.filter(([channel]) => channel === 'save-ocr-debug')).toHaveLength(0);
-    expect(autoFinalizeResultScreenCaptureMock).toHaveBeenCalledTimes(3);
+    expect(autoFinalizeResultScreenCaptureMock).toHaveBeenCalledTimes(2);
     expect(autoFinalizeResultScreenCaptureMock).toHaveBeenNthCalledWith(1, expect.objectContaining({
       imageBase64: 'image-base64',
       resultData: expect.objectContaining({ result: null, detectionMethod: 'flash' }),
@@ -1639,6 +1639,115 @@ describe('App', () => {
       flashEnabled: true,
       textEnabled: true,
     }));
+    vi.useRealTimers();
+  });
+
+  it('stops starting new result bursts after exhausting the per-match retry budget', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
+    uiState.telemetryLifecycleStage = 'live';
+    const draft = {
+      id: 4324,
+      timestamp: Date.now(),
+      date: '3/22/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      artifacts: [],
+    };
+    gameDataState.matches = [draft];
+    appStoreState.matches = [draft];
+    autoFinalizeResultScreenCaptureMock.mockResolvedValue({ success: false, reason: 'unconfirmed' });
+
+    const api = {
+      invoke: vi.fn((channel: string) => {
+        if (channel === 'capture-screen') {
+          return Promise.resolve('image-base64');
+        }
+        if (channel === 'save-screenshot') {
+          return Promise.resolve({
+            success: true,
+            data: { filePath: 'C:\\match_artifacts\\4324\\capture_result.png' },
+          });
+        }
+        if (channel === 'scan-result-screen') {
+          return Promise.resolve({ data: { result: null } });
+        }
+        if (channel === 'telemetry-retention-status') {
+          return Promise.resolve(null);
+        }
+        return Promise.resolve(null);
+      }),
+      send: vi.fn(),
+      on: vi.fn(() => () => {}),
+      removeAllListeners: vi.fn(),
+    };
+    getElectronAPIMock.mockReturnValue(api);
+
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    const flashOptions = useResultFlashMonitorMock.mock.calls.at(-1)?.[0] as {
+      onFlashDetected?: () => Promise<void>;
+    };
+    expect(flashOptions?.onFlashDetected).toBeTypeOf('function');
+
+    let firstTriggerPromise: Promise<void> | undefined;
+    await act(async () => {
+      firstTriggerPromise = flashOptions.onFlashDetected?.();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await firstTriggerPromise;
+
+    const captureCallsAfterFirstBurst = api.invoke.mock.calls.filter(([channel]) => channel === 'capture-screen').length;
+    expect(captureCallsAfterFirstBurst).toBe(2);
+
+    let secondTriggerPromise: Promise<void> | undefined;
+    await act(async () => {
+      secondTriggerPromise = flashOptions.onFlashDetected?.();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await secondTriggerPromise;
+
+    const captureCallsAfterSecondBurst = api.invoke.mock.calls.filter(([channel]) => channel === 'capture-screen').length;
+    expect(captureCallsAfterSecondBurst).toBe(4);
+
+    await act(async () => {
+      await flashOptions.onFlashDetected?.();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const captureCallsAfterThirdSignal = api.invoke.mock.calls.filter(([channel]) => channel === 'capture-screen').length;
+    expect(captureCallsAfterThirdSignal).toBe(4);
     vi.useRealTimers();
   });
 

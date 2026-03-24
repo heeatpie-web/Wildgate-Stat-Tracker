@@ -35,6 +35,18 @@ describe('resultScreenExtractor heuristics', () => {
     });
   });
 
+  it('parses REACH WINS as a draw result', () => {
+    expect(__test__.parseResultSignals({
+      headlineTexts: ['REACHWINS'],
+    }, { detectionMethod: 'text' })).toEqual({
+      result: 'Draw',
+      winType: 'combat',
+      detectionMethod: 'text',
+      damageTaken: undefined,
+      damageSourcesAvailable: false,
+    });
+  });
+
   it('parses combat losses and placement from placement banner text', () => {
     expect(__test__.parseResultSignals({
       placementTexts: ['2', 'FINALMOMENTSRECAP'],

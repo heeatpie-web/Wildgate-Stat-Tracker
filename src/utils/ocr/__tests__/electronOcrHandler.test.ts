@@ -1,5 +1,5 @@
 import { createRequire } from 'module';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 const require = createRequire(import.meta.url);
 const Module = require('module');
@@ -42,6 +42,7 @@ const { __test__ } = require('../../../../electron/ocrHandler.cjs') as {
     cleanupLegacyExtraction: (input: Record<string, any>) => Record<string, any>;
     convertCrewHubToLegacy: (crewHubData: Record<string, any>, rawText: string) => Record<string, any>;
     getMaxTeammatesForShipType: (shipType: string) => number;
+    restoreHiddenCaptureWindow: (mainWindow: Record<string, any> | null | undefined, options?: { wasVisible?: boolean }) => void;
   };
 };
 
@@ -171,5 +172,18 @@ describe('electron/ocrHandler crew-hub teammate cleanup', () => {
     expect((result.teammates || []).map((player: Record<string, any>) => player.name)).toEqual([
       'Riv2I9',
     ]);
+  });
+
+  it('restores a hidden capture window without focusing it', () => {
+    const showInactive = vi.fn();
+    const focus = vi.fn();
+    __test__.restoreHiddenCaptureWindow({
+      isDestroyed: () => false,
+      showInactive,
+      focus,
+    }, { wasVisible: true });
+
+    expect(showInactive).toHaveBeenCalledTimes(1);
+    expect(focus).not.toHaveBeenCalled();
   });
 });
