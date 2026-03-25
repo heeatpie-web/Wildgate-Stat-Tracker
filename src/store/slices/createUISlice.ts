@@ -97,6 +97,8 @@ export type TelemetryAutomationStatusPhase =
     | 'result-flash-detected'
     | 'result-ocr'
     | 'result-ocr-burst'
+    | 'result-saved'
+    | 'ready-next-match'
     | 'manual-result-needed'
     | 'failed';
 export type TelemetryAutomationStatusLevel = 'info' | 'success' | 'warning' | 'error';

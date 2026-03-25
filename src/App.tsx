@@ -316,6 +316,7 @@ const FULL_AUTO_RESULT_OCR_MAX_ATTEMPTS = 2;
 const FULL_AUTO_RESULT_OCR_RETRY_INTERVAL_MS = 250;
 // Prevent a failed result phase from re-triggering forever on menus/loading screens.
 const FULL_AUTO_RESULT_MAX_BURSTS_PER_MATCH = 2;
+const FULL_AUTO_READY_FOR_NEXT_MATCH_DELAY_MS = 30_000;
 const FULL_AUTO_BACKGROUND_RESULT_OCR_INTERVAL_MS = 2_000;
 const FULL_AUTO_BACKGROUND_RESULT_OCR_MAX_ATTEMPTS = 4;
 const FULL_AUTO_FRONTEND_RESULT_CONFIRM_GRACE_MS = 8_000;
@@ -477,6 +478,10 @@ const clonePendingMatchDraft = (value: Partial<Match> | null | undefined): Parti
         : [],
     reachModifiers: Array.isArray(value?.reachModifiers) ? [...value.reachModifiers] : [],
     artifacts: Array.isArray(value?.artifacts) ? [...value.artifacts] : [],
+    friendlyPlayerIds: Array.isArray(value?.friendlyPlayerIds) ? [...value.friendlyPlayerIds] : [],
+    friendlyIdentityAssignments: value?.friendlyIdentityAssignments
+        ? { ...value.friendlyIdentityAssignments }
+        : undefined,
     kills: value?.kills ? { ...value.kills } : {},
     loadout: cloneLoadout(value?.loadout) || undefined,
     timelineEvents: Array.isArray(value?.timelineEvents) ? [...value.timelineEvents] : [],
@@ -852,6 +857,7 @@ const App: React.FC = () => {
         playCapture,
         playAutomationStart,
         playAutomationComplete,
+        playAutoResultApplied,
         playAutomationFailed,
     } = useSoundEffects();
     const [fullAutoResultLatched, setFullAutoResultLatched] = useState(false);
@@ -865,6 +871,7 @@ const App: React.FC = () => {
     const pendingTextDetectionMatchIdRef = useRef<number | null>(null);
     const fullAutoResultBurstMatchIdRef = useRef<number | null>(null);
     const fullAutoResultBurstCountRef = useRef(0);
+    const fullAutoReadyForNextMatchTimerRef = useRef<number | null>(null);
     const fullAutoEnabledRef = useRef(fullAutoEnabled);
     const telemetryLifecycleStageValueRef = useRef<TelemetryLifecycleStage>(telemetryLifecycleStage);
     const triggerFullAutoSaveRef = useRef<(options?: {
@@ -900,6 +907,44 @@ const App: React.FC = () => {
         pendingTextDetectionTokenRef.current += 1;
         pendingTextDetectionMatchIdRef.current = null;
     }, []);
+    const clearFullAutoReadyForNextMatchTimer = useCallback(() => {
+        const timerId = fullAutoReadyForNextMatchTimerRef.current;
+        if (timerId != null) {
+            window.clearTimeout(timerId);
+            fullAutoReadyForNextMatchTimerRef.current = null;
+        }
+    }, []);
+    const scheduleFullAutoReadyForNextMatchStatus = useCallback((matchId: number) => {
+        clearFullAutoReadyForNextMatchTimer();
+        setTelemetryAutomationStatus(createTelemetryAutomationStatus({
+            phase: 'result-saved',
+            message: 'Automatic result saved',
+            matchId,
+            level: 'success',
+        }));
+        playAutoResultApplied();
+        fullAutoReadyForNextMatchTimerRef.current = window.setTimeout(() => {
+            fullAutoReadyForNextMatchTimerRef.current = null;
+            const currentStatus = useAppStore.getState().telemetryAutomationStatus;
+            const currentMatchId = Number(currentStatus?.matchId || 0);
+            const matchesSuccessfulAutoStatus = (
+                currentMatchId === matchId
+                && (
+                    currentStatus?.phase === 'result-saved'
+                    || (
+                        currentStatus?.phase === 'result-ocr'
+                        && currentStatus?.message === 'Automatic result saved'
+                    )
+                )
+            );
+            if (!matchesSuccessfulAutoStatus) return;
+            setTelemetryAutomationStatus(createTelemetryAutomationStatus({
+                phase: 'ready-next-match',
+                message: 'Ready for next match',
+                level: 'success',
+            }));
+        }, FULL_AUTO_READY_FOR_NEXT_MATCH_DELAY_MS);
+    }, [clearFullAutoReadyForNextMatchTimer, playAutoResultApplied, setTelemetryAutomationStatus]);
     const resetFullAutoResultBurstBudget = useCallback((matchId?: number | null) => {
         const normalizedMatchId = Number(matchId || 0);
         fullAutoResultBurstMatchIdRef.current = Number.isInteger(normalizedMatchId) && normalizedMatchId > 0
@@ -2396,12 +2441,14 @@ const App: React.FC = () => {
         clearTelemetryDraftFallbackTimer();
         clearTelemetryBackgroundResultOcrTimer();
         clearTelemetryLobbyCaptureTimer();
+        clearFullAutoReadyForNextMatchTimer();
         clearArtifactsAndGatesFallbackWatchTimer();
     }, [
         clearArtifactsAndGatesFallbackWatchTimer,
         clearTelemetryBackgroundResultOcrTimer,
         clearTelemetryDraftFallbackTimer,
         clearTelemetryLobbyCaptureTimer,
+        clearFullAutoReadyForNextMatchTimer,
     ]);
 
     useEffect(() => {
@@ -2410,6 +2457,7 @@ const App: React.FC = () => {
         if (!Number.isInteger(nextDraftId) || nextDraftId <= 0) {
             clearTelemetryBackgroundResultOcrTimer(previousDraftId);
             clearTelemetryLobbyCaptureTimer(previousDraftId);
+            clearFullAutoReadyForNextMatchTimer();
             clearArtifactsAndGatesFallbackWatchTimer();
             latestTelemetryDraftIdRef.current = null;
             telemetryFirstPregameAtRef.current.clear();
@@ -2429,6 +2477,7 @@ const App: React.FC = () => {
         if (previousDraftId === nextDraftId) return;
         clearTelemetryBackgroundResultOcrTimer(previousDraftId);
         clearTelemetryLobbyCaptureTimer(previousDraftId);
+        clearFullAutoReadyForNextMatchTimer();
         clearArtifactsAndGatesFallbackWatchTimer();
         latestTelemetryDraftIdRef.current = nextDraftId;
         telemetryFirstPregameAtRef.current.clear();
@@ -2445,6 +2494,7 @@ const App: React.FC = () => {
     }, [
         activeTelemetryDraftMatch?.id,
         clearArtifactsAndGatesFallbackWatchTimer,
+        clearFullAutoReadyForNextMatchTimer,
         clearTelemetryBackgroundResultOcrTimer,
         clearTelemetryLobbyCaptureTimer,
         cancelPendingTextDetection,
@@ -2605,12 +2655,23 @@ const App: React.FC = () => {
             || currentStatus.phase === 'result-flash-detected'
             || currentStatus.phase === 'result-ocr'
             || currentStatus.phase === 'result-ocr-burst'
+            || (
+                normalizedMatchId == null
+                && (
+                    currentStatus.phase === 'result-saved'
+                    || currentStatus.phase === 'ready-next-match'
+                )
+            )
             || currentStatus.phase === 'manual-result-needed'
             || currentStatus.phase === 'failed'
         );
 
         if (telemetryLifecycleStage === 'idle') {
-            if (!telemetryDraftPrompt && currentStatus != null) {
+            const shouldKeepIdleSuccessStatus = (
+                currentStatus?.phase === 'result-saved'
+                || currentStatus?.phase === 'ready-next-match'
+            );
+            if (!telemetryDraftPrompt && currentStatus != null && !shouldKeepIdleSuccessStatus) {
                 setTelemetryAutomationStatus(null);
             }
             return;
@@ -2791,6 +2852,10 @@ const App: React.FC = () => {
             ocrDebug: draft.ocrDebug || undefined,
             artifacts: [...(draft.artifacts || [])],
             ocrState: draft.ocrState,
+            friendlyPlayerIds: [...(draft.friendlyPlayerIds || [])],
+            friendlyIdentityAssignments: draft.friendlyIdentityAssignments
+                ? { ...draft.friendlyIdentityAssignments }
+                : undefined,
         };
 
         handledTelemetryDraftPostmatchPromptIdsRef.current.add(draft.id);
@@ -3349,12 +3414,7 @@ const App: React.FC = () => {
 
                 if (finalized.success) {
                     setFullAutoResultLatched(true);
-                    setTelemetryAutomationStatus(createTelemetryAutomationStatus({
-                        phase: 'result-ocr',
-                        message: 'Automatic result saved',
-                        matchId: normalizedDraftMatchId,
-                        level: 'success',
-                    }));
+                    scheduleFullAutoReadyForNextMatchStatus(normalizedDraftMatchId);
                     return;
                 }
 
@@ -3437,6 +3497,7 @@ const App: React.FC = () => {
         normalizedActiveTelemetryDraftMatchId,
         resetResultMonitorSuppression,
         saveFullAutoDebugCapture,
+        scheduleFullAutoReadyForNextMatchStatus,
         setFullAutoDetectionLocked,
         setTelemetryAutomationStatus,
         setToast,

@@ -15,6 +15,7 @@ const sendGameUiActionMock = vi.fn();
 const playCaptureMock = vi.fn();
 const playAutomationStartMock = vi.fn();
 const playAutomationCompleteMock = vi.fn();
+const playAutoResultAppliedMock = vi.fn();
 const playAutomationFailedMock = vi.fn();
 
 const buildRestoreSessionSnapshot = () => JSON.stringify({
@@ -211,6 +212,7 @@ vi.mock('./hooks/useSoundEffects', () => ({
     playCapture: playCaptureMock,
     playAutomationStart: playAutomationStartMock,
     playAutomationComplete: playAutomationCompleteMock,
+    playAutoResultApplied: playAutoResultAppliedMock,
     playAutomationFailed: playAutomationFailedMock,
   }),
 }));
@@ -313,6 +315,7 @@ describe('App', () => {
     playCaptureMock.mockReset();
     playAutomationStartMock.mockReset();
     playAutomationCompleteMock.mockReset();
+    playAutoResultAppliedMock.mockReset();
     playAutomationFailedMock.mockReset();
     uiState.activeUser = 'Pilot';
     uiState.activeView = 'recording';
@@ -2244,7 +2247,7 @@ describe('App', () => {
       }),
     }));
     expect(sendGameUiActionMock).toHaveBeenCalledWith('show-damage-sources');
-    expect(autoFinalizeResultScreenCaptureMock).toHaveBeenCalledWith(expect.objectContaining({
+  expect(autoFinalizeResultScreenCaptureMock).toHaveBeenCalledWith(expect.objectContaining({
       imageBase64: 'image-base64-2',
       resultData: expect.objectContaining({
         result: 'Loss',
@@ -2258,6 +2261,201 @@ describe('App', () => {
         { imageBase64: 'damage-region', kind: 'damage-sources' },
         { imageBase64: 'damage-region', kind: 'damage-ships' },
       ],
+    }));
+    vi.useRealTimers();
+  });
+
+  it('plays the automatic result-applied sound and shifts to ready for the next match after 30 seconds', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
+    uiState.telemetryLifecycleStage = 'live';
+    const draft = {
+      id: 6601,
+      timestamp: Date.now(),
+      date: '3/25/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      artifacts: [],
+    };
+    gameDataState.matches = [draft];
+    appStoreState.matches = [draft];
+    autoFinalizeResultScreenCaptureMock.mockResolvedValue({ success: true });
+
+    const api = {
+      invoke: vi.fn((channel: string) => {
+        if (channel === 'capture-screen') {
+          return Promise.resolve('image-base64');
+        }
+        if (channel === 'save-screenshot') {
+          return Promise.resolve({
+            success: true,
+            data: { filePath: 'C:\\match_artifacts\\6601\\capture_result.png' },
+          });
+        }
+        if (channel === 'scan-result-screen') {
+          return Promise.resolve({ data: { result: 'Win', detectionMethod: 'flash' } });
+        }
+        if (channel === 'telemetry-retention-status') {
+          return Promise.resolve(null);
+        }
+        return Promise.resolve(null);
+      }),
+      send: vi.fn(),
+      on: vi.fn(() => () => {}),
+      removeAllListeners: vi.fn(),
+    };
+    getElectronAPIMock.mockReturnValue(api);
+
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    const flashOptions = useResultFlashMonitorMock.mock.calls.at(-1)?.[0] as {
+      onFlashDetected?: () => Promise<void>;
+    };
+    expect(flashOptions?.onFlashDetected).toBeTypeOf('function');
+
+    let flashPromise: Promise<void> | undefined;
+    await act(async () => {
+      flashPromise = flashOptions.onFlashDetected?.();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500);
+      await Promise.resolve();
+      await Promise.resolve();
+      await flashPromise;
+    });
+
+    expect(playAutoResultAppliedMock).toHaveBeenCalledTimes(1);
+    expect(uiState.setTelemetryAutomationStatus).toHaveBeenCalledWith(expect.objectContaining({
+      phase: 'result-saved',
+      message: 'Automatic result saved',
+      matchId: 6601,
+      level: 'success',
+    }));
+    uiState.setTelemetryAutomationStatus.mockClear();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(27_000);
+      await Promise.resolve();
+    });
+
+    expect(uiState.setTelemetryAutomationStatus).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000);
+      await Promise.resolve();
+    });
+
+    expect(uiState.setTelemetryAutomationStatus).toHaveBeenCalledWith(expect.objectContaining({
+      phase: 'ready-next-match',
+      message: 'Ready for next match',
+      level: 'success',
+    }));
+    vi.useRealTimers();
+  });
+
+  it('keeps the failure status instead of transitioning to ready for the next match after an unsuccessful auto-save', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
+    uiState.telemetryLifecycleStage = 'live';
+    const draft = {
+      id: 6602,
+      timestamp: Date.now(),
+      date: '3/25/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      artifacts: [],
+    };
+    gameDataState.matches = [draft];
+    appStoreState.matches = [draft];
+    autoFinalizeResultScreenCaptureMock.mockResolvedValue({ success: false, reason: 'error' });
+
+    const api = {
+      invoke: vi.fn((channel: string) => {
+        if (channel === 'capture-screen') {
+          return Promise.resolve('image-base64');
+        }
+        if (channel === 'save-screenshot') {
+          return Promise.resolve({
+            success: true,
+            data: { filePath: 'C:\\match_artifacts\\6602\\capture_result.png' },
+          });
+        }
+        if (channel === 'scan-result-screen') {
+          return Promise.resolve({ data: { result: 'Loss', winType: 'combat', placement: 3, detectionMethod: 'flash' } });
+        }
+        if (channel === 'save-ocr-debug') {
+          return Promise.resolve({ success: true });
+        }
+        if (channel === 'telemetry-retention-status') {
+          return Promise.resolve(null);
+        }
+        return Promise.resolve(null);
+      }),
+      send: vi.fn(),
+      on: vi.fn(() => () => {}),
+      removeAllListeners: vi.fn(),
+    };
+    getElectronAPIMock.mockReturnValue(api);
+
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    const flashOptions = useResultFlashMonitorMock.mock.calls.at(-1)?.[0] as {
+      onFlashDetected?: () => Promise<void>;
+    };
+    expect(flashOptions?.onFlashDetected).toBeTypeOf('function');
+
+    let flashPromise: Promise<void> | undefined;
+    await act(async () => {
+      flashPromise = flashOptions.onFlashDetected?.();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+      await Promise.resolve();
+      await Promise.resolve();
+      await flashPromise;
+    });
+
+    expect(playAutoResultAppliedMock).not.toHaveBeenCalled();
+    expect(uiState.setTelemetryAutomationStatus).toHaveBeenCalledWith(expect.objectContaining({
+      phase: 'failed',
+      message: 'Automatic result capture failed',
+      matchId: 6602,
+      level: 'warning',
+    }));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+      await Promise.resolve();
+    });
+
+    expect(uiState.setTelemetryAutomationStatus).not.toHaveBeenCalledWith(expect.objectContaining({
+      phase: 'ready-next-match',
+      message: 'Ready for next match',
+      level: 'success',
     }));
     vi.useRealTimers();
   });

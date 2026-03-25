@@ -114,6 +114,12 @@ export const useSoundEffects = () => {
         playTone(1046.5, 'triangle', 0.22, 0.18);
     }, [playTone]);
 
+    const playAutoResultApplied = useCallback(() => {
+        playTone(523.25, 'triangle', 0.08);
+        playTone(659.25, 'triangle', 0.12, 0.05);
+        playTone(783.99, 'sine', 0.16, 0.13);
+    }, [playTone]);
+
     const playAutomationFailed = useCallback(() => {
         playTone(360, 'square', 0.12);
         playTone(250, 'square', 0.18, 0.08);
@@ -137,6 +143,7 @@ export const useSoundEffects = () => {
         playError,
         playAutomationStart,
         playAutomationComplete,
+        playAutoResultApplied,
         playAutomationFailed,
         playEnd,
     };
