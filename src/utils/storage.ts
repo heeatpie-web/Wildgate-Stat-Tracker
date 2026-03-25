@@ -203,6 +203,16 @@ const toNumberOr = (value: unknown, fallback: number) => {
 
 const emptyUidMappings = (): UidMappings => normalizeSharedUidMappings();
 
+const GUID_HEX_PATTERN = /^[A-F0-9]{32}$/i;
+
+const normalizeGuidKey = (value: unknown): string => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const direct = raw.replace(/[{}-]/g, '');
+  if (GUID_HEX_PATTERN.test(direct)) return direct.toUpperCase();
+  return raw;
+};
+
 const toUidMappings = (value: unknown): UidMappings => {
   if (!isRecord(value)) return emptyUidMappings();
   return normalizeSharedUidMappings({
@@ -360,13 +370,45 @@ const applyUidSeed = async (data: StorageData): Promise<StorageData> => {
 
   if (!ipc) return merged;
 
+  const stripSeedNonPlayerResidue = (
+    seedMappings: UidMappings,
+    relocations: unknown[],
+  ) => {
+    const nonPlayerIds = new Set<string>();
+    const registerGuid = (guid: unknown) => {
+      const normalized = normalizeGuidKey(guid);
+      if (normalized) nonPlayerIds.add(normalized);
+    };
+    const stripStringMap = (value: StringMap | undefined): StringMap => (
+      Object.fromEntries(
+        Object.entries(value || {}).filter(([key]) => !nonPlayerIds.has(normalizeGuidKey(key)))
+      )
+    );
+
+    Object.keys(seedMappings.ships || {}).forEach(registerGuid);
+    Object.keys(seedMappings.weapons || {}).forEach(registerGuid);
+    Object.keys(seedMappings.equipment || {}).forEach(registerGuid);
+    Object.keys(seedMappings.perks || {}).forEach(registerGuid);
+    relocations.forEach((relocation) => {
+      if (!isRecord(relocation)) return;
+      const targetDomain = String(relocation.to || '').trim().toLowerCase();
+      if (targetDomain && targetDomain !== 'players') {
+        registerGuid(relocation.guid);
+      }
+    });
+    if (nonPlayerIds.size === 0) return;
+
+    merged.uidMappings.players = stripStringMap(merged.uidMappings.players);
+    merged.mappings = stripStringMap(merged.mappings);
+    merged.playerIdMap = stripStringMap(merged.playerIdMap);
+    merged.playerProfiles = Object.fromEntries(
+      Object.entries(merged.playerProfiles || {}).filter(([key]) => !nonPlayerIds.has(normalizeGuidKey(key)))
+    );
+  };
+
   try {
     const seed = await ipc.invoke('read-uid-seed');
     if (!isRecord(seed)) return merged;
-    const seedVersion = toNumberOr(seed.version, 0);
-    const applied = merged.uidSeedState?.seedVersionApplied ?? null;
-    if (applied !== null && seedVersion <= applied) return merged;
-
     const seedMappings = normalizeSharedUidMappings({
       players: toStringMap(seed.players),
       ships: toStringMap(seed.ships),
@@ -374,6 +416,13 @@ const applyUidSeed = async (data: StorageData): Promise<StorageData> => {
       equipment: toStringMap(seed.equipment),
       perks: toStringMap(seed.perks),
     });
+    const relocations = Array.isArray(seed.relocations) ? seed.relocations : [];
+    const seedVersion = toNumberOr(seed.version, 0);
+    const applied = merged.uidSeedState?.seedVersionApplied ?? null;
+    if (applied !== null && seedVersion <= applied) {
+      stripSeedNonPlayerResidue(seedMappings, relocations);
+      return merged;
+    }
     merged.uidMappings = {
       players: { ...seedMappings.players, ...merged.uidMappings.players },
       ships: { ...seedMappings.ships, ...merged.uidMappings.ships },
@@ -383,7 +432,6 @@ const applyUidSeed = async (data: StorageData): Promise<StorageData> => {
     };
 
     // Apply relocations: remove GUIDs from the domain they were incorrectly placed in.
-    const relocations = Array.isArray(seed.relocations) ? seed.relocations : [];
     for (const relocation of relocations) {
       if (!isRecord(relocation)) continue;
       const { guid, from } = relocation as { guid?: unknown; from?: unknown };
@@ -396,6 +444,7 @@ const applyUidSeed = async (data: StorageData): Promise<StorageData> => {
     }
 
     merged.uidSeedState = { seedVersionApplied: seedVersion };
+    stripSeedNonPlayerResidue(seedMappings, relocations);
     return merged;
   } catch (error) {
     Logger.warn('UIDSeed', 'Failed to load seed mappings', error);

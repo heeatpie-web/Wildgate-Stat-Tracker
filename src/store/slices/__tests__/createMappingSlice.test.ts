@@ -428,6 +428,12 @@ describe('createMappingSlice', () => {
       expect(store.getState().detectedUnknowns['xyz'].type).toBe('Ship');
     });
 
+    it('does not create player profiles for non-player unknown ids', () => {
+      store.getState().registerUnknownId('gear-guid', 'Equipment');
+      expect(store.getState().detectedUnknowns['gear-guid'].type).toBe('Equipment');
+      expect(store.getState().playerProfiles['gear-guid']).toBeUndefined();
+    });
+
     it('skips already-known ids', () => {
       store.getState().addMapping('abc', 'Player1');
       store.getState().registerUnknownId('abc', 'Hero');

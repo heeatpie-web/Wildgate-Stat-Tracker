@@ -941,11 +941,6 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
         ));
         if (hasResolvedMapping) return {};
 
-        // Initialize profile if needed
-        const existingProfileEntry = Object.entries(state.playerProfiles)
-            .find(([profileId]) => idsEquivalent(profileId, normalizedId));
-        const profileKey = existingProfileEntry?.[0] || normalizedId;
-        const existingProfile = existingProfileEntry?.[1] || createEmptyProfile(profileKey);
         const existingUnknownEntry = Object.entries(state.detectedUnknowns)
             .find(([unknownId]) => idsEquivalent(unknownId, normalizedId));
         const existingUnknownId = existingUnknownEntry?.[0];
@@ -955,10 +950,6 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
                 detectedUnknowns: {
                     ...state.detectedUnknowns,
                     [existingUnknownId]: { ...state.detectedUnknowns[existingUnknownId], lastSeen: Date.now() }
-                },
-                playerProfiles: {
-                    ...state.playerProfiles,
-                    [profileKey]: { ...existingProfile, id: profileKey, lastSeen: Date.now(), sightings: existingProfile.sightings + 1 }
                 }
             };
         }
@@ -968,10 +959,6 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
             detectedUnknowns: {
                 ...state.detectedUnknowns,
                 [normalizedId]: { type, lastSeen: Date.now() }
-            },
-            playerProfiles: {
-                ...state.playerProfiles,
-                [profileKey]: { ...existingProfile, id: profileKey }
             }
         };
     }),

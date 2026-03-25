@@ -36,6 +36,8 @@ export const SHIP_GUIDS: Record<string, string> = withGuidCaseAliases({
 });
 
 export const WEAPON_GUIDS: Record<string, string> = withGuidCaseAliases({
+    'EEACC46745DD1CBCB28878B34BE78BDC': 'AIM-e',
+    'E12964DF4EB63ED2C1A33888DA5E8C60': 'MK2 Blaster',
     'F350FD964B4A0E59F068AE88D6D9650C': 'The Doctor',
     '96E8EBE7458D6614EDCE83B6561C5FAE': 'Double Whammy',
     'D6936A484DB111488285BC82D1841483': 'Sidelong',
@@ -45,6 +47,8 @@ export const WEAPON_GUIDS: Record<string, string> = withGuidCaseAliases({
     '0AAA474246ADEDFF6D39FC80D9794461': 'Rocket Launcher',
     '2CACFD654B27AB15B6AC5FBB18216117': 'Hand Cannon',
     '13638B5748A18C0CC643E1830A5A88DB': 'Foam Sprayer',
+    '77A11BF74EE089D011376584479CFEA2': 'Surefire',
+    'CF3DFA6A424F043F7151BCB8BBCFA48A': 'Surefire',
 });
 
 export const EQUIPMENT_GUIDS: Record<string, string> = withGuidCaseAliases({

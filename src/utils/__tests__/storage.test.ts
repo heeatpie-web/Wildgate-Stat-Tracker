@@ -286,6 +286,69 @@ describe('StorageService', () => {
     expect(loaded?.uidMappings.equipment[ATTACK_DRONE_GUID]).toBe('Attack Drone');
   });
 
+  it('strips ghost non-player player profiles and legacy player mappings even when the seed version is already applied', async () => {
+    const THUNDER_DASH_GUID = '1FC6C97040714EF444F7119B75377054';
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'db-read') {
+        return createStorageData({
+          mappings: {
+            [THUNDER_DASH_GUID]: 'Thunder Dash',
+          },
+          playerIdMap: {
+            [THUNDER_DASH_GUID]: 'Thunder Dash',
+          },
+          playerProfiles: {
+            [THUNDER_DASH_GUID]: {
+              id: THUNDER_DASH_GUID,
+              sightings: 4,
+              firstSeen: 123,
+              lastSeen: 456,
+              teamsObserved: {},
+              playedWith: {},
+              playedAgainst: {},
+              shipsObserved: {},
+              ocrSightings: 0,
+              manualSightings: 0,
+              name: 'Thunder Dash',
+            },
+          },
+          uidMappings: {
+            players: {
+              [THUNDER_DASH_GUID]: 'Thunder Dash',
+            },
+            ships: {},
+            weapons: {},
+            equipment: {},
+            perks: {},
+          },
+          uidSeedState: { seedVersionApplied: 9 },
+        });
+      }
+      if (channel === 'read-uid-seed') {
+        return {
+          version: 9,
+          players: {},
+          ships: {},
+          weapons: {},
+          equipment: {},
+          perks: {},
+          relocations: [
+            { guid: THUNDER_DASH_GUID, from: 'players', to: 'equipment' },
+          ],
+        };
+      }
+      return null;
+    });
+    const { StorageService } = await loadStorageModule({ invoke });
+
+    const loaded = await StorageService.init();
+
+    expect(loaded?.uidMappings.players[THUNDER_DASH_GUID]).toBeUndefined();
+    expect(loaded?.mappings?.[THUNDER_DASH_GUID]).toBeUndefined();
+    expect(loaded?.playerIdMap?.[THUNDER_DASH_GUID]).toBeUndefined();
+    expect(loaded?.playerProfiles?.[THUNDER_DASH_GUID]).toBeUndefined();
+  });
+
   it('strips bogus tertiary placeholder mappings and loadout entries during hydration', async () => {
     const invoke = vi.fn(async (channel: string) => {
       if (channel === 'db-read') {
