@@ -74,6 +74,18 @@ describe('resultScreenExtractor heuristics', () => {
     });
   });
 
+  it('treats bare artifact recovered as an artifact loss', () => {
+    expect(__test__.parseResultSignals({
+      statusTexts: ['ARTIFACTRECOVERED'],
+    }, { detectionMethod: 'text' })).toEqual({
+      result: 'Loss',
+      winType: 'artifact',
+      detectionMethod: 'text',
+      damageTaken: undefined,
+      damageSourcesAvailable: false,
+    });
+  });
+
   it('accepts truncated placement OCR like 2NDPLA when ship-wins context confirms a combat loss', () => {
     expect(__test__.parseResultSignals({
       placementTexts: ['OND', '2NDPLA'],

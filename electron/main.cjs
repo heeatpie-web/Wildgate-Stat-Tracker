@@ -9,7 +9,7 @@ const http = require('http');
 const https = require('https');
 const fsPromises = require('fs').promises;
 const { registerOCRHandlers, captureGameWindow, captureGameWindowBuffer, processCapture, runOCR } = require('./ocrHandler.cjs');
-const { mergeCaptures, isSameMatch } = require('./ocrMerger.cjs');
+const { mergeCaptures, isSameMatch, pickPreferredTeammateRoster } = require('./ocrMerger.cjs');
 const artifactHelpers = require('./helpers/artifactHelpers.cjs');
 const { runArtifactCanonicalMigration } = require('./helpers/artifactCanonicalMigration.cjs');
 const telemetryArchiveHelpers = require('./helpers/telemetryArchiveHelpers.cjs');
@@ -2060,6 +2060,21 @@ ipcMain.handle('rerun-ocr-multi', async (event, { imagePaths, activeUser, ocrMod
         // fields over clobbering previously merged data when classifier disagrees.
         _mDlog('MISMATCH forced-merge with type=' + (entry.data.screenshotType || '?') + ' file=' + entry.imagePath.split(/[\\/]/).pop());
         accumulatedData = mergeCaptures(accumulatedData, entry.data);
+      }
+    }
+    let preferredCrewHubTeammates = [];
+    for (const entry of perFile) {
+      if (!entry.success || !entry.data || entry.data.screenshotType !== 'crew_hub') continue;
+      preferredCrewHubTeammates = pickPreferredTeammateRoster(preferredCrewHubTeammates, entry.data.teammates || []);
+    }
+    if (accumulatedData && preferredCrewHubTeammates.length > 0) {
+      const priorTeammates = Array.isArray(accumulatedData.teammates) ? accumulatedData.teammates : [];
+      const resolvedTeammates = pickPreferredTeammateRoster(priorTeammates, preferredCrewHubTeammates);
+      const priorRosterKey = priorTeammates.map((player) => (typeof player === 'string' ? player : player?.name || '')).join('|');
+      const resolvedRosterKey = resolvedTeammates.map((player) => (typeof player === 'string' ? player : player?.name || '')).join('|');
+      if (resolvedRosterKey && resolvedRosterKey !== priorRosterKey) {
+        _mDlog('teammates preferred from crew_hub=' + resolvedRosterKey);
+        accumulatedData = { ...accumulatedData, teammates: resolvedTeammates };
       }
     }
     const _finOppC = accumulatedData?.opponentTeams?.length || 0;

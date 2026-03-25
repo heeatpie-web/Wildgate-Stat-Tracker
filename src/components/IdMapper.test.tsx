@@ -14,6 +14,7 @@ const storeState: any = {
     knownMappings: {},
     uidMappings: { players: {}, ships: {}, weapons: {}, equipment: {}, perks: {} },
     playerProfiles: {},
+    teammateIdentityRecords: {},
     addMapping: vi.fn(),
     setUidMapping,
     removeMapping: vi.fn(),
@@ -55,6 +56,7 @@ describe('IdMapper ship mapping behavior', () => {
         storeState.knownMappings = {};
         storeState.uidMappings = { players: {}, ships: {}, weapons: {}, equipment: {}, perks: {} };
         storeState.playerProfiles = {};
+        storeState.teammateIdentityRecords = {};
         storeState.activeShip = 'Unknown (ABCD)';
         storeState.shipSource = 'manual';
         storeState.telemetryDetectedShip = 'Unknown (ABCD)';
@@ -120,5 +122,74 @@ describe('IdMapper ship mapping behavior', () => {
 
         expect(screen.getByText('Afterburn')).toBeInTheDocument();
         expect(screen.getByText('PERK')).toBeInTheDocument();
+    });
+
+    it('renders teammate identity relationship badges with confidence and recency', async () => {
+        const { IdMapper } = await import('./IdMapper');
+        storeState.teammateIdentityRecords = {
+            BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB: {
+                playerId: 'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',
+                status: 'learning',
+                firstSeenAt: Date.now() - 120_000,
+                lastSeenAt: Date.now() - 60_000,
+                sampleCount: 1,
+                candidates: {
+                    prospecta: {
+                        displayName: 'Prospecta',
+                        sampleCount: 1,
+                        weightedScore: 0.9,
+                        maxOcrConfidence: 0.9,
+                        firstSeenAt: Date.now() - 120_000,
+                        lastSeenAt: Date.now() - 60_000,
+                        sourceCounts: {
+                            crew_hub: 1,
+                            social: 0,
+                            matchstats: 0,
+                            telemetry_direct: 0,
+                            manual: 0,
+                            unknown: 0,
+                        },
+                    },
+                },
+            },
+            AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA: {
+                playerId: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+                status: 'confirmed',
+                currentName: 'Wingmate',
+                firstSeenAt: Date.now() - 240_000,
+                lastSeenAt: Date.now() - 10_000,
+                sampleCount: 4,
+                candidates: {
+                    wingmate: {
+                        displayName: 'Wingmate',
+                        sampleCount: 4,
+                        weightedScore: 4,
+                        maxOcrConfidence: 1,
+                        firstSeenAt: Date.now() - 240_000,
+                        lastSeenAt: Date.now() - 10_000,
+                        sourceCounts: {
+                            crew_hub: 3,
+                            social: 0,
+                            matchstats: 1,
+                            telemetry_direct: 0,
+                            manual: 0,
+                            unknown: 0,
+                        },
+                    },
+                },
+            },
+        };
+
+        render(<IdMapper />);
+
+        fireEvent.click(screen.getByRole('button', { name: /^Relationships/i }));
+
+        expect(screen.getByText(/Teammate Identity Links/i)).toBeInTheDocument();
+        expect(screen.getByText('Confirmed')).toBeInTheDocument();
+        expect(screen.getByText('Learning')).toBeInTheDocument();
+        expect(screen.getByText(/100% confidence/i)).toBeInTheDocument();
+        const rows = screen.getAllByText(/samples/i);
+        expect(rows.length).toBeGreaterThan(0);
+        expect(screen.getAllByText(/Wingmate|Prospecta/)[0]).toHaveTextContent('Wingmate');
     });
 });

@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const { mergeCaptures } = require('./ocrMerger.cjs');
+const { mergeCaptures, pickPreferredTeammateRoster } = require('./ocrMerger.cjs');
 
 describe('ocrMerger positional fallback', () => {
   it('does not reuse a map ship already claimed by a different enemy team', () => {
@@ -163,5 +163,51 @@ describe('ocrMerger legacy crew_hub overflow preservation', () => {
       'Team Lime',
       'Team Gold',
     ]));
+  });
+});
+
+describe('pickPreferredTeammateRoster', () => {
+  it('prefers the clean crew-hub roster over an equally sized polluted merge', () => {
+    const mergedRoster = [
+      { name: 'Blakah', confidence: 93 },
+      { name: 'Braikeit', confidence: 94 },
+      { name: 'Braiker', confidence: 94 },
+      { name: 'AlixThus', confidence: 92 },
+    ];
+    const crewHubRoster = [
+      { name: 'LankyBastard', confidence: 88 },
+      { name: 'NobleGnocchi', confidence: 87 },
+      { name: 'Braiker', confidence: 90 },
+      { name: 'AlixThus', confidence: 89 },
+    ];
+
+    const preferred = pickPreferredTeammateRoster(mergedRoster, crewHubRoster);
+
+    expect(preferred.map((player) => player.name)).toEqual([
+      'LankyBastard',
+      'NobleGnocchi',
+      'Braiker',
+      'AlixThus',
+    ]);
+  });
+
+  it('keeps the fuller merged roster when the crew-hub fallback is partial', () => {
+    const mergedRoster = [
+      { name: 'Tone', confidence: 92 },
+      { name: 'Braiker', confidence: 93 },
+      { name: 'NobleGnocchi', confidence: 87 },
+    ];
+    const crewHubRoster = [
+      { name: 'Tone', confidence: 95 },
+      { name: 'Braiker', confidence: 95 },
+    ];
+
+    const preferred = pickPreferredTeammateRoster(mergedRoster, crewHubRoster);
+
+    expect(preferred.map((player) => player.name)).toEqual([
+      'Tone',
+      'Braiker',
+      'NobleGnocchi',
+    ]);
   });
 });

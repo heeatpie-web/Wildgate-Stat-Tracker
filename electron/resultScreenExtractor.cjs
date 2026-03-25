@@ -346,11 +346,21 @@ function parseResultSignals({
     };
   }
 
-  if (hasArtifactRecovered || (hasVictory && hasArtifact && !hasCombatWin)) {
+  if (hasVictory && hasArtifactSignal && !hasCombatWin) {
     return {
       result: 'Win',
       winType: 'artifact',
       placement: 1,
+      detectionMethod,
+      damageTaken: resolvedDamageTaken,
+      damageSourcesAvailable: resolvedDamageSourcesAvailable,
+    };
+  }
+
+  if (hasArtifactRecovered) {
+    return {
+      result: 'Loss',
+      winType: 'artifact',
       detectionMethod,
       damageTaken: resolvedDamageTaken,
       damageSourcesAvailable: resolvedDamageSourcesAvailable,

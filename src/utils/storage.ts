@@ -8,6 +8,7 @@ import type {
   TeamIdentityCorrection,
 } from '../store/slices/createMappingSlice';
 import type { OcrAliasModel, OcrLearningEvent, OcrLearningQueueItem } from './ocrAliasEngine';
+import type { TeammateIdentityRecord } from './teammateIdentity';
 import { normalizeSharedUidMappings } from '../services/mappingContract';
 import { isBogusTertiaryLoadoutEntry, sanitizeUnknownLoadout } from './loadout';
 import Logger from './logger';
@@ -66,6 +67,7 @@ export interface StorageData {
   lastActivity: number;
   mappings?: StringMap;
   playerProfiles?: Record<string, PlayerProfile>;
+  teammateIdentityRecords?: Record<string, TeammateIdentityRecord>;
   timelineEvents?: TimelineEvent[];
   uidMappings?: UidMappingsContract;
   uidSeedState?: UidSeedState;
@@ -224,6 +226,16 @@ const toUidMappings = (value: unknown): UidMappings => {
   });
 };
 
+const toTeammateIdentityRecords = (value: unknown): Record<string, TeammateIdentityRecord> => {
+  if (!isRecord(value)) return {};
+  const records: Record<string, TeammateIdentityRecord> = {};
+  Object.entries(value).forEach(([key, raw]) => {
+    if (!isRecord(raw)) return;
+    records[key] = raw as unknown as TeammateIdentityRecord;
+  });
+  return records;
+};
+
 const toUidSeedState = (value: unknown): UidSeedState => {
   if (!isRecord(value)) return { seedVersionApplied: null };
   const seedVersionApplied = value.seedVersionApplied;
@@ -256,6 +268,7 @@ const createDefaultStorageData = (): StorageData => ({
   favorites: [],
   pilotNotes: {},
   playerEncounterRoleCorrections: {},
+  teammateIdentityRecords: {},
   pendingReviews: [],
   dismissedRosterMergePairKeys: [],
   dismissedRosterCandidateKeys: [],
@@ -327,6 +340,7 @@ const coerceStorageData = (value: unknown): StorageData | null => {
     lastActivity: toNumberOr(value.lastActivity, Date.now()),
     mappings: toStringMap(value.mappings),
     playerProfiles: toPlayerProfiles(value.playerProfiles),
+    teammateIdentityRecords: toTeammateIdentityRecords(value.teammateIdentityRecords),
     timelineEvents: toTimelineEvents(value.timelineEvents),
     uidMappings: toUidMappings(value.uidMappings),
     uidSeedState: toUidSeedState(value.uidSeedState),
@@ -403,6 +417,9 @@ const applyUidSeed = async (data: StorageData): Promise<StorageData> => {
     merged.playerIdMap = stripStringMap(merged.playerIdMap);
     merged.playerProfiles = Object.fromEntries(
       Object.entries(merged.playerProfiles || {}).filter(([key]) => !nonPlayerIds.has(normalizeGuidKey(key)))
+    );
+    merged.teammateIdentityRecords = Object.fromEntries(
+      Object.entries(merged.teammateIdentityRecords || {}).filter(([key]) => !nonPlayerIds.has(normalizeGuidKey(key)))
     );
   };
 

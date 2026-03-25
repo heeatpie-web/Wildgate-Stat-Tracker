@@ -41,6 +41,20 @@ const { __test__ } = require('../../../../electron/ocrHandler.cjs') as {
   __test__: {
     cleanupLegacyExtraction: (input: Record<string, any>) => Record<string, any>;
     convertCrewHubToLegacy: (crewHubData: Record<string, any>, rawText: string) => Record<string, any>;
+    deriveRuntimeAnchors: (
+      screenType: string,
+      ocrResult: Record<string, any>,
+      processed: Record<string, any>,
+      ocrRegions?: Record<string, any> | null,
+    ) => Record<string, any> | null;
+    findHeaderAnchorY: (
+      words: Array<Record<string, any>>,
+      regexes: RegExp[],
+      xMin?: number,
+      xMax?: number,
+      yMin?: number,
+      yMax?: number,
+    ) => number | null;
     getMaxTeammatesForShipType: (shipType: string) => number;
     restoreHiddenCaptureWindow: (mainWindow: Record<string, any> | null | undefined, options?: { wasVisible?: boolean }) => void;
   };
@@ -185,5 +199,37 @@ describe('electron/ocrHandler crew-hub teammate cleanup', () => {
 
     expect(showInactive).toHaveBeenCalledTimes(1);
     expect(focus).not.toHaveBeenCalled();
+  });
+
+  it('detects merged tactical-map header tokens when deriving runtime anchors', () => {
+    const anchors = __test__.deriveRuntimeAnchors(
+      'mapScreen',
+      {
+        words: [
+          {
+            text: 'ENEMYSHIPS',
+            confidence: 88,
+            bbox: { x0: 1700, x1: 1880, y0: 60, y1: 96 },
+          },
+          {
+            text: 'KNOWNHAZARDSFEATURES',
+            confidence: 84,
+            bbox: { x0: 1540, x1: 1888, y0: 322, y1: 360 },
+          },
+        ],
+      },
+      {
+        width: 1920,
+        height: 1080,
+      },
+      {
+        mapScreen: {
+          enemyShips: { xMin: 0.83 },
+        },
+      }
+    );
+
+    expect(anchors?.mapScreen?.enemyShipsHeaderY).toBeCloseTo(78 / 1080, 4);
+    expect(anchors?.mapScreen?.hazardsHeaderY).toBeCloseTo(341 / 1080, 4);
   });
 });

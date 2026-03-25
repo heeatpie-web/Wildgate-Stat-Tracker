@@ -11,7 +11,7 @@ import { StateCreator } from 'zustand';
 import Logger from '../../utils/logger';
 import { isBogusTertiaryLoadoutEntry } from '../../utils/loadout';
 import { normalizeOcrName } from '../../utils/stringUtils';
-import type { DetectedUnknownMapping, MappingEntityType } from '../../types';
+import type { DetectedUnknownMapping, MappingEntityType, Match } from '../../types';
 import { normalizeDetectedUnknownMappings, normalizeSharedUidMappings } from '../../services/mappingContract';
 import {
     OcrAliasContext,
@@ -37,6 +37,15 @@ import {
     normalizeEncounterPlayerKey,
     type EncounterRoleCorrection,
 } from '../../utils/playerEncounterRoles';
+import {
+    buildTeammateIdentityObservation,
+    confirmTeammateIdentityRecord,
+    type ObservedTeammateName,
+    type TeammateIdentityPromotion,
+    type TeammateIdentityRecord,
+    type TeammateIdentitySource,
+    normalizeTeammatePlayerId,
+} from '../../utils/teammateIdentity';
 
 export type PlayerRole = 'teammate' | 'opponent' | 'mixed' | 'unknown';
 
@@ -110,6 +119,7 @@ export type UidMappings = ReturnType<typeof normalizeSharedUidMappings>;
 export interface MappingSlice {
     // Player profiles with relationship tracking
     playerProfiles: Record<string, PlayerProfile>;
+    teammateIdentityRecords: Record<string, TeammateIdentityRecord>;
 
     // Legacy mappings (for backwards compatibility)
     knownMappings: Record<string, string>;      // ID -> Name
@@ -128,6 +138,18 @@ export interface MappingSlice {
     // Profile management
     recordPlayerSighting: (playerId: string, teamColor: string, allTeamPlayers: string[], allOpponentPlayers: string[], shipType?: string, source?: 'ocr' | 'manual', ocrOnly?: boolean) => void;
     setPlayerName: (playerId: string, name: string) => void;
+    recordTeammateIdentityObservation: (input: {
+        friendlyPlayerIds: string[];
+        observedNames: ObservedTeammateName[];
+        activeUser?: string | null;
+        pilotRegistry?: string[];
+        matchId?: number | null;
+    }) => { assignments: Record<string, string>; promotions: TeammateIdentityPromotion[] };
+    confirmTeammateIdentity: (playerId: string, name: string, opts?: {
+        source?: TeammateIdentitySource;
+        lockedByUser?: boolean;
+        matchId?: number | null;
+    }) => TeammateIdentityPromotion | null;
     getPlayerRole: (playerId: string) => PlayerRole;
     getMostFrequentOpponents: (limit?: number) => PlayerProfile[];
     getMostFrequentTeammates: (limit?: number) => PlayerProfile[];
@@ -341,6 +363,129 @@ export const resolvePlayerProfileDisplayName = (
     return fallbackId;
 };
 
+const normalizeMatchNameKey = (value: string | null | undefined): string =>
+    normalizeOcrName(value || '').toLowerCase();
+
+const dedupeFriendlyNames = (values: string[]): string[] => {
+    const seen = new Set<string>();
+    const next: string[] = [];
+    values.forEach((value) => {
+        const cleaned = String(value || '').trim();
+        const key = normalizeMatchNameKey(cleaned);
+        if (!cleaned || !key || seen.has(key)) return;
+        seen.add(key);
+        next.push(cleaned);
+    });
+    return next;
+};
+
+const applyResolvedPlayerLayers = (
+    state: MappingSlice & { playerIdMap?: Record<string, string> },
+    playerId: string,
+    name: string,
+): Partial<MappingSlice> & { playerIdMap?: Record<string, string> } => {
+    const normalizedId = normalizeTeammatePlayerId(playerId);
+    const trimmedName = String(name || '').trim();
+    if (!normalizedId || !trimmedName) return {};
+    const existingProfileEntry = Object.entries(state.playerProfiles || {})
+        .find(([profileId]) => idsEquivalent(profileId, normalizedId));
+    const profileKey = existingProfileEntry?.[0] || normalizedId;
+    const existingProfile = existingProfileEntry?.[1] || createEmptyProfile(profileKey);
+    return {
+        knownMappings: { ...state.knownMappings, [normalizedId]: trimmedName },
+        uidMappings: {
+            ...state.uidMappings,
+            players: { ...state.uidMappings.players, [normalizedId]: trimmedName }
+        },
+        playerProfiles: {
+            ...state.playerProfiles,
+            [profileKey]: { ...existingProfile, id: profileKey, name: trimmedName }
+        },
+        playerIdMap: {
+            ...((state as { playerIdMap?: Record<string, string> }).playerIdMap || {}),
+            [normalizedId]: trimmedName,
+        },
+        detectedUnknowns: Object.fromEntries(
+            Object.entries(state.detectedUnknowns || {}).filter(([key]) => !idsEquivalent(key, normalizedId))
+        ),
+    };
+};
+
+const clearResolvedPlayerLayers = (
+    state: MappingSlice & { playerIdMap?: Record<string, string> },
+    playerId: string,
+): Partial<MappingSlice> & { playerIdMap?: Record<string, string> } => {
+    const normalizedId = normalizeTeammatePlayerId(playerId);
+    if (!normalizedId) return {};
+    return {
+        knownMappings: Object.fromEntries(
+            Object.entries(state.knownMappings || {}).filter(([key]) => !idsEquivalent(key, normalizedId))
+        ),
+        uidMappings: {
+            ...state.uidMappings,
+            players: Object.fromEntries(
+                Object.entries(state.uidMappings.players || {}).filter(([key]) => !idsEquivalent(key, normalizedId))
+            ),
+        },
+        playerIdMap: Object.fromEntries(
+            Object.entries(((state as { playerIdMap?: Record<string, string> }).playerIdMap || {}))
+                .filter(([key]) => !idsEquivalent(key, normalizedId))
+        ),
+    };
+};
+
+const rewriteFriendlyIdentityAssignmentsInMatches = (
+    matches: Match[] | undefined,
+    playerId: string,
+    displayName: string,
+): Match[] | undefined => {
+    if (!Array.isArray(matches) || matches.length === 0) return matches;
+    const normalizedId = normalizeTeammatePlayerId(playerId);
+    const replacement = String(displayName || '').trim();
+    if (!normalizedId || !replacement) return matches;
+    return matches.map((match) => {
+        const storedAssignments = match?.friendlyIdentityAssignments || {};
+        const assignedName = storedAssignments[normalizedId];
+        if (!assignedName) return match;
+        const assignedKey = normalizeMatchNameKey(assignedName);
+        const replacementKey = normalizeMatchNameKey(replacement);
+        const nextTeammates = dedupeFriendlyNames((match.teammates || []).map((name) => (
+            normalizeMatchNameKey(name) === assignedKey ? replacement : name
+        )));
+        const nextAssignments = {
+            ...storedAssignments,
+            [normalizedId]: replacement,
+        };
+        const teammatesChanged = nextTeammates.length !== (match.teammates || []).length
+            || nextTeammates.some((name, index) => name !== (match.teammates || [])[index]);
+        if (!teammatesChanged && assignedKey === replacementKey) {
+            return {
+                ...match,
+                friendlyIdentityAssignments: nextAssignments,
+            };
+        }
+        return {
+            ...match,
+            teammates: nextTeammates,
+            friendlyIdentityAssignments: nextAssignments,
+        };
+    });
+};
+
+const releaseTeammateIdentityRecord = (
+    record: TeammateIdentityRecord | undefined,
+): TeammateIdentityRecord | undefined => {
+    if (!record) return record;
+    const candidateCount = Object.keys(record.candidates || {}).length;
+    return {
+        ...record,
+        status: candidateCount > 1 ? 'conflicted' : 'learning',
+        currentName: undefined,
+        lockedByUser: false,
+        autoLinkedAt: undefined,
+    };
+};
+
 const emptyTeamIdentityContexts = (): Record<OcrAliasContext, number> => ({
     lobby: 0,
     tactical: 0,
@@ -355,6 +500,7 @@ const emptyTeamIdentityContexts = (): Record<OcrAliasContext, number> => ({
 
 export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
     playerProfiles: {},
+    teammateIdentityRecords: {},
     knownMappings: {},
     detectedUnknowns: normalizeDetectedUnknownMappings(),
     uidMappings: normalizeSharedUidMappings(),
@@ -435,24 +581,123 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
 
     setPlayerName: (playerId, name) => {
         set((state) => {
+            const normalizedId = normalizeTeammatePlayerId(playerId);
             const existing = state.playerProfiles[playerId] || createEmptyProfile(playerId);
+            const nextRecords = { ...(state.teammateIdentityRecords || {}) };
+            if (normalizedId) {
+                confirmTeammateIdentityRecord(nextRecords, normalizedId, name, {
+                    source: 'manual',
+                    lockedByUser: true,
+                });
+            }
             Logger.info('MappingSlice', `Set name for ${playerId}: ${name}`);
 
             return {
+                ...applyResolvedPlayerLayers(state as MappingSlice & { playerIdMap?: Record<string, string> }, normalizedId, name),
                 playerProfiles: {
                     ...state.playerProfiles,
                     [playerId]: { ...existing, name }
                 },
-                knownMappings: { ...state.knownMappings, [playerId]: name },
-                uidMappings: {
-                    ...state.uidMappings,
-                    players: {
-                        ...state.uidMappings.players,
-                        [playerId]: name
-                    }
-                }
+                teammateIdentityRecords: nextRecords,
             };
         });
+    },
+
+    recordTeammateIdentityObservation: ({ friendlyPlayerIds, observedNames, activeUser, pilotRegistry, matchId }) => {
+        let outcome: { assignments: Record<string, string>; promotions: TeammateIdentityPromotion[] } = {
+            assignments: {},
+            promotions: [],
+        };
+        set((state) => {
+            const nextRecords = { ...(state.teammateIdentityRecords || {}) };
+            outcome = buildTeammateIdentityObservation(nextRecords, {
+                friendlyPlayerIds,
+                observedNames,
+                activeUser,
+                knownMappings: state.knownMappings,
+                playerIdMap: ((state as MappingSlice & { playerIdMap?: Record<string, string> }).playerIdMap || {}),
+                playerProfiles: state.playerProfiles,
+                pilotRegistry,
+            });
+
+            const layerUpdates = outcome.promotions.reduce<Partial<MappingSlice> & { playerIdMap?: Record<string, string>; matches?: Match[] }>((acc, promotion) => {
+                const nextLayers = applyResolvedPlayerLayers(
+                    {
+                        ...(state as MappingSlice & { playerIdMap?: Record<string, string>; matches?: Match[] }),
+                        knownMappings: acc.knownMappings || state.knownMappings,
+                        uidMappings: acc.uidMappings || state.uidMappings,
+                        playerProfiles: acc.playerProfiles || state.playerProfiles,
+                        detectedUnknowns: acc.detectedUnknowns || state.detectedUnknowns,
+                        playerIdMap: acc.playerIdMap || ((state as MappingSlice & { playerIdMap?: Record<string, string> }).playerIdMap || {}),
+                    } as MappingSlice & { playerIdMap?: Record<string, string>; matches?: Match[] },
+                    promotion.playerId,
+                    promotion.nextName,
+                );
+                return {
+                    ...acc,
+                    ...nextLayers,
+                    matches: rewriteFriendlyIdentityAssignmentsInMatches(
+                        acc.matches || ((state as MappingSlice & { matches?: Match[] }).matches || []),
+                        promotion.playerId,
+                        promotion.nextName,
+                    ),
+                };
+            }, {});
+
+            return {
+                teammateIdentityRecords: nextRecords,
+                ...(layerUpdates as Partial<MappingSlice>),
+                ...(('matches' in layerUpdates)
+                    ? { matches: layerUpdates.matches }
+                    : {}),
+            } as Partial<MappingSlice> & { matches?: Match[]; playerIdMap?: Record<string, string> };
+        });
+        if (Object.keys(outcome.assignments).length > 0) {
+            Logger.info('MappingSlice', 'Recorded teammate identity observation', {
+                matchId: Number.isInteger(Number(matchId)) ? Number(matchId) : undefined,
+                assignmentCount: Object.keys(outcome.assignments).length,
+                promotionCount: outcome.promotions.length,
+            });
+        }
+        return outcome;
+    },
+
+    confirmTeammateIdentity: (playerId, name, opts = {}) => {
+        const normalizedId = normalizeTeammatePlayerId(playerId);
+        if (!normalizedId || !String(name || '').trim()) return null;
+        let promotion: TeammateIdentityPromotion | null = null;
+        set((state) => {
+            const nextRecords = { ...(state.teammateIdentityRecords || {}) };
+            promotion = confirmTeammateIdentityRecord(nextRecords, normalizedId, name, {
+                source: opts.source || 'telemetry_direct',
+                lockedByUser: opts.lockedByUser,
+            });
+            const layerUpdates = applyResolvedPlayerLayers(
+                state as MappingSlice & { playerIdMap?: Record<string, string> },
+                normalizedId,
+                name,
+            );
+            return {
+                teammateIdentityRecords: nextRecords,
+                ...(layerUpdates as Partial<MappingSlice>),
+                ...(((state as MappingSlice & { matches?: Match[] }).matches)
+                    ? {
+                        matches: rewriteFriendlyIdentityAssignmentsInMatches(
+                            (state as MappingSlice & { matches?: Match[] }).matches,
+                            normalizedId,
+                            name,
+                        ),
+                    }
+                    : {}),
+            } as Partial<MappingSlice> & { matches?: Match[]; playerIdMap?: Record<string, string> };
+        });
+        if (promotion) {
+            Logger.info('MappingSlice', `Confirmed teammate identity ${normalizedId} -> ${name}`, {
+                source: opts.source || 'telemetry_direct',
+                matchId: opts.matchId,
+            });
+        }
+        return promotion;
     },
 
     recordOcrAliasCorrection: (ocrText, correctedTo, opts = {}) => {
@@ -892,44 +1137,45 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
         const normalizedId = normalizeGuidLikeId(id);
         if (!normalizedId) return {};
         Logger.info('MappingSlice', `Added mapping: ${normalizedId} -> ${name}`);
-
-        // Also update player profile
-        const existingProfileEntry = Object.entries(state.playerProfiles)
-            .find(([profileId]) => idsEquivalent(profileId, normalizedId));
-        const existing = existingProfileEntry?.[1] || createEmptyProfile(normalizedId);
+        const nextRecords = { ...(state.teammateIdentityRecords || {}) };
+        confirmTeammateIdentityRecord(nextRecords, normalizedId, name, {
+            source: 'manual',
+            lockedByUser: true,
+        });
 
         return {
-            knownMappings: { ...state.knownMappings, [normalizedId]: name },
-            playerProfiles: { ...state.playerProfiles, [existing.id || normalizedId]: { ...existing, id: existing.id || normalizedId, name } },
-            uidMappings: {
-                ...state.uidMappings,
-                players: { ...state.uidMappings.players, [normalizedId]: name }
-            },
-            detectedUnknowns: Object.fromEntries(
-                Object.entries(state.detectedUnknowns).filter(([k]) => !idsEquivalent(k, normalizedId))
-            )
+            ...applyResolvedPlayerLayers(
+                state as MappingSlice & { playerIdMap?: Record<string, string> },
+                normalizedId,
+                name,
+            ),
+            teammateIdentityRecords: nextRecords,
         };
     }),
 
     removeMapping: (id) => set((state) => {
         const normalizedId = normalizeGuidLikeId(id);
         if (!normalizedId) return {};
-        const rest = Object.fromEntries(
-            Object.entries(state.knownMappings).filter(([key]) => !idsEquivalent(key, normalizedId))
-        );
-        const restPlayers = Object.fromEntries(
-            Object.entries(state.uidMappings.players).filter(([key]) => !idsEquivalent(key, normalizedId))
-        );
         Logger.info('MappingSlice', `Removed mapping: ${id}`);
+        const nextRecords = { ...(state.teammateIdentityRecords || {}) };
+        if (nextRecords[normalizedId]) {
+            const released = releaseTeammateIdentityRecord(nextRecords[normalizedId]);
+            if (released) nextRecords[normalizedId] = released;
+        }
         return {
-            knownMappings: rest,
-            uidMappings: { ...state.uidMappings, players: restPlayers }
+            ...clearResolvedPlayerLayers(
+                state as MappingSlice & { playerIdMap?: Record<string, string> },
+                normalizedId,
+            ),
+            teammateIdentityRecords: nextRecords,
         };
     }),
 
     registerUnknownId: (id, type) => set((state) => {
         const normalizedId = normalizeGuidLikeId(id);
         if (!normalizedId) return {};
+        const isKnownTeammateId = Object.keys(state.teammateIdentityRecords || {}).some((playerId) => idsEquivalent(playerId, normalizedId));
+        if (isKnownTeammateId) return {};
         const aliases = buildIdAliases(normalizedId);
         const hasResolvedMapping = aliases.some((alias) => (
             state.knownMappings[alias]
@@ -968,11 +1214,19 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
 
         // Create profiles for imported mappings
         const newProfiles = { ...state.playerProfiles };
+        const nextRecords = { ...(state.teammateIdentityRecords || {}) };
         Object.entries(mappings).forEach(([id, name]) => {
             if (!newProfiles[id]) {
                 newProfiles[id] = createEmptyProfile(id);
             }
             newProfiles[id].name = name;
+            const normalizedId = normalizeTeammatePlayerId(id);
+            if (normalizedId && String(name || '').trim()) {
+                confirmTeammateIdentityRecord(nextRecords, normalizedId, name, {
+                    source: 'manual',
+                    lockedByUser: true,
+                });
+            }
         });
 
         return {
@@ -981,7 +1235,17 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
                 ...state.uidMappings,
                 players: { ...state.uidMappings.players, ...mappings }
             },
-            playerProfiles: newProfiles
+            playerProfiles: newProfiles,
+            teammateIdentityRecords: nextRecords,
+            playerIdMap: {
+                ...((state as MappingSlice & { playerIdMap?: Record<string, string> }).playerIdMap || {}),
+                ...Object.fromEntries(
+                    Object.entries(mappings).map(([id, name]) => [normalizeTeammatePlayerId(id), name]).filter(([id, name]) => Boolean(id && name))
+                ),
+            },
+            detectedUnknowns: Object.fromEntries(
+                Object.entries(state.detectedUnknowns || {}).filter(([key]) => !Object.keys(mappings).some((mappingId) => idsEquivalent(mappingId, key)))
+            ),
         };
     }),
 
@@ -1014,14 +1278,19 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
             )
         };
         if (domain === 'players') {
-            const existingProfileEntry = Object.entries(state.playerProfiles)
-                .find(([profileId]) => idsEquivalent(profileId, normalizedId));
-            const profileKey = existingProfileEntry?.[0] || normalizedId;
-            const existing = existingProfileEntry?.[1] || createEmptyProfile(profileKey);
+            const nextRecords = { ...(state.teammateIdentityRecords || {}) };
+            confirmTeammateIdentityRecord(nextRecords, normalizedId, trimmedName, {
+                source: 'manual',
+                lockedByUser: true,
+            });
             return {
                 ...base,
-                knownMappings: { ...state.knownMappings, [normalizedId]: trimmedName },
-                playerProfiles: { ...state.playerProfiles, [profileKey]: { ...existing, id: profileKey, name: trimmedName } }
+                ...applyResolvedPlayerLayers(
+                    state as MappingSlice & { playerIdMap?: Record<string, string> },
+                    normalizedId,
+                    trimmedName,
+                ),
+                teammateIdentityRecords: nextRecords,
             };
         }
         return {
@@ -1037,10 +1306,22 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
         );
         const next = { ...state.uidMappings, [domain]: rest };
         if (domain === 'players') {
-            const km = Object.fromEntries(
-                Object.entries(state.knownMappings).filter(([key]) => !idsEquivalent(key, normalizedId))
-            );
-            return { uidMappings: next, knownMappings: km };
+            const nextRecords = { ...(state.teammateIdentityRecords || {}) };
+            if (nextRecords[normalizedId]) {
+                const released = releaseTeammateIdentityRecord(nextRecords[normalizedId]);
+                if (released) nextRecords[normalizedId] = released;
+            }
+            return {
+                uidMappings: next,
+                teammateIdentityRecords: nextRecords,
+                ...clearResolvedPlayerLayers(
+                    {
+                        ...(state as MappingSlice & { playerIdMap?: Record<string, string> }),
+                        uidMappings: next,
+                    } as MappingSlice & { playerIdMap?: Record<string, string> },
+                    normalizedId,
+                ),
+            };
         }
         return { uidMappings: next };
     }),
@@ -1055,9 +1336,28 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
             equipment: { ...sanitizeImportedUidDomain(state.uidMappings.equipment, true), ...sanitizedEquipment },
             perks: { ...state.uidMappings.perks, ...(mappings.perks || {}) },
         });
+        const nextRecords = { ...(state.teammateIdentityRecords || {}) };
+        Object.entries(mappings.players || {}).forEach(([id, name]) => {
+            const normalizedId = normalizeTeammatePlayerId(id);
+            if (!normalizedId || !String(name || '').trim()) return;
+            confirmTeammateIdentityRecord(nextRecords, normalizedId, name, {
+                source: 'manual',
+                lockedByUser: true,
+            });
+        });
         return {
             uidMappings: merged,
-            knownMappings: { ...state.knownMappings, ...(mappings.players || {}) }
+            knownMappings: { ...state.knownMappings, ...(mappings.players || {}) },
+            teammateIdentityRecords: nextRecords,
+            playerIdMap: {
+                ...((state as MappingSlice & { playerIdMap?: Record<string, string> }).playerIdMap || {}),
+                ...Object.fromEntries(
+                    Object.entries(mappings.players || {}).map(([id, name]) => [normalizeTeammatePlayerId(id), name]).filter(([id, name]) => Boolean(id && name))
+                ),
+            },
+            detectedUnknowns: Object.fromEntries(
+                Object.entries(state.detectedUnknowns || {}).filter(([key]) => !Object.keys(mappings.players || {}).some((mappingId) => idsEquivalent(mappingId, key)))
+            ),
         };
     }),
 

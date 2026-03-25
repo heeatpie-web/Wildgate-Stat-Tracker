@@ -34,6 +34,7 @@ const deleteMatch = vi.fn();
 const updateMatch = vi.fn();
 const dispatchEventSpy = vi.spyOn(window, 'dispatchEvent');
 const electronInvokeMock = vi.fn();
+const recordTeammateIdentityObservation = vi.fn(() => ({ assignments: {}, promotions: [] }));
 
 vi.mock('../../providers/GameDataProvider', () => ({
   useGameData: () => ({
@@ -105,6 +106,8 @@ const mockStoreState: Record<string, any> = {
   sessionShipTypes: {},
   matches: [],
   sessionStartTime: 1_700_000_000_000,
+  pilotRegistry: [],
+  recordTeammateIdentityObservation,
   discardMatch: vi.fn(),
 };
 
@@ -210,7 +213,10 @@ describe('useMatchSubmission', () => {
       sessionShipTypes: {},
       matches: [],
       sessionStartTime: 1_700_000_000_000,
+      pilotRegistry: [],
     });
+    recordTeammateIdentityObservation.mockReset();
+    recordTeammateIdentityObservation.mockReturnValue({ assignments: {}, promotions: [] });
     mockStoreState.discardMatch.mockClear();
     vi.mocked(bundleMatchArtifacts).mockReset();
     vi.mocked(bundleMatchArtifacts).mockResolvedValue([]);
@@ -243,6 +249,42 @@ describe('useMatchSubmission', () => {
     expect(typeof result.current.discardCurrentMatch).toBe('function');
     expect(typeof result.current.discardTelemetryDraft).toBe('function');
     expect(result.current.submitting).toBe(false);
+  });
+
+  it('persists friendly teammate identity assignments on saved result drafts', async () => {
+    mockStoreState.activeUser = 'Pilot';
+    mockStoreState.pendingMatchData = {
+      id: 88,
+      player: 'Pilot',
+      teammates: ['Wingmate', 'Pilot'],
+      opponents: ['Enemy'],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      result: 'Win',
+      time: '12:34',
+      friendlyPlayerIds: ['TEAMMATE-ID'],
+    };
+    mockStoreState.showWizard = 'Win';
+    mockStoreState.pilotRegistry = ['Pilot', 'Wingmate'];
+    recordTeammateIdentityObservation.mockReturnValueOnce({
+      assignments: { 'TEAMMATE-ID': 'Wingmate' },
+      promotions: [],
+    });
+
+    const { result } = renderHook(() => useMatchSubmission());
+
+    await act(async () => {
+      await result.current.saveResultDraft('Combat');
+    });
+
+    expect(recordTeammateIdentityObservation).toHaveBeenCalledWith(expect.objectContaining({
+      friendlyPlayerIds: ['TEAMMATE-ID'],
+      pilotRegistry: ['Pilot', 'Wingmate'],
+    }));
+    expect(addMatch).toHaveBeenCalledWith(expect.objectContaining({
+      friendlyPlayerIds: ['TEAMMATE-ID'],
+      friendlyIdentityAssignments: { 'TEAMMATE-ID': 'Wingmate' },
+    }));
   });
 
   it('initiateSubmission with no activeUser shows warning and still opens wizard', () => {

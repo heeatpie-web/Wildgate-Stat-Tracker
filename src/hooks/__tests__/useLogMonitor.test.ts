@@ -73,6 +73,8 @@ const appStoreState = {
   resetMatchMetricsForNewMatch: vi.fn(),
   registerUnknownId: vi.fn(),
   setPlayerName: vi.fn(),
+  confirmTeammateIdentity: vi.fn(),
+  teammateIdentityRecords: {},
   activeWeapons: {},
 };
 
@@ -145,6 +147,7 @@ describe('useLogMonitor', () => {
     loggerWarn.mockClear();
     loggerError.mockClear();
     appStoreState.setPlayerName.mockClear();
+    appStoreState.confirmTeammateIdentity.mockClear();
     appStoreState.resetSelectionSourcesForNewMatch.mockClear();
     appStoreState.resetMatchTrackingForNewMatch.mockClear();
     appStoreState.resetMatchMetricsForNewMatch.mockClear();
@@ -162,6 +165,8 @@ describe('useLogMonitor', () => {
     gameDataState.setSelectedTeammates.mockClear();
     gameDataState.clearTelemetryDetected.mockClear();
     gameDataState.updatePlayerIdMapping.mockClear();
+    gameDataState.playerIdMap = {};
+    gameDataState.pilotRegistry = [];
     gameDataState.activeHero = 'Adrian';
     gameDataState.activeShip = 'Hunter';
     gameDataState.activeWeapons = {};
@@ -182,6 +187,7 @@ describe('useLogMonitor', () => {
     appStoreState.matches = [];
     appStoreState.knownMappings = {};
     appStoreState.uidMappings = { players: {}, ships: {}, weapons: {}, equipment: {}, perks: {} };
+    appStoreState.teammateIdentityRecords = {};
     appStoreState.activeWeapons = {};
     Object.keys(ipcCallbacks).forEach((key) => {
       delete ipcCallbacks[key];
@@ -246,6 +252,85 @@ describe('useLogMonitor', () => {
     expect(ipcMock.on).toHaveBeenCalledWith('log-data', expect.any(Function));
     expect(ipcMock.on.mock.invocationCallOrder[0]).toBeLessThan(ipcMock.send.mock.invocationCallOrder[0]);
     expect(ipcMock.on.mock.invocationCallOrder[1]).toBeLessThan(ipcMock.send.mock.invocationCallOrder[0]);
+  });
+
+  it('stores friendly teammate ids on telemetry drafts from matchmaker rosters', async () => {
+    gameDataState.playerIdMap = { 'pilot-id': 'Pilot' };
+
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: {
+            event: {
+              playerIds: ['pilot-id', 'wing-1', 'wing-2'],
+              ticketMatchPool: 'ArtifactBrawl',
+            },
+          },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'DesolationReach' },
+          ClientTimestamp: Math.floor(Date.now() / 1000) + 1,
+        },
+      ]);
+    });
+
+    expect(latestAddedMatch()).toEqual(expect.objectContaining({
+      friendlyPlayerIds: ['wing-1', 'wing-2'],
+    }));
+  });
+
+  it('confirms teammate identities when telemetry reveals a named friendly roster id', async () => {
+    gameDataState.playerIdMap = { 'pilot-id': 'Pilot' };
+
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: {
+            event: {
+              playerIds: ['pilot-id', 'wing-1'],
+              ticketMatchPool: 'ArtifactBrawl',
+            },
+          },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebTelemetryNameReveal',
+          Payload: {
+            event: {
+              playerId: 'wing-1',
+              displayName: 'Wingmate',
+            },
+          },
+          ClientTimestamp: Math.floor(Date.now() / 1000) + 1,
+        },
+      ]);
+    });
+
+    expect(appStoreState.confirmTeammateIdentity).toHaveBeenCalledWith(
+      'wing-1',
+      'Wingmate',
+      expect.objectContaining({ source: 'telemetry_direct' }),
+    );
   });
 
   it('uses adaptive polling profiles when adaptive telemetry is enabled', async () => {

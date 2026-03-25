@@ -250,6 +250,10 @@ export interface Match {
   damageSourcesAvailable?: boolean;
   /** OCR lines captured from the damage sources panel for later analytics. */
   damageSourcesText?: string[];
+  /** Telemetry teammate IDs captured for the friendly roster, excluding the local player. */
+  friendlyPlayerIds?: string[];
+  /** Resolved teammate ID -> displayed name assignments used when this match was saved. */
+  friendlyIdentityAssignments?: Record<string, string>;
 }
 
 /** Returns crew capacity (1-4) based on the ship display name. */

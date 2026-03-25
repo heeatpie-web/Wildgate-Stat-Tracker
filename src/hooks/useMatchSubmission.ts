@@ -25,6 +25,11 @@ import {
 import { buildOcrNameConfidenceMapFromExtractedData } from '../utils/ocr/nameSourceHints';
 import { sanitizeOpponentTeamsAgainstFriendlyRoster } from '../utils/ocr/friendlyTeamDeduper';
 import { backfillOpponentTeamShipTypes } from '../utils/ocr/opponentTeamShipTypes';
+import {
+    normalizeTeammatePlayerId,
+    type ObservedTeammateName,
+    type TeammateIdentitySource,
+} from '../utils/teammateIdentity';
 
 const DEFAULT_ARTIFACT_LOOKBACK_MS = 10 * 60 * 1000;
 const SCOPED_ARTIFACT_REPAIR_POSTMATCH_GRACE_MS = 5 * 60 * 1000;
@@ -234,6 +239,133 @@ const dedupeNames = (...nameSets: Array<Array<string | null | undefined> | null 
         });
     });
     return merged;
+};
+
+const dedupeFriendlyPlayerIds = (...playerIdSets: Array<Array<string | null | undefined> | null | undefined>): string[] => {
+    const seen = new Set<string>();
+    const merged: string[] = [];
+    playerIdSets.forEach((playerIdSet) => {
+        (playerIdSet || []).forEach((entry) => {
+            const normalizedId = normalizeTeammatePlayerId(entry);
+            if (!normalizedId || seen.has(normalizedId)) return;
+            seen.add(normalizedId);
+            merged.push(normalizedId);
+        });
+    });
+    return merged;
+};
+
+const normalizeConfidenceValue = (value: unknown): number | null => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return null;
+    if (numeric <= 0) return 0;
+    return numeric > 1 ? Math.min(1, numeric / 100) : Math.min(1, numeric);
+};
+
+const resolveObservedNameConfidence = (
+    teammateName: string,
+    ...maps: Array<Record<string, number> | undefined>
+): number | null => {
+    const teammateKey = normalizeNameKey(teammateName);
+    if (!teammateKey) return null;
+    for (const map of maps) {
+        if (!map) continue;
+        const direct = normalizeConfidenceValue(map[teammateName]);
+        if (direct != null) return direct;
+        const matchedEntry = Object.entries(map).find(([name]) => normalizeNameKey(name) === teammateKey);
+        if (matchedEntry) {
+            return normalizeConfidenceValue(matchedEntry[1]);
+        }
+    }
+    return null;
+};
+
+const buildObservedTeammateNames = ({
+    teammateNames,
+    activeUser,
+    nameConfidence,
+    source,
+}: {
+    teammateNames: string[];
+    activeUser?: string | null;
+    nameConfidence?: Record<string, number>;
+    source: TeammateIdentitySource;
+}): ObservedTeammateName[] => {
+    const activeUserKey = normalizeNameKey(activeUser);
+    return dedupeNames(teammateNames)
+        .filter((name) => normalizeNameKey(name) !== activeUserKey)
+        .map((name) => ({
+            name,
+            confidence: resolveObservedNameConfidence(name, nameConfidence) ?? 0.78,
+            source,
+        }));
+};
+
+const buildFriendlyIdentityMetadata = ({
+    existingMatch,
+    pendingMatchData,
+    activeUser,
+    teammateNames,
+    source,
+    matchId,
+    pilotRegistry,
+}: {
+    existingMatch?: Match | null;
+    pendingMatchData?: Partial<Match> | null;
+    activeUser?: string | null;
+    teammateNames: string[];
+    source: TeammateIdentitySource;
+    matchId?: number | null;
+    pilotRegistry?: string[];
+}): {
+    friendlyPlayerIds: string[];
+    friendlyIdentityAssignments?: Record<string, string>;
+} => {
+    const friendlyPlayerIds = dedupeFriendlyPlayerIds(
+        pendingMatchData?.friendlyPlayerIds,
+        existingMatch?.friendlyPlayerIds,
+    );
+    const existingAssignments = {
+        ...(existingMatch?.friendlyIdentityAssignments || {}),
+        ...(pendingMatchData?.friendlyIdentityAssignments || {}),
+    };
+    if (friendlyPlayerIds.length === 0) {
+        return {
+            friendlyPlayerIds,
+            friendlyIdentityAssignments: Object.keys(existingAssignments).length > 0 ? existingAssignments : undefined,
+        };
+    }
+
+    const observedNames = buildObservedTeammateNames({
+        teammateNames,
+        activeUser,
+        nameConfidence: pendingMatchData?.ocrDebug?.nameConfidence || existingMatch?.ocrDebug?.nameConfidence,
+        source,
+    });
+    if (observedNames.length === 0) {
+        return {
+            friendlyPlayerIds,
+            friendlyIdentityAssignments: Object.keys(existingAssignments).length > 0 ? existingAssignments : undefined,
+        };
+    }
+
+    const outcome = useAppStore.getState().recordTeammateIdentityObservation({
+        friendlyPlayerIds,
+        observedNames,
+        activeUser,
+        pilotRegistry,
+        matchId,
+    });
+    const friendlyIdentityAssignments = {
+        ...existingAssignments,
+        ...(outcome.assignments || {}),
+    };
+    return {
+        friendlyPlayerIds,
+        friendlyIdentityAssignments: Object.keys(friendlyIdentityAssignments).length > 0
+            ? friendlyIdentityAssignments
+            : undefined,
+    };
 };
 
 const coerceExtractedPlayerName = (entry: string | ExtractedPlayer | null | undefined): string =>
@@ -703,8 +835,22 @@ export const useMatchSubmission = () => {
                         combined,
                         activeUser: activeUserHint || latestMatch.player || storeState.activeUser,
                     });
-                    updateMatch(mergedMatch);
-                    applyRosterAutoPopulationForSavedMatch(mergedMatch);
+                    const friendlyIdentityMetadata = buildFriendlyIdentityMetadata({
+                        existingMatch: latestMatch,
+                        pendingMatchData: mergedMatch,
+                        activeUser: activeUserHint || latestMatch.player || storeState.activeUser,
+                        teammateNames: mergedMatch.teammates || [],
+                        source: 'crew_hub',
+                        matchId: normalizedMatchId,
+                        pilotRegistry: storeState.pilotRegistry || [],
+                    });
+                    const mergedMatchWithIdentity: Match = {
+                        ...mergedMatch,
+                        friendlyPlayerIds: friendlyIdentityMetadata.friendlyPlayerIds,
+                        friendlyIdentityAssignments: friendlyIdentityMetadata.friendlyIdentityAssignments,
+                    };
+                    updateMatch(mergedMatchWithIdentity);
+                    applyRosterAutoPopulationForSavedMatch(mergedMatchWithIdentity);
                     await StorageService.flush();
                     Logger.info('MatchSubmission', 'Background artifact OCR merged into saved match', {
                         matchId: normalizedMatchId,
@@ -851,7 +997,11 @@ export const useMatchSubmission = () => {
             result,
             subType: result === 'Draw' ? 'Combat' : undefined,
             artifacts: unresolvedDraft?.artifacts ? [...unresolvedDraft.artifacts] : undefined,
-            ocrState: unresolvedDraft?.ocrState
+            ocrState: unresolvedDraft?.ocrState,
+            friendlyPlayerIds: unresolvedDraft?.friendlyPlayerIds ? [...unresolvedDraft.friendlyPlayerIds] : undefined,
+            friendlyIdentityAssignments: unresolvedDraft?.friendlyIdentityAssignments
+                ? { ...unresolvedDraft.friendlyIdentityAssignments }
+                : undefined,
         };
 
         if (unresolvedDraft) {
@@ -926,7 +1076,8 @@ export const useMatchSubmission = () => {
             kills, poiEasy, poiMedium, poiEpic,
             damageTaken, currentNote,
             matches,
-            sessionStartTime
+            sessionStartTime,
+            pilotRegistry,
         } = state;
 
         if (!pendingMatchData || submitting) return;
@@ -1040,6 +1191,15 @@ export const useMatchSubmission = () => {
             if (isTelemetryDraftSource) {
                 Logger.info('Submission', `Reusing telemetry draft ${existingMatch.id} for final submission`);
             }
+            const friendlyIdentityMetadata = buildFriendlyIdentityMetadata({
+                existingMatch,
+                pendingMatchData,
+                activeUser: pendingMatchData.player || activeUser,
+                teammateNames: finalTeammates,
+                source: 'matchstats',
+                matchId,
+                pilotRegistry,
+            });
 
             const newMatch: Match = {
                 id: matchId,
@@ -1072,6 +1232,8 @@ export const useMatchSubmission = () => {
                 eliminatedByTeam: finalEliminatedByTeam,
                 ...savedOcrMeta,
                 telemetryConsistency: finalTelemetryConsistency,
+                friendlyPlayerIds: friendlyIdentityMetadata.friendlyPlayerIds,
+                friendlyIdentityAssignments: friendlyIdentityMetadata.friendlyIdentityAssignments,
             };
             const submittedResult = newMatch.result;
             if (existingMatch) {
@@ -1215,7 +1377,8 @@ export const useMatchSubmission = () => {
             kills, poiEasy, poiMedium, poiEpic,
             damageTaken, currentNote,
             matches,
-            sessionStartTime
+            sessionStartTime,
+            pilotRegistry,
         } = state;
 
         if (!pendingMatchData || submitting) return;
@@ -1319,6 +1482,15 @@ export const useMatchSubmission = () => {
                     };
                 })()
                 : undefined;
+            const friendlyIdentityMetadata = buildFriendlyIdentityMetadata({
+                existingMatch,
+                pendingMatchData,
+                activeUser: pendingMatchData.player || activeUser,
+                teammateNames: finalTeammates,
+                source: 'matchstats',
+                matchId,
+                pilotRegistry,
+            });
 
             const savedMatch: Match = {
                 id: matchId,
@@ -1351,6 +1523,8 @@ export const useMatchSubmission = () => {
                 eliminatedByTeam: finalEliminatedByTeam,
                 ...savedOcrMeta,
                 telemetryConsistency: finalTelemetryConsistency,
+                friendlyPlayerIds: friendlyIdentityMetadata.friendlyPlayerIds,
+                friendlyIdentityAssignments: friendlyIdentityMetadata.friendlyIdentityAssignments,
             };
 
             if (existingMatch) {
@@ -1407,6 +1581,7 @@ export const useMatchSubmission = () => {
             pendingKilledBy, pendingKilledByShip,
             matches,
             sessionStartTime,
+            pilotRegistry,
         } = state;
 
         const resolvedPendingMatchData = pendingMatchData || {};
@@ -1613,6 +1788,15 @@ export const useMatchSubmission = () => {
                     };
                 })()
                 : undefined;
+            const friendlyIdentityMetadata = buildFriendlyIdentityMetadata({
+                existingMatch,
+                pendingMatchData: resolvedPendingMatchData,
+                activeUser: resolvedPendingMatchData.player || existingMatch.player || activeUser,
+                teammateNames: finalTeammates,
+                source: 'matchstats',
+                matchId: existingMatch.id,
+                pilotRegistry,
+            });
 
             const savedMatch: Match = {
                 ...existingMatch,
@@ -1651,6 +1835,8 @@ export const useMatchSubmission = () => {
                 damageSourcesText: mergedDamageSourcesText.length > 0 ? mergedDamageSourcesText : undefined,
                 ...savedOcrMeta,
                 telemetryConsistency: finalTelemetryConsistency,
+                friendlyPlayerIds: friendlyIdentityMetadata.friendlyPlayerIds,
+                friendlyIdentityAssignments: friendlyIdentityMetadata.friendlyIdentityAssignments,
             };
 
             updateMatch(savedMatch);

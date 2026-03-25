@@ -14,6 +14,84 @@
 const MAX_TEAM_PLAYERS = 4;
 const TEAM_COLOR_ORDER = ['red', 'orange', 'goldenrod', 'yellow', 'yellowgreen', 'limegreen', 'green', 'blue', 'purple', 'black', 'unknown'];
 
+function clonePlayerEntry(player) {
+  if (typeof player === 'string') return player;
+  if (!player || typeof player !== 'object') return player;
+  return { ...player };
+}
+
+function clonePlayerRoster(players = []) {
+  if (!Array.isArray(players)) return [];
+  return players.map(clonePlayerEntry);
+}
+
+function getPlayerEntryName(player) {
+  const raw = typeof player === 'string' ? player : player?.name;
+  return String(raw || '').trim();
+}
+
+function getPlayerEntryConfidence(player) {
+  const value = typeof player === 'string' ? 60 : Number(player?.confidence || 0);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function buildPlayerRosterMetrics(players = []) {
+  const unique = [];
+  const seen = new Set();
+  let longNameCount = 0;
+  let totalNameLength = 0;
+  let totalConfidence = 0;
+  let longestNameLength = 0;
+
+  for (const player of (players || [])) {
+    const name = getPlayerEntryName(player);
+    const key = normalizePlayerKey(name);
+    if (!name || !key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(player);
+
+    const compactLength = key.length;
+    totalNameLength += compactLength;
+    longestNameLength = Math.max(longestNameLength, compactLength);
+    if (compactLength >= 8) longNameCount += 1;
+    totalConfidence += getPlayerEntryConfidence(player);
+  }
+
+  return {
+    unique,
+    count: unique.length,
+    longNameCount,
+    totalNameLength,
+    totalConfidence,
+    longestNameLength,
+    signature: unique
+      .map((player) => normalizePlayerKey(getPlayerEntryName(player)))
+      .sort()
+      .join('|'),
+  };
+}
+
+function comparePlayerRosters(leftPlayers = [], rightPlayers = []) {
+  const left = buildPlayerRosterMetrics(leftPlayers);
+  const right = buildPlayerRosterMetrics(rightPlayers);
+
+  if (left.count !== right.count) return left.count - right.count;
+  if (left.longNameCount !== right.longNameCount) return left.longNameCount - right.longNameCount;
+  if (left.totalNameLength !== right.totalNameLength) return left.totalNameLength - right.totalNameLength;
+  if (left.totalConfidence !== right.totalConfidence) return left.totalConfidence - right.totalConfidence;
+  if (left.longestNameLength !== right.longestNameLength) return left.longestNameLength - right.longestNameLength;
+  return left.signature.localeCompare(right.signature);
+}
+
+function pickPreferredTeammateRoster(existing = [], candidate = []) {
+  const existingCapped = capPlayerEntries(Array.isArray(existing) ? existing : []);
+  const candidateCapped = capPlayerEntries(Array.isArray(candidate) ? candidate : []);
+  if (comparePlayerRosters(candidateCapped, existingCapped) > 0) {
+    return clonePlayerRoster(candidateCapped);
+  }
+  return clonePlayerRoster(existingCapped.length > 0 ? existingCapped : candidateCapped);
+}
+
 function capPlayerEntries(players = [], maxPlayers = MAX_TEAM_PLAYERS) {
   if (!Array.isArray(players) || players.length <= maxPlayers) return players || [];
 
@@ -1349,4 +1427,5 @@ module.exports = {
   fuzzyTeamNameMatch,
   createCaptureFingerprint,
   isSameMatch,
+  pickPreferredTeammateRoster,
 };

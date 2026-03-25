@@ -174,6 +174,41 @@ describe('createMappingSlice', () => {
     });
   });
 
+  describe('teammate identity learning', () => {
+    it('accumulates evidence and auto-links high-confidence teammate ids', () => {
+      const playerId = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        const result = store.getState().recordTeammateIdentityObservation({
+          friendlyPlayerIds: [playerId],
+          observedNames: [{ name: 'Wingmate', confidence: 1, source: 'crew_hub' }],
+          activeUser: 'Pilot',
+          pilotRegistry: ['Pilot', 'Wingmate'],
+          matchId: attempt + 1,
+        });
+        expect(result.assignments[playerId]).toBe('Wingmate');
+      }
+
+      const record = store.getState().teammateIdentityRecords[playerId];
+      expect(record).toBeDefined();
+      expect(record.currentName).toBe('Wingmate');
+      expect(record.status).toBe('auto_linked');
+      expect(store.getState().knownMappings[playerId]).toBe('Wingmate');
+      expect(store.getState().uidMappings.players[playerId]).toBe('Wingmate');
+    });
+
+    it('locks teammate identity records when a manual player name is set', () => {
+      const playerId = 'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
+
+      store.getState().setPlayerName(playerId, 'Manual Wing');
+
+      const record = store.getState().teammateIdentityRecords[playerId];
+      expect(record?.currentName).toBe('Manual Wing');
+      expect(record?.status).toBe('confirmed');
+      expect(record?.lockedByUser).toBe(true);
+    });
+  });
+
   // ── OCR Corrections ──
 
   describe('ocrCorrections', () => {

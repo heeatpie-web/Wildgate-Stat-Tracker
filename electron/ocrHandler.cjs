@@ -341,6 +341,20 @@ function findHeaderAnchorY(words, regexes = [], xMin = 0, xMax = 1, yMin = 0, yM
   }, null)?.y || null;
 }
 
+const MAP_ENEMY_HEADER_PATTERNS = Object.freeze([
+  /^ENEMY$/,
+  /^SHIPS?$/,
+  /^ENEMYSHIPS?$/,
+]);
+
+const MAP_HAZARD_HEADER_PATTERNS = Object.freeze([
+  /^KNOWN$/,
+  /^HAZARDS?$/,
+  /^KNOWNHAZARDS?$/,
+  /^KNOWNHAZARDSFEATURES?$/,
+  /^HAZARDS?FEATURES?$/,
+]);
+
 function deriveRuntimeAnchors(screenType, ocrResult, processed, ocrRegions) {
   const words = ocrResult?.allWords || ocrResult?.words || [];
   if (!Array.isArray(words) || words.length === 0 || !processed?.width || !processed?.height) {
@@ -355,7 +369,7 @@ function deriveRuntimeAnchors(screenType, ocrResult, processed, ocrRegions) {
     const rightXMax = width * 1.0;
     const enemyHeaderY = findHeaderAnchorY(
       words,
-      [/^ENEMY$/, /^SHIPS?$/],
+      MAP_ENEMY_HEADER_PATTERNS,
       rightXMin,
       rightXMax,
       0,
@@ -363,7 +377,7 @@ function deriveRuntimeAnchors(screenType, ocrResult, processed, ocrRegions) {
     );
     const hazardsHeaderY = findHeaderAnchorY(
       words,
-      [/^KNOWN$/, /^HAZARDS?$/],
+      MAP_HAZARD_HEADER_PATTERNS,
       rightXMin,
       width,
       height * 0.18,
@@ -3024,6 +3038,8 @@ module.exports = {
     cleanupLegacyExtraction,
     convertCrewHubToLegacy,
     detectAspectProfile,
+    deriveRuntimeAnchors,
+    findHeaderAnchorY,
     getMaxTeammatesForShipType,
     restoreHiddenCaptureWindow,
   },

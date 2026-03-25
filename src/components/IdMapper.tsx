@@ -8,6 +8,10 @@ import { SHIPS, CHARACTERS, WEAPONS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT } fr
 import { normalizeDetectedUnknownMappings } from '../services/mappingContract';
 import Logger from '../utils/logger';
 import { getPerkCatalog, getProspectorEquipmentCatalog, getProspectorWeaponCatalog, getShipCatalog } from './patch/patchEntityCatalog';
+import {
+    getTeammateIdentityConfidence,
+    getTeammateIdentityDisplayName,
+} from '../utils/teammateIdentity';
 
 type MappingDomain = 'players' | 'ships' | 'weapons' | 'equipment' | 'perks';
 type MappingTag = 'prospector' | 'ship' | 'weapon' | 'equipment' | 'perk' | 'player';
@@ -139,6 +143,7 @@ export const IdMapper: React.FC = () => {
         knownMappings,
         uidMappings,
         playerProfiles,
+        teammateIdentityRecords,
         addMapping,
         setUidMapping,
         removeMapping,
@@ -399,6 +404,11 @@ export const IdMapper: React.FC = () => {
             .filter(([id, profile]: [string, any]) => inferRelationshipTag(id, profile.name || '') === 'player'),
         [inferRelationshipTag, playerProfiles]
     );
+    const teammateIdentityEntries = useMemo(
+        () => Object.values(teammateIdentityRecords || {})
+            .sort((left, right) => Number(right.lastSeenAt || 0) - Number(left.lastSeenAt || 0)),
+        [teammateIdentityRecords]
+    );
 
     useEffect(() => {
         const unknownCount = Object.keys(normalizedUnknowns || {}).length;
@@ -514,6 +524,13 @@ export const IdMapper: React.FC = () => {
         });
     };
 
+    const teammateStatusStyle: Record<string, string> = {
+        learning: 'bg-info/15 text-info',
+        auto_linked: 'bg-success-soft text-success',
+        confirmed: 'bg-md-sys-primary/15 text-md-sys-primary',
+        conflicted: 'bg-warning-soft text-warning',
+    };
+
     return (
         <div className="idmapper-shell flex flex-col gap-4 p-4 md3-card rounded-xl">
             {/* Header */}
@@ -559,7 +576,7 @@ export const IdMapper: React.FC = () => {
                 {[
                     { id: 'unknowns', label: 'Unknowns', count: Object.keys(normalizedUnknowns).length },
                     { id: 'known', label: 'Known', count: knownEntries.length },
-                    { id: 'relationships', label: 'Relationships', count: Object.keys(playerProfiles).length }
+                    { id: 'relationships', label: 'Relationships', count: relationshipEntries.length + teammateIdentityEntries.length }
                 ].map(tab => (
                     <button
                         key={tab.id}
@@ -775,6 +792,51 @@ export const IdMapper: React.FC = () => {
                 {/* Relationships Tab */}
                 {activeTab === 'relationships' && (
                     <div className="space-y-4">
+                        <div className="md3-card rounded-lg p-3">
+                            <h4 className="text-label-sm font-bold uppercase tracking-wide text-md-sys-primary flex items-center gap-2 mb-2">
+                                <Eye size={12} /> Teammate Identity Links ({teammateIdentityEntries.length})
+                            </h4>
+                            {teammateIdentityEntries.length === 0 ? (
+                                <div className="text-label-sm opacity-40 text-center py-4">No teammate identity evidence yet. Teammate IDs will start learning as telemetry and OCR overlap across matches.</div>
+                            ) : (
+                                <div className="space-y-1 max-h-48 overflow-y-auto">
+                                    {teammateIdentityEntries
+                                        .filter((record: any) => {
+                                            const displayName = getTeammateIdentityDisplayName(record);
+                                            return !searchTerm
+                                                || displayName.toLowerCase().includes(searchTerm.toLowerCase())
+                                                || String(record.playerId || '').toLowerCase().includes(searchTerm.toLowerCase());
+                                        })
+                                        .map((record: any) => {
+                                            const displayName = getTeammateIdentityDisplayName(record) || String(record.playerId || '').slice(0, 12);
+                                            const confidence = Math.round(getTeammateIdentityConfidence(record) * 100);
+                                            const statusLabel = String(record.status || 'learning')
+                                                .replace(/_/g, ' ')
+                                                .replace(/\b\w/g, (char) => char.toUpperCase());
+                                            const statusStyle = teammateStatusStyle[String(record.status || 'learning')] || teammateStatusStyle.learning;
+                                            return (
+                                                <div key={record.playerId} className="flex items-center gap-2 md3-surface-high px-2 py-1.5 rounded text-label-sm">
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-bold truncate">{displayName}</span>
+                                                            <span className={`px-1.5 py-0.5 rounded text-label-xs font-bold uppercase ${statusStyle}`}>
+                                                                {statusLabel}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex gap-3 text-label-sm opacity-60 mt-0.5">
+                                                            <span className="font-mono">{String(record.playerId || '').slice(0, 12)}...</span>
+                                                            <span>{record.sampleCount || 0} samples</span>
+                                                            <span>{confidence}% confidence</span>
+                                                            <span>{formatLastSeen(Number(record.lastSeenAt || 0))}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                </div>
+                            )}
+                        </div>
+
                         {/* Player Profiles - Direct from playerProfiles data */}
                         <div className="md3-card rounded-lg p-3">
                             <h4 className="text-label-sm font-bold uppercase tracking-wide text-md-sys-primary flex items-center gap-2 mb-2">
@@ -790,7 +852,7 @@ export const IdMapper: React.FC = () => {
                                             (profile.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                                             id.toLowerCase().includes(searchTerm.toLowerCase())
                                         )
-                                        .sort((a: any, b: any) => (b[1].sightings || 0) - (a[1].sightings || 0))
+                                        .sort((a: any, b: any) => (Number(b[1].lastSeen || 0) - Number(a[1].lastSeen || 0)))
                                         .map(([id, profile]: [string, any]) => {
                                             const role = getPlayerRole(id);
                                             const entityTag = inferRelationshipTag(id, profile.name || '');

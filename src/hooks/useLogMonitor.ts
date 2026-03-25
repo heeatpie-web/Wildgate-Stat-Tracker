@@ -14,6 +14,7 @@ import Logger from '../utils/logger';
 import { getElectronAPI } from '../utils/electronAPI';
 import { runtimeConfig } from '../config/runtimeConfig';
 import { buildActiveWeaponsFromLoadout, buildLoadoutSignature, cloneLoadout, isBogusTertiaryLoadoutEntry, sanitizeLoadout } from '../utils/loadout';
+import { normalizeTeammatePlayerId } from '../utils/teammateIdentity';
 import type { TelemetryLifecycleStage } from '../store/slices/createUISlice';
 import {
     DEFAULT_DURATION_TOLERANCE_SECONDS,
@@ -587,6 +588,7 @@ export const useLogMonitor = (activeUser?: string) => {
     const lifecycleTrackingPaused = useAppStore(s => s.lifecycleTrackingPaused);
     const setDeviceDisplayInfo = useAppStore(s => s.setDeviceDisplayInfo);
     const setGameResolution = useAppStore(s => s.setGameResolution);
+    const confirmTeammateIdentity = useAppStore(s => s.confirmTeammateIdentity);
     const {
         addMatch, updateMatch,
         playerIdMap, updatePlayerIdMapping,
@@ -622,6 +624,7 @@ export const useLogMonitor = (activeUser?: string) => {
 
     const prevKillCount = useRef(0);
     const currentSquadIds = useRef<string[]>([]);
+    const localTelemetryPlayerIdsRef = useRef<string[]>([]);
     const sessionStartTimeRef = useRef(sessionStartTime);
     const lastActivityRef = useRef(0);
     const playerIdMapRef = useRef(playerIdMap);
@@ -683,6 +686,54 @@ export const useLogMonitor = (activeUser?: string) => {
         setTimeSec(ss.padStart(2, '0'), 'telemetry');
     }, [setTimeMin, setTimeSec]);
 
+    const rememberLocalTelemetryPlayerId = useCallback((playerId: string) => {
+        const normalizedId = normalizeTeammatePlayerId(playerId);
+        if (!normalizedId) return;
+        if (localTelemetryPlayerIdsRef.current.includes(normalizedId)) return;
+        localTelemetryPlayerIdsRef.current = [...localTelemetryPlayerIdsRef.current, normalizedId];
+    }, []);
+
+    const isLocalTelemetryPlayerId = useCallback((playerId: string): boolean => {
+        const normalizedId = normalizeTeammatePlayerId(playerId);
+        if (!normalizedId) return false;
+        if (localTelemetryPlayerIdsRef.current.includes(normalizedId)) return true;
+        const activeUserKey = String(activeUserRef.current || '').trim().toLowerCase();
+        if (!activeUserKey) return false;
+        return Object.entries(playerIdMapRef.current || {}).some(([mappedId, mappedName]) => (
+            normalizeTeammatePlayerId(mappedId) === normalizedId
+            && String(mappedName || '').trim().toLowerCase() === activeUserKey
+        ));
+    }, []);
+
+    const getFriendlyTelemetryPlayerIds = useCallback((playerIds: string[]): string[] => {
+        const seen = new Set<string>();
+        const next: string[] = [];
+        (playerIds || []).forEach((playerId) => {
+            const normalizedId = normalizeTeammatePlayerId(playerId);
+            if (!normalizedId || seen.has(normalizedId) || isLocalTelemetryPlayerId(normalizedId)) return;
+            seen.add(normalizedId);
+            next.push(normalizedId);
+        });
+        return next;
+    }, [isLocalTelemetryPlayerId]);
+
+    const syncFriendlyPlayerIdsToDraft = useCallback((gameTime: number) => {
+        const draftId = telemetryDraftMatchIdRef.current;
+        if (!draftId) return;
+        const match = useAppStore.getState().matches.find((m: Match) => m.id === draftId);
+        if (!match) return;
+        const friendlyPlayerIds = getFriendlyTelemetryPlayerIds(currentSquadIds.current);
+        const currentFriendlyIds = Array.isArray(match.friendlyPlayerIds) ? match.friendlyPlayerIds : [];
+        const changed = friendlyPlayerIds.length !== currentFriendlyIds.length
+            || friendlyPlayerIds.some((playerId, index) => playerId !== currentFriendlyIds[index]);
+        if (!changed) return;
+        updateMatch({
+            ...match,
+            timestamp: match.timestamp || gameTime,
+            friendlyPlayerIds,
+        });
+    }, [getFriendlyTelemetryPlayerIds, updateMatch]);
+
     const buildTelemetryDraft = useCallback((matchId: number, gameTime: number, loadout: Loadout | null): Match => ({
         id: matchId,
         timestamp: gameTime,
@@ -719,11 +770,12 @@ export const useLogMonitor = (activeUser?: string) => {
         ocrState: 'queued',
         telemetryDraftState: 'active',
         isPracticeRange: telemetryLifecycleIsPracticeRangeRef.current === true,
+        friendlyPlayerIds: getFriendlyTelemetryPlayerIds(currentSquadIds.current),
         telemetryConsistency: {
             durationToleranceSeconds: DEFAULT_DURATION_TOLERANCE_SECONDS,
             ...(pendingTelemetryConsistencyRef.current || {}),
         },
-    }), []);
+    }), [getFriendlyTelemetryPlayerIds]);
 
     const updateTelemetryDraftMatchMode = useCallback((matchMode: TelemetryMatchMode, gameTime: number) => {
         if (!matchMode) return;
@@ -820,6 +872,7 @@ export const useLogMonitor = (activeUser?: string) => {
             if (Object.keys(pendingTelemetryConsistencyRef.current || {}).length > 0) {
                 updateTelemetryDraftConsistency(pendingTelemetryConsistencyRef.current, gameTime);
             }
+            syncFriendlyPlayerIdsToDraft(gameTime);
             Logger.info('LogMonitor', `Reused existing telemetry draft (matchId=${existingDraft.id})`);
             return existingDraft.id;
         }
@@ -834,7 +887,7 @@ export const useLogMonitor = (activeUser?: string) => {
         telemetryDraftLoadoutSignatureRef.current = buildLoadoutSignature(draft.loadout);
         Logger.info('LogMonitor', `Telemetry draft created (matchId=${matchId})`);
         return matchId;
-    }, [addMatch, buildTelemetryDraft, updateMatch, updateTelemetryDraftConsistency]);
+    }, [addMatch, buildTelemetryDraft, syncFriendlyPlayerIdsToDraft, updateMatch, updateTelemetryDraftConsistency]);
 
     const updateTelemetryDraftFromLoadout = useCallback((loadout: Loadout, gameTime: number) => {
         const draftId = telemetryDraftMatchIdRef.current;
@@ -1495,18 +1548,20 @@ export const useLogMonitor = (activeUser?: string) => {
                     }
 
                     if (name === 'NebClientMatchmakerStateChange') {
+                        const matchmakerPlayerIds = Array.from(new Set(
+                            extractTelemetryStringList(
+                                payload.playerIds
+                                || payload.player_ids
+                                || payload.players
+                                || payload.playerList
+                                || payload.ticketPlayerIds
+                            ).map((value) => String(value || '').trim()).filter(Boolean)
+                        ));
+                        currentSquadIds.current = matchmakerPlayerIds;
+                        syncFriendlyPlayerIdsToDraft(gameTime);
                         if (!telemetryLifecycleActiveRef.current) {
                             Logger.debug('LogMonitor', 'Skipping pre-start matchmaker consistency capture');
                         } else {
-                            const matchmakerPlayerIds = Array.from(new Set(
-                                extractTelemetryStringList(
-                                    payload.playerIds
-                                    || payload.player_ids
-                                    || payload.players
-                                    || payload.playerList
-                                    || payload.ticketPlayerIds
-                                ).map((value) => String(value || '').trim()).filter(Boolean)
-                            ));
                             const inferredMode = inferModeFromMatchPool(
                                 payload.ticketMatchPool
                                 || payload.ticket_match_pool
@@ -1607,6 +1662,17 @@ export const useLogMonitor = (activeUser?: string) => {
                         if (potentialName && typeof potentialName === 'string' && potentialName.length > 0) {
                             const setPlayerName = useAppStore.getState().setPlayerName;
                             setPlayerName(potentialId, potentialName);
+                            const normalizedPotentialId = normalizeTeammatePlayerId(potentialId);
+                            if (
+                                normalizedPotentialId
+                                && currentSquadIds.current.some((playerId) => normalizeTeammatePlayerId(playerId) === normalizedPotentialId)
+                                && !isLocalTelemetryPlayerId(normalizedPotentialId)
+                            ) {
+                                confirmTeammateIdentity(normalizedPotentialId, potentialName, {
+                                    source: 'telemetry_direct',
+                                    matchId: telemetryDraftMatchIdRef.current,
+                                });
+                            }
                             const currentMappedName = playerIdMapRef.current[potentialId];
                             if (currentMappedName && currentMappedName.startsWith(UNNAMED_PLAYER_PREFIX) && currentMappedName !== potentialName) {
                                 updatePlayerIdMapping(potentialId, potentialName);
@@ -1626,8 +1692,12 @@ export const useLogMonitor = (activeUser?: string) => {
                         asRecord(payloadContextAlt.client).accountId ||
                         asRecord(payloadContextAlt.client).platformAccountId
                     );
+                    rememberLocalTelemetryPlayerId(localId);
                     if (localId && activeUserRef.current && !playerIdMapRef.current[localId]) {
                         updatePlayerIdMapping(localId, activeUserRef.current);
+                    }
+                    if (localId) {
+                        syncFriendlyPlayerIdsToDraft(gameTime);
                     }
                     const normalizeName = (value: unknown) => String(value || '').trim().toLowerCase();
                     const normalizeTelemetryId = (value: unknown) => {
@@ -2427,7 +2497,7 @@ export const useLogMonitor = (activeUser?: string) => {
             unsubStatus();
             unsubData();
         };
-    }, [appendTelemetryLoadoutSave, createTelemetryDraftIfNeeded, setCurrentLoadout, setDeviceDisplayInfo, setGameResolution, setLastActivity, setTelemetryStatus, setToast, startupLifecycleEstablished, transitionTelemetryLifecycleStage, updatePlayerIdMapping, updateTelemetryDraftConsistency, updateTelemetryDraftFromLoadout, updateTelemetryDraftMatchMode]);
+    }, [appendTelemetryLoadoutSave, clearTelemetryDetected, confirmTeammateIdentity, createTelemetryDraftIfNeeded, isLocalTelemetryPlayerId, rememberLocalTelemetryPlayerId, setActiveHero, setActiveShip, setActiveWeapons, setCurrentLoadout, setDeviceDisplayInfo, setGameResolution, setIsMatchInProgress, setLastActivity, setMatchStartTime, setOverlayPhase, setTelemetryLifecycleIsPracticeRange, setTelemetryLifecycleStage, setTelemetryStatus, setToast, startupLifecycleEstablished, syncFriendlyPlayerIdsToDraft, transitionTelemetryLifecycleStage, updatePlayerIdMapping, updateTelemetryDraftConsistency, updateTelemetryDraftFromLoadout, updateTelemetryDraftMatchMode]);
 
     return { logFeed, logStatus: telemetryStatus };
 };

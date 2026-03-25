@@ -197,6 +197,52 @@ describe('StorageService', () => {
     expect(loaded?.uidSeedState.seedVersionApplied).toBe(2);
   });
 
+  it('hydrates teammate identity records from persisted storage', async () => {
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'db-read') {
+        return createStorageData({
+          teammateIdentityRecords: {
+            AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA: {
+              playerId: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+              status: 'auto_linked',
+              currentName: 'Wingmate',
+              firstSeenAt: 123,
+              lastSeenAt: 456,
+              sampleCount: 4,
+              candidates: {
+                wingmate: {
+                  displayName: 'Wingmate',
+                  sampleCount: 4,
+                  weightedScore: 4.2,
+                  maxOcrConfidence: 1,
+                  firstSeenAt: 123,
+                  lastSeenAt: 456,
+                  sourceCounts: {
+                    crew_hub: 4,
+                    social: 0,
+                    matchstats: 0,
+                    telemetry_direct: 0,
+                    manual: 0,
+                    unknown: 0,
+                  },
+                },
+              },
+            },
+          },
+        });
+      }
+      if (channel === 'read-uid-seed') {
+        return { version: 0, players: {}, ships: {}, weapons: {}, equipment: {}, perks: {} };
+      }
+      return null;
+    });
+    const { StorageService } = await loadStorageModule({ invoke });
+
+    const loaded = await StorageService.init();
+
+    expect(loaded?.teammateIdentityRecords?.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA?.currentName).toBe('Wingmate');
+  });
+
   it('relocations in seed move a misplaced GUID from the wrong domain to the correct one', async () => {
     const PRIVATEER_GUID = 'DBCDD50744CF05BC84F52982E6567ACB';
     const invoke = vi.fn(async (channel: string) => {
