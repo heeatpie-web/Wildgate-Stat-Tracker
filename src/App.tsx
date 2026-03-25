@@ -3174,7 +3174,6 @@ const App: React.FC = () => {
         reason?: FullAutoSaveReason;
         detectionMethod?: FullAutoDetectionMethod;
         matchId?: number | null;
-        resultHint?: FullAutoResultContext | null;
     }) => {
         const api = getElectronAPI();
         if (!api || fullAutoResultLatched || fullAutoCaptureInFlightRef.current) return;
@@ -3269,13 +3268,6 @@ const App: React.FC = () => {
 
                 const imageBase64 = capture as string;
                 const normalizedCaptureBase64 = normalizeImageBase64Payload(imageBase64);
-                if (
-                    attemptIndex === 0
-                    && !supplementalArtifactsPromise
-                    && shouldCaptureDamageSourcesFollowUp(options?.resultHint)
-                ) {
-                    supplementalArtifactsPromise = captureDamageSourcesArtifact(api, normalizedDraftMatchId);
-                }
                 const scanResult = await api.invoke('scan-result-screen', {
                     imageBase64,
                     detectionMethod: currentDetectionMethod,
@@ -3298,8 +3290,7 @@ const App: React.FC = () => {
                     resultData.detectionMethod = currentDetectionMethod;
                 }
                 if (
-                    attemptIndex === 0
-                    && !supplementalArtifactsPromise
+                    !supplementalArtifactsPromise
                     && shouldCaptureDamageSourcesFollowUp(resultData)
                 ) {
                     supplementalArtifactsPromise = captureDamageSourcesArtifact(api, normalizedDraftMatchId);
@@ -3342,9 +3333,9 @@ const App: React.FC = () => {
                     });
                 }
 
-                // Only keep the speculative damage follow-up on the first burst.
-                // It may have already started from the text tripwire's provisional loss hint.
-                if (attemptIndex === 0 && supplementalArtifactsPromise) {
+                // Keep the follow-up tied to the first confirmed combat-loss frame,
+                // even if that lands on a retry instead of the first burst attempt.
+                if (supplementalArtifactsPromise) {
                     supplementalArtifacts = (await supplementalArtifactsPromise) ?? [];
                 }
 
@@ -3402,6 +3393,8 @@ const App: React.FC = () => {
                     )
                 );
                 if (shouldRetryAfterRecoverableMiss) {
+                    supplementalArtifacts = [];
+                    supplementalArtifactsPromise = null;
                     await waitForDuration(FULL_AUTO_RESULT_OCR_RETRY_INTERVAL_MS);
                 }
             }
@@ -3535,7 +3528,6 @@ const App: React.FC = () => {
             reason: 'text',
             detectionMethod: 'text',
             matchId: scheduledMatchId,
-            resultHint: payload,
         });
     }, [beginFullAutoResultDetection, normalizedActiveTelemetryDraftMatchId, triggerFullAutoSave]);
 

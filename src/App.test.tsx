@@ -2119,7 +2119,7 @@ describe('App', () => {
     vi.useRealTimers();
   });
 
-  it('starts the combat-loss damage follow-up before result OCR finishes when text already identified the loss', async () => {
+  it('retries unconfirmed loss captures before starting the live damage follow-up', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
     uiState.telemetryLifecycleStage = 'live';
@@ -2142,25 +2142,29 @@ describe('App', () => {
     };
     gameDataState.matches = [draft];
     appStoreState.matches = [draft];
-    autoFinalizeResultScreenCaptureMock.mockResolvedValue({ success: true });
-
-    let resolveScanResult: ((value: any) => void) | null = null;
-    const scanResultPromise = new Promise<any>((resolve) => {
-      resolveScanResult = resolve;
-    });
+    autoFinalizeResultScreenCaptureMock
+      .mockResolvedValueOnce({ success: false, reason: 'unconfirmed' })
+      .mockResolvedValueOnce({ success: true });
+    let captureCount = 0;
+    let scanCount = 0;
     const api = {
       invoke: vi.fn((channel: string, payload?: any) => {
         if (channel === 'capture-screen') {
-          return Promise.resolve('image-base64');
+          captureCount += 1;
+          return Promise.resolve(`image-base64-${captureCount}`);
         }
         if (channel === 'save-screenshot') {
           return Promise.resolve({
             success: true,
-            data: { filePath: 'C:\\match_artifacts\\5444\\capture_result.png' },
+            data: { filePath: `C:\\match_artifacts\\5444\\capture_result_${captureCount}.png` },
           });
         }
         if (channel === 'scan-result-screen') {
-          return scanResultPromise;
+          scanCount += 1;
+          if (scanCount === 1) {
+            return Promise.resolve({ data: { result: null, detectionMethod: 'text' } });
+          }
+          return Promise.resolve({ data: { result: 'Loss', winType: 'combat', placement: 4, detectionMethod: 'text' } });
         }
         if (channel === 'capture-result-screen-region') {
           return Promise.resolve({ success: true, imageBase64: 'damage-region' });
@@ -2213,9 +2217,21 @@ describe('App', () => {
     expect(api.invoke).not.toHaveBeenCalledWith('capture-result-screen-region', expect.anything());
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(500);
+      await vi.advanceTimersByTimeAsync(250);
       await Promise.resolve();
       await Promise.resolve();
+    });
+
+    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'capture-screen')).toHaveLength(2);
+    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'capture-result-screen-region')).toHaveLength(0);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(700);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await triggerPromise;
     });
 
     expect(api.invoke).toHaveBeenCalledWith('capture-result-screen-region', expect.objectContaining({
@@ -2228,24 +2244,8 @@ describe('App', () => {
       }),
     }));
     expect(sendGameUiActionMock).toHaveBeenCalledWith('show-damage-sources');
-
-    await act(async () => {
-      resolveScanResult?.({
-        data: { result: 'Loss', winType: 'combat', placement: 4, detectionMethod: 'text' },
-      });
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(200);
-      await Promise.resolve();
-      await Promise.resolve();
-      await triggerPromise;
-    });
-
     expect(autoFinalizeResultScreenCaptureMock).toHaveBeenCalledWith(expect.objectContaining({
-      imageBase64: 'image-base64',
+      imageBase64: 'image-base64-2',
       resultData: expect.objectContaining({
         result: 'Loss',
         winType: 'combat',
@@ -2253,7 +2253,7 @@ describe('App', () => {
         detectionMethod: 'text',
       }),
       matchId: 5444,
-      persistedPrimaryArtifactPath: 'C:\\match_artifacts\\5444\\capture_result.png',
+      persistedPrimaryArtifactPath: 'C:\\match_artifacts\\5444\\capture_result_2.png',
       supplementalArtifacts: [
         { imageBase64: 'damage-region', kind: 'damage-sources' },
         { imageBase64: 'damage-region', kind: 'damage-ships' },
