@@ -36,4 +36,13 @@ describe('guid mapping aliases', () => {
     expect(EQUIPMENT_GUIDS[guid.toLowerCase()]).toBe('Repulsor');
     expect(EQUIPMENT_GUIDS[guid.toUpperCase()]).toBe('Repulsor');
   });
+
+  it('includes the corrected built-in equipment GUID aliases', () => {
+    expect(EQUIPMENT_GUIDS['1FC6C97040714EF444F7119B75377054']).toBe('Rock!');
+    expect(EQUIPMENT_GUIDS['CD21C7B2468EC990E4AFDE8B27CFE398']).toBe('Adventure Gear');
+  });
+
+  it('drops the stale Thunder Dash equipment alias that was masking Drill Charge', () => {
+    expect(EQUIPMENT_GUIDS['20C5C5A04C5A86EFAF1F9FAF2C0DD60C']).toBeUndefined();
+  });
 });

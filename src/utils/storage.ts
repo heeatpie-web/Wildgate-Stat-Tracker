@@ -9,7 +9,7 @@ import type {
 } from '../store/slices/createMappingSlice';
 import type { OcrAliasModel, OcrLearningEvent, OcrLearningQueueItem } from './ocrAliasEngine';
 import type { TeammateIdentityRecord } from './teammateIdentity';
-import { normalizeSharedUidMappings } from '../services/mappingContract';
+import { normalizeSharedUidMappings, normalizeUidMappingName } from '../services/mappingContract';
 import { isBogusTertiaryLoadoutEntry, sanitizeUnknownLoadout } from './loadout';
 import Logger from './logger';
 import { runtimeConfig } from '../config/runtimeConfig';
@@ -423,6 +423,21 @@ const applyUidSeed = async (data: StorageData): Promise<StorageData> => {
     );
   };
 
+  const stripDeprecatedEquipmentAliases = () => {
+    const deprecatedEquipmentNamesByGuid: Record<string, string[]> = {
+      '20C5C5A04C5A86EFAF1F9FAF2C0DD60C': ['Thunder Dash'],
+    };
+    merged.uidMappings.equipment = Object.fromEntries(
+      Object.entries(merged.uidMappings.equipment || {}).filter(([key, value]) => {
+        const normalizedGuid = normalizeGuidKey(key);
+        const deprecatedNames = deprecatedEquipmentNamesByGuid[normalizedGuid];
+        if (!deprecatedNames || deprecatedNames.length === 0) return true;
+        const normalizedValue = normalizeUidMappingName('equipment', value).toLowerCase();
+        return !deprecatedNames.some((name) => normalizeUidMappingName('equipment', name).toLowerCase() === normalizedValue);
+      })
+    );
+  };
+
   try {
     const seed = await ipc.invoke('read-uid-seed');
     if (!isRecord(seed)) return merged;
@@ -438,6 +453,7 @@ const applyUidSeed = async (data: StorageData): Promise<StorageData> => {
     const applied = merged.uidSeedState?.seedVersionApplied ?? null;
     if (applied !== null && seedVersion <= applied) {
       stripSeedNonPlayerResidue(seedMappings, relocations);
+      stripDeprecatedEquipmentAliases();
       return merged;
     }
     merged.uidMappings = {
@@ -462,6 +478,7 @@ const applyUidSeed = async (data: StorageData): Promise<StorageData> => {
 
     merged.uidSeedState = { seedVersionApplied: seedVersion };
     stripSeedNonPlayerResidue(seedMappings, relocations);
+    stripDeprecatedEquipmentAliases();
     return merged;
   } catch (error) {
     Logger.warn('UIDSeed', 'Failed to load seed mappings', error);

@@ -515,6 +515,45 @@ describe('createMappingSlice', () => {
       expect(store.getState().uidMappings.ships['ship1']).toBe('Hunter');
     });
 
+    it('canonicalizes equipment names and clears stray player residue for non-player mappings', () => {
+      store.setState({
+        knownMappings: { 'gear-guid': 'Adventure Geat' },
+        uidMappings: {
+          ...store.getState().uidMappings,
+          players: { 'gear-guid': 'Adventure Geat' },
+          equipment: {},
+        },
+        playerProfiles: {
+          'gear-guid': {
+            id: 'gear-guid',
+            sightings: 1,
+            firstSeen: 1,
+            lastSeen: 1,
+            teamsObserved: {},
+            playedWith: {},
+            playedAgainst: {},
+            shipsObserved: {},
+            ocrSightings: 0,
+            manualSightings: 0,
+            name: 'Adventure Geat',
+          },
+        },
+        teammateIdentityRecords: {
+          'gear-guid': { playerId: 'gear-guid', candidates: {}, status: 'learning' } as any,
+        },
+        playerIdMap: { 'gear-guid': 'Adventure Geat' },
+      } as any);
+
+      store.getState().setUidMapping('equipment', 'gear-guid', 'Adventure Geat');
+
+      expect(store.getState().uidMappings.equipment['gear-guid']).toBe('Adventure Gear');
+      expect(store.getState().uidMappings.players['gear-guid']).toBeUndefined();
+      expect(store.getState().knownMappings['gear-guid']).toBeUndefined();
+      expect(store.getState().playerProfiles['gear-guid']).toBeUndefined();
+      expect(store.getState().teammateIdentityRecords['gear-guid']).toBeUndefined();
+      expect((store.getState() as MappingSlice & { playerIdMap?: Record<string, string> }).playerIdMap?.['gear-guid']).toBeUndefined();
+    });
+
     it('updates player profile name when saving player UID mapping', () => {
       store.getState().registerUnknownId('p1', 'Hero');
       store.getState().setUidMapping('players', 'p1', 'Alice');

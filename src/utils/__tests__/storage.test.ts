@@ -395,6 +395,83 @@ describe('StorageService', () => {
     expect(loaded?.playerProfiles?.[THUNDER_DASH_GUID]).toBeUndefined();
   });
 
+  it('canonicalizes corrected equipment names and removes the stale Thunder Dash alias on upgrade', async () => {
+    const STALE_GUID = '20C5C5A04C5A86EFAF1F9FAF2C0DD60C';
+    const ROCK_GUID = '1FC6C97040714EF444F7119B75377054';
+    const ADVENTURE_GUID = 'CD21C7B2468EC990E4AFDE8B27CFE398';
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'db-read') {
+        return createStorageData({
+          mappings: {
+            [ADVENTURE_GUID]: 'Adventure Geat',
+          },
+          playerIdMap: {
+            [ADVENTURE_GUID]: 'Adventure Geat',
+          },
+          playerProfiles: {
+            [ADVENTURE_GUID]: {
+              id: ADVENTURE_GUID,
+              sightings: 1,
+              firstSeen: 1,
+              lastSeen: 1,
+              teamsObserved: {},
+              playedWith: {},
+              playedAgainst: {},
+              shipsObserved: {},
+              ocrSightings: 0,
+              manualSightings: 0,
+              name: 'Adventure Geat',
+            },
+          },
+          uidMappings: {
+            players: {
+              [ADVENTURE_GUID]: 'Adventure Geat',
+            },
+            ships: {},
+            weapons: {},
+            equipment: {
+              [STALE_GUID]: 'Thunder Dash',
+              [ROCK_GUID]: 'Rock',
+              [ADVENTURE_GUID]: 'Adventure Geat',
+            },
+            perks: {},
+          },
+          uidSeedState: { seedVersionApplied: 10 },
+        });
+      }
+      if (channel === 'read-uid-seed') {
+        return {
+          version: 11,
+          players: {},
+          ships: {},
+          weapons: {},
+          equipment: {
+            [ROCK_GUID]: 'Rock!',
+            [ADVENTURE_GUID]: 'Adventure Gear',
+          },
+          perks: {},
+          relocations: [
+            { guid: STALE_GUID, from: 'players', to: 'equipment' },
+            { guid: ROCK_GUID, from: 'players', to: 'equipment' },
+            { guid: ADVENTURE_GUID, from: 'players', to: 'equipment' },
+          ],
+        };
+      }
+      return null;
+    });
+    const { StorageService } = await loadStorageModule({ invoke });
+
+    const loaded = await StorageService.init();
+
+    expect(loaded?.uidMappings.equipment[STALE_GUID]).toBeUndefined();
+    expect(loaded?.uidMappings.equipment[ROCK_GUID]).toBe('Rock!');
+    expect(loaded?.uidMappings.equipment[ADVENTURE_GUID]).toBe('Adventure Gear');
+    expect(loaded?.uidMappings.players[ADVENTURE_GUID]).toBeUndefined();
+    expect(loaded?.mappings?.[ADVENTURE_GUID]).toBeUndefined();
+    expect(loaded?.playerIdMap?.[ADVENTURE_GUID]).toBeUndefined();
+    expect(loaded?.playerProfiles?.[ADVENTURE_GUID]).toBeUndefined();
+  });
+
   it('strips bogus tertiary placeholder mappings and loadout entries during hydration', async () => {
     const invoke = vi.fn(async (channel: string) => {
       if (channel === 'db-read') {

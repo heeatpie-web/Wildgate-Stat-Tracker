@@ -12,7 +12,7 @@ import Logger from '../../utils/logger';
 import { isBogusTertiaryLoadoutEntry } from '../../utils/loadout';
 import { normalizeOcrName } from '../../utils/stringUtils';
 import type { DetectedUnknownMapping, MappingEntityType, Match } from '../../types';
-import { normalizeDetectedUnknownMappings, normalizeSharedUidMappings } from '../../services/mappingContract';
+import { normalizeDetectedUnknownMappings, normalizeSharedUidMappings, normalizeUidMappingName } from '../../services/mappingContract';
 import {
     OcrAliasContext,
     OcrAliasModel,
@@ -433,6 +433,26 @@ const clearResolvedPlayerLayers = (
         ),
     };
 };
+
+const clearNonPlayerIdentityResidue = (
+    state: MappingSlice & { playerIdMap?: Record<string, string> },
+    id: string,
+    nextUidMappings?: UidMappings,
+): Partial<MappingSlice> & { playerIdMap?: Record<string, string> } => ({
+    ...clearResolvedPlayerLayers(
+        {
+            ...state,
+            uidMappings: nextUidMappings || state.uidMappings,
+        } as MappingSlice & { playerIdMap?: Record<string, string> },
+        id,
+    ),
+    playerProfiles: Object.fromEntries(
+        Object.entries(state.playerProfiles || {}).filter(([key]) => !idsEquivalent(key, id))
+    ),
+    teammateIdentityRecords: Object.fromEntries(
+        Object.entries(state.teammateIdentityRecords || {}).filter(([key]) => !idsEquivalent(key, id))
+    ),
+});
 
 const rewriteFriendlyIdentityAssignmentsInMatches = (
     matches: Match[] | undefined,
@@ -1258,8 +1278,11 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
         const normalizedId = normalizeGuidLikeId(id);
         if (!normalizedId) return {};
         const trimmedName = String(name || '').trim();
-        if (!trimmedName) return {};
-        if (domain !== 'players' && isBogusTertiaryLoadoutEntry(trimmedName)) {
+        const normalizedName = domain === 'players'
+            ? trimmedName
+            : normalizeUidMappingName(domain, trimmedName);
+        if (!normalizedName) return {};
+        if (domain !== 'players' && isBogusTertiaryLoadoutEntry(normalizedName)) {
             const rest = Object.fromEntries(
                 Object.entries(state.uidMappings[domain]).filter(([key]) => !idsEquivalent(key, normalizedId))
             );
@@ -1270,16 +1293,17 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
                 )
             } as Partial<MappingSlice>;
         }
-        const nextDomain = { ...state.uidMappings[domain], [normalizedId]: trimmedName };
+        const nextDomain = { ...state.uidMappings[domain], [normalizedId]: normalizedName };
+        const nextUidMappings = { ...state.uidMappings, [domain]: nextDomain };
         const base: Partial<MappingSlice> = {
-            uidMappings: { ...state.uidMappings, [domain]: nextDomain },
+            uidMappings: nextUidMappings,
             detectedUnknowns: Object.fromEntries(
                 Object.entries(state.detectedUnknowns).filter(([k]) => !idsEquivalent(k, normalizedId))
             )
         };
         if (domain === 'players') {
             const nextRecords = { ...(state.teammateIdentityRecords || {}) };
-            confirmTeammateIdentityRecord(nextRecords, normalizedId, trimmedName, {
+            confirmTeammateIdentityRecord(nextRecords, normalizedId, normalizedName, {
                 source: 'manual',
                 lockedByUser: true,
             });
@@ -1288,13 +1312,18 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
                 ...applyResolvedPlayerLayers(
                     state as MappingSlice & { playerIdMap?: Record<string, string> },
                     normalizedId,
-                    trimmedName,
+                    normalizedName,
                 ),
                 teammateIdentityRecords: nextRecords,
             };
         }
         return {
-            ...base
+            ...base,
+            ...clearNonPlayerIdentityResidue(
+                state as MappingSlice & { playerIdMap?: Record<string, string> },
+                normalizedId,
+                nextUidMappings,
+            ),
         } as Partial<MappingSlice>;
     }),
 
