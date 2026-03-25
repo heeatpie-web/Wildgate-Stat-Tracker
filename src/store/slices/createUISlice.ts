@@ -140,6 +140,7 @@ export interface UISlice {
     telemetryAutomationStatus: TelemetryAutomationStatusState | null;
     sidebarCollapsed: boolean;
     activeView: AppView;
+    playerHubFocusName: string | null;
     visionStatus: 'idle' | 'capturing' | 'scanning' | 'processing';
     telemetryStatus: TelemetryStatusState;
 
@@ -175,6 +176,7 @@ export interface UISlice {
     setTelemetryAutomationStatus: (status: TelemetryAutomationStatusState | null) => void;
     setSidebarCollapsed: (collapsed: boolean) => void;
     setActiveView: (view: AppView) => void;
+    setPlayerHubFocusName: (name: string | null) => void;
     showIdMapper: boolean;
     setShowIdMapper: (show: boolean) => void;
     setVisionStatus: (status: 'idle' | 'capturing' | 'scanning' | 'processing') => void;
@@ -385,6 +387,7 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
     telemetryAutomationStatus: null,
     sidebarCollapsed: false,
     activeView: 'recording',
+    playerHubFocusName: null,
     visionStatus: 'idle',
     telemetryStatus: { exists: false },
     layouts: {
@@ -520,6 +523,9 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
     setActiveView: (view) => set({
         activeView: view,
         showIdMapper: view === 'id-mapper',
+    }),
+    setPlayerHubFocusName: (name) => set({
+        playerHubFocusName: typeof name === 'string' && name.trim().length > 0 ? name.trim() : null,
     }),
     showIdMapper: false,
     setShowIdMapper: (show) => set((state) => ({

@@ -122,6 +122,8 @@ interface UIStateContextType {
     setDevMode: (enabled: boolean) => void;
     activeView: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'id-mapper' | 'history' | 'dev-ocr';
     setActiveView: (view: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'id-mapper' | 'history' | 'dev-ocr') => void;
+    playerHubFocusName: string | null;
+    setPlayerHubFocusName: (name: string | null) => void;
     hiddenForScan: boolean;
     setHiddenForScan: (hidden: boolean) => void;
     showIdMapper: boolean;
@@ -186,6 +188,7 @@ export const UIStateProvider: React.FC<{ children: React.ReactNode }> = ({ child
         wizardInitialTab: s.wizardInitialTab, setWizardInitialTab: s.setWizardInitialTab,
         devMode: s.devMode, setDevMode: s.setDevMode,
         activeView: s.activeView, setActiveView: s.setActiveView,
+        playerHubFocusName: s.playerHubFocusName, setPlayerHubFocusName: s.setPlayerHubFocusName,
         showIdMapper: s.showIdMapper, setShowIdMapper: s.setShowIdMapper,
         visionStatus: s.visionStatus, setVisionStatus: s.setVisionStatus,
         telemetryStatus: s.telemetryStatus, setTelemetryStatus: s.setTelemetryStatus,

@@ -9,7 +9,7 @@ import { normalizeOcrName, similarityScore } from '../../utils/stringUtils';
 import { getMaxTeammatesForShip } from '../../utils/teamLimits';
 
 export const RosterPanel: React.FC = () => {
-    const { activeUser, setToast } = useUIState();
+    const { activeUser, setToast, setActiveView, setPlayerHubFocusName } = useUIState();
     const {
         pilotRegistry,
         favorites,
@@ -166,6 +166,13 @@ export const RosterPanel: React.FC = () => {
         }
         setTeammateLimitError('');
         toggleTeammate(pilotName);
+    };
+
+    const openPlayerProfile = (pilotName: string) => {
+        const trimmedName = String(pilotName || '').trim();
+        if (!trimmedName) return;
+        setPlayerHubFocusName(trimmedName);
+        setActiveView('players');
     };
 
     const openEditModal = (pilot: string) => {
@@ -498,14 +505,24 @@ export const RosterPanel: React.FC = () => {
                                         />
                                     )}
                                     <button
-                                        onClick={() => openEditModal(p)}
+                                        onClick={() => openPlayerProfile(p)}
                                         className="recording-click-target roster-player-name text-label-sm font-semibold text-left truncate rounded-control px-1.5 py-0.5 border border-md-sys-outline/14 hover:text-md-sys-primary hover:border-md-sys-primary/35 hover:bg-md-sys-primary/10 transition-colors"
-                                        title={pilotNotes[p]}
+                                        title={`Open ${p} in Players`}
+                                        aria-label={`Open ${p} in Players`}
                                     >
                                         {p}
                                     </button>
                                 </div>
                                 <div className="flex items-center gap-1 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                        onClick={() => openPlayerProfile(p)}
+                                        className="h-7 px-2.5 rounded-control text-label-xs font-bold bg-md-sys-primary/12 text-md-sys-primary hover:bg-md-sys-primary/20 transition-colors flex items-center justify-center gap-1 shrink-0"
+                                        title={`Open ${p} in Players`}
+                                        aria-label={`Open ${p} profile in Players`}
+                                    >
+                                        <Users size={11} />
+                                        Profile
+                                    </button>
                                     <button onClick={() => openEditModal(p)} className="md3-icon-btn md3-icon-btn--small w-7 h-7 min-w-7 hover:bg-md-sys-primary hover:text-md-sys-onPrimary" title="Edit" aria-label={`Edit ${p}`}>
                                         <Edit2 size={12} />
                                     </button>

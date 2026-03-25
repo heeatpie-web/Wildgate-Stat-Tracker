@@ -89,6 +89,8 @@ const uiState = {
     setSmartCapturesFocusMatchId: vi.fn(),
     setToast: vi.fn(),
     setShowSettings: vi.fn(),
+    playerHubFocusName: null as string | null,
+    setPlayerHubFocusName: vi.fn(),
 };
 
 const appStoreState = {
@@ -229,6 +231,7 @@ describe('PlayerHub', () => {
             blocklist: {},
             stats: { totalEntries: 1, lastCompactedAt: Date.now() },
         };
+        uiState.playerHubFocusName = null;
     });
 
     it('shows former names, learned OCR variants, and duplicate candidates for the selected player', () => {
@@ -903,10 +906,10 @@ describe('PlayerHub', () => {
         fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
 
         expect(screen.getAllByRole('button', { name: /collapse possible merges/i }).length).toBeGreaterThan(0);
-        expect(screen.getAllByText(/keep ace pilot/i).length).toBeGreaterThan(0);
-        expect(screen.getAllByText(/ace squad \(82%\)/i).length).toBeGreaterThan(0);
+        expect(screen.getAllByText(/keep "ace pilot"/i).length).toBeGreaterThan(0);
+        expect(screen.getAllByText(/merge "ace squad" into "ace pilot" \(82%\)/i).length).toBeGreaterThan(0);
 
-        fireEvent.click(screen.getAllByRole('button', { name: /merge possible roster variants into ace pilot/i })[0]);
+        fireEvent.click(screen.getAllByRole('button', { name: /merge listed roster variants into ace pilot/i })[0]);
         expect(gameDataState.mergePilots).toHaveBeenCalledWith('Ace Squad', 'Ace Pilot');
 
         fireEvent.click(screen.getAllByRole('button', { name: /dismiss possible merge suggestions for ace pilot/i })[0]);
@@ -920,14 +923,24 @@ describe('PlayerHub', () => {
 
         fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
 
-        expect(screen.getAllByText(/merge into ace pilot/i).length).toBeGreaterThan(0);
-        expect(screen.getAllByText(/keep ace pilot/i).length).toBeGreaterThan(0);
+        expect(screen.getAllByText(/keep "ace pilot"/i).length).toBeGreaterThan(0);
+        expect(screen.getAllByText(/merge "ace pliot" into "ace pilot"/i).length).toBeGreaterThan(0);
         expect(screen.getAllByText(/ace pliot/i).length).toBeGreaterThan(0);
-        expect(screen.queryByText(/merge into 🛸 ace pilot/i)).toBeNull();
-        expect(screen.queryByText(/keep 🛸 ace pilot/i)).toBeNull();
+        expect(screen.queryByText(/merge "ace pliot" into "🛸 ace pilot"/i)).toBeNull();
+        expect(screen.queryByText(/keep "🛸 ace pilot"/i)).toBeNull();
 
-        fireEvent.click(screen.getAllByRole('button', { name: /merge possible roster variants into ace pilot/i })[0]);
+        fireEvent.click(screen.getAllByRole('button', { name: /merge listed roster variants into ace pilot/i })[0]);
         expect(gameDataState.mergePilots).toHaveBeenCalledWith('Ace Pliot', '🛸 Ace Pilot');
+    });
+
+    it('focuses a requested player profile when the players tab opens from another workspace', () => {
+        uiState.playerHubFocusName = 'PilotOne';
+
+        render(<PlayerHub />);
+
+        expect(screen.getByText(/pilotone profile loaded/i)).toBeInTheDocument();
+        expect(uiState.setPlayerHubFocusName).toHaveBeenCalledWith(null);
+        expect(screen.getByDisplayValue('PilotOne')).toBeInTheDocument();
     });
 
     it('keeps OCR merge suggestions lazy in details mode and supports large-roster search with virtualization', async () => {

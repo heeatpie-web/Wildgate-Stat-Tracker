@@ -267,7 +267,13 @@ const PlayerHub: React.FC = () => {
         recordPlayerEncounterRoleCorrection: state.recordPlayerEncounterRoleCorrection,
         getPlayerEncounterRoleCorrection: state.getPlayerEncounterRoleCorrection,
     })));
-    const { setActiveView, setToast, setSmartCapturesFocusMatchId } = useUIState();
+    const {
+        setActiveView,
+        setToast,
+        setSmartCapturesFocusMatchId,
+        playerHubFocusName,
+        setPlayerHubFocusName,
+    } = useUIState();
 
     const [searchTerm, setSearchTerm] = useState('');
     const [ocrSearchTerm, setOcrSearchTerm] = useState('');
@@ -819,6 +825,23 @@ const PlayerHub: React.FC = () => {
         trackedProfilesByPilot,
     ]);
     const enrichedPilots = rosterModel.enrichedPilots;
+    useEffect(() => {
+        if (!playerHubFocusName) return;
+        const focusKey = normalizeNameKey(playerHubFocusName);
+        if (!focusKey) {
+            setPlayerHubFocusName(null);
+            return;
+        }
+        const focusedPilot = enrichedPilots.find((pilot) => normalizeNameKey(pilot.name) === focusKey) || null;
+        setPanelMode('roster');
+        if (focusedPilot) {
+            setSearchTerm(focusedPilot.name);
+            setSelectedPilot(focusedPilot.name);
+        } else {
+            setSearchTerm(playerHubFocusName);
+        }
+        setPlayerHubFocusName(null);
+    }, [enrichedPilots, playerHubFocusName, setPlayerHubFocusName]);
     const deferredSearchTerm = useDeferredValue(searchTerm);
     const rosteredPlayerCount = useMemo(() => enrichedPilots.filter((pilot) => pilot.isRoster).length, [enrichedPilots]);
     const trackedOnlyPlayerCount = useMemo(() => enrichedPilots.filter((pilot) => pilot.isTrackedOnly).length, [enrichedPilots]);
@@ -1528,7 +1551,7 @@ const PlayerHub: React.FC = () => {
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="min-w-0">
                                                 <div className="text-label-sm font-semibold text-warning truncate">
-                                                    Merge into {group.canonicalDisplayName}
+                                                    Keep "{group.canonicalDisplayName}"
                                                 </div>
                                                 <div className="text-label-xs text-md-sys-on-surface/58">
                                                     Highest similarity: {Math.round(group.score)}%
@@ -1540,14 +1563,14 @@ const PlayerHub: React.FC = () => {
                                         </div>
                                         <div className="flex flex-wrap gap-1.5">
                                             <span className="px-2 py-1 rounded-pill bg-warning text-ink-strong text-label-xs font-bold">
-                                                Keep {group.canonicalDisplayName}
+                                                Keep "{group.canonicalDisplayName}"
                                             </span>
                                             {group.variants.map((variant) => (
                                                 <span
                                                     key={`${group.canonicalName}-${variant.name}`}
                                                     className="px-2 py-1 rounded-pill bg-md-sys-on-surface/8 text-label-xs font-semibold text-md-sys-on-surface/72"
                                                 >
-                                                    {variant.displayName} ({Math.round(variant.score)}%)
+                                                    Merge "{variant.displayName}" into "{group.canonicalDisplayName}" ({Math.round(variant.score)}%)
                                                 </span>
                                             ))}
                                         </div>
@@ -1556,9 +1579,9 @@ const PlayerHub: React.FC = () => {
                                                 type="button"
                                                 onClick={() => handleMergeSuggestionGroup(group)}
                                                 className="flex-1 h-8 rounded-md text-label-xs font-bold bg-warning text-ink-strong hover:brightness-95"
-                                                aria-label={`Merge possible roster variants into ${group.canonicalDisplayName}`}
+                                                aria-label={`Merge listed roster variants into ${group.canonicalDisplayName}`}
                                             >
-                                                Merge
+                                                Merge into "{group.canonicalDisplayName}"
                                             </button>
                                             <button
                                                 type="button"
