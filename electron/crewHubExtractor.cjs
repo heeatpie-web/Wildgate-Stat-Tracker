@@ -1394,6 +1394,12 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     if (!key) continue;
     repeatedCardNameCounts.set(key, (repeatedCardNameCounts.get(key) || 0) + 1);
   }
+  const textTeamLabelFrequency = new Map();
+  for (const card of uniqueCards) {
+    const key = normalizeBadgeLikeLabel(card?.textTeamName || '');
+    if (!key || key.length < 4) continue;
+    textTeamLabelFrequency.set(key, (textTeamLabelFrequency.get(key) || 0) + 1);
+  }
 
   // ── Step 3b-post: Remove cards whose name is a garbled form of a captured team name ─
   // e.g. "Fancy Goose" == "FANCY GOOSE", "ANGUAR" ⊂ "VANGUARD", "VANCUARP" ≈ "VANGUARD"
@@ -1625,6 +1631,24 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     // Assign ungrouped cards to nearest badge group by Y distance.
     const unassigned = uniqueCards.filter(c => !assignedCardIds.has(c));
     for (const card of unassigned) {
+      const singletonBadgeName = getDistinctTextTeamSingletonName(
+        card,
+        knownGroups.map((group) => getGroupDisplayName(group)).filter(Boolean),
+        textTeamLabelFrequency,
+      );
+      if (singletonBadgeName) {
+        knownGroups.push({
+          color: card.color || 'unknown',
+          badgeName: singletonBadgeName,
+          cards: [card],
+          minY: card.y,
+          maxY: card.y,
+          confidence: card.confidence || 0,
+        });
+        dlog('[CrewHub] Step4a preserve text-team singleton "' + card.name + '" -> "' + singletonBadgeName + '"');
+        continue;
+      }
+
       // Preserve singleton teams when a card has a known color that is not
       // represented in repeated-badge groups (e.g. Riv1P/FANCY GOOSE, Tycdaddy/THE MUNGUS).
       // Use hue proximity (±25°) rather than exact name equality so that adjacent
@@ -1728,11 +1752,28 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
       return clusters;
     }
 
-    const chromaticCards = uniqueCards.filter(c => typeof c.rawHue === 'number');
-    const achromaticNamedCards = uniqueCards.filter(c => typeof c.rawHue !== 'number' && c.color && c.color !== 'unknown');
-    const achromaticUnknownCards = uniqueCards.filter(c => typeof c.rawHue !== 'number' && c.color === 'unknown');
-
     knownGroups = [];
+    const singletonTextTeamCards = new Set();
+    const singletonKnownLabels = [...capturedTeamNames.values()].filter(Boolean);
+    for (const card of uniqueCards) {
+      const singletonBadgeName = getDistinctTextTeamSingletonName(card, singletonKnownLabels, textTeamLabelFrequency);
+      if (!singletonBadgeName) continue;
+      singletonTextTeamCards.add(card);
+      singletonKnownLabels.push(singletonBadgeName);
+      knownGroups.push({
+        color: card.color || 'unknown',
+        badgeName: singletonBadgeName,
+        cards: [card],
+        minY: card.y,
+        maxY: card.y,
+        confidence: card.confidence || 0,
+      });
+      dlog('[CrewHub] Step4b preserve text-team singleton "' + card.name + '" -> "' + singletonBadgeName + '"');
+    }
+
+    const chromaticCards = uniqueCards.filter(c => !singletonTextTeamCards.has(c) && typeof c.rawHue === 'number');
+    const achromaticNamedCards = uniqueCards.filter(c => !singletonTextTeamCards.has(c) && typeof c.rawHue !== 'number' && c.color && c.color !== 'unknown');
+    const achromaticUnknownCards = uniqueCards.filter(c => !singletonTextTeamCards.has(c) && typeof c.rawHue !== 'number' && c.color === 'unknown');
 
     if (chromaticCards.length > 0) {
       const huePlayers = chromaticCards.map(c => ({ name: c.name, hue: c.rawHue, card: c }));
@@ -2069,6 +2110,10 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
       })
       .filter(Boolean);
     for (const candidate of salvageCandidates) {
+      if (shouldSkipSalvageCandidateForKnownTeamLabel(candidate.name, enemyTeams)) {
+        dlog('[CrewHub] Under-capture salvage: skipped team-label candidate "' + candidate.name + '"');
+        continue;
+      }
       let best = null;
       let bestDist = Number.POSITIVE_INFINITY;
       for (const team of knownColorTeams) {
@@ -3056,6 +3101,49 @@ function formatTeamName(name) {
     .trim();
 }
 
+function normalizeBadgeLikeLabel(value) {
+  return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function labelsAreNearDuplicate(left, right) {
+  const leftKey = normalizeBadgeLikeLabel(left);
+  const rightKey = normalizeBadgeLikeLabel(right);
+  if (!leftKey || !rightKey) return false;
+  if (leftKey === rightKey) return true;
+  if (leftKey.length >= 6 && rightKey.length >= 6 && (leftKey.includes(rightKey) || rightKey.includes(leftKey))) {
+    return true;
+  }
+  if (leftKey.length >= 8 && rightKey.length >= 8) {
+    const maxLen = Math.max(leftKey.length, rightKey.length);
+    return (levenshteinDistance(leftKey, rightKey) / maxLen) <= 0.2;
+  }
+  return false;
+}
+
+function getDistinctTextTeamSingletonName(card, knownLabels = [], labelFrequency = null) {
+  const textTeamName = formatTeamName(String(card?.textTeamName || '')).trim();
+  if (!textTeamName || textTeamName.length < 4) return '';
+
+  const textTeamKey = normalizeBadgeLikeLabel(textTeamName);
+  if (!textTeamKey) return '';
+  if (labelFrequency instanceof Map && Number(labelFrequency.get(textTeamKey) || 0) !== 1) return '';
+
+  const playerName = formatTeamName(String(card?.name || '')).trim();
+  if (playerName && labelsAreNearDuplicate(playerName, textTeamName)) return '';
+
+  const hasKnownDuplicate = (knownLabels || []).some((label) => labelsAreNearDuplicate(label, textTeamName));
+  return hasKnownDuplicate ? '' : textTeamName;
+}
+
+function shouldSkipSalvageCandidateForKnownTeamLabel(candidateName, teams = []) {
+  const cleanedCandidate = formatTeamName(String(candidateName || '')).trim();
+  if (!cleanedCandidate) return false;
+  return (teams || []).some((team) => (
+    (team?.players?.length || 0) > 0 &&
+    labelsAreNearDuplicate(cleanedCandidate, team?.name || '')
+  ));
+}
+
 /**
  * Fuzzy match player name (allows for OCR errors)
  * Uses Levenshtein distance with threshold
@@ -3128,5 +3216,7 @@ module.exports = {
     isNearSkippedAnchor,
     isLikelyShortUiSuffixTagCandidate,
     isValidOpponentName,
+    getDistinctTextTeamSingletonName,
+    shouldSkipSalvageCandidateForKnownTeamLabel,
   },
 };

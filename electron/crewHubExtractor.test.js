@@ -37,6 +37,44 @@ describe('crewHubExtractor UI-noise filtering', () => {
   });
 });
 
+describe('crewHubExtractor singleton team preservation', () => {
+  it('preserves a distinct one-off text team label for a solo enemy card', () => {
+    const label = __test__.getDistinctTextTeamSingletonName(
+      { name: 'BusyDaGr8', textTeamName: 'Thezinka' },
+      ['Gun Jumpers'],
+      new Map([
+        ['THEZINKA', 1],
+        ['GUNJUMPERS', 4],
+      ]),
+    );
+
+    expect(label).toBe('Thezinka');
+  });
+
+  it('ignores one-off text team labels that duplicate an existing team', () => {
+    const label = __test__.getDistinctTextTeamSingletonName(
+      { name: 'BusyDaGr8', textTeamName: 'Gun Jumpers' },
+      ['GUNJUMPERS'],
+      new Map([
+        ['GUNJUMPERS', 1],
+      ]),
+    );
+
+    expect(label).toBe('');
+  });
+
+  it('does not salvage a known team label back into player names', () => {
+    expect(__test__.shouldSkipSalvageCandidateForKnownTeamLabel('Thezinka', [
+      { name: 'The Zinka', players: ['BusyDaGr8'] },
+      { name: 'Gun Jumpers', players: ['Alpha', 'Beta'] },
+    ])).toBe(true);
+
+    expect(__test__.shouldSkipSalvageCandidateForKnownTeamLabel('BusyDaGr8', [
+      { name: 'The Zinka', players: ['BusyDaGr8'] },
+    ])).toBe(false);
+  });
+});
+
 describe('clusterByHue grouping', () => {
   it('clusterByHue groups a custom-color all-unknown lobby into separate teams', () => {
     // Simulate two teams with custom colors: pink (~330°) and green (~90°)
