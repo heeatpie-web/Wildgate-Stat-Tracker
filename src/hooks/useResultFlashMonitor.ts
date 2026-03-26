@@ -12,15 +12,16 @@ import {
 
 const FLASH_SAMPLE_INTERVAL_MS = 100;
 export const DEFAULT_FLASH_ARM_DELAY_MS = 45_000;
-// The end-game flash fades into and out of white, so we accept two consecutive
-// samples at roughly 90% brightness instead of requiring a longer pure-white plateau.
-const FLASH_BRIGHT_HOLD_MS = 100;
-const FLASH_WHITE_THRESHOLD = Math.ceil(255 * 0.9);
+// The end-game flash still ramps quickly, but we now require about 200ms of
+// sustained near-white brightness before treating it as the real result flash.
+const FLASH_BRIGHT_HOLD_MS = 200;
+const FLASH_WHITE_THRESHOLD = 250;
 
-// Mirrors the OBS macro's ROI: X:64 Y:1013 W:107 H:21 on a 1920x1080 frame.
+// Targets the active-user HUD username box in the bottom-left corner:
+// X:150 Y:979 W:107 H:21 on a 1920x1080 frame.
 export const FLASH_SAMPLE_REGION = {
-    x: 64 / 1920,
-    y: 1013 / 1080,
+    x: 150 / 1920,
+    y: 979 / 1080,
     width: 107 / 1920,
     height: 21 / 1080,
 };

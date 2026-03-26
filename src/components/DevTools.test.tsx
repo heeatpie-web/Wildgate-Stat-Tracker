@@ -115,7 +115,7 @@ describe('DevTools', () => {
           armDelayMs: 45_000,
           armRemainingMs: 0,
           isArmed: true,
-          regions: [{ x: 64, y: 1013, width: 107, height: 21 }],
+          regions: [{ x: 150, y: 979, width: 107, height: 21 }],
           sampleIntervalMs: 100,
           brightHoldMs: 200,
           whiteThreshold: 250,
@@ -142,12 +142,12 @@ describe('DevTools', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /result flash debug/i }));
 
-    expect(screen.getByText(/watches the full-auto roi/i)).toBeInTheDocument();
+    expect(screen.getByText(/watches the active-user hud username roi/i)).toBeInTheDocument();
     expect(screen.getByText(/sampling/i)).toBeInTheDocument();
     expect(screen.getByText(/all watcher gates are open/i)).toBeInTheDocument();
     expect(screen.getByText(/active draft: #321/i)).toBeInTheDocument();
     expect(screen.getByText(/actual roi: x:364 y:1193 w:107 h:21/i)).toBeInTheDocument();
-    expect(screen.getByText(/predicted roi: x:64 y:1013 w:107 h:21/i)).toBeInTheDocument();
+    expect(screen.getByText(/predicted roi: x:150 y:979 w:107 h:21/i)).toBeInTheDocument();
     expect(screen.getByText(/source: window-region/i)).toBeInTheDocument();
     expect(screen.getByText(/client rect: left:300 top:180 w:1920 h:1080/i)).toBeInTheDocument();
     expect(screen.getByText(/geometry age: 0.14s/i)).toBeInTheDocument();
@@ -163,8 +163,8 @@ describe('DevTools', () => {
     expect(screen.getByText(/avg rgb: \(252, 251, 250\)/i)).toBeInTheDocument();
     expect(invokeMock).toHaveBeenCalledWith('result-flash-sample', {
       normalizedRegion: {
-        x: 64 / 1920,
-        y: 1013 / 1080,
+        x: 150 / 1920,
+        y: 979 / 1080,
         width: 107 / 1920,
         height: 21 / 1080,
       },
@@ -206,7 +206,7 @@ describe('DevTools', () => {
           armDelayMs: 45_000,
           armRemainingMs: 45_000,
           isArmed: false,
-          regions: [{ x: 64, y: 1013, width: 107, height: 21 }],
+          regions: [{ x: 150, y: 979, width: 107, height: 21 }],
           sampleIntervalMs: 100,
           brightHoldMs: 200,
           whiteThreshold: 250,
@@ -248,7 +248,7 @@ describe('DevTools', () => {
           armDelayMs: 45_000,
           armRemainingMs: 0,
           isArmed: true,
-          regions: [{ x: 64, y: 1013, width: 107, height: 21 }],
+          regions: [{ x: 150, y: 979, width: 107, height: 21 }],
           sampleIntervalMs: 100,
           brightHoldMs: 200,
           whiteThreshold: 250,

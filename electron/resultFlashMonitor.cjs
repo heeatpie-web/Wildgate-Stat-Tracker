@@ -10,10 +10,10 @@
 const { sampleRegion: dxgiSampleRegion } = require('./dxgiSampler.cjs');
 
 const FLASH_SAMPLE_INTERVAL_MS = 100;
-// The result-screen flash ramps up and down quickly, so two consecutive samples
-// at roughly 90% brightness are enough to count as a real flash.
-const FLASH_BRIGHT_HOLD_MS = 100;
-const FLASH_WHITE_THRESHOLD = Math.ceil(255 * 0.9);
+// Require about 200ms of sustained near-white brightness before counting a
+// flash as the real result-screen transition.
+const FLASH_BRIGHT_HOLD_MS = 200;
+const FLASH_WHITE_THRESHOLD = 250;
 const FLASH_COOLDOWN_MS = 15_000;
 const MIN_PRE_ARM_FLASHES_TO_SKIP = 1;
 // Known pure-white duration of the result flash. Used to schedule the capture

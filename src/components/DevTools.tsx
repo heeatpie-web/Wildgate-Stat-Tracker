@@ -298,7 +298,7 @@ export const DevTools: React.FC<DevToolsProps> = ({
                             <div>
                                 <div className="text-label-sm font-black uppercase tracking-wide opacity-60">Result Flash Debug</div>
                                 <div className="text-xs opacity-70">
-                                    Watches the full-auto ROI and mirrors the real hook integration path.
+                                    Watches the active-user HUD username ROI and mirrors the real hook integration path.
                                 </div>
                             </div>
 

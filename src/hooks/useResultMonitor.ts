@@ -11,10 +11,11 @@ import {
 } from '../utils/pixelMonitorSample';
 
 // ── Flash region ────────────────────────────────────────────────────────────
-// Mirrors the OBS macro's ROI: X:64 Y:1013 W:107 H:21 on a 1920×1080 frame.
+// Targets the active-user HUD username box in the bottom-left corner:
+// X:150 Y:979 W:107 H:21 on a 1920×1080 frame.
 export const FLASH_SAMPLE_REGION = {
-    x: 64 / 1920,
-    y: 1013 / 1080,
+    x: 150 / 1920,
+    y: 979 / 1080,
     width: 107 / 1920,
     height: 21 / 1080,
 } as const;
@@ -32,6 +33,8 @@ export const RESULT_TEXT_SAMPLE_REGION = {
 
 export const DEFAULT_RESULT_MONITOR_ARM_DELAY_MS = 45_000;
 export const KNOWN_FLASH_PURE_WHITE_MS = 200;
+export const FLASH_WHITE_THRESHOLD = 250;
+export const FLASH_BRIGHT_HOLD_MS = 200;
 
 const SEND_START = 'result-monitor-start';
 const SEND_STOP = 'result-monitor-stop';
@@ -344,8 +347,8 @@ export function useResultMonitor({
                 isArmed: normalizedArmAnchorAt != null && armRemainingMs <= 0,
                 regions: flashRegionsRef.current,
                 sampleIntervalMs: 100,
-                brightHoldMs: 100,
-                whiteThreshold: Math.ceil(255 * 0.9),
+                brightHoldMs: FLASH_BRIGHT_HOLD_MS,
+                whiteThreshold: FLASH_WHITE_THRESHOLD,
                 brightSinceMs: nextState.brightSinceMs,
                 waitingForFlashEnd: nextState.waitingForFlashEnd,
                 flashNotified: nextState.flashNotified,

@@ -5,13 +5,13 @@
  * Single-poll combined flash + text result-screen monitor.
  *
  * One DXGI captureImage() per 100 ms tick feeds both the flash brightness
- * check (tiny 107×21 px region) and the text tripwire (headline region with
- * three sub-boxes), eliminating the duplicate full-screen capture that the two
- * separate monitors previously performed. When both need a sample in the same
- * tick, the text crop is taken first; headline A/B/C average brightness OR’d
- * with the tiny ROI can count as a white frame only if the full text region’s
- * tripwire-white ratio is high (same threshold as the text flash guard), so
- * normal result text does not fake a flash.
+ * check (the active-user HUD username region) and the text tripwire (headline
+ * region with three sub-boxes), eliminating the duplicate full-screen capture
+ * that the two separate monitors previously performed. When both need a sample
+ * in the same tick, the text crop is taken first; headline A/B/C average
+ * brightness OR’d with the username ROI can count as a white frame only if the
+ * full text region’s tripwire-white ratio is high (same threshold as the text
+ * flash guard), so normal result text does not fake a flash.
  */
 
 let _nodeScreenshots = null;
@@ -24,8 +24,8 @@ function getNodeScreenshots() {
 const SAMPLE_INTERVAL_MS = 100;
 
 // ── Flash constants ────────────────────────────────────────────────────────
-const FLASH_BRIGHT_HOLD_MS = 100;
-const FLASH_WHITE_THRESHOLD = Math.ceil(255 * 0.9); // 230
+const FLASH_BRIGHT_HOLD_MS = 200;
+const FLASH_WHITE_THRESHOLD = 250;
 const FLASH_COOLDOWN_MS = 15_000;
 const MIN_PRE_ARM_FLASHES_TO_SKIP = 1;
 const KNOWN_FLASH_PURE_WHITE_MS = 200;

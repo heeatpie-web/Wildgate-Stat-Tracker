@@ -66,8 +66,8 @@ describe('useResultFlashMonitor', () => {
     expect(sendMock).toHaveBeenCalledWith('result-flash-start', {
       armAt: liveStartedAt + 45_000,
       normalizedRegion: {
-        x: 64 / 1920,
-        y: 1013 / 1080,
+        x: 150 / 1920,
+        y: 979 / 1080,
         width: 107 / 1920,
         height: 21 / 1080,
       },
@@ -163,7 +163,7 @@ describe('useResultFlashMonitor', () => {
           data: { avgR: 255, avgG: 255, avgB: 255 },
           meta: {
             source: 'primary-display',
-            absoluteRegion: { x: 64, y: 1013, width: 107, height: 21 },
+            absoluteRegion: { x: 150, y: 979, width: 107, height: 21 },
           },
         },
         lastIsWhiteFrame: true,
@@ -176,19 +176,19 @@ describe('useResultFlashMonitor', () => {
       enabled: true,
       triggerLatched: false,
       isArmed: true,
-      regions: [{ x: 64, y: 1013, width: 107, height: 21 }],
+      regions: [{ x: 150, y: 979, width: 107, height: 21 }],
       waitingForFlashEnd: true,
       flashNotified: true,
       lastSampleMeta: {
         source: 'primary-display',
-        absoluteRegion: { x: 64, y: 1013, width: 107, height: 21 },
+        absoluteRegion: { x: 150, y: 979, width: 107, height: 21 },
       },
       lastSampleResult: {
         success: true,
         data: { avgR: 255, avgG: 255, avgB: 255 },
         meta: {
           source: 'primary-display',
-          absoluteRegion: { x: 64, y: 1013, width: 107, height: 21 },
+          absoluteRegion: { x: 150, y: 979, width: 107, height: 21 },
         },
       },
       lastIsWhiteFrame: true,
@@ -211,7 +211,7 @@ describe('useResultFlashMonitor', () => {
     expect(onDebugStateChange).toHaveBeenCalledWith(expect.objectContaining({
       status: 'waiting-live-start',
       isArmed: false,
-      regions: [{ x: 64, y: 1013, width: 107, height: 21 }],
+      regions: [{ x: 150, y: 979, width: 107, height: 21 }],
     }));
   });
 
@@ -229,19 +229,19 @@ describe('useResultFlashMonitor', () => {
     expect(sendMock).not.toHaveBeenCalledWith('result-flash-start', expect.anything());
   });
 
-  it('accepts fade-transition samples at the relaxed brightness threshold and rejects samples just below it', async () => {
+  it('accepts fade-transition samples at the tighter brightness threshold and rejects samples just below it', async () => {
     const { isNearWhiteSample } = await import('../useResultFlashMonitor');
 
-    expect(isNearWhiteSample({ avgR: 230, avgG: 230, avgB: 230 })).toBe(true);
-    expect(isNearWhiteSample({ avgR: 229, avgG: 229, avgB: 229 })).toBe(false);
+    expect(isNearWhiteSample({ avgR: 250, avgG: 250, avgB: 250 })).toBe(true);
+    expect(isNearWhiteSample({ avgR: 249, avgG: 249, avgB: 249 })).toBe(false);
   });
 
-  it('builds the OBS-style bottom-left ROI from normalized 1920x1080 coordinates', async () => {
+  it('builds the bottom-left active-user username ROI from normalized 1920x1080 coordinates', async () => {
     const { buildResultFlashSampleRegions, FLASH_SAMPLE_REGION } = await import('../useResultFlashMonitor');
 
     expect(FLASH_SAMPLE_REGION).toEqual({
-      x: 64 / 1920,
-      y: 1013 / 1080,
+      x: 150 / 1920,
+      y: 979 / 1080,
       width: 107 / 1920,
       height: 21 / 1080,
     });
@@ -249,6 +249,6 @@ describe('useResultFlashMonitor', () => {
     expect(buildResultFlashSampleRegions(
       { resX: 1920, resY: 1080 },
       null,
-    )).toEqual([{ x: 64, y: 1013, width: 107, height: 21 }]);
+    )).toEqual([{ x: 150, y: 979, width: 107, height: 21 }]);
   });
 });

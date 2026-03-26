@@ -8,8 +8,8 @@ const {
 } = require('./resultFlashMonitor.cjs');
 
 const WHITE = { success: true, data: { avgR: 255, avgG: 255, avgB: 255 } };
-const NEAR_WHITE = { success: true, data: { avgR: 232, avgG: 231, avgB: 230 } };
-const BRIGHT_FADE = { success: true, data: { avgR: 228, avgG: 228, avgB: 228 } };
+const NEAR_WHITE = { success: true, data: { avgR: 250, avgG: 250, avgB: 250 } };
+const BRIGHT_FADE = { success: true, data: { avgR: 249, avgG: 249, avgB: 249 } };
 const DARK = { success: true, data: { avgR: 12, avgG: 18, avgB: 24 } };
 
 const flushAsyncWork = async () => {
@@ -36,7 +36,7 @@ describe('resultFlashMonitor', () => {
 
     startResultFlashMonitor({
       armAt: Date.now() + 45_000,
-      absoluteRegion: { x: 64, y: 1013, width: 107, height: 21 },
+      absoluteRegion: { x: 150, y: 979, width: 107, height: 21 },
       onDetected,
       onResolved: vi.fn(),
       onDebug,
@@ -60,15 +60,16 @@ describe('resultFlashMonitor', () => {
       .mockResolvedValueOnce(DARK)
       .mockResolvedValueOnce(WHITE)
       .mockResolvedValueOnce(WHITE)
+      .mockResolvedValueOnce(WHITE)
       .mockResolvedValueOnce(DARK)
-      .mockResolvedValueOnce(DARK)
+      .mockResolvedValueOnce(WHITE)
       .mockResolvedValueOnce(WHITE)
       .mockResolvedValueOnce(WHITE)
       .mockResolvedValueOnce(DARK);
 
     startResultFlashMonitor({
       armAt: Date.now() + 250,
-      absoluteRegion: { x: 64, y: 1013, width: 107, height: 21 },
+      absoluteRegion: { x: 150, y: 979, width: 107, height: 21 },
       onDetected,
       onResolved,
       _sampler: sampler,
@@ -89,12 +90,12 @@ describe('resultFlashMonitor', () => {
   it('fires onDetected for a fade-style white flash and resolves on the next dim frame', async () => {
     const onDetected = vi.fn();
     const onResolved = vi.fn();
-    const frames = [DARK, BRIGHT_FADE, NEAR_WHITE, WHITE, BRIGHT_FADE, DARK];
+    const frames = [DARK, NEAR_WHITE, WHITE, WHITE, BRIGHT_FADE, DARK];
     const sampler = vi.fn().mockImplementation(() => Promise.resolve(frames.shift() || DARK));
 
     startResultFlashMonitor({
       armAt: Date.now() - 1,
-      absoluteRegion: { x: 64, y: 1013, width: 107, height: 21 },
+      absoluteRegion: { x: 150, y: 979, width: 107, height: 21 },
       onDetected,
       onResolved,
       _sampler: sampler,
@@ -129,7 +130,7 @@ describe('resultFlashMonitor', () => {
 
     startResultFlashMonitor({
       armAt: Date.now() - 1,
-      absoluteRegion: { x: 64, y: 1013, width: 107, height: 21 },
+      absoluteRegion: { x: 150, y: 979, width: 107, height: 21 },
       onDetected,
       onResolved,
       _sampler: sampler,
@@ -153,7 +154,7 @@ describe('resultFlashMonitor', () => {
 
     startResultFlashMonitor({
       armAt: Date.now() - 1,
-      absoluteRegion: { x: 64, y: 1013, width: 107, height: 21 },
+      absoluteRegion: { x: 150, y: 979, width: 107, height: 21 },
       onDetected: vi.fn(),
       onResolved: vi.fn(),
       _sampler: sampler,
