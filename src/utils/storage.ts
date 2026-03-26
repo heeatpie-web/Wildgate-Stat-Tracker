@@ -423,19 +423,27 @@ const applyUidSeed = async (data: StorageData): Promise<StorageData> => {
     );
   };
 
-  const stripDeprecatedEquipmentAliases = () => {
-    const deprecatedEquipmentNamesByGuid: Record<string, string[]> = {
-      '20C5C5A04C5A86EFAF1F9FAF2C0DD60C': ['Thunder Dash'],
-    };
-    merged.uidMappings.equipment = Object.fromEntries(
-      Object.entries(merged.uidMappings.equipment || {}).filter(([key, value]) => {
-        const normalizedGuid = normalizeGuidKey(key);
-        const deprecatedNames = deprecatedEquipmentNamesByGuid[normalizedGuid];
-        if (!deprecatedNames || deprecatedNames.length === 0) return true;
-        const normalizedValue = normalizeUidMappingName('equipment', value).toLowerCase();
-        return !deprecatedNames.some((name) => normalizeUidMappingName('equipment', name).toLowerCase() === normalizedValue);
-      })
+  const applyDeprecatedEquipmentCorrections = (seedMappings: UidMappings) => {
+    const correctionSeedName = normalizeUidMappingName(
+      'equipment',
+      seedMappings.equipment['20C5C5A04C5A86EFAF1F9FAF2C0DD60C'] || 'Drill Charge',
     );
+    const deprecatedEquipmentCorrections: Record<string, { staleNames: string[]; correctedName: string }> = {
+      '20C5C5A04C5A86EFAF1F9FAF2C0DD60C': {
+        staleNames: ['Thunder Dash'],
+        correctedName: correctionSeedName,
+      },
+    };
+    const nextEquipment = { ...(merged.uidMappings.equipment || {}) };
+    Object.entries(deprecatedEquipmentCorrections).forEach(([guid, correction]) => {
+      const existingKey = Object.keys(nextEquipment).find((key) => normalizeGuidKey(key) === guid);
+      if (!existingKey) return;
+      const normalizedValue = normalizeUidMappingName('equipment', nextEquipment[existingKey]).toLowerCase();
+      const isStale = correction.staleNames.some((name) => normalizeUidMappingName('equipment', name).toLowerCase() === normalizedValue);
+      if (!isStale) return;
+      nextEquipment[existingKey] = correction.correctedName;
+    });
+    merged.uidMappings.equipment = nextEquipment;
   };
 
   try {
@@ -453,7 +461,7 @@ const applyUidSeed = async (data: StorageData): Promise<StorageData> => {
     const applied = merged.uidSeedState?.seedVersionApplied ?? null;
     if (applied !== null && seedVersion <= applied) {
       stripSeedNonPlayerResidue(seedMappings, relocations);
-      stripDeprecatedEquipmentAliases();
+      applyDeprecatedEquipmentCorrections(seedMappings);
       return merged;
     }
     merged.uidMappings = {
@@ -478,7 +486,7 @@ const applyUidSeed = async (data: StorageData): Promise<StorageData> => {
 
     merged.uidSeedState = { seedVersionApplied: seedVersion };
     stripSeedNonPlayerResidue(seedMappings, relocations);
-    stripDeprecatedEquipmentAliases();
+    applyDeprecatedEquipmentCorrections(seedMappings);
     return merged;
   } catch (error) {
     Logger.warn('UIDSeed', 'Failed to load seed mappings', error);

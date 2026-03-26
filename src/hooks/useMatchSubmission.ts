@@ -194,13 +194,14 @@ const resolveSavedOcrMeta = (
     options?: { forceSaved?: boolean }
 ): Pick<Match, 'ocrState' | 'ocrReviewedAt'> => {
     const reviewedAtRaw = Number(pendingMatchData?.ocrReviewedAt ?? existingMatch?.ocrReviewedAt ?? 0);
-    const ocrReviewedAt = Number.isFinite(reviewedAtRaw) && reviewedAtRaw > 0
+    const hasReviewedAt = Number.isFinite(reviewedAtRaw) && reviewedAtRaw > 0;
+    const ocrReviewedAt = hasReviewedAt
         ? reviewedAtRaw
         : undefined;
     if (options?.forceSaved || ocrReviewedAt) {
         return {
             ocrState: 'saved',
-            ocrReviewedAt,
+            ocrReviewedAt: ocrReviewedAt ?? Date.now(),
         };
     }
     return {
@@ -466,6 +467,7 @@ const buildSilentBackgroundOcrMatch = ({
     );
     const nextNameConfidence = buildOcrNameConfidenceMapFromExtractedData(combined);
     const reviewedAt = Number(match.ocrReviewedAt || 0);
+    const shouldPreserveSavedReview = reviewedAt > 0 || String(match.ocrState || '').trim().toLowerCase() === 'saved';
 
     return {
         ...match,
@@ -520,8 +522,10 @@ const buildSilentBackgroundOcrMatch = ({
             ).trim() || undefined,
             timestamp: Date.now(),
         },
-        ocrState: reviewedAt > 0 ? 'saved' : 'reviewing',
-        ocrReviewedAt: reviewedAt > 0 ? reviewedAt : undefined,
+        ocrState: shouldPreserveSavedReview ? 'saved' : 'reviewing',
+        ocrReviewedAt: shouldPreserveSavedReview
+            ? (reviewedAt > 0 ? reviewedAt : Date.now())
+            : undefined,
     };
 };
 

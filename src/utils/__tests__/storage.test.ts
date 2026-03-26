@@ -395,7 +395,7 @@ describe('StorageService', () => {
     expect(loaded?.playerProfiles?.[THUNDER_DASH_GUID]).toBeUndefined();
   });
 
-  it('canonicalizes corrected equipment names and removes the stale Thunder Dash alias on upgrade', async () => {
+  it('canonicalizes corrected equipment names and rewrites the stale Thunder Dash alias to Drill Charge on upgrade', async () => {
     const STALE_GUID = '20C5C5A04C5A86EFAF1F9FAF2C0DD60C';
     const ROCK_GUID = '1FC6C97040714EF444F7119B75377054';
     const ADVENTURE_GUID = 'CD21C7B2468EC990E4AFDE8B27CFE398';
@@ -441,11 +441,12 @@ describe('StorageService', () => {
       }
       if (channel === 'read-uid-seed') {
         return {
-          version: 11,
+          version: 12,
           players: {},
           ships: {},
           weapons: {},
           equipment: {
+            [STALE_GUID]: 'Drill Charge',
             [ROCK_GUID]: 'Rock!',
             [ADVENTURE_GUID]: 'Adventure Gear',
           },
@@ -463,7 +464,7 @@ describe('StorageService', () => {
 
     const loaded = await StorageService.init();
 
-    expect(loaded?.uidMappings.equipment[STALE_GUID]).toBeUndefined();
+    expect(loaded?.uidMappings.equipment[STALE_GUID]).toBe('Drill Charge');
     expect(loaded?.uidMappings.equipment[ROCK_GUID]).toBe('Rock!');
     expect(loaded?.uidMappings.equipment[ADVENTURE_GUID]).toBe('Adventure Gear');
     expect(loaded?.uidMappings.players[ADVENTURE_GUID]).toBeUndefined();

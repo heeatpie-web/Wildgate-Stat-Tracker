@@ -42,7 +42,7 @@ describe('guid mapping aliases', () => {
     expect(EQUIPMENT_GUIDS['CD21C7B2468EC990E4AFDE8B27CFE398']).toBe('Adventure Gear');
   });
 
-  it('drops the stale Thunder Dash equipment alias that was masking Drill Charge', () => {
-    expect(EQUIPMENT_GUIDS['20C5C5A04C5A86EFAF1F9FAF2C0DD60C']).toBeUndefined();
+  it('maps the corrected Drill Charge equipment GUID', () => {
+    expect(EQUIPMENT_GUIDS['20C5C5A04C5A86EFAF1F9FAF2C0DD60C']).toBe('Drill Charge');
   });
 });

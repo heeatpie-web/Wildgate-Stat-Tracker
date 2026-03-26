@@ -1075,7 +1075,7 @@ describe('useMatchSubmission', () => {
     expect(submitted.ocrReviewedAt).toBe(1_700_000_123_000);
   });
 
-  it('marks finalized matches as saved even without an OCR review timestamp', async () => {
+  it('stamps a saved OCR review time when finalizing a match without one', async () => {
     mockStoreState.activeUser = 'Tester';
     mockStoreState.showWizard = 'Win';
     mockStoreState.pendingMatchData = {
@@ -1101,7 +1101,8 @@ describe('useMatchSubmission', () => {
     expect(addMatch).toHaveBeenCalled();
     const [submitted] = addMatch.mock.calls[0];
     expect(submitted.ocrState).toBe('saved');
-    expect(submitted.ocrReviewedAt).toBeUndefined();
+    expect(submitted.ocrReviewedAt).toEqual(expect.any(Number));
+    expect(submitted.ocrReviewedAt).toBeGreaterThan(0);
   });
 
   it('saveResultDraft uses pending draft result precedence and skips artifact bundling', async () => {
@@ -1593,7 +1594,8 @@ describe('useMatchSubmission', () => {
     expect(updatedMatch.placement).toBe(2);
     expect(updatedMatch.damageTaken).toBe(114);
     expect(updatedMatch.ocrState).toBe('saved');
-    expect(updatedMatch.ocrReviewedAt).toBeUndefined();
+    expect(updatedMatch.ocrReviewedAt).toEqual(expect.any(Number));
+    expect(updatedMatch.ocrReviewedAt).toBeGreaterThan(0);
     expect(updatedMatch.resultDetectionMethod).toBeUndefined();
     expect(updatedMatch.artifacts).toEqual([
       'existing_capture.png',
@@ -1979,6 +1981,11 @@ describe('useMatchSubmission', () => {
         ocrSource: 'local',
       },
     });
+    updateMatch.mockImplementation((nextMatch) => {
+      mockStoreState.matches = (mockStoreState.matches || []).map((entry) => (
+        Number(entry.id || 0) === Number(nextMatch.id || 0) ? nextMatch : entry
+      ));
+    });
 
     const { result } = renderHook(() => useMatchSubmission());
 
@@ -2033,7 +2040,8 @@ describe('useMatchSubmission', () => {
       opponents: ['EnemyPilot'],
       reachModifiers: ['Ionized'],
       artifactSource: undefined,
-      ocrState: 'reviewing',
+      ocrState: 'saved',
+      ocrReviewedAt: expect.any(Number),
     }));
 
     vi.useRealTimers();
