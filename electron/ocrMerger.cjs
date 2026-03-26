@@ -255,6 +255,77 @@ function dedupePlayersAcrossOpponentTeams(teams = []) {
   return result.filter((team) => (team.players?.length || 0) > 0 || !isPlaceholderTeamName(team.teamName, team.color || team.teamColor));
 }
 
+function isKnownLegacyType(type) {
+  return type === 'crew_hub' || type === 'tactical_map';
+}
+
+function isKnownInternalType(type) {
+  return type === 'crewHub' || type === 'mapScreen';
+}
+
+function countNamedPlayers(players = []) {
+  if (!Array.isArray(players)) return 0;
+  let count = 0;
+  for (const player of players) {
+    if (getPlayerEntryName(player)) count += 1;
+  }
+  return count;
+}
+
+function countOpponentTeamSignal(opponentTeams = []) {
+  if (!Array.isArray(opponentTeams)) return 0;
+  let count = 0;
+  for (const team of opponentTeams) {
+    const shipType = String(team?.shipType || '').trim();
+    if (shipType) count += 1;
+    count += countNamedPlayers(team?.players || []);
+  }
+  return count;
+}
+
+function countEnemyShipSignal(enemyShips = []) {
+  if (!Array.isArray(enemyShips)) return 0;
+  let count = 0;
+  for (const ship of enemyShips) {
+    const shipType = normalizeShipTypeKey(ship?.shipType || '');
+    const teamName = normalizeTeamName(ship?.teamName || '');
+    if (shipType || teamName) count += 1;
+  }
+  return count;
+}
+
+function hasRosterSignal(data) {
+  if (!data || typeof data !== 'object') return false;
+  if (countNamedPlayers(data.teammates || []) > 0) return true;
+  if (countOpponentTeamSignal(data.opponentTeams || []) > 0) return true;
+  if (countEnemyShipSignal(data.enemyShips || []) > 0) return true;
+  return false;
+}
+
+function mergeFallbackPreservingRoster(existing, newData) {
+  const merged = { ...existing, ...newData };
+
+  const existingTeammates = countNamedPlayers(existing?.teammates || []);
+  const newTeammates = countNamedPlayers(newData?.teammates || []);
+  if (existingTeammates > 0 && newTeammates === 0) {
+    merged.teammates = existing.teammates;
+  }
+
+  const existingOppSignal = countOpponentTeamSignal(existing?.opponentTeams || []);
+  const newOppSignal = countOpponentTeamSignal(newData?.opponentTeams || []);
+  if (existingOppSignal > 0 && newOppSignal === 0) {
+    merged.opponentTeams = existing.opponentTeams;
+  }
+
+  const existingEnemySignal = countEnemyShipSignal(existing?.enemyShips || []);
+  const newEnemySignal = countEnemyShipSignal(newData?.enemyShips || []);
+  if (existingEnemySignal > 0 && newEnemySignal === 0) {
+    merged.enemyShips = existing.enemyShips;
+  }
+
+  return merged;
+}
+
 /**
  * Merge new capture data with existing data
  * @param {Object} existing - Existing accumulated data
@@ -308,8 +379,18 @@ function mergeCaptures(existing, newData) {
     return crossMergeCrewHubAndMap(crewHub, tactMap);
   }
 
-  // Unknown type - return new data
-  return { ...newData };
+  // Type mismatch/unknown fallback. Preserve previously merged roster data
+  // when the incoming capture has little or no roster signal (common when one
+  // screenshot is misclassified/unknown during multi-artifact reruns).
+  const existingKnown = isKnownInternalType(existScreenType) || isKnownLegacyType(existType);
+  const newKnown = isKnownInternalType(newScreenType) || isKnownLegacyType(newType);
+  if (newKnown && !existingKnown) {
+    return { ...newData };
+  }
+  if (!newKnown && existingKnown && !hasRosterSignal(newData)) {
+    return mergeFallbackPreservingRoster(existing, newData);
+  }
+  return mergeFallbackPreservingRoster(existing, newData);
 }
 
 /**

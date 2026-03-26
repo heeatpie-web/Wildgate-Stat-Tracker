@@ -116,6 +116,42 @@ describe('resultScreenExtractor heuristics', () => {
     });
   });
 
+  it('prioritizes placement-based loss over spurious victory-like tokens', () => {
+    // Some screenshots have "3rd place" correctly OCRed, but also accidentally
+    // contain a "VICTORY" token from nearby UI art. Placement-based loss
+    // context should win over the spurious victory signal.
+    expect(__test__.parseResultSignals({
+      headlineTexts: ['VICTORY'],
+      placementTexts: ['3RD PLACE'],
+      statusTexts: ['ELIMINATED'],
+      panelTexts: [],
+      damageTexts: [],
+    }, { detectionMethod: 'text' })).toEqual({
+      result: 'Loss',
+      winType: 'combat',
+      placement: 3,
+      detectionMethod: 'text',
+      damageTaken: undefined,
+      damageSourcesAvailable: true,
+    });
+  });
+
+  it('does not override artifact losses when placement OCR is present', () => {
+    expect(__test__.parseResultSignals({
+      placementTexts: ['3RD PLACE'],
+      statusTexts: ['ARTIFACTRECOVERED', 'DEFEAT'],
+      headlineTexts: [],
+      panelTexts: [],
+      damageTexts: [],
+    }, { detectionMethod: 'text' })).toEqual({
+      result: 'Loss',
+      winType: 'artifact',
+      detectionMethod: 'text',
+      damageTaken: undefined,
+      damageSourcesAvailable: false,
+    });
+  });
+
   it('uses shared context to recover a bare digit placement from headline OCR', () => {
     expect(__test__.parseResultSignals({
       headlineTexts: ['2'],

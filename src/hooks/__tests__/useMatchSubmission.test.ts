@@ -1270,22 +1270,13 @@ describe('useMatchSubmission', () => {
       success: false,
       reason: 'unconfirmed',
       matchId: draftId,
-      artifactPath: 'C:\\match_artifacts\\8080\\capture_result.png',
-      artifactPaths: ['C:\\match_artifacts\\8080\\capture_result.png'],
+      artifactPath: null,
+      artifactPaths: [],
     });
     expect(addMatch).not.toHaveBeenCalled();
-    expect(electronInvokeMock).toHaveBeenCalledWith('save-screenshot', {
-      imageBase64: 'ZmFrZQ==',
-      matchId: draftId,
-    });
-    expect(updateMatch).toHaveBeenCalledWith(expect.objectContaining({
-      id: draftId,
-      artifacts: [
-        'existing_capture.png',
-        'C:\\match_artifacts\\8080\\capture_result.png',
-      ],
-    }));
-    expect(StorageService.flush).toHaveBeenCalled();
+    expect(electronInvokeMock).not.toHaveBeenCalledWith('save-screenshot', expect.anything());
+    expect(updateMatch).not.toHaveBeenCalled();
+    expect(StorageService.flush).not.toHaveBeenCalled();
   });
 
   it('autoFinalizeResultScreenCapture reuses a pre-saved primary result screenshot', async () => {
@@ -1335,18 +1326,12 @@ describe('useMatchSubmission', () => {
       success: false,
       reason: 'unconfirmed',
       matchId: draftId,
-      artifactPath: 'C:\\match_artifacts\\8082\\capture_result.png',
-      artifactPaths: ['C:\\match_artifacts\\8082\\capture_result.png'],
+      artifactPath: null,
+      artifactPaths: [],
     });
     expect(electronInvokeMock).not.toHaveBeenCalledWith('save-screenshot', expect.anything());
-    expect(updateMatch).toHaveBeenCalledWith(expect.objectContaining({
-      id: draftId,
-      artifacts: [
-        'existing_capture.png',
-        'C:\\match_artifacts\\8082\\capture_result.png',
-      ],
-    }));
-    expect(StorageService.flush).toHaveBeenCalled();
+    expect(updateMatch).not.toHaveBeenCalled();
+    expect(StorageService.flush).not.toHaveBeenCalled();
   });
 
   it('autoFinalizeResultScreenCapture requires an active telemetry draft', async () => {
@@ -1429,6 +1414,7 @@ describe('useMatchSubmission', () => {
     expect(electronInvokeMock).toHaveBeenCalledWith('save-screenshot', {
       imageBase64: 'ZmFrZQ==',
       matchId: draftId,
+      captureSource: 'result-macro',
     });
     expect(updateMatch).toHaveBeenCalledWith(expect.objectContaining({
       id: draftId,
@@ -1585,6 +1571,7 @@ describe('useMatchSubmission', () => {
     expect(electronInvokeMock).toHaveBeenCalledWith('save-screenshot', {
       imageBase64: 'ZmFrZQ==',
       matchId: draftId,
+      captureSource: 'result-macro',
     });
     expect(updateMatch).toHaveBeenCalled();
     const [updatedMatch] = updateMatch.mock.calls[0];
@@ -1672,6 +1659,7 @@ describe('useMatchSubmission', () => {
     expect(electronInvokeMock).toHaveBeenCalledWith('save-screenshot', {
       imageBase64: 'ZmFrZQ==',
       matchId: activeDraftId,
+      captureSource: 'result-macro',
     });
     expect(updateMatch).toHaveBeenCalled();
     const [updatedMatch] = updateMatch.mock.calls[0];
@@ -1869,10 +1857,12 @@ describe('useMatchSubmission', () => {
     expect(electronInvokeMock).toHaveBeenCalledWith('save-screenshot', {
       imageBase64: 'ZmFrZQ==',
       matchId: draftId,
+      captureSource: 'result-macro',
     });
     expect(electronInvokeMock).toHaveBeenCalledWith('save-screenshot', {
       imageBase64: 'ZGFtYWdl',
       matchId: draftId,
+      captureSource: 'result-macro',
     });
     expect(electronInvokeMock).toHaveBeenCalledWith('ocr-scan', 'C:\\match_artifacts\\7070\\damage_sources.png');
     const [updatedMatch] = updateMatch.mock.calls[0];

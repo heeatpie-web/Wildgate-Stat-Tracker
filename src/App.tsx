@@ -3362,11 +3362,13 @@ const App: React.FC = () => {
                 }
 
                 let persistedPrimaryArtifactPath: string | null = null;
-                if (normalizedCaptureBase64) {
+                const recognizedContext = hasRecognizedResultContext(resultData);
+                if (recognizedContext && normalizedCaptureBase64) {
                     try {
                         const persistedCapture = await api.invoke('save-screenshot', {
                             imageBase64: normalizedCaptureBase64,
                             matchId: normalizedDraftMatchId,
+                            captureSource: 'result-macro',
                         });
                         const savedPath = String(persistedCapture?.data?.filePath || '').trim();
                         if (savedPath) {
@@ -3389,7 +3391,7 @@ const App: React.FC = () => {
                     }
                 }
 
-                if (!hasRecognizedResultContext(resultData)) {
+                if (!recognizedContext) {
                     console.warn('[FullAuto] Preserving automated result capture with no recognizable result signals', {
                         matchId: normalizedDraftMatchId,
                         detectionMethod: currentDetectionMethod,

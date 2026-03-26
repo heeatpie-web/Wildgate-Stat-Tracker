@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.5.1": [
+    "Reliability: OCR rerun now preserves roster/team context when unclassifiable artifact frames appear later in the same match.",
+    "Workflow: Smart Capture artifacts are tagged by capture source (Crew/Map macro vs Result macro) and shown in separate screenshot buckets.",
+    "Fix: Re-analyze and Wizard rerun process both capture buckets in separate passes so result-screen captures do not interfere with crew/map OCR enrichment."
+  ],
   "v3.5.0": [
     "Release: Version 3.5.0 rolls in the minimized auto-capture reliability fix, result-screen OCR cleanup, and telemetry loadout mapping fixes.",
     "Automation: Full Auto no longer opens the blocking telemetry result popup when automatic result capture times out and instead falls back to non-modal manual guidance.",

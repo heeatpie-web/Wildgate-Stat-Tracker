@@ -1072,7 +1072,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     const baseHint = assessCaptureQuality(captureResult.imageBase64);
     setQualityHint(baseHint);
 
-    const saved = await saveScreenshot(captureResult.imageBase64);
+    const saved = await saveScreenshot(captureResult.imageBase64, null, 'ocr-macro');
     if (saved.success && saved.filePath) {
       setSavedCaptures(prev => {
         const next = [...prev, {
@@ -1138,7 +1138,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       setQualityHint(assessCaptureQuality(captureResult.imageBase64));
 
       const resolvedMatchId = normalizeMatchScope(matchId);
-      const saved = await saveScreenshot(captureResult.imageBase64, resolvedMatchId);
+      const saved = await saveScreenshot(captureResult.imageBase64, resolvedMatchId, 'ocr-macro');
       if (!saved.success || !saved.filePath) {
         throw new Error(saved.error || 'Failed to save screenshot');
       }

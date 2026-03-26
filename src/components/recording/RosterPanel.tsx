@@ -513,7 +513,7 @@ export const RosterPanel: React.FC = () => {
                                         {p}
                                     </button>
                                 </div>
-                                <div className="flex items-center gap-1 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity">
+                                <div className="flex items-center gap-1 shrink-0 opacity-100 pointer-events-auto transition-opacity [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:pointer-events-none [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:group-hover:pointer-events-auto [@media(hover:hover)_and_(pointer:fine)]:group-focus-within:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:group-focus-within:pointer-events-auto">
                                     <button
                                         onClick={() => openPlayerProfile(p)}
                                         className="h-7 px-2.5 rounded-control text-label-xs font-bold bg-md-sys-primary/12 text-md-sys-primary hover:bg-md-sys-primary/20 transition-colors flex items-center justify-center gap-1 shrink-0"

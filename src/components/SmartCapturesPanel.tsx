@@ -1114,18 +1114,47 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
             return;
         }
         const selectedMatches = matches.filter(m => selectedIds.has(m.id));
-        const artifactPathsByMatch = new Map<number, string[]>();
+        const artifactPathsByMatch = new Map<number, { ocr: string[]; result: string[]; other: string[] }>();
+        const classifyBucket = (value: string): 'ocr' | 'result' | 'other' => {
+            const filename = String(value || '').split(/[\\/]/).pop()?.toLowerCase() || '';
+            if (filename.startsWith('capture_ocr_')) return 'ocr';
+            if (filename.startsWith('capture_result_')) return 'result';
+            return 'other';
+        };
         for (const selectedMatch of selectedMatches) {
             try {
                 const structured = await getMatchArtifactsStructured(selectedMatch.id, selectedMatch.artifacts || []);
-                artifactPathsByMatch.set(selectedMatch.id, structured.images || []);
+                const bucketed = { ocr: [] as string[], result: [] as string[], other: [] as string[] };
+                (structured.images || []).forEach((imagePath, index) => {
+                    const explicit = structured.imageFiles?.[index]?.captureSource || null;
+                    const bucket = explicit === 'ocr-macro'
+                        ? 'ocr'
+                        : explicit === 'result-macro'
+                            ? 'result'
+                            : classifyBucket(imagePath);
+                    const cleaned = String(imagePath || '').trim();
+                    if (!cleaned) return;
+                    if (bucketed[bucket].some((entry) => entry.toLowerCase() === cleaned.toLowerCase())) return;
+                    bucketed[bucket].push(cleaned);
+                });
+                artifactPathsByMatch.set(selectedMatch.id, bucketed);
             } catch {
-                artifactPathsByMatch.set(selectedMatch.id, selectedMatch.artifacts || []);
+                const bucketed = { ocr: [] as string[], result: [] as string[], other: [] as string[] };
+                (selectedMatch.artifacts || []).forEach((artifactPath) => {
+                    const cleaned = String(artifactPath || '').trim();
+                    if (!cleaned) return;
+                    const bucket = classifyBucket(cleaned);
+                    if (bucketed[bucket].some((entry) => entry.toLowerCase() === cleaned.toLowerCase())) return;
+                    bucketed[bucket].push(cleaned);
+                });
+                artifactPathsByMatch.set(selectedMatch.id, bucketed);
             }
         }
         const hasAnyArtifacts = selectedMatches.some((selectedMatch) =>
-            (artifactPathsByMatch.get(selectedMatch.id) || []).some((path) =>
-                IMAGE_EXTS.some((ext) => path.toLowerCase().endsWith(ext))
+            (['ocr', 'result', 'other'] as const).some((bucket) =>
+                (artifactPathsByMatch.get(selectedMatch.id)?.[bucket] || []).some((path) =>
+                    IMAGE_EXTS.some((ext) => path.toLowerCase().endsWith(ext))
+                )
             )
         );
         if (!hasAnyArtifacts) {
@@ -1141,20 +1170,32 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
             let autoOpenedMatchId: number | null = null;
 
             for (const match of selectedMatches) {
-                const imagePaths = (artifactPathsByMatch.get(match.id) || [])
-                    .filter((path) => IMAGE_EXTS.some((ext) => path.toLowerCase().endsWith(ext)));
-                if (imagePaths.length === 0) continue;
+                const bucketed = artifactPathsByMatch.get(match.id) || { ocr: [], result: [], other: [] };
+                const buckets = (['ocr', 'result', 'other'] as const).map((bucket) => ({
+                    bucket,
+                    paths: (bucketed[bucket] || []).filter((path) => IMAGE_EXTS.some((ext) => path.toLowerCase().endsWith(ext))),
+                })).filter((entry) => entry.paths.length > 0);
+                if (buckets.length === 0) continue;
 
                 updateMatch({ ...match, ocrState: 'processing' });
-                const rerun = await rerunOCRMulti(
-                    imagePaths,
-                    activeUser,
-                    ocrMode,
-                    ocrRegions,
-                    rerunRuntimeOptions,
-                );
-                const combined = rerun.data as OCRExtractedData | undefined;
-                if (!rerun.success || !combined) {
+                let combined: OCRExtractedData | undefined;
+                let hasSuccessfulBucket = false;
+                for (const entry of buckets) {
+                    const rerun = await rerunOCRMulti(
+                        entry.paths,
+                        activeUser,
+                        ocrMode,
+                        ocrRegions,
+                        rerunRuntimeOptions,
+                    );
+                    hasSuccessfulBucket = hasSuccessfulBucket || rerun.success;
+                    if (entry.bucket === 'ocr' && rerun.data) {
+                        combined = rerun.data as OCRExtractedData;
+                    } else if (!combined && rerun.data) {
+                        combined = rerun.data as OCRExtractedData;
+                    }
+                }
+                if (!hasSuccessfulBucket || !combined) {
                     failedMatches += 1;
                     updateMatch({ ...match, ocrState: 'error' });
                     continue;
@@ -1658,10 +1699,17 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
                                                     .map((value) => normalizeOcrName(String(value || '')))
                                                     .filter(Boolean)
                                             ));
+                                            const readExtractedPlayerName = (entry: unknown): string => {
+                                                if (typeof entry === 'string') return entry;
+                                                if (entry && typeof entry === 'object' && 'name' in entry) {
+                                                    return String((entry as { name?: unknown }).name || '');
+                                                }
+                                                return '';
+                                            };
                                             const nextTeammates: string[] = [];
                                             if (data.teammates?.length > 0) {
                                                 const existing = new Set<string>();
-                                                for (const raw of data.teammates.map(t => t.name).filter(Boolean)) {
+                                                for (const raw of data.teammates.map(readExtractedPlayerName).filter(Boolean)) {
                                                     const resolved = resolveRosterName(raw);
                                                     if (!resolved) continue;
                                                     const key = normalizeOcrName(resolved).toLowerCase();
@@ -1683,7 +1731,7 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
                                                         new Map(
                                                             team.players
                                                                 .map((player) => {
-                                                                    const resolved = resolveRosterName(player.name || '');
+                                                                    const resolved = resolveRosterName(readExtractedPlayerName(player));
                                                                     if (!resolved) return '';
                                                                     const key = normalizeOcrName(resolved).toLowerCase();
                                                                     if (!key || isActiveUserLike(resolved)) return '';
@@ -3640,8 +3688,36 @@ const SmartMatchDetail: React.FC<{
             }
         };
         const handleRerunAnalysis = useCallback(async () => {
-            const artifactCandidates = artifacts.images.length > 0 ? artifacts.images : (match.artifacts || []);
-            if (!artifactCandidates || artifactCandidates.length === 0) return;
+            const classifyBucket = (value: string): 'ocr' | 'result' | 'other' => {
+                const filename = String(value || '').split(/[\\/]/).pop()?.toLowerCase() || '';
+                if (filename.startsWith('capture_ocr_')) return 'ocr';
+                if (filename.startsWith('capture_result_')) return 'result';
+                return 'other';
+            };
+            const classifySource = (pathValue: string, index: number): 'ocr' | 'result' | 'other' => {
+                const explicit = artifacts.imageFiles[index]?.captureSource || null;
+                if (explicit === 'ocr-macro') return 'ocr';
+                if (explicit === 'result-macro') return 'result';
+                return classifyBucket(pathValue);
+            };
+            const bucketedCandidates: Record<'ocr' | 'result' | 'other', string[]> = { ocr: [], result: [], other: [] };
+            const pushUnique = (bucket: 'ocr' | 'result' | 'other', value: string) => {
+                const cleaned = String(value || '').trim();
+                if (!cleaned) return;
+                const existing = bucketedCandidates[bucket];
+                if (existing.some((entry) => entry.toLowerCase() === cleaned.toLowerCase())) return;
+                existing.push(cleaned);
+            };
+            artifacts.images.forEach((imagePath, index) => {
+                pushUnique(classifySource(imagePath, index), imagePath);
+            });
+            if ((bucketedCandidates.ocr.length + bucketedCandidates.result.length + bucketedCandidates.other.length) === 0) {
+                (match.artifacts || []).forEach((artifactPath) => {
+                    pushUnique(classifyBucket(artifactPath), artifactPath);
+                });
+            }
+            const totalCandidates = bucketedCandidates.ocr.length + bucketedCandidates.result.length + bucketedCandidates.other.length;
+            if (totalCandidates === 0) return;
             setRerunning(true);
             setRerunResults(null);
             setOcrNameSources({});
@@ -3655,8 +3731,13 @@ const SmartMatchDetail: React.FC<{
             const processingBaseMatch = getLatestMatchSnapshot();
             onUpdate({ ...processingBaseMatch, ocrState: 'processing' });
             const imageExts = ['.png', '.jpg', '.jpeg', '.bmp', '.webp'];
-            const imagePaths = artifactCandidates.filter(p => imageExts.some(ext => p.toLowerCase().endsWith(ext)));
-            if (imagePaths.length === 0) {
+            const buckets = [
+                { id: 'ocr' as const, paths: bucketedCandidates.ocr.filter((p) => imageExts.some((ext) => p.toLowerCase().endsWith(ext))) },
+                { id: 'result' as const, paths: bucketedCandidates.result.filter((p) => imageExts.some((ext) => p.toLowerCase().endsWith(ext))) },
+                { id: 'other' as const, paths: bucketedCandidates.other.filter((p) => imageExts.some((ext) => p.toLowerCase().endsWith(ext))) },
+            ].filter((bucket) => bucket.paths.length > 0);
+            const totalImageCount = buckets.reduce((sum, bucket) => sum + bucket.paths.length, 0);
+            if (totalImageCount === 0) {
                 setRerunning(false);
                 setRerunProgress({
                     ...INITIAL_RERUN_PROGRESS,
@@ -3670,8 +3751,8 @@ const SmartMatchDetail: React.FC<{
             setRerunProgress({
                 phase: 'processing',
                 current: 0,
-                total: imagePaths.length,
-                status: `Processing ${imagePaths.length} image${imagePaths.length === 1 ? '' : 's'}...`,
+                total: totalImageCount,
+                status: `Processing ${totalImageCount} image${totalImageCount === 1 ? '' : 's'}...`,
                 cloudStatus: '',
                 latestFileStatus: 'Queued',
                 latestFile: '',
@@ -3680,16 +3761,30 @@ const SmartMatchDetail: React.FC<{
             try {
                 // Use the multi-image server-side rerun: processes screenshots sequentially
                 // so ocrMerger can properly combine tactical-map + crew-hub data.
-                const multiResult = await rerunOCRMulti(
-                    imagePaths,
-                    activeUser,
-                    ocrMode,
-                    ocrRegions,
-                    rerunRuntimeOptions,
-                );
-                const perFileRaw = multiResult.perFile || [];
+                const perFileRaw: Array<{ imagePath: string; success: boolean; error?: string; data?: OCRExtractedData }> = [];
+                let mergedData: OCRExtractedData | null = null;
+                let firstFailureReason = '';
+                for (const bucket of buckets) {
+                    const rerun = await rerunOCRMulti(
+                        bucket.paths,
+                        activeUser,
+                        ocrMode,
+                        ocrRegions,
+                        rerunRuntimeOptions,
+                    );
+                    perFileRaw.push(...(rerun.perFile || []));
+                    if (bucket.id === 'ocr' && rerun.data) {
+                        mergedData = rerun.data;
+                    } else if (!mergedData && rerun.data) {
+                        mergedData = rerun.data;
+                    }
+                    if (!firstFailureReason) {
+                        firstFailureReason = (rerun.perFile || []).find((entry) => !entry.success)?.error
+                            || rerun.error
+                            || '';
+                    }
+                }
                 const successfulCount = perFileRaw.filter(f => f.success).length;
-                const mergedData = multiResult.data ?? null;
                 const results: RerunResultWithMeta[] = perFileRaw.map((entry) => ({
                     success: entry.success,
                     error: entry.error,
@@ -3702,7 +3797,6 @@ const SmartMatchDetail: React.FC<{
                 setOcrNameSources(nextNameSources);
 
                 const latestSummary = results[results.length - 1];
-                const firstFailureReason = results.find((entry) => !entry.success)?.error || multiResult.error || '';
                 const latestFileStatus = latestSummary
                     ? (latestSummary.success ? 'Succeeded' : `Failed: ${latestSummary.error || 'OCR failed'}`)
                     : '';
@@ -3710,9 +3804,9 @@ const SmartMatchDetail: React.FC<{
                 if (!mergedData || successfulCount === 0) {
                     setRerunProgress({
                         phase: 'error',
-                        current: imagePaths.length,
-                        total: imagePaths.length,
-                        status: `Done - 0/${imagePaths.length} succeeded`,
+                        current: totalImageCount,
+                        total: totalImageCount,
+                        status: `Done - 0/${totalImageCount} succeeded`,
                         cloudStatus: '',
                         latestFile: latestSummary?.filename || '',
                         latestFileStatus: latestFileStatus || firstFailureReason || 'No successful OCR output',
@@ -3730,9 +3824,9 @@ const SmartMatchDetail: React.FC<{
 
                 setRerunProgress({
                     phase: 'ready',
-                    current: imagePaths.length,
-                    total: imagePaths.length,
-                    status: `Done - ${successfulCount}/${imagePaths.length} succeeded`,
+                    current: totalImageCount,
+                    total: totalImageCount,
+                    status: `Done - ${successfulCount}/${totalImageCount} succeeded`,
                     cloudStatus: '',
                     latestFile: latestSummary?.filename || '',
                     latestFileStatus: latestFileStatus || 'Completed',
@@ -3758,7 +3852,7 @@ const SmartMatchDetail: React.FC<{
                 setRerunProgress({
                     phase: 'error',
                     current: 0,
-                    total: imagePaths.length,
+                    total: totalImageCount,
                     status: `OCR rerun failed: ${reason}`,
                     cloudStatus: '',
                     latestFile: '',
@@ -3774,6 +3868,7 @@ const SmartMatchDetail: React.FC<{
             activeUser,
             applyReviewDataToSession,
             artifacts.images,
+            artifacts.imageFiles,
             displayNumber,
             getLatestMatchSnapshot,
             match.artifacts,
@@ -3835,6 +3930,26 @@ const SmartMatchDetail: React.FC<{
         const analyzeButtonLabel = hasExistingOcrAnalysis ? 'Re-analyze' : 'Analyze';
         const hasResult = match.result === 'Win' || match.result === 'Loss' || match.result === 'Draw';
         const hasArtifacts = (artifacts.images && artifacts.images.length > 0) || (match.artifacts && match.artifacts.length > 0);
+        const screenshotBuckets = (() => {
+            const ocrIndices: number[] = [];
+            const resultIndices: number[] = [];
+            const otherIndices: number[] = [];
+            artifacts.images.forEach((_, index) => {
+                const source = artifacts.imageFiles[index]?.captureSource || null;
+                if (source === 'ocr-macro') {
+                    ocrIndices.push(index);
+                } else if (source === 'result-macro') {
+                    resultIndices.push(index);
+                } else {
+                    otherIndices.push(index);
+                }
+            });
+            return [
+                { key: 'ocr', title: `Crew/Map Macro (${ocrIndices.length})`, indices: ocrIndices },
+                { key: 'result', title: `Result Macro (${resultIndices.length})`, indices: resultIndices },
+                { key: 'other', title: `Other (${otherIndices.length})`, indices: otherIndices },
+            ].filter((bucket) => bucket.indices.length > 0);
+        })();
         const queueStatus = getQueueStatus(match);
         const statusMeta = getStatusMeta(queueStatus.key);
         const statusIcon = (() => {
@@ -4405,79 +4520,91 @@ const SmartMatchDetail: React.FC<{
                                 </div>
                             }
                         >
-                            <div className="sc-screenshots-rail">
-                                {artifacts.images.map((src, i) => {
-                                    const artifactFile = artifacts.imageFiles[i];
-                                    return (
-                                        <div
-                                            key={artifactFile?.artifactId || src || i}
-                                            className={`relative shrink-0 w-40 aspect-video md3-surface-high rounded-xl overflow-hidden group sc-shot-thumb border shadow-sm transition-[border-color,box-shadow] ${dragOverImgIdx === i && dragSrcImgIdx !== null && dragSrcImgIdx !== i ? 'border-md-sys-primary ring-2 ring-md-sys-primary/50' : 'border-md-sys-outline/10'}`}
-                                            draggable={!!artifactFile?.artifactId}
-                                            onDragStart={(event) => {
-                                                setDragSrcImgIdx(i);
-                                                if (!artifactFile?.artifactId || !onBeginArtifactDrag) return;
-                                                event.dataTransfer.effectAllowed = 'move';
-                                                event.dataTransfer.setData('text/plain', artifactFile.artifactId);
-                                                onBeginArtifactDrag({
-                                                    sourceMatchId: match.id,
-                                                    artifactId: artifactFile.artifactId,
-                                                    imagePath: src,
-                                                    filename: artifactFile.filename,
-                                                });
-                                            }}
-                                            onDragOver={(event) => {
-                                                if (dragSrcImgIdx === null || dragSrcImgIdx === i) return;
-                                                event.preventDefault();
-                                                setDragOverImgIdx(i);
-                                            }}
-                                            onDragLeave={() => setDragOverImgIdx(null)}
-                                            onDrop={(event) => {
-                                                if (dragSrcImgIdx === null || dragSrcImgIdx === i) return;
-                                                event.preventDefault();
-                                                event.stopPropagation();
-                                                handleReorderImages(dragSrcImgIdx, i);
-                                                setDragSrcImgIdx(null);
-                                                setDragOverImgIdx(null);
-                                            }}
-                                            onDragEnd={() => {
-                                                setDragSrcImgIdx(null);
-                                                setDragOverImgIdx(null);
-                                                onEndArtifactDrag?.();
-                                            }}
-                                        >
-                                            <button onClick={() => setActiveScreenshotIndex(i)} className="w-full h-full cursor-pointer">
-                                                <LocalImage
-                                                    src={src}
-                                                    alt={`Screenshot ${i + 1}`}
-                                                    className="w-full h-full object-cover bg-md-sys-surface-container-lowest"
-                                                />
-                                                <div className="absolute inset-0 bg-scrim-40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                    <Eye size={16} />
-                                                </div>
-                                            </button>
-                                            {artifactFile && (
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); handleRemoveScreenshot(i); }}
-                                                    onMouseLeave={() => { if (confirmDeleteIdx === i) setConfirmDeleteIdx(null); }}
-                                                    className={`absolute bottom-1 right-1 rounded-full flex items-center justify-center transition-all ${confirmDeleteIdx === i
-                                                        ? 'w-auto h-5 px-1.5 gap-1 bg-danger text-on-scrim opacity-100 text-label-xs font-bold'
-                                                        : 'w-4 h-4 bg-danger-soft-strong text-danger opacity-0 group-hover:opacity-100'
-                                                        }`}
-                                                    title={confirmDeleteIdx === i ? 'Click again to confirm' : 'Remove screenshot'}
-                                                >
-                                                    {confirmDeleteIdx === i ? <><Trash2 size={9} /> Delete?</> : <X size={9} />}
-                                                </button>
-                                            )}
+                            <div className="space-y-3">
+                                {screenshotBuckets.map((bucket) => (
+                                    <div key={bucket.key} className="space-y-1.5">
+                                        <div className="text-label-xs font-semibold uppercase tracking-wide text-md-sys-on-surface/55">
+                                            {bucket.title}
                                         </div>
-                                    );
-                                })}
-                                <button
-                                    onClick={handleAddScreenshot}
-                                    className="shrink-0 w-40 aspect-video md3-surface-high rounded-xl border-2 border-dashed border-md-sys-outline/30 hover:border-md-sys-primary/50 hover:bg-md-sys-primary/5 transition-all flex flex-col items-center justify-center gap-1 opacity-60 hover:opacity-100 hover:text-md-sys-primary sc-shot-thumb"
-                                >
-                                    <Upload size={14} />
-                                    <span className="text-label-xs font-bold uppercase">Add</span>
-                                </button>
+                                        <div className="sc-screenshots-rail">
+                                            {bucket.indices.map((i) => {
+                                                const src = artifacts.images[i];
+                                                const artifactFile = artifacts.imageFiles[i];
+                                                return (
+                                                    <div
+                                                        key={artifactFile?.artifactId || src || i}
+                                                        className={`relative shrink-0 w-40 aspect-video md3-surface-high rounded-xl overflow-hidden group sc-shot-thumb border shadow-sm transition-[border-color,box-shadow] ${dragOverImgIdx === i && dragSrcImgIdx !== null && dragSrcImgIdx !== i ? 'border-md-sys-primary ring-2 ring-md-sys-primary/50' : 'border-md-sys-outline/10'}`}
+                                                        draggable={!!artifactFile?.artifactId}
+                                                        onDragStart={(event) => {
+                                                            setDragSrcImgIdx(i);
+                                                            if (!artifactFile?.artifactId || !onBeginArtifactDrag) return;
+                                                            event.dataTransfer.effectAllowed = 'move';
+                                                            event.dataTransfer.setData('text/plain', artifactFile.artifactId);
+                                                            onBeginArtifactDrag({
+                                                                sourceMatchId: match.id,
+                                                                artifactId: artifactFile.artifactId,
+                                                                imagePath: src,
+                                                                filename: artifactFile.filename,
+                                                            });
+                                                        }}
+                                                        onDragOver={(event) => {
+                                                            if (dragSrcImgIdx === null || dragSrcImgIdx === i) return;
+                                                            event.preventDefault();
+                                                            setDragOverImgIdx(i);
+                                                        }}
+                                                        onDragLeave={() => setDragOverImgIdx(null)}
+                                                        onDrop={(event) => {
+                                                            if (dragSrcImgIdx === null || dragSrcImgIdx === i) return;
+                                                            event.preventDefault();
+                                                            event.stopPropagation();
+                                                            handleReorderImages(dragSrcImgIdx, i);
+                                                            setDragSrcImgIdx(null);
+                                                            setDragOverImgIdx(null);
+                                                        }}
+                                                        onDragEnd={() => {
+                                                            setDragSrcImgIdx(null);
+                                                            setDragOverImgIdx(null);
+                                                            onEndArtifactDrag?.();
+                                                        }}
+                                                    >
+                                                        <button onClick={() => setActiveScreenshotIndex(i)} className="w-full h-full cursor-pointer">
+                                                            <LocalImage
+                                                                src={src}
+                                                                alt={`Screenshot ${i + 1}`}
+                                                                className="w-full h-full object-cover bg-md-sys-surface-container-lowest"
+                                                            />
+                                                            <div className="absolute inset-0 bg-scrim-40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                                <Eye size={16} />
+                                                            </div>
+                                                        </button>
+                                                        {artifactFile && (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleRemoveScreenshot(i); }}
+                                                                onMouseLeave={() => { if (confirmDeleteIdx === i) setConfirmDeleteIdx(null); }}
+                                                                className={`absolute bottom-1 right-1 rounded-full flex items-center justify-center transition-all ${confirmDeleteIdx === i
+                                                                    ? 'w-auto h-5 px-1.5 gap-1 bg-danger text-on-scrim opacity-100 text-label-xs font-bold'
+                                                                    : 'w-4 h-4 bg-danger-soft-strong text-danger opacity-0 group-hover:opacity-100'
+                                                                    }`}
+                                                                title={confirmDeleteIdx === i ? 'Click again to confirm' : 'Remove screenshot'}
+                                                            >
+                                                                {confirmDeleteIdx === i ? <><Trash2 size={9} /> Delete?</> : <X size={9} />}
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ))}
+                                <div className="sc-screenshots-rail">
+                                    <button
+                                        onClick={handleAddScreenshot}
+                                        className="shrink-0 w-40 aspect-video md3-surface-high rounded-xl border-2 border-dashed border-md-sys-outline/30 hover:border-md-sys-primary/50 hover:bg-md-sys-primary/5 transition-all flex flex-col items-center justify-center gap-1 opacity-60 hover:opacity-100 hover:text-md-sys-primary sc-shot-thumb"
+                                    >
+                                        <Upload size={14} />
+                                        <span className="text-label-xs font-bold uppercase">Add</span>
+                                    </button>
+                                </div>
                             </div>
                         </Section>
 

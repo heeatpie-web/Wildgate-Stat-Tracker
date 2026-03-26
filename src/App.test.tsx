@@ -1438,6 +1438,7 @@ describe('App', () => {
       expect(api.invoke).toHaveBeenCalledWith('save-screenshot', {
         imageBase64: 'image-base64',
         matchId: 4321,
+        captureSource: 'result-macro',
       });
 
       // Advance far enough for any speculative damage follow-up to finish.
@@ -1535,7 +1536,7 @@ describe('App', () => {
 
     expect(api.invoke.mock.calls.filter(([channel]) => channel === 'capture-screen')).toHaveLength(2);
     expect(api.invoke.mock.calls.filter(([channel]) => channel === 'scan-result-screen')).toHaveLength(2);
-    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'save-screenshot')).toHaveLength(2);
+    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'save-screenshot')).toHaveLength(0);
     expect(api.invoke.mock.calls.filter(([channel]) => channel === 'capture-result-screen-region')).toHaveLength(0);
     expect(api.invoke.mock.calls.filter(([channel]) => channel === 'save-ocr-debug')).toHaveLength(0);
     expect(autoFinalizeResultScreenCaptureMock).toHaveBeenCalledTimes(2);
@@ -1543,7 +1544,7 @@ describe('App', () => {
       imageBase64: 'image-base64',
       resultData: expect.objectContaining({ result: null, detectionMethod: 'flash' }),
       matchId: 4322,
-      persistedPrimaryArtifactPath: 'C:\\match_artifacts\\4322\\capture_result.png',
+      persistedPrimaryArtifactPath: null,
       supplementalArtifacts: [],
     }));
     vi.useRealTimers();

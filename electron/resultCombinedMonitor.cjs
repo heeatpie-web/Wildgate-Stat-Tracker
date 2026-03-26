@@ -7,7 +7,11 @@
  * One DXGI captureImage() per 100 ms tick feeds both the flash brightness
  * check (tiny 107×21 px region) and the text tripwire (headline region with
  * three sub-boxes), eliminating the duplicate full-screen capture that the two
- * separate monitors previously performed.
+ * separate monitors previously performed. When both need a sample in the same
+ * tick, the text crop is taken first; headline A/B/C average brightness OR’d
+ * with the tiny ROI can count as a white frame only if the full text region’s
+ * tripwire-white ratio is high (same threshold as the text flash guard), so
+ * normal result text does not fake a flash.
  */
 
 let _nodeScreenshots = null;
@@ -83,15 +87,19 @@ function emitFlashDebug(status, overrides = {}) {
     lastSampleResult: _flash.lastSampleResult,
     lastSampleMeta: _flash.lastSampleResult?.meta ?? null,
     lastIsWhiteFrame: _flash.lastIsWhiteFrame,
+    lastHeadlineFlashAssist: _flash.lastHeadlineFlashAssist,
     lastUpdatedAt: _flash.lastUpdatedAt,
     ...overrides,
   });
 }
 
-function processFlashRaw(raw, now) {
+function processFlashRaw(raw, now, options = {}) {
   const flash = _flash;
   if (flash?.disabledForMatch) return;
   if (!flash) return;
+
+  const headlineFlashAssist = options.headlineFlashAssist === true;
+  flash.lastHeadlineFlashAssist = headlineFlashAssist;
 
   const pixelCount = flash.absoluteRegion.width * flash.absoluteRegion.height;
 
@@ -117,7 +125,8 @@ function processFlashRaw(raw, now) {
   }
 
   const avgBrightness = (sumR + sumG + sumB) / 3 / pixelCount;
-  const isWhiteFrame = avgBrightness >= FLASH_WHITE_THRESHOLD;
+  const tinyRoiIsWhite = avgBrightness >= FLASH_WHITE_THRESHOLD;
+  const isWhiteFrame = tinyRoiIsWhite || headlineFlashAssist;
 
   flash.lastSampleResult = {
     success: true,
@@ -125,8 +134,14 @@ function processFlashRaw(raw, now) {
       avgR: Math.round(sumR / pixelCount),
       avgG: Math.round(sumG / pixelCount),
       avgB: Math.round(sumB / pixelCount),
+      tinyRoiIsWhite,
+      headlineFlashAssist,
     },
-    meta: { source: 'primary-display', absoluteRegion: flash.absoluteRegion },
+    meta: {
+      source: 'primary-display',
+      absoluteRegion: flash.absoluteRegion,
+      headlineFlashAssist,
+    },
   };
   flash.lastIsWhiteFrame = isWhiteFrame;
   flash.lastUpdatedAt = now;
@@ -294,6 +309,38 @@ function computeRegionWhiteRatio(raw, imageWidth, imageHeight) {
     }
   }
   return whiteCount / Math.max(1, total);
+}
+
+/**
+ * When the text tripwire crop is sampled in the same tick as flash, derive a
+ * second flash signal from the headline A/B/C boxes: near-white average there
+ * plus a high full-region white ratio (same idea as TRIPWIRE_FLASH_GUARD_RATIO)
+ * avoids treating normal result text as a flash. OR with the tiny ROI path.
+ */
+function computeHeadlineFlashAssist(raw, imageWidth, imageHeight) {
+  if (!raw || raw.length < imageWidth * imageHeight * 4) {
+    return { avgBrightness: 0, regionWhiteRatio: 0, contributes: false };
+  }
+  const regionWhiteRatio = computeRegionWhiteRatio(raw, imageWidth, imageHeight);
+  const boxes = TRIPWIRE_BOX_LAYOUT.map((box) => normalizeTripwireBox(box, imageWidth, imageHeight));
+  let brightnessSum = 0;
+  let pixelCount = 0;
+  for (const box of boxes) {
+    for (let y = box.top; y < box.top + box.height; y += 1) {
+      for (let x = box.left; x < box.left + box.width; x += 1) {
+        const offset = ((y * imageWidth) + x) * 4;
+        brightnessSum += (raw[offset] + raw[offset + 1] + raw[offset + 2]) / 3;
+        pixelCount += 1;
+      }
+    }
+  }
+  if (pixelCount < 1) {
+    return { avgBrightness: 0, regionWhiteRatio, contributes: false };
+  }
+  const avgBrightness = brightnessSum / pixelCount;
+  const contributes = avgBrightness >= FLASH_WHITE_THRESHOLD
+    && regionWhiteRatio >= TRIPWIRE_FLASH_GUARD_RATIO;
+  return { avgBrightness, regionWhiteRatio, contributes };
 }
 
 function emitTextDebug(status, overrides = {}) {
@@ -509,6 +556,33 @@ async function pollOnce() {
     const image = await _monitor.captureImage();
     const capturedAt = Date.now();
 
+    let sharedTextRaw = null;
+    let sharedTextW = 0;
+    let sharedTextH = 0;
+    let headlineFlashAssist = false;
+
+    const combinedTextThenFlash = flashNeedsSample && textNeedsSample && _flash && _text;
+
+    if (combinedTextThenFlash) {
+      try {
+        const { absoluteRegion } = _text;
+        const localX = absoluteRegion.x - _monitorOffsetX;
+        const localY = absoluteRegion.y - _monitorOffsetY;
+        const crop = await image.crop(localX, localY, absoluteRegion.width, absoluteRegion.height);
+        sharedTextRaw = await crop.toRaw(true);
+        sharedTextW = absoluteRegion.width;
+        sharedTextH = absoluteRegion.height;
+        headlineFlashAssist = computeHeadlineFlashAssist(sharedTextRaw, sharedTextW, sharedTextH).contributes;
+      } catch (err) {
+        if (_text) {
+          _text.lastError = err?.message || 'Crop failed';
+          _text.lastUpdatedAt = capturedAt;
+          emitTextDebug(capturedAt < _text.armAt ? 'arming-delay' : 'sampling');
+        }
+        sharedTextRaw = null;
+      }
+    }
+
     if (flashNeedsSample && _flash) {
       try {
         const { absoluteRegion } = _flash;
@@ -516,7 +590,7 @@ async function pollOnce() {
         const localY = absoluteRegion.y - _monitorOffsetY;
         const crop = await image.crop(localX, localY, absoluteRegion.width, absoluteRegion.height);
         const raw = await crop.toRaw(true);
-        processFlashRaw(raw, capturedAt);
+        processFlashRaw(raw, capturedAt, { headlineFlashAssist });
       } catch (err) {
         if (_flash) {
           _flash.lastSampleResult = {
@@ -533,12 +607,16 @@ async function pollOnce() {
 
     if (textNeedsSample && _text) {
       try {
-        const { absoluteRegion } = _text;
-        const localX = absoluteRegion.x - _monitorOffsetX;
-        const localY = absoluteRegion.y - _monitorOffsetY;
-        const crop = await image.crop(localX, localY, absoluteRegion.width, absoluteRegion.height);
-        const raw = await crop.toRaw(true);
-        processTextRaw(raw, absoluteRegion.width, absoluteRegion.height, capturedAt);
+        if (sharedTextRaw && combinedTextThenFlash) {
+          processTextRaw(sharedTextRaw, sharedTextW, sharedTextH, capturedAt);
+        } else {
+          const { absoluteRegion } = _text;
+          const localX = absoluteRegion.x - _monitorOffsetX;
+          const localY = absoluteRegion.y - _monitorOffsetY;
+          const crop = await image.crop(localX, localY, absoluteRegion.width, absoluteRegion.height);
+          const raw = await crop.toRaw(true);
+          processTextRaw(raw, absoluteRegion.width, absoluteRegion.height, capturedAt);
+        }
       } catch (err) {
         if (_text) {
           _text.lastError = err?.message || 'Crop failed';
@@ -616,6 +694,7 @@ function startResultMonitor({
       cooldownUntil: 0,
       lastSampleResult: null,
       lastIsWhiteFrame: null,
+      lastHeadlineFlashAssist: false,
       lastUpdatedAt: now,
       onDetected: onFlashDetected,
       onResolved: onFlashResolved,
@@ -669,12 +748,16 @@ module.exports = {
   KNOWN_FLASH_PURE_WHITE_MS,
   __test__: {
     TRIPWIRE_BOX_LAYOUT,
+    TRIPWIRE_FLASH_GUARD_RATIO,
+    FLASH_WHITE_THRESHOLD,
     createTripwireBaseline,
     createColdTripwireBaseline,
     updateTripwireBaseline,
     buildTripwireSnapshot,
     analyzeTextBoxes,
     computeRegionWhiteRatio,
+    computeHeadlineFlashAssist,
+    processFlashRaw,
     createTripwireDetectionPayload,
     applyTextTripwireSample,
   },

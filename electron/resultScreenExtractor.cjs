@@ -336,6 +336,20 @@ function parseResultSignals({
     };
   }
 
+  // Placement-based losses should take precedence over spurious OCR that
+  // might include victory-like tokens. Example: "3RD PLACE" + "ELIMINATED"
+  // being misread as "VICTORY".
+  if (!hasArtifactSignal && placement && placement >= 2 && placement <= 5 && (hasDefeat || hasEliminated || hasFinalMoments || hasShipWins)) {
+    return {
+      result: 'Loss',
+      winType: 'combat',
+      placement,
+      detectionMethod,
+      damageTaken: resolvedDamageTaken,
+      damageSourcesAvailable: resolvedDamageSourcesAvailable,
+    };
+  }
+
   if (hasDefeat && hasArtifactSignal) {
     return {
       result: 'Loss',
@@ -385,17 +399,6 @@ function parseResultSignals({
       detectionMethod,
       damageTaken: undefined,
       damageSourcesAvailable: false,
-    };
-  }
-
-  if (placement && placement >= 2 && placement <= 5 && (hasDefeat || hasEliminated || hasVanguardWins || hasFinalMoments || hasShipWins)) {
-    return {
-      result: 'Loss',
-      winType: 'combat',
-      placement,
-      detectionMethod,
-      damageTaken: resolvedDamageTaken,
-      damageSourcesAvailable: resolvedDamageSourcesAvailable,
     };
   }
 

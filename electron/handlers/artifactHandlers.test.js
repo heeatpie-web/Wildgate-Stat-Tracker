@@ -193,4 +193,38 @@ describe('artifactHandlers token-backed fallback artifacts', () => {
     expect(listed.data.imageFiles).toHaveLength(1);
     expect(listed.data.imageFiles[0].filename).toBe('capture_2026-03-19T20-28-32-675Z.png');
   });
+
+  it('flags saved screenshots by macro source and returns captureSource metadata', async () => {
+    const rootDir = makeTempDir();
+    tempDirs.push(rootDir);
+    const ipcMain = createIpcMainHarness();
+    registerArtifactHandlers(ipcMain, createArtifactContext(rootDir));
+    const saveScreenshot = ipcMain.handlers.get('save-screenshot');
+    const getArtifacts = ipcMain.handlers.get('get-match-artifacts');
+    const event = { sender: { id: 506 } };
+    const imageBase64 = Buffer.from('x'.repeat(256), 'utf-8').toString('base64');
+
+    const savedOcr = await saveScreenshot(event, {
+      imageBase64,
+      matchId: 777,
+      captureSource: 'ocr-macro',
+    });
+    const savedResult = await saveScreenshot(event, {
+      imageBase64,
+      matchId: 777,
+      captureSource: 'result-macro',
+    });
+
+    expect(savedOcr.success).toBe(true);
+    expect(savedResult.success).toBe(true);
+    expect(savedOcr.data.filename).toMatch(/^capture_ocr_/i);
+    expect(savedResult.data.filename).toMatch(/^capture_result_/i);
+
+    const listed = await getArtifacts(event, { matchId: 777 });
+    expect(listed.success).toBe(true);
+    expect(listed.data.imageFiles).toEqual(expect.arrayContaining([
+      expect.objectContaining({ captureSource: 'ocr-macro' }),
+      expect.objectContaining({ captureSource: 'result-macro' }),
+    ]));
+  });
 });

@@ -51,7 +51,8 @@ const isArtifactFile = (value: unknown): value is ArtifactFile =>
     isRecord(value) &&
     typeof value.artifactId === 'string' &&
     typeof value.filename === 'string' &&
-    typeof value.path === 'string';
+    typeof value.path === 'string' &&
+    (value.captureSource == null || value.captureSource === 'ocr-macro' || value.captureSource === 'result-macro');
 
 const isLikelyOcrExtractedData = (value: unknown): value is OCRExtractedData =>
     isRecord(value) &&
@@ -79,6 +80,7 @@ export interface ArtifactFile {
     artifactId: string;
     filename: string;
     path: string;
+    captureSource?: 'ocr-macro' | 'result-macro' | null;
 }
 
 export interface ArtifactRepairCandidate {
@@ -248,6 +250,7 @@ export const getMatchArtifactsStructured = async (
                 artifactId: '',
                 filename: imagePath.split(/[\\/]/).pop() || imagePath,
                 path: imagePath,
+                captureSource: null,
             } as ArtifactFile;
         });
         return {

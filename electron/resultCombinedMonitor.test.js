@@ -129,3 +129,55 @@ describe('resultCombinedMonitor tripwire helpers', () => {
     expect(text.onDetected).not.toHaveBeenCalled();
   });
 });
+
+describe('computeHeadlineFlashAssist (same-tick OR path for flash)', () => {
+  it('contributes on full-frame tripwire-white flash (matches text flash guard region)', () => {
+    const whiteImage = createRawTripwireImage([], { fullWhite: true });
+    const out = __test__.computeHeadlineFlashAssist(whiteImage.raw, whiteImage.width, whiteImage.height);
+    expect(out.regionWhiteRatio).toBeGreaterThanOrEqual(__test__.TRIPWIRE_FLASH_GUARD_RATIO);
+    expect(out.avgBrightness).toBeGreaterThanOrEqual(__test__.FLASH_WHITE_THRESHOLD);
+    expect(out.contributes).toBe(true);
+  });
+
+  it('does not contribute for normal tripwire-hot result text (low region white ratio)', () => {
+    const hotImage = createRawTripwireImage(['result-b', 'result-c']);
+    const out = __test__.computeHeadlineFlashAssist(hotImage.raw, hotImage.width, hotImage.height);
+    expect(out.regionWhiteRatio).toBeLessThan(__test__.TRIPWIRE_FLASH_GUARD_RATIO);
+    expect(out.contributes).toBe(false);
+  });
+
+  it('does not contribute when region is mostly flash-white but headline boxes stay dark', () => {
+    const width = 800;
+    const height = 240;
+    const pixels = Buffer.alloc(width * height * 4, 12);
+    for (let i = 3; i < pixels.length; i += 4) {
+      pixels[i] = 255;
+    }
+    const boxes = __test__.TRIPWIRE_BOX_LAYOUT;
+    for (const box of boxes) {
+      const left = Math.floor(box.left * width);
+      const top = Math.floor(box.top * height);
+      const boxWidth = Math.max(1, Math.floor(box.width * width));
+      const boxHeight = Math.max(1, Math.floor(box.height * height));
+      for (let y = top; y < top + boxHeight; y += 1) {
+        for (let x = left; x < left + boxWidth; x += 1) {
+          const offset = (y * width + x) * 4;
+          pixels[offset] = 20;
+          pixels[offset + 1] = 20;
+          pixels[offset + 2] = 20;
+        }
+      }
+    }
+    for (let i = 0; i < pixels.length; i += 4) {
+      const r = pixels[i];
+      if (r === 20) continue;
+      pixels[i] = 250;
+      pixels[i + 1] = 250;
+      pixels[i + 2] = 250;
+    }
+    const out = __test__.computeHeadlineFlashAssist(pixels, width, height);
+    expect(out.regionWhiteRatio).toBeGreaterThanOrEqual(__test__.TRIPWIRE_FLASH_GUARD_RATIO);
+    expect(out.avgBrightness).toBeLessThan(__test__.FLASH_WHITE_THRESHOLD);
+    expect(out.contributes).toBe(false);
+  });
+});

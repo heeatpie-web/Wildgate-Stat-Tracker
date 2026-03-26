@@ -1633,22 +1633,29 @@ export const useMatchSubmission = () => {
                 || (artifact?.kind !== 'damage-sources' && artifact?.kind !== 'damage-ships')
             ));
 
-            const artifactsToSave: Array<{ rawBase64: string; kind?: AutoResultCaptureArtifact['kind'] }> = [
-                ...(!normalizedPersistedPrimaryArtifactPath ? [{
-                    rawBase64: String(imageBase64 || '').replace(/^data:image\/\w+;base64,/, '').trim(),
-                }] : []),
-                ...((retainedSupplementalArtifacts).map((artifact) => ({
-                    rawBase64: String(artifact?.imageBase64 || '').replace(/^data:image\/\w+;base64,/, '').trim(),
-                    kind: artifact?.kind,
-                }))),
-            ].filter((artifact) => artifact.rawBase64.length > 0);
+            const shouldPersistArtifacts = (
+                normalizedResult === 'Win'
+                || normalizedResult === 'Loss'
+                || normalizedResult === 'Draw'
+            );
+            const artifactsToSave: Array<{ rawBase64: string; kind?: AutoResultCaptureArtifact['kind'] }> = shouldPersistArtifacts
+                ? [
+                    ...(!normalizedPersistedPrimaryArtifactPath ? [{
+                        rawBase64: String(imageBase64 || '').replace(/^data:image\/\w+;base64,/, '').trim(),
+                    }] : []),
+                    ...((retainedSupplementalArtifacts).map((artifact) => ({
+                        rawBase64: String(artifact?.imageBase64 || '').replace(/^data:image\/\w+;base64,/, '').trim(),
+                        kind: artifact?.kind,
+                    }))),
+                ].filter((artifact) => artifact.rawBase64.length > 0)
+                : [];
 
             // On losses, damage crops can supersede the full result capture. On wins, those
             // follow-up panels are speculative and get dropped once OCR confirms victory.
             const hasDamageSourcesArtifact = retainedSupplementalArtifacts.some(
                 (a) => a?.kind === 'damage-sources'
             );
-            const savedArtifactPaths: string[] = normalizedPersistedPrimaryArtifactPath && !hasDamageSourcesArtifact
+            const savedArtifactPaths: string[] = shouldPersistArtifacts && normalizedPersistedPrimaryArtifactPath && !hasDamageSourcesArtifact
                 ? [normalizedPersistedPrimaryArtifactPath]
                 : [];
             let damageSourcesOcrLines: string[] = [];
@@ -1657,6 +1664,7 @@ export const useMatchSubmission = () => {
                 const saveResult = await api.invoke('save-screenshot', {
                     imageBase64: artifact.rawBase64,
                     matchId: existingMatch.id,
+                    captureSource: 'result-macro',
                 });
                 const savedPath = String(saveResult?.data?.filePath || '').trim() || '';
                 if (!savedPath) {
@@ -1674,7 +1682,8 @@ export const useMatchSubmission = () => {
                 }
             }
 
-            const savedArtifactPath = savedArtifactPaths[0] || normalizedPersistedPrimaryArtifactPath || null;
+            const savedArtifactPath = savedArtifactPaths[0]
+                || (shouldPersistArtifacts ? (normalizedPersistedPrimaryArtifactPath || null) : null);
             const syncDraftArtifactsOnly = async (
                 reason: 'unconfirmed' | 'incomplete'
             ): Promise<AutoFinalizeResultStatus> => {

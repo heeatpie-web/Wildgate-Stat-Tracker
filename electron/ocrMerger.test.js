@@ -4,6 +4,119 @@ import { describe, expect, it } from 'vitest';
 const require = createRequire(import.meta.url);
 const { mergeCaptures, pickPreferredTeammateRoster } = require('./ocrMerger.cjs');
 
+describe('ocrMerger mergeCaptures fallback behavior', () => {
+  it('preserves crew_hub roster when a later unknown capture is empty', () => {
+    const existing = {
+      screenshotType: 'crew_hub',
+      teammates: [{ name: 'Wingman', confidence: 85 }],
+      opponentTeams: [
+        {
+          teamName: 'Red Team',
+          shipType: 'Scout',
+          color: 'red',
+          players: [{ name: 'EnemyOne', confidence: 80 }],
+          confidence: 82,
+        },
+      ],
+      enemyShips: [],
+      reachModifiers: [],
+      overallConfidence: 80,
+      captureTimestamp: 1000,
+      rawText: 'crew hub text',
+    };
+    const incomingUnknown = {
+      screenshotType: 'unknown',
+      teammates: [],
+      opponentTeams: [],
+      enemyShips: [],
+      reachModifiers: [],
+      overallConfidence: 0,
+      captureTimestamp: 2000,
+      rawText: 'unknown frame',
+    };
+
+    const merged = mergeCaptures(existing, incomingUnknown);
+
+    expect(merged.screenshotType).toBe('unknown');
+    expect(merged.captureTimestamp).toBe(2000);
+    expect(merged.rawText).toBe('unknown frame');
+    expect(merged.teammates).toEqual(existing.teammates);
+    expect(merged.opponentTeams).toEqual(existing.opponentTeams);
+  });
+
+  it('upgrades from unknown seed to known crew_hub data', () => {
+    const unknownSeed = {
+      screenshotType: 'unknown',
+      teammates: [],
+      opponentTeams: [],
+      enemyShips: [],
+      reachModifiers: [],
+      overallConfidence: 0,
+      captureTimestamp: 1000,
+    };
+    const incomingCrewHub = {
+      screenshotType: 'crew_hub',
+      teammates: [{ name: 'Wingman', confidence: 88 }],
+      opponentTeams: [
+        {
+          teamName: 'Blue Team',
+          shipType: 'Bastion',
+          color: 'blue',
+          players: [{ name: 'EnemyTwo', confidence: 78 }],
+          confidence: 79,
+        },
+      ],
+      enemyShips: [],
+      reachModifiers: [],
+      overallConfidence: 84,
+      captureTimestamp: 3000,
+    };
+
+    const merged = mergeCaptures(unknownSeed, incomingCrewHub);
+
+    expect(merged.screenshotType).toBe('crew_hub');
+    expect(merged.teammates).toEqual(incomingCrewHub.teammates);
+    expect(merged.opponentTeams).toEqual(incomingCrewHub.opponentTeams);
+  });
+
+  it('preserves tactical_map enemyShips when a later unknown capture is empty', () => {
+    const existing = {
+      screenshotType: 'tactical_map',
+      teammates: [],
+      opponentTeams: [
+        {
+          teamName: 'Enemy Team 1',
+          shipType: 'Brig',
+          color: 'orange',
+          players: [],
+          confidence: 72,
+        },
+      ],
+      enemyShips: [
+        { teamName: 'Enemy Team 1', shipType: 'Brig', color: 'orange' },
+      ],
+      reachModifiers: [],
+      overallConfidence: 74,
+      captureTimestamp: 1000,
+    };
+    const incomingUnknown = {
+      screenshotType: 'unknown',
+      teammates: [],
+      opponentTeams: [],
+      enemyShips: [],
+      reachModifiers: [],
+      overallConfidence: 0,
+      captureTimestamp: 2000,
+    };
+
+    const merged = mergeCaptures(existing, incomingUnknown);
+
+    expect(merged.screenshotType).toBe('unknown');
+    expect(merged.enemyShips).toEqual(existing.enemyShips);
+    expect(merged.opponentTeams).toEqual(existing.opponentTeams);
+  });
+});
+
 describe('ocrMerger positional fallback', () => {
   it('does not reuse a map ship already claimed by a different enemy team', () => {
     const crew = {

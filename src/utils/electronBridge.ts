@@ -147,15 +147,20 @@ export async function ocrProcessCapture(
  */
 export async function saveScreenshot(
   imageBase64: string,
-  matchId?: string | number | null
-): Promise<{ success: boolean; filePath?: string; filename?: string; size?: number; error?: string }> {
+  matchId?: string | number | null,
+  captureSource?: 'ocr-macro' | 'result-macro' | null
+): Promise<{ success: boolean; filePath?: string; filename?: string; size?: number; captureSource?: 'ocr-macro' | 'result-macro'; error?: string }> {
   const ipc = getIpcRenderer();
   if (!ipc) {
     return { success: false, error: 'Not running in Electron' };
   }
 
   try {
-    const raw = await ipc.invoke('save-screenshot', { imageBase64, matchId: matchId ?? null });
+    const raw = await ipc.invoke('save-screenshot', {
+      imageBase64,
+      matchId: matchId ?? null,
+      captureSource: captureSource ?? null,
+    });
     if (raw && typeof raw === 'object' && typeof raw.success === 'boolean') {
       if (raw.success) return { success: true, ...(raw.data || {}) };
       return { success: false, error: raw.message || raw.error || 'Save failed' };

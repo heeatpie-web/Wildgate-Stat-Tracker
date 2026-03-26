@@ -30,6 +30,11 @@ const blockedSecurityCounters = new Map();
 const MATCH_ARTIFACT_REL_PATTERN = /match_artifacts[\\/](\d+)[\\/](.+)$/i;
 const AUTO_CAPTURE_FILENAME_PATTERN = /^capture_/i;
 const RELINKED_SUFFIX_PATTERN = /(?:__relinked_\d+)+(?=\.[^.]+$)/ig;
+const CAPTURE_SOURCE_PREFIX_TO_FLAG = Object.freeze({
+  result: 'result-macro',
+  ocr: 'ocr-macro',
+});
+const ALLOWED_CAPTURE_SOURCES = new Set(['result-macro', 'ocr-macro']);
 
 function recordSecurityBlock(channel, code, message) {
   const key = `${channel}:${code}`;
@@ -124,6 +129,18 @@ function getArtifactCanonicalFilename(value) {
   return stripRelinkSuffixes(baseName).toLowerCase();
 }
 
+function normalizeCaptureSource(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return ALLOWED_CAPTURE_SOURCES.has(normalized) ? normalized : null;
+}
+
+function classifyCaptureSourceFromFilename(value) {
+  const baseName = stripRelinkSuffixes(value).toLowerCase();
+  const prefixMatch = baseName.match(/^capture_([a-z0-9]+)_/i);
+  if (!prefixMatch?.[1]) return null;
+  return CAPTURE_SOURCE_PREFIX_TO_FLAG[prefixMatch[1]] || null;
+}
+
 function countRelinkSuffixes(value) {
   const matches = path.basename(String(value || '').trim()).match(/__relinked_\d+/ig);
   return Array.isArray(matches) ? matches.length : 0;
@@ -148,7 +165,7 @@ function pickPreferredArtifactPath(currentPath, candidatePath) {
   return candidateName < currentName ? candidatePath : currentPath;
 }
 
-async function saveScreenshotImage({ app, artifactHelpers }, { imageBase64, matchId, channel = 'save-screenshot' }) {
+async function saveScreenshotImage({ app, artifactHelpers }, { imageBase64, matchId, captureSource, channel = 'save-screenshot' }) {
   if (!imageBase64 || imageBase64.length < 100) {
     recordSecurityBlock(channel, IpcErrorCode.INVALID_INPUT, 'Invalid image data');
     return fail(IpcErrorCode.INVALID_INPUT, 'Invalid image data');
@@ -162,7 +179,15 @@ async function saveScreenshotImage({ app, artifactHelpers }, { imageBase64, matc
 
   const imageBuffer = Buffer.from(imageBase64, 'base64');
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const filename = `capture_${timestamp}.png`;
+  const normalizedSource = normalizeCaptureSource(captureSource);
+  const sourcePrefix = normalizedSource === 'result-macro'
+    ? 'result'
+    : normalizedSource === 'ocr-macro'
+      ? 'ocr'
+      : '';
+  const filename = sourcePrefix
+    ? `capture_${sourcePrefix}_${timestamp}.png`
+    : `capture_${timestamp}.png`;
 
   const paths = artifactHelpers.getArtifactPaths(app);
   let destDir = paths.screenshotsDir;
@@ -180,7 +205,7 @@ async function saveScreenshotImage({ app, artifactHelpers }, { imageBase64, matc
   await fsPromises.writeFile(filePath, imageBuffer);
   console.log(`[Screenshot] Saved ${filename} (${(imageBuffer.length / 1024).toFixed(1)}KB) to ${destDir}`);
 
-  return ok({ filePath, filename, size: imageBuffer.length });
+  return ok({ filePath, filename, size: imageBuffer.length, captureSource: normalizedSource || undefined });
 }
 
 function toPathKey(value) {
@@ -428,11 +453,12 @@ function registerArtifactHandlers(ipcMain, ctx) {
       const scope = getArtifactScope(event.sender.id, safeMatchId);
       const imageFiles = images.map((imagePath) => {
         const filename = path.basename(imagePath);
+        const captureSource = classifyCaptureSourceFromFilename(filename);
         const artifactId = artifactTokenRegistry.issue(scope, {
           filename,
           fullPath: imagePath,
         });
-        return { artifactId, filename, path: imagePath };
+        return { artifactId, filename, path: imagePath, captureSource };
       });
       return ok({ images, imageFiles, telemetry });
     } catch (e) {
@@ -709,9 +735,9 @@ function registerArtifactHandlers(ipcMain, ctx) {
     }
   });
 
-  ipcMain.handle('save-screenshot', async (event, { imageBase64, matchId }) => {
+  ipcMain.handle('save-screenshot', async (event, { imageBase64, matchId, captureSource }) => {
     try {
-      return await saveScreenshotImage({ app, artifactHelpers }, { imageBase64, matchId });
+      return await saveScreenshotImage({ app, artifactHelpers }, { imageBase64, matchId, captureSource });
     } catch (e) {
       console.error('[Screenshot] Save error:', e.message);
       return internal('Failed to save screenshot');
