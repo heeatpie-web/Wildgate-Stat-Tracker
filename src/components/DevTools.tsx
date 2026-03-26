@@ -7,6 +7,7 @@ import type { DeviceDisplayInfo, GameResolution } from '../store/slices/createDa
 import { Match, SHIPS, CHARACTERS, UI_REACH_MODIFIERS } from '../types';
 import { getElectronAPI } from '../utils/electronAPI';
 import {
+    buildResultFlashSampleNormalizedRegion,
     buildResultFlashSampleRegions,
     FLASH_SAMPLE_REGION,
     isNearWhiteSample,
@@ -160,6 +161,10 @@ export const DevTools: React.FC<DevToolsProps> = ({
         }
         return buildResultFlashSampleRegions(gameResolution, deviceDisplayInfo);
     }, [deviceDisplayInfo, gameResolution, resultFlashDebug]);
+    const predictedResultFlashNormalizedRegion = useMemo(
+        () => buildResultFlashSampleNormalizedRegion(gameResolution, deviceDisplayInfo) ?? FLASH_SAMPLE_REGION,
+        [deviceDisplayInfo, gameResolution],
+    );
 
     const predictedResultFlashRegion = predictedResultFlashRegions[0] ?? null;
     const activeResultFlashMeta = resultFlashDebug?.lastSampleMeta ?? resultFlashSampleResult?.meta ?? null;
@@ -243,7 +248,7 @@ export const DevTools: React.FC<DevToolsProps> = ({
         setResultFlashSampleResult(null);
         try {
             const result = await api.invoke(RESULT_FLASH_SAMPLE_CHANNEL, {
-                normalizedRegion: FLASH_SAMPLE_REGION,
+                normalizedRegion: predictedResultFlashNormalizedRegion,
             });
             setResultFlashSampleResult(normalizePixelMonitorSampleResult(result));
         } catch (error) {
@@ -256,7 +261,7 @@ export const DevTools: React.FC<DevToolsProps> = ({
         } finally {
             setResultFlashSampling(false);
         }
-    }, []);
+    }, [predictedResultFlashNormalizedRegion]);
 
     if (!devMode) return null;
 

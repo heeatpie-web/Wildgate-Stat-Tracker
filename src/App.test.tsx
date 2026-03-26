@@ -1358,7 +1358,7 @@ describe('App', () => {
     vi.useRealTimers();
   });
 
-  it('starts the result screenshot burst 300ms after flash detection', async () => {
+  it('starts the result screenshot burst immediately after flash detection', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
     uiState.telemetryLifecycleStage = 'live';
@@ -1424,16 +1424,15 @@ describe('App', () => {
         await Promise.resolve();
       });
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        '[Brain] Flash signal received - scheduling result capture in 300ms',
-        expect.objectContaining({ matchId: 4321, delayMs: 300 }),
-      );
-      expect(api.invoke).not.toHaveBeenCalledWith('capture-screen');
-
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(300);
+        await Promise.resolve();
+        await Promise.resolve();
       });
 
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        '[Brain] Flash signal received - scheduling result capture in 0ms',
+        expect.objectContaining({ matchId: 4321, delayMs: 0 }),
+      );
       expect(api.invoke).toHaveBeenCalledWith('capture-screen');
       expect(api.invoke).toHaveBeenCalledWith('save-screenshot', {
         imageBase64: 'image-base64',
@@ -1536,7 +1535,7 @@ describe('App', () => {
 
     expect(api.invoke.mock.calls.filter(([channel]) => channel === 'capture-screen')).toHaveLength(2);
     expect(api.invoke.mock.calls.filter(([channel]) => channel === 'scan-result-screen')).toHaveLength(2);
-    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'save-screenshot')).toHaveLength(0);
+    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'save-screenshot')).toHaveLength(2);
     expect(api.invoke.mock.calls.filter(([channel]) => channel === 'capture-result-screen-region')).toHaveLength(0);
     expect(api.invoke.mock.calls.filter(([channel]) => channel === 'save-ocr-debug')).toHaveLength(0);
     expect(autoFinalizeResultScreenCaptureMock).toHaveBeenCalledTimes(2);
@@ -1544,7 +1543,7 @@ describe('App', () => {
       imageBase64: 'image-base64',
       resultData: expect.objectContaining({ result: null, detectionMethod: 'flash' }),
       matchId: 4322,
-      persistedPrimaryArtifactPath: null,
+      persistedPrimaryArtifactPath: 'C:\\match_artifacts\\4322\\capture_result.png',
       supplementalArtifacts: [],
     }));
     vi.useRealTimers();
@@ -1755,7 +1754,7 @@ describe('App', () => {
     vi.useRealTimers();
   });
 
-  it('lets a later flash override a pending text-triggered capture grace window', async () => {
+  it('starts text capture immediately so a later flash cannot preempt an in-flight text burst', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
     uiState.telemetryLifecycleStage = 'live';
@@ -1834,21 +1833,19 @@ describe('App', () => {
         text: '4TH PLACE',
       });
       await Promise.resolve();
-    });
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(150);
-    });
-    expect(api.invoke).not.toHaveBeenCalledWith('capture-screen');
-
-    let flashPromise: Promise<void> | undefined;
-    await act(async () => {
-      flashPromise = flashOptions.onFlashDetected?.();
       await Promise.resolve();
     });
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(300);
+      await vi.advanceTimersByTimeAsync(150);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(api.invoke).toHaveBeenCalledWith('capture-screen');
+
+    let flashPromise: Promise<void> | undefined;
+    await act(async () => {
+      flashPromise = flashOptions.onFlashDetected?.();
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -1865,7 +1862,7 @@ describe('App', () => {
 
     const resultScanCalls = api.invoke.mock.calls.filter(([channel]) => channel === 'scan-result-screen');
     expect(resultScanCalls.length).toBeGreaterThan(0);
-    expect(resultScanCalls.every(([, payload]) => payload?.detectionMethod === 'flash')).toBe(true);
+    expect(resultScanCalls.every(([, payload]) => payload?.detectionMethod === 'text')).toBe(true);
     expect(autoFinalizeResultScreenCaptureMock).toHaveBeenCalledWith(expect.objectContaining({
       imageBase64: 'image-base64',
       resultData: expect.objectContaining({ result: 'Loss', detectionMethod: 'flash' }),
@@ -2071,15 +2068,6 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    expect(api.invoke).not.toHaveBeenCalledWith('capture-screen');
-
-    // Advance past the 300ms text grace so the initial result screenshot can run.
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(300);
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
     expect(api.invoke).toHaveBeenCalledWith('capture-screen');
 
     // Advance far enough for the early loss recap capture and the tab-2 toggle to complete.
@@ -2212,7 +2200,7 @@ describe('App', () => {
     });
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(300);
+      await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
     });

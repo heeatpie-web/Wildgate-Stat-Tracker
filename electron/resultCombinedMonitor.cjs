@@ -6,9 +6,9 @@
  *
  * One DXGI captureImage() per 100 ms tick feeds both the flash brightness
  * check (the active-user HUD username region) and the text tripwire (headline
- * region with three sub-boxes), eliminating the duplicate full-screen capture
+ * region with placement-specific sub-boxes), eliminating the duplicate full-screen capture
  * that the two separate monitors previously performed. When both need a sample
- * in the same tick, the text crop is taken first; headline A/B/C average
+ * in the same tick, the text crop is taken first; placement anchor average
  * brightness OR’d with the username ROI can count as a white frame only if the
  * full text region’s tripwire-white ratio is high (same threshold as the text
  * flash guard), so normal result text does not fake a flash.
@@ -33,23 +33,40 @@ const FLASH_MIN_VALID_DURATION_MS = 100;
 const FLASH_MAX_VALID_DURATION_MS = 900;
 
 // ── Text tripwire constants ────────────────────────────────────────────────
-const TEXT_TRIPWIRE_SUSTAIN_MS = 300;
+const TEXT_TRIPWIRE_SUSTAIN_MS = 200;
 const TRIPWIRE_MIN_CONSECUTIVE_HITS = Math.max(1, Math.ceil(TEXT_TRIPWIRE_SUSTAIN_MS / SAMPLE_INTERVAL_MS));
-const TRIPWIRE_MIN_ACTIVE_BOXES = 2;
-const TRIPWIRE_MIN_BOX_WHITE_RATIO = 0.09;
-const TRIPWIRE_BASELINE_ALPHA = 0.18;
-const TRIPWIRE_MIN_BOX_WHITE_DELTA = 0.045;
-const TRIPWIRE_MIN_TOTAL_WHITE_DELTA = 0.045;
+const TRIPWIRE_MIN_ACTIVE_BOXES = 3;
+const TRIPWIRE_MIN_BOX_BRIGHTNESS_RATIO = 0.98;
+const TRIPWIRE_MIN_BOX_BRIGHTNESS = 255 * TRIPWIRE_MIN_BOX_BRIGHTNESS_RATIO;
 const TRIPWIRE_WHITE_MIN_CHANNEL = 240;
 const TRIPWIRE_WHITE_MAX_DRIFT = 20;
 // If more than this fraction of the full text region is pure white, the screen
 // is in a pure-white flash transition rather than showing the result screen.
 const TRIPWIRE_FLASH_GUARD_RATIO = 0.60;
-// Three sub-boxes within the result headline region (relative to text crop).
-const TRIPWIRE_BOX_LAYOUT = Object.freeze([
-  { id: 'result-a', left: 0.04, top: 0.24, width: 0.12, height: 0.76 },
-  { id: 'result-b', left: 0.44, top: 0.12, width: 0.12, height: 0.76 },
-  { id: 'result-c', left: 0.84, top: 0.12, width: 0.12, height: 0.76 },
+const PLACE_TRIPWIRE_REFERENCE_WIDTH = 1920;
+const PLACE_TRIPWIRE_REFERENCE_HEIGHT = 1080;
+const PLACE_TRIPWIRE_REFERENCE_CENTER_X = PLACE_TRIPWIRE_REFERENCE_WIDTH / 2;
+const PLACE_TRIPWIRE_REFERENCE_TEXT_REGION = Object.freeze({
+  left: 0.2489,
+  top: 0.105,
+  width: 0.3991,
+  height: 0.145,
+  normalized: true,
+});
+const PLACE_TRIPWIRE_REFERENCE_ABSOLUTE_TEXT_REGION = Object.freeze({
+  x: Math.round(PLACE_TRIPWIRE_REFERENCE_WIDTH * PLACE_TRIPWIRE_REFERENCE_TEXT_REGION.left),
+  y: Math.round(PLACE_TRIPWIRE_REFERENCE_HEIGHT * PLACE_TRIPWIRE_REFERENCE_TEXT_REGION.top),
+  width: Math.round(PLACE_TRIPWIRE_REFERENCE_WIDTH * PLACE_TRIPWIRE_REFERENCE_TEXT_REGION.width),
+  height: Math.round(PLACE_TRIPWIRE_REFERENCE_HEIGHT * PLACE_TRIPWIRE_REFERENCE_TEXT_REGION.height),
+});
+// Five placement anchor boxes on a 1920x1080 frame, each centered over a solid
+// shared-white portion of "PLACE".
+const PLACE_TRIPWIRE_REFERENCE_BOXES = Object.freeze([
+  { id: 'place-p', x: 539, y: 176, width: 32, height: 13 },
+  { id: 'place-l', x: 594, y: 241, width: 37, height: 16 },
+  { id: 'place-a', x: 661, y: 232, width: 47, height: 13 },
+  { id: 'place-c', x: 765, y: 179, width: 37, height: 9 },
+  { id: 'place-e', x: 814, y: 241, width: 39, height: 16 },
 ]);
 
 // ── Module-level state ─────────────────────────────────────────────────────
@@ -220,8 +237,64 @@ function normalizeTripwireBox(box, imageWidth, imageHeight) {
   return { id: box.id, left, top, width, height };
 }
 
+function clampBoxToRegion(box, region) {
+  const left = Math.max(region.x, Math.min(region.x + region.width - 1, box.x));
+  const top = Math.max(region.y, Math.min(region.y + region.height - 1, box.y));
+  const right = Math.max(left + 1, Math.min(region.x + region.width, box.x + box.width));
+  const bottom = Math.max(top + 1, Math.min(region.y + region.height, box.y + box.height));
+  return { id: box.id, x: left, y: top, width: right - left, height: bottom - top };
+}
+
+function deriveTextScreenMetrics(absoluteRegion, captureRegion) {
+  if (!absoluteRegion || !captureRegion) return null;
+  const normalizedWidth = Number(captureRegion.width || 0);
+  const normalizedHeight = Number(captureRegion.height || 0);
+  if (!captureRegion.normalized || normalizedWidth <= 0 || normalizedHeight <= 0) return null;
+
+  const screenWidth = Math.round(Number(absoluteRegion.width || 0) / normalizedWidth);
+  const screenHeight = Math.round(Number(absoluteRegion.height || 0) / normalizedHeight);
+  if (!Number.isFinite(screenWidth) || !Number.isFinite(screenHeight) || screenWidth <= 0 || screenHeight <= 0) {
+    return null;
+  }
+
+  return { screenWidth, screenHeight };
+}
+
+function buildPlaceTripwireLayout({ absoluteRegion, captureRegion }) {
+  if (!absoluteRegion) return [];
+
+  const metrics = deriveTextScreenMetrics(absoluteRegion, captureRegion);
+  const screenWidth = Number(metrics?.screenWidth || PLACE_TRIPWIRE_REFERENCE_WIDTH);
+  const screenHeight = Number(metrics?.screenHeight || PLACE_TRIPWIRE_REFERENCE_HEIGHT);
+  const scale = screenHeight / PLACE_TRIPWIRE_REFERENCE_HEIGHT;
+  const centerX = screenWidth / 2;
+
+  return PLACE_TRIPWIRE_REFERENCE_BOXES.map((box) => {
+    const absoluteBox = clampBoxToRegion({
+      id: box.id,
+      x: Math.round(centerX + ((box.x - PLACE_TRIPWIRE_REFERENCE_CENTER_X) * scale)),
+      y: Math.round(box.y * scale),
+      width: Math.max(1, Math.round(box.width * scale)),
+      height: Math.max(1, Math.round(box.height * scale)),
+    }, absoluteRegion);
+
+    return {
+      id: absoluteBox.id,
+      left: (absoluteBox.x - absoluteRegion.x) / absoluteRegion.width,
+      top: (absoluteBox.y - absoluteRegion.y) / absoluteRegion.height,
+      width: absoluteBox.width / absoluteRegion.width,
+      height: absoluteBox.height / absoluteRegion.height,
+    };
+  });
+}
+
+const DEFAULT_PLACE_TRIPWIRE_LAYOUT = Object.freeze(buildPlaceTripwireLayout({
+  absoluteRegion: PLACE_TRIPWIRE_REFERENCE_ABSOLUTE_TEXT_REGION,
+  captureRegion: PLACE_TRIPWIRE_REFERENCE_TEXT_REGION,
+}));
+
 function createTripwireBaseline(metrics) {
-  return metrics.map((metric) => Number(metric?.whiteRatio || 0));
+  return metrics.map((metric) => Number(metric?.avgBrightness || 0) / 255);
 }
 
 function createColdTripwireBaseline(metrics) {
@@ -235,7 +308,8 @@ function updateTripwireBaseline(currentBaseline, metrics) {
 
   return metrics.map((metric, index) => {
     const previous = Number(currentBaseline[index] || 0);
-    return (previous * (1 - TRIPWIRE_BASELINE_ALPHA)) + (Number(metric?.whiteRatio || 0) * TRIPWIRE_BASELINE_ALPHA);
+    const current = Number(metric?.avgBrightness || 0) / 255;
+    return (previous * 0.82) + (current * 0.18);
   });
 }
 
@@ -243,36 +317,33 @@ function buildTripwireSnapshot(metrics, baseline) {
   const boxMetrics = metrics.map((metric, index) => {
     const whiteRatio = Number(metric.whiteRatio || 0);
     const avgBrightness = Number(metric.avgBrightness || 0);
+    const brightnessRatio = avgBrightness / 255;
     const baselineWhiteRatio = Number(Array.isArray(baseline) ? baseline[index] || 0 : 0);
-    const whiteDelta = Math.max(0, whiteRatio - baselineWhiteRatio);
+    const whiteDelta = Math.max(0, brightnessRatio - baselineWhiteRatio);
     return {
       id: metric.id,
       whiteRatio,
       avgBrightness,
+      brightnessRatio,
       baselineWhiteRatio,
       whiteDelta,
-      active: whiteRatio >= TRIPWIRE_MIN_BOX_WHITE_RATIO
-        && whiteDelta >= TRIPWIRE_MIN_BOX_WHITE_DELTA,
+      active: avgBrightness >= TRIPWIRE_MIN_BOX_BRIGHTNESS,
     };
   });
 
   const activeBoxCount = boxMetrics.reduce((n, m) => n + (m.active ? 1 : 0), 0);
-  const totalWhiteDelta = boxMetrics.reduce((s, m) => s + m.whiteDelta, 0);
-  // result-a alone is sufficient: left-anchored placement text (e.g. 2nd place loss)
-  // only lights up the leftmost box. B+C (centered headline) still require 2 boxes.
-  const aOnlyActive = activeBoxCount === 1 && boxMetrics.some((m) => m.id === 'result-a' && m.active);
+  const totalWhiteDelta = boxMetrics.reduce((s, m) => s + m.brightnessRatio, 0) / Math.max(1, boxMetrics.length);
   return {
-    triggered: (activeBoxCount >= TRIPWIRE_MIN_ACTIVE_BOXES || aOnlyActive)
-      && totalWhiteDelta >= TRIPWIRE_MIN_TOTAL_WHITE_DELTA,
+    triggered: activeBoxCount >= TRIPWIRE_MIN_ACTIVE_BOXES,
     activeBoxCount,
     totalWhiteDelta,
     boxes: boxMetrics,
   };
 }
 
-function analyzeTextBoxes(raw, imageWidth, imageHeight) {
+function analyzeTextBoxes(raw, imageWidth, imageHeight, layout = DEFAULT_PLACE_TRIPWIRE_LAYOUT) {
   const channels = 4;
-  const boxes = TRIPWIRE_BOX_LAYOUT.map((box) => normalizeTripwireBox(box, imageWidth, imageHeight));
+  const boxes = layout.map((box) => normalizeTripwireBox(box, imageWidth, imageHeight));
   return boxes.map((box) => {
     let brightPixelCount = 0;
     let brightnessSum = 0;
@@ -313,16 +384,16 @@ function computeRegionWhiteRatio(raw, imageWidth, imageHeight) {
 
 /**
  * When the text tripwire crop is sampled in the same tick as flash, derive a
- * second flash signal from the headline A/B/C boxes: near-white average there
+ * second flash signal from the placement anchor boxes: near-white average there
  * plus a high full-region white ratio (same idea as TRIPWIRE_FLASH_GUARD_RATIO)
  * avoids treating normal result text as a flash. OR with the tiny ROI path.
  */
-function computeHeadlineFlashAssist(raw, imageWidth, imageHeight) {
+function computeHeadlineFlashAssist(raw, imageWidth, imageHeight, layout = DEFAULT_PLACE_TRIPWIRE_LAYOUT) {
   if (!raw || raw.length < imageWidth * imageHeight * 4) {
     return { avgBrightness: 0, regionWhiteRatio: 0, contributes: false };
   }
   const regionWhiteRatio = computeRegionWhiteRatio(raw, imageWidth, imageHeight);
-  const boxes = TRIPWIRE_BOX_LAYOUT.map((box) => normalizeTripwireBox(box, imageWidth, imageHeight));
+  const boxes = layout.map((box) => normalizeTripwireBox(box, imageWidth, imageHeight));
   let brightnessSum = 0;
   let pixelCount = 0;
   for (const box of boxes) {
@@ -386,103 +457,44 @@ function applyTextTripwireSample(text, boxMetrics, regionWhiteRatio, now) {
   const isArmed = now >= text.armAt;
 
   const emitFlashGuard = (tripwire, baseline) => {
-    text.bootstrapHotStart = false;
     text.tripwireConsecutiveHits = 0;
     text.lastTripwire = tripwire;
-    if (!Array.isArray(text.baselineWhiteRatios) || text.baselineWhiteRatios.length !== boxMetrics.length) {
-      text.baselineWhiteRatios = baseline ?? null;
-    }
+    text.baselineWhiteRatios = baseline ?? text.baselineWhiteRatios;
     text.lastUpdatedAt = now;
     emitTextDebug('flash-guard', { regionWhiteRatio });
   };
 
+  const flashSuppressingText = Boolean(
+    _flash
+    && now >= text.armAt
+    && (
+      _flash.waitingForFlashEnd
+      || _flash.flashNotified
+      || _flash.brightSinceMs != null
+    ),
+  );
+
+  const tripwire = buildTripwireSnapshot(boxMetrics, text.baselineWhiteRatios);
+  text.lastTripwire = tripwire;
+
   if (!isArmed) {
-    text.baselineWhiteRatios = updateTripwireBaseline(text.baselineWhiteRatios, boxMetrics);
-    text.lastTripwire = buildTripwireSnapshot(boxMetrics, text.baselineWhiteRatios);
-    text.bootstrapHotStart = false;
     text.tripwireConsecutiveHits = 0;
     text.lastUpdatedAt = now;
     emitTextDebug('arming-delay');
     return;
   }
 
-  if (
-    !text.bootstrapHotStart
-    && (
-      !Array.isArray(text.baselineWhiteRatios)
-      || text.baselineWhiteRatios.length !== boxMetrics.length
-    )
-  ) {
-    const coldBaseline = createColdTripwireBaseline(boxMetrics);
-    const bootstrapTripwire = buildTripwireSnapshot(boxMetrics, coldBaseline);
-    if (bootstrapTripwire.triggered) {
-      if (regionWhiteRatio >= TRIPWIRE_FLASH_GUARD_RATIO) {
-        emitFlashGuard(bootstrapTripwire, null);
-        return;
-      }
-      text.bootstrapHotStart = true;
-      text.lastTripwire = bootstrapTripwire;
-      text.tripwireConsecutiveHits = 1;
-      text.lastUpdatedAt = now;
-      emitTextDebug('sampling');
-      return;
-    }
-
-    text.baselineWhiteRatios = createTripwireBaseline(boxMetrics);
-    text.bootstrapHotStart = false;
-    text.lastTripwire = buildTripwireSnapshot(boxMetrics, text.baselineWhiteRatios);
+  if (flashSuppressingText) {
     text.tripwireConsecutiveHits = 0;
     text.lastUpdatedAt = now;
     emitTextDebug('sampling');
     return;
   }
 
-  if (text.bootstrapHotStart) {
-    const bootstrapTripwire = buildTripwireSnapshot(boxMetrics, createColdTripwireBaseline(boxMetrics));
-    if (bootstrapTripwire.triggered && regionWhiteRatio >= TRIPWIRE_FLASH_GUARD_RATIO) {
-      emitFlashGuard(bootstrapTripwire, null);
-      return;
-    }
-    text.lastTripwire = bootstrapTripwire;
-
-    if (bootstrapTripwire.triggered) {
-      text.tripwireConsecutiveHits += 1;
-      if (text.tripwireConsecutiveHits >= TRIPWIRE_MIN_CONSECUTIVE_HITS) {
-        text.detected = true;
-        if (_flash) {
-          _flash.disabledForMatch = true;
-          _flash.brightSinceMs = null;
-          _flash.waitingForFlashEnd = false;
-          _flash.flashNotified = false;
-          _flash.lastUpdatedAt = now;
-        }
-        text.lastSignal = createTripwireDetectionPayload(text, now);
-        text.lastUpdatedAt = now;
-        text.onDetected?.(text.lastSignal);
-        emitTextDebug('detected');
-        return;
-      }
-
-      text.lastUpdatedAt = now;
-      emitTextDebug('sampling');
-      return;
-    }
-
-    text.bootstrapHotStart = false;
-    text.baselineWhiteRatios = createTripwireBaseline(boxMetrics);
-    text.lastTripwire = buildTripwireSnapshot(boxMetrics, text.baselineWhiteRatios);
-    text.tripwireConsecutiveHits = 0;
-    text.lastUpdatedAt = now;
-    emitTextDebug('sampling');
-    return;
-  }
-
-  const tripwire = buildTripwireSnapshot(boxMetrics, text.baselineWhiteRatios);
   if (tripwire.triggered && regionWhiteRatio >= TRIPWIRE_FLASH_GUARD_RATIO) {
     emitFlashGuard(tripwire, text.baselineWhiteRatios);
     return;
   }
-  text.lastTripwire = tripwire;
 
   if (tripwire.triggered) {
     text.tripwireConsecutiveHits += 1;
@@ -503,8 +515,6 @@ function applyTextTripwireSample(text, boxMetrics, regionWhiteRatio, now) {
     }
   } else {
     text.tripwireConsecutiveHits = 0;
-    text.baselineWhiteRatios = updateTripwireBaseline(text.baselineWhiteRatios, boxMetrics);
-    text.lastTripwire = buildTripwireSnapshot(boxMetrics, text.baselineWhiteRatios);
   }
 
   text.lastUpdatedAt = now;
@@ -516,7 +526,7 @@ function processTextRaw(raw, imageWidth, imageHeight, now) {
   if (!text || text.detected || text.disabledForMatch) return;
 
   try {
-    const boxMetrics = analyzeTextBoxes(raw, imageWidth, imageHeight);
+    const boxMetrics = analyzeTextBoxes(raw, imageWidth, imageHeight, text.tripwireBoxLayout || DEFAULT_PLACE_TRIPWIRE_LAYOUT);
     const regionWhiteRatio = computeRegionWhiteRatio(raw, imageWidth, imageHeight);
     applyTextTripwireSample(text, boxMetrics, regionWhiteRatio, now);
   } catch (error) {
@@ -572,7 +582,12 @@ async function pollOnce() {
         sharedTextRaw = await crop.toRaw(true);
         sharedTextW = absoluteRegion.width;
         sharedTextH = absoluteRegion.height;
-        headlineFlashAssist = computeHeadlineFlashAssist(sharedTextRaw, sharedTextW, sharedTextH).contributes;
+        headlineFlashAssist = computeHeadlineFlashAssist(
+          sharedTextRaw,
+          sharedTextW,
+          sharedTextH,
+          _text?.tripwireBoxLayout || DEFAULT_PLACE_TRIPWIRE_LAYOUT,
+        ).contributes;
       } catch (err) {
         if (_text) {
           _text.lastError = err?.message || 'Crop failed';
@@ -704,10 +719,15 @@ function startResultMonitor({
   }
 
   if (textAbsoluteRegion) {
+    const tripwireBoxLayout = buildPlaceTripwireLayout({
+      absoluteRegion: textAbsoluteRegion,
+      captureRegion: textCaptureRegion,
+    });
     _text = {
       armAt: Number.isFinite(Number(textArmAt)) ? Math.round(Number(textArmAt)) : 0,
       absoluteRegion: textAbsoluteRegion,
       captureRegion: textCaptureRegion,
+      tripwireBoxLayout,
       detected: false,
       disabledForMatch: false,
       tripwireConsecutiveHits: 0,
@@ -747,12 +767,15 @@ module.exports = {
   stopResultMonitor,
   KNOWN_FLASH_PURE_WHITE_MS,
   __test__: {
-    TRIPWIRE_BOX_LAYOUT,
+    PLACE_TRIPWIRE_REFERENCE_BOXES,
+    DEFAULT_PLACE_TRIPWIRE_LAYOUT,
     TRIPWIRE_FLASH_GUARD_RATIO,
     FLASH_WHITE_THRESHOLD,
+    TRIPWIRE_MIN_BOX_BRIGHTNESS,
     createTripwireBaseline,
     createColdTripwireBaseline,
     updateTripwireBaseline,
+    buildPlaceTripwireLayout,
     buildTripwireSnapshot,
     analyzeTextBoxes,
     computeRegionWhiteRatio,

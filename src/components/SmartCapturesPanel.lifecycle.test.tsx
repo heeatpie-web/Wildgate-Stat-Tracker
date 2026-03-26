@@ -412,6 +412,43 @@ describe('SmartCapturesPanel paused lifecycle', () => {
     expect(detailPane?.contains(dialog)).toBe(false);
   });
 
+  it('keeps bucketed screenshots in a single rail while preserving bucket labels', async () => {
+    appStoreState.activeSection = 'capture';
+    appStoreState.selectedMatchId = 1;
+    getMatchArtifactsStructured.mockResolvedValue({
+      images: ['C:\\captures\\crew-map.png', 'C:\\captures\\result.png'],
+      imageFiles: [
+        {
+          artifactId: 'artifact-ocr',
+          filename: 'crew-map.png',
+          path: 'C:\\captures\\crew-map.png',
+          captureSource: 'ocr-macro',
+        },
+        {
+          artifactId: 'artifact-result',
+          filename: 'result.png',
+          path: 'C:\\captures\\result.png',
+          captureSource: 'result-macro',
+        },
+      ],
+      telemetry: [],
+      missingImages: [],
+      resolvedFromDisk: false,
+    });
+
+    const { default: SmartCapturesPanel } = await import('./SmartCapturesPanel');
+    const { container } = render(<SmartCapturesPanel />);
+
+    await waitFor(() => {
+      expect(container.querySelectorAll('.sc-screenshots-rail')).toHaveLength(1);
+    });
+
+    expect(screen.getByText('Crew/Map Macro (1)')).toBeInTheDocument();
+    expect(screen.getByText('Result Macro (1)')).toBeInTheDocument();
+    expect(screen.getAllByText('Crew/Map')[0]).toBeInTheDocument();
+    expect(screen.getAllByText('Result')[0]).toBeInTheDocument();
+  });
+
   it('switches the queue day to the new local day when midnight passes and a new match arrives', async () => {
     vi.useFakeTimers();
     try {

@@ -9,20 +9,22 @@ import {
     type PixelMonitorSampleResult,
     type PixelMonitorSampleMeta,
 } from '../utils/pixelMonitorSample';
+import {
+    FLASH_SAMPLE_REGION,
+    buildResultFlashSampleNormalizedRegion,
+    buildResultFlashSampleRegions,
+} from '../utils/resultFlashGeometry';
 
 // ── Flash region ────────────────────────────────────────────────────────────
-// Targets the active-user HUD username box in the bottom-left corner:
-// X:150 Y:979 W:107 H:21 on a 1920×1080 frame.
-export const FLASH_SAMPLE_REGION = {
-    x: 150 / 1920,
-    y: 979 / 1080,
-    width: 107 / 1920,
-    height: 21 / 1080,
-} as const;
+// Reference ROI on a 1920×1080 frame. Runtime geometry height-scales this
+// anchor and widens slightly on ultrawide layouts so the detector stays over
+// the active-user HUD username.
+export { FLASH_SAMPLE_REGION };
 
 // ── Text region ─────────────────────────────────────────────────────────────
-// Spans x=478-1244, y=113-270 at 1920×1080 — boxes A/B/C cover left-anchored
-// (2025) and center (2026) layouts without diluting white ratio with background.
+// Spans x=478-1244, y=113-270 at 1920×1080 — the combined monitor crops this
+// broad headline band and then places the live PLACE anchors inside it at
+// runtime for the no-flash placement detector.
 export const RESULT_TEXT_SAMPLE_REGION = {
     left: 0.2489,
     top: 0.105,
@@ -138,56 +140,20 @@ export interface ResultMonitorOptions {
 
 // ── Region helpers ──────────────────────────────────────────────────────────
 
-const toPositiveDimension = (value: unknown): number | null => {
-    const parsed = Number(value);
-    if (!Number.isFinite(parsed) || parsed <= 0) return null;
-    return Math.round(parsed);
-};
-
-const resolveDisplayDimensions = (
-    gameResolution: GameResolution | null | undefined,
-    deviceDisplayInfo: DeviceDisplayInfo | null | undefined,
-): { width: number; height: number } | null => {
-    const gw = toPositiveDimension(gameResolution?.resX);
-    const gh = toPositiveDimension(gameResolution?.resY);
-    if (gw && gh) return { width: gw, height: gh };
-
-    const vw = toPositiveDimension(deviceDisplayInfo?.virtualWidth);
-    const vh = toPositiveDimension(deviceDisplayInfo?.virtualHeight);
-    if (vw && vh) return { width: vw, height: vh };
-
-    const dw = toPositiveDimension(deviceDisplayInfo?.displayWidth);
-    const dh = toPositiveDimension(deviceDisplayInfo?.displayHeight);
-    if (dw && dh) return { width: dw, height: dh };
-
-    if (typeof window !== 'undefined' && typeof window.screen !== 'undefined') {
-        const scale = Math.max(1, Number(window.devicePixelRatio) || 1);
-        const sw = toPositiveDimension(window.screen.width * scale);
-        const sh = toPositiveDimension(window.screen.height * scale);
-        if (sw && sh) return { width: sw, height: sh };
-    }
-
-    return null;
-};
-
 // Build the absolute flash sample region array for debug snapshots.
 export const buildFlashSampleRegions = (
     gameResolution: GameResolution | null | undefined,
     deviceDisplayInfo: DeviceDisplayInfo | null | undefined,
-): Array<{ x: number; y: number; width: number; height: number }> => {
-    const dims = resolveDisplayDimensions(gameResolution, deviceDisplayInfo);
-    if (!dims) return [];
-    const rw = Math.max(1, Math.round(dims.width * FLASH_SAMPLE_REGION.width));
-    const rh = Math.max(1, Math.round(dims.height * FLASH_SAMPLE_REGION.height));
-    const maxX = Math.max(0, dims.width - rw);
-    const maxY = Math.max(0, dims.height - rh);
-    return [{
-        x: Math.min(maxX, Math.max(0, Math.round(dims.width * FLASH_SAMPLE_REGION.x))),
-        y: Math.min(maxY, Math.max(0, Math.round(dims.height * FLASH_SAMPLE_REGION.y))),
-        width: rw,
-        height: rh,
-    }];
-};
+): Array<{ x: number; y: number; width: number; height: number }> => (
+    buildResultFlashSampleRegions(gameResolution, deviceDisplayInfo)
+);
+
+export const buildFlashSampleNormalizedRegion = (
+    gameResolution: GameResolution | null | undefined,
+    deviceDisplayInfo: DeviceDisplayInfo | null | undefined,
+): { x: number; y: number; width: number; height: number } | null => (
+    buildResultFlashSampleNormalizedRegion(gameResolution, deviceDisplayInfo)
+);
 
 // ── Text payload normalizer ─────────────────────────────────────────────────
 
@@ -278,6 +244,10 @@ export function useResultMonitor({
 
     const flashRegions = useMemo(
         () => buildFlashSampleRegions(gameResolution, deviceDisplayInfo),
+        [deviceDisplayInfo, gameResolution],
+    );
+    const flashNormalizedRegion = useMemo(
+        () => buildFlashSampleNormalizedRegion(gameResolution, deviceDisplayInfo) ?? FLASH_SAMPLE_REGION,
         [deviceDisplayInfo, gameResolution],
     );
 
@@ -417,7 +387,7 @@ export function useResultMonitor({
             ...diagnosticState,
             armAnchorAt: normalizedArmAnchorAt,
             armAt,
-            flashRegion: flashEnabled ? FLASH_SAMPLE_REGION : null,
+            flashRegion: flashEnabled ? flashNormalizedRegion : null,
             textRegion: textEnabled ? RESULT_TEXT_SAMPLE_REGION : null,
         });
 
@@ -467,7 +437,7 @@ export function useResultMonitor({
 
         api.send(SEND_START, {
             armAt,
-            flashRegion: flashEnabled ? FLASH_SAMPLE_REGION : null,
+            flashRegion: flashEnabled ? flashNormalizedRegion : null,
             textRegion: textEnabled ? RESULT_TEXT_SAMPLE_REGION : null,
         });
 
@@ -482,5 +452,5 @@ export function useResultMonitor({
             unsubTextDebug?.();
             flashRuntimeDebugRef.current = createEmptyFlashDebugState();
         };
-    }, [armAnchorAt, enabled, flashEnabled, normalizedArmDelayMs, textEnabled, triggerLatched]);
+    }, [armAnchorAt, enabled, flashEnabled, flashNormalizedRegion, normalizedArmDelayMs, textEnabled, triggerLatched]);
 }

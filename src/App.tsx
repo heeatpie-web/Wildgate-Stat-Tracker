@@ -302,17 +302,10 @@ type FullAutoSaveReason = FullAutoDetectionMethod | 'background' | 'manual';
 const IMAGE_ARTIFACT_PATTERN = /\.(png|jpe?g|webp|bmp|gif)$/i;
 const TELEMETRY_AUTO_CAPTURE_ARTIFACT_TARGET = 3;
 const PREGAME_LOBBY_MACRO_DELAY_MS = 5_000;
-// `capture-screen` already hides the overlay window and waits briefly before grabbing the game frame.
-// The actual result flash is much shorter than the old 541ms assumption, so keep both
-// flash and text captures keyed off the same 100ms settle window.
-const KNOWN_FLASH_PURE_WHITE_MS = 100;
-// Extra settle time after the flash window ends before we take the first
-// full-screen result capture. This is intentionally looser than the text path.
-const POST_FLASH_CAPTURE_BUFFER_MS = 200;
-// Text can appear shortly before the white-out transition on some result flows.
-// Hold the text-trigger path long enough for the flash path to supersede it,
-// or for the flash to finish before we grab the first screenshot.
-const FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS = KNOWN_FLASH_PURE_WHITE_MS + POST_FLASH_CAPTURE_BUFFER_MS;
+// The detectors already enforce their own hold timing, so once either path
+// signals a result state we capture immediately.
+const POST_FLASH_CAPTURE_BUFFER_MS = 0;
+const FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS = 0;
 // Take a short bounded burst per trigger so a bad early frame does not end
 // the automatic path while the result screen is still visible.
 const FULL_AUTO_RESULT_OCR_MAX_ATTEMPTS = 2;
@@ -2556,7 +2549,7 @@ const App: React.FC = () => {
     // stages. Restricting to 'live' caused the combined monitor to restart on the
     // 'live' → 'menu' transition (textEnabled flip), wiping flash cooldown state and
     // letting the loading-screen brightness trigger a false positive capture.
-    // The 300ms consecutive-hit requirement on the text tripwire already guards
+    // The 200ms consecutive-hit requirement on the placement tripwire already guards
     // against transient false positives from loading screens.
     const resultTextTripwireEnabled = resultMonitorEligible && !resultMonitorSuppression.text;
 
@@ -3524,19 +3517,14 @@ const App: React.FC = () => {
         setResultFlashDebugEvents([]);
     }, [devMode]);
 
-    const handleResultFlashDetectedWithDebug = useCallback(async ({ brightSinceMs }: { brightSinceMs: number }) => {
+    const handleResultFlashDetectedWithDebug = useCallback(async ({ brightSinceMs: _brightSinceMs }: { brightSinceMs: number }) => {
         appendResultFlashDebugEvent('detected', 'Flash threshold held on the game capture; scheduling screenshot burst');
         cancelPendingTextDetection();
         const scheduledMatchId = normalizedActiveTelemetryDraftMatchId;
-        // Calculate how much of the 200ms pure-white flash has already elapsed,
-        // then wait for the remainder + buffer so we capture just after flash-end.
-        const elapsed = Math.max(0, Date.now() - brightSinceMs);
-        const remaining = Math.max(0, KNOWN_FLASH_PURE_WHITE_MS - elapsed);
-        const initialDelayMs = remaining + POST_FLASH_CAPTURE_BUFFER_MS;
+        void _brightSinceMs;
+        const initialDelayMs = POST_FLASH_CAPTURE_BUFFER_MS;
         console.log(`[Brain] Flash signal received - scheduling result capture in ${initialDelayMs}ms`, {
             matchId: scheduledMatchId,
-            elapsed,
-            remaining,
             delayMs: initialDelayMs,
         });
         if (!beginFullAutoResultDetection('Result flash detected', scheduledMatchId, 'flash')) return;
@@ -3581,7 +3569,9 @@ const App: React.FC = () => {
         const pendingToken = pendingTextDetectionTokenRef.current + 1;
         pendingTextDetectionTokenRef.current = pendingToken;
         pendingTextDetectionMatchIdRef.current = scheduledMatchId;
-        await waitForDuration(FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS);
+        if (FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS > 0) {
+            await waitForDuration(FULL_AUTO_RESULT_OCR_POST_TEXT_DELAY_MS);
+        }
 
         if (
             pendingTextDetectionTokenRef.current !== pendingToken

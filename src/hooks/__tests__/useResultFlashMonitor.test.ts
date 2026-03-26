@@ -251,4 +251,49 @@ describe('useResultFlashMonitor', () => {
       null,
     )).toEqual([{ x: 150, y: 979, width: 107, height: 21 }]);
   });
+
+  it('widens and repositions the flash ROI for ultrawide active-user HUD layouts', async () => {
+    const {
+      buildResultFlashSampleNormalizedRegion,
+      buildResultFlashSampleRegions,
+    } = await import('../useResultFlashMonitor');
+
+    expect(buildResultFlashSampleRegions(
+      { resX: 3840, resY: 1600 },
+      null,
+    )).toEqual([{ x: 220, y: 1450, width: 200, height: 31 }]);
+
+    expect(buildResultFlashSampleNormalizedRegion(
+      { resX: 3840, resY: 1600 },
+      null,
+    )).toEqual({
+      x: 220 / 3840,
+      y: 1450 / 1600,
+      width: 200 / 3840,
+      height: 31 / 1600,
+    });
+  });
+
+  it('sends the dynamic ultrawide normalized region to the main process', async () => {
+    const { useResultFlashMonitor } = await import('../useResultFlashMonitor');
+    appStoreState.gameResolution = { resX: 3840, resY: 1600 };
+    const liveStartedAt = Date.now() - 10_000;
+
+    renderHook(() => useResultFlashMonitor({
+      enabled: true,
+      liveStartedAt,
+      armDelayMs: 45_000,
+      onFlashResolved: vi.fn(),
+    }));
+
+    expect(sendMock).toHaveBeenCalledWith('result-flash-start', {
+      armAt: liveStartedAt + 45_000,
+      normalizedRegion: {
+        x: 220 / 3840,
+        y: 1450 / 1600,
+        width: 200 / 3840,
+        height: 31 / 1600,
+      },
+    });
+  });
 });

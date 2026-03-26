@@ -6,9 +6,17 @@ const {
   __test__,
 } = require('./resultCombinedMonitor.cjs');
 
+const STANDARD_CAPTURE_REGION = { left: 0.2489, top: 0.105, width: 0.3991, height: 0.145, normalized: true };
+const STANDARD_ABSOLUTE_REGION = { x: 478, y: 113, width: 766, height: 157 };
+const STANDARD_LAYOUT = __test__.buildPlaceTripwireLayout({
+  absoluteRegion: STANDARD_ABSOLUTE_REGION,
+  captureRegion: STANDARD_CAPTURE_REGION,
+});
+
 function createRawTripwireImage(activeBoxIds = [], options = {}) {
-  const width = 800;
-  const height = 240;
+  const width = options.width ?? STANDARD_ABSOLUTE_REGION.width;
+  const height = options.height ?? STANDARD_ABSOLUTE_REGION.height;
+  const layout = options.layout ?? STANDARD_LAYOUT;
   const activeIds = new Set(activeBoxIds);
   const pixels = Buffer.alloc(width * height * 4, 12);
 
@@ -25,7 +33,7 @@ function createRawTripwireImage(activeBoxIds = [], options = {}) {
     return { raw: pixels, width, height };
   }
 
-  for (const box of __test__.TRIPWIRE_BOX_LAYOUT) {
+  for (const box of layout) {
     if (!activeIds.has(box.id)) continue;
 
     const left = Math.floor(box.left * width);
@@ -50,6 +58,8 @@ function createTextState(overrides = {}) {
   return {
     armAt: 0,
     captureRegion: { left: 0.2489, top: 0.105, width: 0.3991, height: 0.145, normalized: true },
+    absoluteRegion: STANDARD_ABSOLUTE_REGION,
+    tripwireBoxLayout: STANDARD_LAYOUT,
     detected: false,
     disabledForMatch: false,
     tripwireConsecutiveHits: 0,
@@ -67,54 +77,68 @@ function createTextState(overrides = {}) {
 }
 
 describe('resultCombinedMonitor tripwire helpers', () => {
-  it('triggers from baseline deltas when left-anchored placement text only lights result-a', () => {
+  it('triggers when at least three place anchors are at 98% brightness or higher', () => {
     const baselineImage = createRawTripwireImage();
-    const hotImage = createRawTripwireImage(['result-a']);
-    const baselineMetrics = __test__.analyzeTextBoxes(baselineImage.raw, baselineImage.width, baselineImage.height);
-    const hotMetrics = __test__.analyzeTextBoxes(hotImage.raw, hotImage.width, hotImage.height);
+    const hotImage = createRawTripwireImage(['place-p', 'place-a', 'place-e']);
+    const baselineMetrics = __test__.analyzeTextBoxes(
+      baselineImage.raw,
+      baselineImage.width,
+      baselineImage.height,
+      STANDARD_LAYOUT,
+    );
+    const hotMetrics = __test__.analyzeTextBoxes(
+      hotImage.raw,
+      hotImage.width,
+      hotImage.height,
+      STANDARD_LAYOUT,
+    );
     const baseline = __test__.createTripwireBaseline(baselineMetrics);
 
     const snapshot = __test__.buildTripwireSnapshot(hotMetrics, baseline);
 
     expect(snapshot.triggered).toBe(true);
-    expect(snapshot.activeBoxCount).toBe(1);
-    expect(snapshot.totalWhiteDelta).toBeGreaterThan(0.045);
-    expect(snapshot.boxes.find((box) => box.id === 'result-a')).toMatchObject({
+    expect(snapshot.activeBoxCount).toBe(3);
+    expect(snapshot.totalWhiteDelta).toBeGreaterThanOrEqual(0.6);
+    expect(snapshot.boxes.find((box) => box.id === 'place-p')).toMatchObject({
       active: true,
     });
   });
 
-  it('detects sustained text when the first armed sample is already hot', () => {
-    const hotImage = createRawTripwireImage(['result-b', 'result-c']);
-    const hotMetrics = __test__.analyzeTextBoxes(hotImage.raw, hotImage.width, hotImage.height);
+  it('detects sustained place text after the 200ms hold requirement', () => {
+    const hotImage = createRawTripwireImage(['place-p', 'place-l', 'place-a']);
+    const hotMetrics = __test__.analyzeTextBoxes(
+      hotImage.raw,
+      hotImage.width,
+      hotImage.height,
+      STANDARD_LAYOUT,
+    );
     const regionWhiteRatio = __test__.computeRegionWhiteRatio(hotImage.raw, hotImage.width, hotImage.height);
     const text = createTextState({ armAt: 10 });
 
     __test__.applyTextTripwireSample(text, hotMetrics, regionWhiteRatio, 10);
     expect(text.detected).toBe(false);
-    expect(text.bootstrapHotStart).toBe(true);
     expect(text.tripwireConsecutiveHits).toBe(1);
 
     __test__.applyTextTripwireSample(text, hotMetrics, regionWhiteRatio, 110);
-    expect(text.detected).toBe(false);
-    expect(text.tripwireConsecutiveHits).toBe(2);
-
-    __test__.applyTextTripwireSample(text, hotMetrics, regionWhiteRatio, 210);
-
     expect(text.detected).toBe(true);
     expect(text.onDetected).toHaveBeenCalledTimes(1);
     expect(text.onDetected.mock.calls[0][0]).toMatchObject({
       detectionMethod: 'text',
       result: null,
-      activeBoxIds: ['result-b', 'result-c'],
-      tripwireActiveBoxCount: 2,
+      activeBoxIds: ['place-p', 'place-l', 'place-a'],
+      tripwireActiveBoxCount: 3,
     });
-    expect(text.onDetected.mock.calls[0][0].tripwireTotalWhiteDelta).toBeGreaterThan(0.045);
+    expect(text.onDetected.mock.calls[0][0].tripwireTotalWhiteDelta).toBeGreaterThanOrEqual(0.6);
   });
 
   it('blocks hot tripwire samples during a pure-white transition flash', () => {
     const whiteImage = createRawTripwireImage([], { fullWhite: true });
-    const whiteMetrics = __test__.analyzeTextBoxes(whiteImage.raw, whiteImage.width, whiteImage.height);
+    const whiteMetrics = __test__.analyzeTextBoxes(
+      whiteImage.raw,
+      whiteImage.width,
+      whiteImage.height,
+      STANDARD_LAYOUT,
+    );
     const regionWhiteRatio = __test__.computeRegionWhiteRatio(whiteImage.raw, whiteImage.width, whiteImage.height);
     const text = createTextState({ armAt: 5 });
 
@@ -122,26 +146,39 @@ describe('resultCombinedMonitor tripwire helpers', () => {
 
     expect(regionWhiteRatio).toBeGreaterThanOrEqual(0.6);
     expect(text.detected).toBe(false);
-    expect(text.bootstrapHotStart).toBe(false);
     expect(text.tripwireConsecutiveHits).toBe(0);
-    expect(text.baselineWhiteRatios).toBeNull();
     expect(text.lastTripwire?.triggered).toBe(true);
     expect(text.onDetected).not.toHaveBeenCalled();
+  });
+
+  it('builds the approved ultrawide place-anchor layout from the shared text crop', () => {
+    const layout = __test__.buildPlaceTripwireLayout({
+      absoluteRegion: { x: 940, y: 165, width: 1508, height: 228 },
+      captureRegion: STANDARD_CAPTURE_REGION,
+    });
+
+    expect(layout).toEqual([
+      { id: 'place-p', left: 337 / 1508, top: 91 / 228, width: 47 / 1508, height: 19 / 228 },
+      { id: 'place-l', left: 417 / 1508, top: 186 / 228, width: 54 / 1508, height: 23 / 228 },
+      { id: 'place-a', left: 514 / 1508, top: 173 / 228, width: 68 / 1508, height: 19 / 228 },
+      { id: 'place-c', left: 666 / 1508, top: 96 / 228, width: 54 / 1508, height: 13 / 228 },
+      { id: 'place-e', left: 737 / 1508, top: 186 / 228, width: 57 / 1508, height: 23 / 228 },
+    ]);
   });
 });
 
 describe('computeHeadlineFlashAssist (same-tick OR path for flash)', () => {
   it('contributes on full-frame tripwire-white flash (matches text flash guard region)', () => {
     const whiteImage = createRawTripwireImage([], { fullWhite: true });
-    const out = __test__.computeHeadlineFlashAssist(whiteImage.raw, whiteImage.width, whiteImage.height);
+    const out = __test__.computeHeadlineFlashAssist(whiteImage.raw, whiteImage.width, whiteImage.height, STANDARD_LAYOUT);
     expect(out.regionWhiteRatio).toBeGreaterThanOrEqual(__test__.TRIPWIRE_FLASH_GUARD_RATIO);
     expect(out.avgBrightness).toBeGreaterThanOrEqual(__test__.FLASH_WHITE_THRESHOLD);
     expect(out.contributes).toBe(true);
   });
 
   it('does not contribute for normal tripwire-hot result text (low region white ratio)', () => {
-    const hotImage = createRawTripwireImage(['result-b', 'result-c']);
-    const out = __test__.computeHeadlineFlashAssist(hotImage.raw, hotImage.width, hotImage.height);
+    const hotImage = createRawTripwireImage(['place-a', 'place-c', 'place-e']);
+    const out = __test__.computeHeadlineFlashAssist(hotImage.raw, hotImage.width, hotImage.height, STANDARD_LAYOUT);
     expect(out.regionWhiteRatio).toBeLessThan(__test__.TRIPWIRE_FLASH_GUARD_RATIO);
     expect(out.contributes).toBe(false);
   });
@@ -153,7 +190,7 @@ describe('computeHeadlineFlashAssist (same-tick OR path for flash)', () => {
     for (let i = 3; i < pixels.length; i += 4) {
       pixels[i] = 255;
     }
-    const boxes = __test__.TRIPWIRE_BOX_LAYOUT;
+    const boxes = STANDARD_LAYOUT;
     for (const box of boxes) {
       const left = Math.floor(box.left * width);
       const top = Math.floor(box.top * height);

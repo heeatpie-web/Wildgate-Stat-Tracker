@@ -3930,6 +3930,23 @@ const SmartMatchDetail: React.FC<{
         const analyzeButtonLabel = hasExistingOcrAnalysis ? 'Re-analyze' : 'Analyze';
         const hasResult = match.result === 'Win' || match.result === 'Loss' || match.result === 'Draw';
         const hasArtifacts = (artifacts.images && artifacts.images.length > 0) || (match.artifacts && match.artifacts.length > 0);
+        const screenshotBucketMeta = {
+            ocr: {
+                title: 'Crew/Map Macro',
+                badgeLabel: 'Crew/Map',
+                className: 'bg-md-sys-secondary/16 text-md-sys-secondary',
+            },
+            result: {
+                title: 'Result Macro',
+                badgeLabel: 'Result',
+                className: 'bg-md-sys-primary/16 text-md-sys-primary',
+            },
+            other: {
+                title: 'Other',
+                badgeLabel: 'Other',
+                className: 'bg-md-sys-surface-container-high text-md-sys-on-surface/65',
+            },
+        } as const;
         const screenshotBuckets = (() => {
             const ocrIndices: number[] = [];
             const resultIndices: number[] = [];
@@ -3945,11 +3962,19 @@ const SmartMatchDetail: React.FC<{
                 }
             });
             return [
-                { key: 'ocr', title: `Crew/Map Macro (${ocrIndices.length})`, indices: ocrIndices },
-                { key: 'result', title: `Result Macro (${resultIndices.length})`, indices: resultIndices },
-                { key: 'other', title: `Other (${otherIndices.length})`, indices: otherIndices },
+                { key: 'ocr', indices: ocrIndices, ...screenshotBucketMeta.ocr },
+                { key: 'result', indices: resultIndices, ...screenshotBucketMeta.result },
+                { key: 'other', indices: otherIndices, ...screenshotBucketMeta.other },
             ].filter((bucket) => bucket.indices.length > 0);
         })();
+        const screenshotEntries = screenshotBuckets.flatMap((bucket) => (
+            bucket.indices.map((index) => ({
+                index,
+                key: bucket.key,
+                badgeLabel: bucket.badgeLabel,
+                badgeClassName: bucket.className,
+            }))
+        ));
         const queueStatus = getQueueStatus(match);
         const statusMeta = getStatusMeta(queueStatus.key);
         const statusIcon = (() => {
@@ -4521,82 +4546,91 @@ const SmartMatchDetail: React.FC<{
                             }
                         >
                             <div className="space-y-3">
-                                {screenshotBuckets.map((bucket) => (
-                                    <div key={bucket.key} className="space-y-1.5">
-                                        <div className="text-label-xs font-semibold uppercase tracking-wide text-md-sys-on-surface/55">
-                                            {bucket.title}
-                                        </div>
-                                        <div className="sc-screenshots-rail">
-                                            {bucket.indices.map((i) => {
-                                                const src = artifacts.images[i];
-                                                const artifactFile = artifacts.imageFiles[i];
-                                                return (
-                                                    <div
-                                                        key={artifactFile?.artifactId || src || i}
-                                                        className={`relative shrink-0 w-40 aspect-video md3-surface-high rounded-xl overflow-hidden group sc-shot-thumb border shadow-sm transition-[border-color,box-shadow] ${dragOverImgIdx === i && dragSrcImgIdx !== null && dragSrcImgIdx !== i ? 'border-md-sys-primary ring-2 ring-md-sys-primary/50' : 'border-md-sys-outline/10'}`}
-                                                        draggable={!!artifactFile?.artifactId}
-                                                        onDragStart={(event) => {
-                                                            setDragSrcImgIdx(i);
-                                                            if (!artifactFile?.artifactId || !onBeginArtifactDrag) return;
-                                                            event.dataTransfer.effectAllowed = 'move';
-                                                            event.dataTransfer.setData('text/plain', artifactFile.artifactId);
-                                                            onBeginArtifactDrag({
-                                                                sourceMatchId: match.id,
-                                                                artifactId: artifactFile.artifactId,
-                                                                imagePath: src,
-                                                                filename: artifactFile.filename,
-                                                            });
-                                                        }}
-                                                        onDragOver={(event) => {
-                                                            if (dragSrcImgIdx === null || dragSrcImgIdx === i) return;
-                                                            event.preventDefault();
-                                                            setDragOverImgIdx(i);
-                                                        }}
-                                                        onDragLeave={() => setDragOverImgIdx(null)}
-                                                        onDrop={(event) => {
-                                                            if (dragSrcImgIdx === null || dragSrcImgIdx === i) return;
-                                                            event.preventDefault();
-                                                            event.stopPropagation();
-                                                            handleReorderImages(dragSrcImgIdx, i);
-                                                            setDragSrcImgIdx(null);
-                                                            setDragOverImgIdx(null);
-                                                        }}
-                                                        onDragEnd={() => {
-                                                            setDragSrcImgIdx(null);
-                                                            setDragOverImgIdx(null);
-                                                            onEndArtifactDrag?.();
-                                                        }}
-                                                    >
-                                                        <button onClick={() => setActiveScreenshotIndex(i)} className="w-full h-full cursor-pointer">
-                                                            <LocalImage
-                                                                src={src}
-                                                                alt={`Screenshot ${i + 1}`}
-                                                                className="w-full h-full object-cover bg-md-sys-surface-container-lowest"
-                                                            />
-                                                            <div className="absolute inset-0 bg-scrim-40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                                <Eye size={16} />
-                                                            </div>
-                                                        </button>
-                                                        {artifactFile && (
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); handleRemoveScreenshot(i); }}
-                                                                onMouseLeave={() => { if (confirmDeleteIdx === i) setConfirmDeleteIdx(null); }}
-                                                                className={`absolute bottom-1 right-1 rounded-full flex items-center justify-center transition-all ${confirmDeleteIdx === i
-                                                                    ? 'w-auto h-5 px-1.5 gap-1 bg-danger text-on-scrim opacity-100 text-label-xs font-bold'
-                                                                    : 'w-4 h-4 bg-danger-soft-strong text-danger opacity-0 group-hover:opacity-100'
-                                                                    }`}
-                                                                title={confirmDeleteIdx === i ? 'Click again to confirm' : 'Remove screenshot'}
-                                                            >
-                                                                {confirmDeleteIdx === i ? <><Trash2 size={9} /> Delete?</> : <X size={9} />}
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
+                                {screenshotBuckets.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {screenshotBuckets.map((bucket) => (
+                                            <span
+                                                key={bucket.key}
+                                                className={`rounded-pill px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${bucket.className}`}
+                                            >
+                                                {bucket.title} ({bucket.indices.length})
+                                            </span>
+                                        ))}
                                     </div>
-                                ))}
+                                )}
                                 <div className="sc-screenshots-rail">
+                                    {screenshotEntries.map((entry) => {
+                                        const i = entry.index;
+                                        const src = artifacts.images[i];
+                                        const artifactFile = artifacts.imageFiles[i];
+                                        return (
+                                            <div
+                                                key={artifactFile?.artifactId || src || i}
+                                                className={`relative shrink-0 w-40 aspect-video md3-surface-high rounded-xl overflow-hidden group sc-shot-thumb border shadow-sm transition-[border-color,box-shadow] ${dragOverImgIdx === i && dragSrcImgIdx !== null && dragSrcImgIdx !== i ? 'border-md-sys-primary ring-2 ring-md-sys-primary/50' : 'border-md-sys-outline/10'}`}
+                                                draggable={!!artifactFile?.artifactId}
+                                                onDragStart={(event) => {
+                                                    setDragSrcImgIdx(i);
+                                                    if (!artifactFile?.artifactId || !onBeginArtifactDrag) return;
+                                                    event.dataTransfer.effectAllowed = 'move';
+                                                    event.dataTransfer.setData('text/plain', artifactFile.artifactId);
+                                                    onBeginArtifactDrag({
+                                                        sourceMatchId: match.id,
+                                                        artifactId: artifactFile.artifactId,
+                                                        imagePath: src,
+                                                        filename: artifactFile.filename,
+                                                    });
+                                                }}
+                                                onDragOver={(event) => {
+                                                    if (dragSrcImgIdx === null || dragSrcImgIdx === i) return;
+                                                    event.preventDefault();
+                                                    setDragOverImgIdx(i);
+                                                }}
+                                                onDragLeave={() => setDragOverImgIdx(null)}
+                                                onDrop={(event) => {
+                                                    if (dragSrcImgIdx === null || dragSrcImgIdx === i) return;
+                                                    event.preventDefault();
+                                                    event.stopPropagation();
+                                                    handleReorderImages(dragSrcImgIdx, i);
+                                                    setDragSrcImgIdx(null);
+                                                    setDragOverImgIdx(null);
+                                                }}
+                                                onDragEnd={() => {
+                                                    setDragSrcImgIdx(null);
+                                                    setDragOverImgIdx(null);
+                                                    onEndArtifactDrag?.();
+                                                }}
+                                            >
+                                                <button onClick={() => setActiveScreenshotIndex(i)} className="w-full h-full cursor-pointer">
+                                                    <LocalImage
+                                                        src={src}
+                                                        alt={`Screenshot ${i + 1}`}
+                                                        className="w-full h-full object-cover bg-md-sys-surface-container-lowest"
+                                                    />
+                                                    <div className="absolute inset-0 bg-scrim-40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                        <Eye size={16} />
+                                                    </div>
+                                                </button>
+                                                <div
+                                                    className={`absolute left-1 top-1 rounded-pill px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide shadow-sm ${entry.badgeClassName}`}
+                                                >
+                                                    {entry.badgeLabel}
+                                                </div>
+                                                {artifactFile && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleRemoveScreenshot(i); }}
+                                                        onMouseLeave={() => { if (confirmDeleteIdx === i) setConfirmDeleteIdx(null); }}
+                                                        className={`absolute bottom-1 right-1 rounded-full flex items-center justify-center transition-all ${confirmDeleteIdx === i
+                                                            ? 'w-auto h-5 px-1.5 gap-1 bg-danger text-on-scrim opacity-100 text-label-xs font-bold'
+                                                            : 'w-4 h-4 bg-danger-soft-strong text-danger opacity-0 group-hover:opacity-100'
+                                                            }`}
+                                                        title={confirmDeleteIdx === i ? 'Click again to confirm' : 'Remove screenshot'}
+                                                    >
+                                                        {confirmDeleteIdx === i ? <><Trash2 size={9} /> Delete?</> : <X size={9} />}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
                                     <button
                                         onClick={handleAddScreenshot}
                                         className="shrink-0 w-40 aspect-video md3-surface-high rounded-xl border-2 border-dashed border-md-sys-outline/30 hover:border-md-sys-primary/50 hover:bg-md-sys-primary/5 transition-all flex flex-col items-center justify-center gap-1 opacity-60 hover:opacity-100 hover:text-md-sys-primary sc-shot-thumb"

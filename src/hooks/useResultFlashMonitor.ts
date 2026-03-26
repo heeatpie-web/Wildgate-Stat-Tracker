@@ -9,6 +9,11 @@ import {
     type PixelMonitorSampleData,
     type PixelMonitorSampleMeta,
 } from '../utils/pixelMonitorSample';
+import {
+    FLASH_SAMPLE_REGION,
+    buildResultFlashSampleNormalizedRegion,
+    buildResultFlashSampleRegions,
+} from '../utils/resultFlashGeometry';
 
 const FLASH_SAMPLE_INTERVAL_MS = 100;
 export const DEFAULT_FLASH_ARM_DELAY_MS = 45_000;
@@ -17,14 +22,7 @@ export const DEFAULT_FLASH_ARM_DELAY_MS = 45_000;
 const FLASH_BRIGHT_HOLD_MS = 200;
 const FLASH_WHITE_THRESHOLD = 250;
 
-// Targets the active-user HUD username box in the bottom-left corner:
-// X:150 Y:979 W:107 H:21 on a 1920x1080 frame.
-export const FLASH_SAMPLE_REGION = {
-    x: 150 / 1920,
-    y: 979 / 1080,
-    width: 107 / 1920,
-    height: 21 / 1080,
-};
+export { FLASH_SAMPLE_REGION, buildResultFlashSampleNormalizedRegion, buildResultFlashSampleRegions };
 
 const SEND_START = 'result-flash-start';
 const SEND_STOP = 'result-flash-stop';
@@ -117,65 +115,6 @@ const createEmptyRuntimeDebugState = (): RuntimeDebugState => ({
     lastUpdatedAt: Date.now(),
 });
 
-const toPositiveDimension = (value: unknown): number | null => {
-    const parsed = Number(value);
-    if (!Number.isFinite(parsed) || parsed <= 0) return null;
-    return Math.round(parsed);
-};
-
-const resolveFlashMonitorDimensions = (
-    gameResolution: GameResolution | null | undefined,
-    deviceDisplayInfo: DeviceDisplayInfo | null | undefined,
-): { width: number; height: number } | null => {
-    const gameWidth = toPositiveDimension(gameResolution?.resX);
-    const gameHeight = toPositiveDimension(gameResolution?.resY);
-    if (gameWidth && gameHeight) {
-        return { width: gameWidth, height: gameHeight };
-    }
-
-    const virtualWidth = toPositiveDimension(deviceDisplayInfo?.virtualWidth);
-    const virtualHeight = toPositiveDimension(deviceDisplayInfo?.virtualHeight);
-    if (virtualWidth && virtualHeight) {
-        return { width: virtualWidth, height: virtualHeight };
-    }
-
-    const displayWidth = toPositiveDimension(deviceDisplayInfo?.displayWidth);
-    const displayHeight = toPositiveDimension(deviceDisplayInfo?.displayHeight);
-    if (displayWidth && displayHeight) {
-        return { width: displayWidth, height: displayHeight };
-    }
-
-    if (typeof window !== 'undefined' && typeof window.screen !== 'undefined') {
-        const scaleFactor = Math.max(1, Number(window.devicePixelRatio) || 1);
-        const screenWidth = toPositiveDimension(window.screen.width * scaleFactor);
-        const screenHeight = toPositiveDimension(window.screen.height * scaleFactor);
-        if (screenWidth && screenHeight) {
-            return { width: screenWidth, height: screenHeight };
-        }
-    }
-
-    return null;
-};
-
-export const buildResultFlashSampleRegions = (
-    gameResolution: GameResolution | null | undefined,
-    deviceDisplayInfo: DeviceDisplayInfo | null | undefined,
-): Array<{ x: number; y: number; width: number; height: number }> => {
-    const dimensions = resolveFlashMonitorDimensions(gameResolution, deviceDisplayInfo);
-    if (!dimensions) return [];
-
-    const regionWidth = Math.max(1, Math.round(dimensions.width * FLASH_SAMPLE_REGION.width));
-    const regionHeight = Math.max(1, Math.round(dimensions.height * FLASH_SAMPLE_REGION.height));
-    const maxX = Math.max(0, dimensions.width - regionWidth);
-    const maxY = Math.max(0, dimensions.height - regionHeight);
-    return [{
-        x: Math.min(maxX, Math.max(0, Math.round(dimensions.width * FLASH_SAMPLE_REGION.x))),
-        y: Math.min(maxY, Math.max(0, Math.round(dimensions.height * FLASH_SAMPLE_REGION.y))),
-        width: regionWidth,
-        height: regionHeight,
-    }];
-};
-
 export const isNearWhiteSample = (
     sample: PixelMonitorSampleData | null | undefined,
     threshold = FLASH_WHITE_THRESHOLD,
@@ -211,6 +150,10 @@ export function useResultFlashMonitor({
 
     const regions = useMemo(
         () => buildResultFlashSampleRegions(gameResolution, deviceDisplayInfo),
+        [deviceDisplayInfo, gameResolution],
+    );
+    const normalizedRegion = useMemo(
+        () => buildResultFlashSampleNormalizedRegion(gameResolution, deviceDisplayInfo) ?? FLASH_SAMPLE_REGION,
         [deviceDisplayInfo, gameResolution],
     );
     const normalizedArmDelayMs = Math.max(0, Number(armDelayMs) || 0);
@@ -359,7 +302,7 @@ export function useResultFlashMonitor({
 
         api.send(SEND_START, {
             armAt,
-            normalizedRegion: FLASH_SAMPLE_REGION,
+            normalizedRegion,
         });
 
         emitDebugState(Date.now() < armAt ? 'arming-delay' : 'sampling');
@@ -371,5 +314,5 @@ export function useResultFlashMonitor({
             unsubDebug?.();
             resetRuntimeState();
         };
-    }, [enabled, liveStartedAt, normalizedArmDelayMs, triggerLatched]);
+    }, [enabled, liveStartedAt, normalizedArmDelayMs, normalizedRegion, triggerLatched]);
 }
