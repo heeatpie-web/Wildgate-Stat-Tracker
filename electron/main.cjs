@@ -1325,15 +1325,19 @@ function isAutoCaptureHotkeySnapshotStale(snapshotAgeMs, maxAgeMs = AUTO_CAPTURE
 }
 
 function resolveAppIconPath() {
+  // Prefer icons next to main (dev + packaged app). `process.resourcesPath` is the Electron
+  // framework dir in development and can yield false negatives for extraResources paths.
   const candidates = [
+    path.join(__dirname, 'assets', 'icon.ico'),
+    path.join(__dirname, 'assets', 'icon.png'),
     path.join(process.resourcesPath || '', 'icon.ico'),
     path.join(process.resourcesPath || '', 'icon.png'),
-    path.join(__dirname, 'assets/icon.ico'),
-    path.join(__dirname, 'assets/icon.png'),
-    path.join(__dirname, '../public/app-icon.png'),
-    path.join(__dirname, '../public/icon-512.png'),
+    path.join(__dirname, '..', 'public', 'app-icon.png'),
+    path.join(__dirname, '..', 'public', 'icon-512.png'),
+    path.join(__dirname, '..', 'dist', 'app-icon.png'),
+    path.join(__dirname, '..', 'dist', 'icon-512.png'),
   ];
-  return candidates.find((candidate) => fs.existsSync(candidate)) || candidates[0];
+  return candidates.find((candidate) => fs.existsSync(candidate)) || '';
 }
 let previousBounds = { x: 0, y: 0, width: 1440, height: 900 };
 let lastOverlayBounds = null;
@@ -2924,7 +2928,7 @@ function createWindow() {
       backgroundThrottling: false,
       preload: path.join(__dirname, 'preload.cjs'),
     },
-    icon: iconPath,
+    ...(iconPath ? { icon: iconPath } : {}),
     autoHideMenuBar: true,
     transparent: true,
     frame: false,

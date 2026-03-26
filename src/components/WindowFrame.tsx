@@ -35,9 +35,14 @@ export const WindowFrame: React.FC = () => {
         >
             {/* Left: App Identity */}
             <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 rounded-control bg-gradient-to-br from-md-sys-primary to-md-sys-tertiary flex items-center justify-center shadow-sm">
-                    <span className="text-label-xs font-bold text-on-scrim">W</span>
-                </div>
+                <img
+                    src={`${import.meta.env.BASE_URL}icon-192.png`}
+                    alt=""
+                    width={16}
+                    height={16}
+                    className="w-4 h-4 rounded-control object-cover shadow-sm shrink-0"
+                    draggable={false}
+                />
                 <span className="text-label-sm font-semibold tracking-wide-08 uppercase">{APP_NAME}</span>
                 <span className="text-label-xs font-mono opacity-40">{APP_VERSION}</span>
             </div>
