@@ -556,6 +556,17 @@ const withPreservedMeta = (data: StorageData): StorageData => ({
   },
 });
 
+/** Drop any in-flight debounced save so it cannot overwrite a wipe/restore. */
+const cancelPendingDebouncedSave = () => {
+  if (saveTimeout) {
+    clearTimeout(saveTimeout);
+    saveTimeout = null;
+  }
+  const resolvers = pendingResolvers;
+  pendingResolvers = [];
+  resolvers.forEach((resolver) => resolver(true));
+};
+
 export const StorageService = {
   ensureLifecycleGuards() {
     if (lifecycleGuardsBound) return;
@@ -733,6 +744,7 @@ export const StorageService = {
   },
 
   async restoreFromData(rawData: unknown): Promise<{ success: boolean; error?: string }> {
+    cancelPendingDebouncedSave();
     try {
       const normalized = coerceStorageData(rawData);
       if (!normalized) {
@@ -748,5 +760,24 @@ export const StorageService = {
     } catch (error) {
       return { success: false, error: String(error) };
     }
-  }
+  },
+
+  /**
+   * Replace persisted state with factory defaults (matches, roster, mappings, etc.).
+   * Required for Reset Data in Electron: the DB lives on disk, not only in localStorage.
+   */
+  async wipeAllPersistedData(): Promise<boolean> {
+    this.ensureLifecycleGuards();
+    cancelPendingDebouncedSave();
+    try {
+      const fresh = await applyUidSeed(createDefaultStorageData());
+      const ok = await writeNow(fresh);
+      if (!ok) return false;
+      rememberLoadedData(fresh);
+      return true;
+    } catch (error) {
+      Logger.error('Storage', 'Failed to wipe persisted data', error);
+      return false;
+    }
+  },
 };
