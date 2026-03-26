@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.5.2": [
+    "Reliability: Result flash detection now scales the HUD ROI by resolution so 1440p and ultrawide layouts sample the active-player name correctly.",
+    "Detection: No-flash placement results now use five bright PLACE anchors with flash priority and immediate capture handoff for faster end-state recognition.",
+    "Workflow: Smart Captures screenshots are back in one horizontal review rail while preserving OCR, result, and other artifact buckets."
+  ],
   "v3.5.1": [
     "Reliability: OCR rerun now preserves roster/team context when unclassifiable artifact frames appear later in the same match.",
     "Workflow: Smart Capture artifacts are tagged by capture source (Crew/Map macro vs Result macro) and shown in separate screenshot buckets.",
