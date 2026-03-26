@@ -990,6 +990,63 @@ describe('App', () => {
     vi.useRealTimers();
   });
 
+  it('arms Artifacts & Gates result monitoring from live if pregame was skipped', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
+    uiState.telemetryLifecycleStage = 'live';
+    const draft = {
+      id: 7181,
+      timestamp: Date.now(),
+      date: '3/21/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      artifacts: [],
+      matchMode: 'artifactsandgates',
+    };
+    gameDataState.matches = [draft];
+    appStoreState.matches = [draft];
+
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(useResultFlashMonitorMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      enabled: true,
+      armDelayMs: 120_000,
+      flashEnabled: true,
+      textEnabled: true,
+      armAnchorAt: expect.any(Number),
+    }));
+    expect(useResultTextMonitorMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      enabled: true,
+      armDelayMs: 120_000,
+      flashEnabled: true,
+      textEnabled: true,
+      armAnchorAt: expect.any(Number),
+    }));
+    expect(loggerInfo).toHaveBeenCalledWith(
+      'ResultMonitor',
+      'Seeded Artifacts & Gates live arm anchor after skipped pregame',
+      expect.objectContaining({
+        matchId: 7181,
+        lifecycleStage: 'live',
+      }),
+    );
+    vi.useRealTimers();
+  });
+
   it('restores Artifacts & Gates result monitoring at the five-minute fallback for the same draft', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;

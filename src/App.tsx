@@ -2509,16 +2509,24 @@ const App: React.FC = () => {
             }
             return;
         }
-        if (telemetryLifecycleStage !== 'pregame') return;
+        const seededFromPregame = telemetryLifecycleStage === 'pregame';
+        if (!seededFromPregame && telemetryLifecycleStage !== 'live') return;
         const seededAt = Date.now();
         telemetryFirstPregameAtRef.current.set(normalizedActiveTelemetryDraftMatchId, seededAt);
         setActiveTelemetryDraftFirstPregameAt(seededAt);
-        Logger.info('ResultMonitor', 'Seeded Artifacts & Gates pregame arm anchor', {
+        Logger.info(
+            'ResultMonitor',
+            seededFromPregame
+                ? 'Seeded Artifacts & Gates pregame arm anchor'
+                : 'Seeded Artifacts & Gates live arm anchor after skipped pregame',
+            {
             matchId: normalizedActiveTelemetryDraftMatchId,
+            lifecycleStage: telemetryLifecycleStage,
             armAnchorAt: seededAt,
             primaryArmAt: seededAt + ARTIFACTS_AND_GATES_RESULT_ARM_DELAY_MS,
             fallbackEligibleAt: seededAt + ARTIFACTS_AND_GATES_RESULT_FALLBACK_DELAY_MS,
-        });
+            }
+        );
     }, [
         activeTelemetryDraftFirstPregameAt,
         isArtifactsAndGates,
