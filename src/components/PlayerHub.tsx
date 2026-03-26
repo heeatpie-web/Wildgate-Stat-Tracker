@@ -66,6 +66,7 @@ const PlayerHub: React.FC = () => {
         removeFromRegistry,
         renamePilot,
         mergePilots,
+        mergePilotsBatch,
         undoLastMerge,
         mergeHistory,
         activeMergeNotificationId,
@@ -77,7 +78,7 @@ const PlayerHub: React.FC = () => {
         dismissRosterCandidateKeys,
         addToRegistry,
         confirmRosterEntry,
-        removePendingReview,
+        removePendingReviews,
         addPilotAlias,
         removePilotAlias,
         matches,
@@ -104,6 +105,7 @@ const PlayerHub: React.FC = () => {
         removeFromRegistry: state.removeFromRegistry,
         renamePilot: state.renamePilot,
         mergePilots: state.mergePilots,
+        mergePilotsBatch: state.mergePilotsBatch,
         undoLastMerge: state.undoLastMerge,
         mergeHistory: state.mergeHistory,
         activeMergeNotificationId: state.activeMergeNotificationId,
@@ -115,7 +117,7 @@ const PlayerHub: React.FC = () => {
         dismissRosterCandidateKeys: state.dismissRosterCandidateKeys,
         addToRegistry: state.addToRegistry,
         confirmRosterEntry: state.confirmRosterEntry,
-        removePendingReview: state.removePendingReview,
+        removePendingReviews: state.removePendingReviews,
         addPilotAlias: state.addPilotAlias,
         removePilotAlias: state.removePilotAlias,
         matches: state.matches,
@@ -1203,7 +1205,7 @@ const PlayerHub: React.FC = () => {
     ) => {
         const candidateKey = normalizeOcrName(candidate.value || '').toLowerCase();
         const resolvedKey = normalizeOcrName(resolvedValue || '').toLowerCase();
-        (pendingReviews || [])
+        const idsToRemove = (pendingReviews || [])
             .filter((review) => {
                 if (review.type !== 'roster_candidate') return false;
                 const reviewKey = normalizeOcrName(review.value || '').toLowerCase();
@@ -1213,7 +1215,8 @@ const PlayerHub: React.FC = () => {
                 if (action === 'merge' && resolvedKey && reviewKey === resolvedKey) return true;
                 return false;
             })
-            .forEach((review) => removePendingReview(review.id));
+            .map((review) => review.id);
+        if (idsToRemove.length > 0) removePendingReviews(idsToRemove);
         setPendingCandidateEdits((prev) => {
             const next = { ...prev };
             delete next[candidate.id];
@@ -1280,9 +1283,11 @@ const PlayerHub: React.FC = () => {
 
     const handleMergeSuggestionGroup = (group: RosterMergeSuggestionGroup) => {
         if (!group.canonicalName || group.variants.length === 0) return;
-        group.variants.forEach((variant) => {
-            mergePilots(variant.name, group.canonicalName);
-        });
+        mergePilotsBatch(
+            group.canonicalName,
+            group.variants.map((v) => v.name)
+        );
+        if (group.pairKeys.length > 0) dismissRosterMergeSuggestionPairs(group.pairKeys);
         setSelectedPilot(group.canonicalName);
         setToast({
             message: `Merged ${group.variants.length} roster variant${group.variants.length === 1 ? '' : 's'} into "${group.canonicalDisplayName}"`,
@@ -1306,8 +1311,6 @@ const PlayerHub: React.FC = () => {
         onResolveRoleConflict: handleResolveRoleConflict,
         onOpenMatchInSmartCaptures: handleOpenMatchInSmartCaptures,
         possibleMergeGroups,
-        possibleMergesExpanded,
-        setPossibleMergesExpanded,
         onMergeSuggestionGroup: handleMergeSuggestionGroup,
         onDismissMergeSuggestionGroup: handleDismissMergeSuggestionGroup,
         ocrSearchTerm,
@@ -1332,7 +1335,6 @@ const PlayerHub: React.FC = () => {
                 setPanelMode={setPanelMode}
                 rosteredPlayerCount={rosteredPlayerCount}
                 trackedOnlyPlayerCount={trackedOnlyPlayerCount}
-                ocrWorkbenchCount={ocrWorkbenchCount}
                 searchTerm={searchTerm}
                 setSearchTerm={setSearchTerm}
                 sortMode={sortMode}
@@ -1354,50 +1356,60 @@ const PlayerHub: React.FC = () => {
                 selectedPilot={selectedPilot}
                 setSelectedPilot={setSelectedPilot}
                 timeAgo={timeAgo}
-                ocrWorkbenchProps={ocrWorkbenchSharedProps}
             />
 
             {/* Column 2: Detail / OCR workbench */}
             <div className="flex-1 min-w-0 h-full min-h-0 flex flex-col overflow-hidden gap-3">
-                <div className="md3-card mg-surface shadow-lg p-4 shrink-0">
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                        <div>
-                            <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/48">
-                                {panelMode === 'ocr-work' ? 'Roster Workbench' : 'Player Details'}
-                            </div>
-                            <div className="mt-1 text-body font-semibold text-md-sys-on-surface">
+                {/* Header toolbar */}
+                <div className="rounded-card overflow-hidden border border-md-sys-outline/10 mg-surface shadow-xl shrink-0">
+                    <div className="px-5 py-3.5 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                            <h2 className="text-lg font-bold tracking-tight text-md-sys-on-surface truncate">
                                 {panelMode === 'ocr-work'
-                                    ? `${pendingRosterCandidates.length} OCR candidate${pendingRosterCandidates.length === 1 ? '' : 's'} ready for review`
-                                    : (selected
-                                        ? `${selected.name} profile loaded`
-                                        : 'Choose a tracked player to load the profile panel')}
-                            </div>
-                            <div className="mt-1 text-label-sm text-md-sys-on-surface/58">
+                                    ? 'OCR Workbench'
+                                    : selected
+                                        ? selected.name
+                                        : 'Player Details'}
+                            </h2>
+                            <p className="text-label-sm text-md-sys-on-surface/40 font-medium truncate">
                                 {panelMode === 'ocr-work'
-                                    ? 'Review OCR-detected names in the same pane as the profile workspace so the tab feels like one system instead of three separate columns.'
-                                    : 'Roster stays visible first while tracked-only players stay visible in the same workspace for review and promotion.'}
-                            </div>
+                                    ? `${pendingRosterCandidates.length} candidate${pendingRosterCandidates.length !== 1 ? 's' : ''} to review`
+                                    : selected
+                                        ? `${selected.totalEncounters} encounter${selected.totalEncounters !== 1 ? 's' : ''}${selected.lastSeen ? ` · ${timeAgo(selected.lastSeen)}` : ''}`
+                                        : 'Select a player to view their profile'}
+                            </p>
                         </div>
-                        <div className="grid grid-cols-2 gap-1 shrink-0">
+                        <div className="flex gap-1 shrink-0">
                             <button
                                 type="button"
                                 onClick={() => setPanelMode('roster')}
-                                className={`h-8 rounded-lg px-4 text-label-xs font-bold uppercase tracking-wide transition-all ${panelMode === 'roster'
-                                    ? 'bg-md-sys-primary text-md-sys-onPrimary'
-                                    : 'text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'
-                                    }`}
+                                className={`h-8 px-3 rounded-control text-label-xs font-semibold transition-all border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary/35 ${
+                                    panelMode === 'roster'
+                                        ? 'border-md-sys-primary/30 bg-md-sys-primary/10 text-md-sys-primary'
+                                        : 'border-md-sys-outline/10 text-md-sys-on-surface/55 hover:bg-md-sys-on-surface/[0.06]'
+                                }`}
+                                style={panelMode !== 'roster' ? { background: 'var(--md-sys-color-surface-container-high)' } : undefined}
                             >
                                 Details
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setPanelMode('ocr-work')}
-                                className={`h-8 rounded-lg px-4 text-label-xs font-bold uppercase tracking-wide transition-all ${panelMode === 'ocr-work'
-                                    ? 'bg-md-sys-primary text-md-sys-onPrimary'
-                                    : 'text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'
-                                    }`}
+                                className={`h-8 px-3 rounded-control text-label-xs font-semibold transition-all border inline-flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/35 ${
+                                    panelMode === 'ocr-work'
+                                        ? 'border-info/30 bg-info/10 text-info'
+                                        : 'border-md-sys-outline/10 text-md-sys-on-surface/55 hover:bg-md-sys-on-surface/[0.06]'
+                                }`}
+                                style={panelMode !== 'ocr-work' ? { background: 'var(--md-sys-color-surface-container-high)' } : undefined}
                             >
-                                OCR Work {pendingRosterCandidates.length > 0 ? `(${pendingRosterCandidates.length})` : ''}
+                                OCR Work
+                                {pendingRosterCandidates.length > 0 && (
+                                    <span className={`px-1.5 py-0.5 rounded-pill text-[10px] font-bold leading-none ${
+                                        panelMode === 'ocr-work' ? 'bg-info/20 text-info' : 'bg-info/15 text-info'
+                                    }`}>
+                                        {pendingRosterCandidates.length}
+                                    </span>
+                                )}
                             </button>
                         </div>
                     </div>
@@ -1408,14 +1420,29 @@ const PlayerHub: React.FC = () => {
                         <PlayerHubOcrWorkbench {...ocrWorkbenchSharedProps} containerClassName="h-full min-h-0" />
                     </div>
                 ) : !selected ? (
-                    <div className="flex-1 flex flex-col items-center justify-center text-md-sys-on-surface/40">
-                        <Users size={48} className="mb-3 opacity-40" />
-                        <span className="text-body font-semibold">
-                            Select a player to view details
-                        </span>
-                        <span className="text-label-sm mt-1 opacity-60">
-                            {rosteredPlayerCount} rostered · {trackedOnlyPlayerCount} tracked only
-                        </span>
+                    <div className="flex-1 flex flex-col gap-4">
+                        <div className="grid grid-cols-3 gap-3">
+                            <div className="relative overflow-hidden rounded-card border border-md-sys-outline/10 p-4" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
+                                <div className="absolute -right-3 -top-3 w-16 h-16 rounded-full opacity-10 bg-md-sys-primary" />
+                                <div className="text-label-sm font-bold uppercase tracking-wide text-md-sys-on-surface/60 mb-1">Total Players</div>
+                                <div className="text-2xl font-black tracking-tight text-md-sys-on-surface">{enrichedPilots.length}</div>
+                            </div>
+                            <div className="relative overflow-hidden rounded-card border border-md-sys-outline/10 p-4" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
+                                <div className="absolute -right-3 -top-3 w-16 h-16 rounded-full opacity-15 bg-success" />
+                                <div className="text-label-sm font-bold uppercase tracking-wide text-md-sys-on-surface/60 mb-1">Rostered</div>
+                                <div className="text-2xl font-black tracking-tight text-success">{rosteredPlayerCount}</div>
+                            </div>
+                            <div className="relative overflow-hidden rounded-card border border-md-sys-outline/10 p-4" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
+                                <div className="absolute -right-3 -top-3 w-16 h-16 rounded-full opacity-15 bg-info" />
+                                <div className="text-label-sm font-bold uppercase tracking-wide text-md-sys-on-surface/60 mb-1">Tracked</div>
+                                <div className="text-2xl font-black tracking-tight text-info">{trackedOnlyPlayerCount}</div>
+                            </div>
+                        </div>
+                        <div className="flex-1 flex flex-col items-center justify-center text-md-sys-on-surface/40">
+                            <Users size={40} className="mb-3 opacity-30" />
+                            <span className="text-body font-semibold">Select a player to view details</span>
+                            <span className="text-label-sm mt-1 opacity-60">Click any player in the list on the left</span>
+                        </div>
                     </div>
                 ) : (
                     <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1">
@@ -2165,5 +2192,4 @@ const PlayerHub: React.FC = () => {
 };
 
 export default PlayerHub;
-
 

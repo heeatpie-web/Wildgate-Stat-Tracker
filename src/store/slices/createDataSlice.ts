@@ -517,6 +517,8 @@ export interface DataSlice {
   setPlayerIdMap: (map: Record<string, string>) => void;
   updatePlayerIdMapping: (id: string, name: string) => void;
   mergePilots: (sourceName: string, targetName: string) => void;
+  /** Merge many roster names into one target in a single store update (avoids N× match scans and N re-renders). */
+  mergePilotsBatch: (targetName: string, sourceNames: string[]) => void;
   mergeHistory: MergeHistoryEntry[];
   activeMergeNotificationId: string | null;
   dismissActiveMergeNotification: () => void;
@@ -896,13 +898,37 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
     };
   }),
 
-  mergePilots: (sourceName, targetName) => set((state) => {
-    // ─── Snapshot for undo (keep last 10 merges) ───
+  mergePilotsBatch: (targetName, sourceNames) => set((state) => {
+    const targetTrim = String(targetName || '').trim();
+    if (!targetTrim) return {};
+
+    const normTarget = normalizeOcrName(targetTrim).toLowerCase();
+    const uniqueSources: string[] = [];
+    const seenNorm = new Set<string>();
+    for (const raw of sourceNames || []) {
+      const s = String(raw || '').trim();
+      if (!s) continue;
+      const n = normalizeOcrName(s).toLowerCase();
+      if (!n || n === normTarget) continue;
+      if (seenNorm.has(n)) continue;
+      seenNorm.add(n);
+      uniqueSources.push(s);
+    }
+    if (uniqueSources.length === 0) return {};
+
+    const sourceNorms = new Set(uniqueSources.map((s) => normalizeOcrName(s).toLowerCase()));
+    const sourceExact = new Set(uniqueSources);
+
+    const isSource = (name: string) => {
+      if (sourceExact.has(name)) return true;
+      return sourceNorms.has(normalizeOcrName(name).toLowerCase());
+    };
+
     const snapshot: MergeHistoryEntry = {
       id: `merge_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       timestamp: Date.now(),
-      sourceName,
-      targetName,
+      sourceName: uniqueSources.length === 1 ? uniqueSources[0] : `${uniqueSources.length} pilots`,
+      targetName: targetTrim,
       snapshot: {
         matches: state.matches,
         pilotRegistry: [...state.pilotRegistry],
@@ -919,84 +945,100 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
     };
     const mergeHistory = [snapshot, ...(state.mergeHistory || [])].slice(0, 10);
 
-    const srcNorm = normalizeOcrName(sourceName).toLowerCase();
+    const newMatches = state.matches.map((match) => rewriteMatchPlayerNames(match, isSource, targetTrim));
 
-    // Helper: case-insensitive match against source name
-    const isSource = (name: string) =>
-      name === sourceName || normalizeOcrName(name).toLowerCase() === srcNorm;
+    const newRegistry = state.pilotRegistry.filter((p) => !isSource(p));
+    if (!newRegistry.includes(targetTrim)) newRegistry.push(targetTrim);
 
-    // 1. Update Matches (case-insensitive)
-    const newMatches = state.matches.map((match) => rewriteMatchPlayerNames(
-      match,
-      isSource,
-      targetName
-    ));
-
-    // 2. Update Registry
-    const newRegistry = state.pilotRegistry.filter(p => !isSource(p));
-    if (!newRegistry.includes(targetName)) newRegistry.push(targetName);
-    const targetKey = normalizeRosterEntryKey(targetName);
+    const targetKey = normalizeRosterEntryKey(targetTrim);
+    let foldedMeta = state.rosterEntryMeta?.[targetKey];
+    for (const src of uniqueSources) {
+      const sk = normalizeRosterEntryKey(src);
+      foldedMeta = mergeRosterEntryMeta(foldedMeta, state.rosterEntryMeta?.[sk], Date.now());
+    }
     const newRosterEntryMeta = normalizeRosterEntryMetaMap(
       newRegistry,
       {
         ...(state.rosterEntryMeta || {}),
-        [targetKey]: mergeRosterEntryMeta(
-          state.rosterEntryMeta?.[targetKey],
-          state.rosterEntryMeta?.[srcNorm],
-          Date.now()
-        ),
+        [targetKey]: foldedMeta,
       }
     );
 
-    // 3. Update Favorites, Notes & Aliases
-    const newFavorites = state.favorites.filter(f => !isSource(f));
-    const newNotes = { ...state.pilotNotes };
-    if (newNotes[sourceName]) {
-      newNotes[targetName] = (newNotes[targetName] ? newNotes[targetName] + "\n" : "") + newNotes[sourceName];
-      delete newNotes[sourceName];
-    }
-    const newAliases = clonePilotAliases(state.pilotAliases);
-    const mergedAliases = dedupeAliasList([
-      ...(newAliases[targetName] || []),
-      ...(newAliases[sourceName] || []),
-      sourceName,
-    ], targetName);
-    if (mergedAliases.length > 0) newAliases[targetName] = mergedAliases;
-    else delete newAliases[targetName];
-    delete newAliases[sourceName];
+    const newFavorites = state.favorites.filter((f) => !isSource(f));
 
-    // 4. Update ID Map (case-insensitive)
-    const newIdMap = { ...state.playerIdMap };
-    Object.entries(newIdMap).forEach(([id, name]) => {
-      if (isSource(name)) newIdMap[id] = targetName;
+    const newNotes = { ...state.pilotNotes };
+    Object.keys(newNotes).forEach((key) => {
+      if (!isSource(key)) return;
+      if (normalizeOcrName(key).toLowerCase() === normTarget) return;
+      newNotes[targetTrim] = (newNotes[targetTrim] ? `${newNotes[targetTrim]}\n` : '') + newNotes[key];
+      delete newNotes[key];
     });
 
-    // 5. Consolidate playerProfiles (from MappingSlice, accessible via combined store)
-    // get() returns DataSlice, but the combined store also includes MappingSlice fields at runtime.
+    const newAliases = clonePilotAliases(state.pilotAliases);
+    const combinedAliases: string[] = [...(newAliases[targetTrim] || [])];
+    uniqueSources.forEach((src) => {
+      combinedAliases.push(...(newAliases[src] || []), src);
+    });
+    Object.keys(newAliases).forEach((key) => {
+      if (isSource(key)) delete newAliases[key];
+    });
+    const mergedAliases = dedupeAliasList(combinedAliases, targetTrim);
+    if (mergedAliases.length > 0) newAliases[targetTrim] = mergedAliases;
+    else delete newAliases[targetTrim];
+
+    const newIdMap = { ...state.playerIdMap };
+    Object.entries(newIdMap).forEach(([id, name]) => {
+      if (isSource(name)) newIdMap[id] = targetTrim;
+    });
+
+    const pendingReviewsList = state.pendingReviews || [];
+    const newPending = pendingReviewsList.filter((r) => !isSource(r.value));
+
     const profiles = (get() as unknown as { playerProfiles?: Record<string, Record<string, unknown>> }).playerProfiles;
     if (profiles && typeof profiles === 'object') {
-      const srcProfile = profiles[sourceName];
-      const tgtProfile = profiles[targetName];
-      const merged = mergePlayerProfileRecords(tgtProfile, srcProfile, targetName);
-      if (merged) {
-        const newProfiles = { ...profiles, [targetName]: merged };
-        delete newProfiles[sourceName];
+      let mergedProfile = profiles[targetTrim];
+      for (const src of uniqueSources) {
+        const next = mergePlayerProfileRecords(mergedProfile, profiles[src], targetTrim);
+        if (next) mergedProfile = next;
+      }
+      if (mergedProfile) {
+        const newProfiles = { ...profiles, [targetTrim]: mergedProfile };
+        uniqueSources.forEach((src) => { delete newProfiles[src]; });
         return {
-          matches: newMatches, pilotRegistry: newRegistry, favorites: newFavorites,
-          pilotNotes: newNotes, pilotAliases: newAliases, playerIdMap: newIdMap, rosterEntryMeta: newRosterEntryMeta, playerProfiles: newProfiles, mergeHistory, activeMergeNotificationId: snapshot.id, lastActivity: Date.now()
+          matches: newMatches,
+          pilotRegistry: newRegistry,
+          favorites: newFavorites,
+          pilotNotes: newNotes,
+          pilotAliases: newAliases,
+          playerIdMap: newIdMap,
+          rosterEntryMeta: newRosterEntryMeta,
+          playerProfiles: newProfiles,
+          pendingReviews: newPending,
+          mergeHistory,
+          activeMergeNotificationId: snapshot.id,
+          lastActivity: Date.now(),
         };
       }
     }
 
-    // 6. Clear pending reviews referencing source name
-    const pendingReviews = state.pendingReviews || [];
-    const newPending = pendingReviews.filter(r => !isSource(r.value));
-
     return {
-      matches: newMatches, pilotRegistry: newRegistry, favorites: newFavorites,
-      pilotNotes: newNotes, pilotAliases: newAliases, playerIdMap: newIdMap, rosterEntryMeta: newRosterEntryMeta, pendingReviews: newPending, mergeHistory, activeMergeNotificationId: snapshot.id, lastActivity: Date.now()
+      matches: newMatches,
+      pilotRegistry: newRegistry,
+      favorites: newFavorites,
+      pilotNotes: newNotes,
+      pilotAliases: newAliases,
+      playerIdMap: newIdMap,
+      rosterEntryMeta: newRosterEntryMeta,
+      pendingReviews: newPending,
+      mergeHistory,
+      activeMergeNotificationId: snapshot.id,
+      lastActivity: Date.now(),
     };
   }),
+
+  mergePilots: (sourceName, targetName) => {
+    get().mergePilotsBatch(targetName, [sourceName]);
+  },
 
   undoLastMerge: () => {
     const state = get() as DataSlice;

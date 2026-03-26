@@ -38,6 +38,7 @@ const gameDataState = {
     removeFromRegistry: vi.fn(),
     renamePilot: vi.fn(),
     mergePilots: vi.fn(),
+    mergePilotsBatch: vi.fn(),
     undoLastMerge: vi.fn(),
     mergeHistory: [],
     activeMergeNotificationId: null,
@@ -51,6 +52,7 @@ const gameDataState = {
     confirmRosterEntry: vi.fn(),
     addPilotAlias: vi.fn(),
     removePilotAlias: vi.fn(),
+    removePendingReviews: vi.fn(),
     removePendingReview: vi.fn(),
     matches: [...baseMatches],
     playerProfiles: {
@@ -173,6 +175,8 @@ vi.mock('./LocalImage', () => ({
 describe('PlayerHub', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        gameDataState.mergePilotsBatch = vi.fn();
+        gameDataState.removePendingReviews = vi.fn();
         gameDataState.pilotRegistry = ['PilotOne', 'Pilot0ne'];
         gameDataState.rosterEntryMeta = {};
         gameDataState.pilotAliases = { PilotOne: ['Pilot One Old'] };
@@ -262,10 +266,10 @@ describe('PlayerHub', () => {
         render(<PlayerHub />);
 
         fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
-        fireEvent.click(screen.getAllByRole('button', { name: /merge into pilotone \(91%\)/i })[0]);
+        fireEvent.click(screen.getByRole('button', { name: /pilotone.*91%/i }));
 
         expect(appStoreState.recordOcrAliasCorrection).toHaveBeenCalledWith('PliotOne', 'PilotOne', expect.any(Object));
-        expect(gameDataState.removePendingReview).toHaveBeenCalledWith('candidate-1');
+        expect(gameDataState.removePendingReviews).toHaveBeenCalledWith(['candidate-1']);
         expect(gameDataState.addToRegistry).toHaveBeenCalledWith('PilotOne', { origin: 'ocr', status: 'confirmed' });
     });
 
@@ -579,7 +583,7 @@ describe('PlayerHub', () => {
         render(<PlayerHub />);
 
         const pilotButton = screen.getByRole('button', { name: /pilotone/i });
-        expect(pilotButton).toHaveTextContent('1 encounter');
+        expect(pilotButton).toHaveTextContent('1 enc');
         expect(pilotButton).toHaveTextContent('1d ago');
 
         fireEvent.click(pilotButton);
@@ -852,7 +856,7 @@ describe('PlayerHub', () => {
         const { rerender } = render(<PlayerHub />);
 
         const playerButton = screen.getByRole('button', { name: /wingman/i });
-        expect(playerButton).toHaveTextContent('1 encounter');
+        expect(playerButton).toHaveTextContent('1 enc');
 
         fireEvent.click(playerButton);
         fireEvent.click(screen.getByRole('button', { name: /view full profile/i }));
@@ -863,12 +867,12 @@ describe('PlayerHub', () => {
         expect(screen.getByRole('button', { name: /open match #21 in smart captures/i })).toHaveTextContent('Needs review');
 
         fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
+        fireEvent.click(screen.getByRole('button', { name: /conflicts/i }));
 
-        expect(screen.getAllByText('Role conflicts').length).toBeGreaterThan(0);
-        expect(screen.getAllByRole('button', { name: /count as teammate/i }).length).toBeGreaterThan(0);
-        expect(screen.getAllByRole('button', { name: /count as opponent/i }).length).toBeGreaterThan(0);
+        expect(screen.getAllByRole('button', { name: /^teammate$/i }).length).toBeGreaterThan(0);
+        expect(screen.getAllByRole('button', { name: /^opponent$/i }).length).toBeGreaterThan(0);
 
-        fireEvent.click(screen.getAllByRole('button', { name: /count as teammate/i })[0]);
+        fireEvent.click(screen.getAllByRole('button', { name: /^teammate$/i })[0]);
         expect(appStoreState.recordPlayerEncounterRoleCorrection).toHaveBeenCalledWith(21, 'Wingman', 'teammate');
 
         rerender(<PlayerHub />);
@@ -904,15 +908,15 @@ describe('PlayerHub', () => {
         render(<PlayerHub />);
 
         fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
+        fireEvent.click(screen.getByRole('button', { name: /merge suggestions/i }));
 
-        expect(screen.getAllByRole('button', { name: /collapse possible merges/i }).length).toBeGreaterThan(0);
-        expect(screen.getAllByText(/keep "ace pilot"/i).length).toBeGreaterThan(0);
-        expect(screen.getAllByText(/merge "ace squad" into "ace pilot" \(82%\)/i).length).toBeGreaterThan(0);
+        expect(screen.getByText(/82% similarity/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/ace squad/i).length).toBeGreaterThan(0);
 
-        fireEvent.click(screen.getAllByRole('button', { name: /merge listed roster variants into ace pilot/i })[0]);
-        expect(gameDataState.mergePilots).toHaveBeenCalledWith('Ace Squad', 'Ace Pilot');
+        fireEvent.click(screen.getAllByRole('button', { name: /merge into ace pilot/i })[0]);
+        expect(gameDataState.mergePilotsBatch).toHaveBeenCalledWith('Ace Pilot', ['Ace Squad']);
 
-        fireEvent.click(screen.getAllByRole('button', { name: /dismiss possible merge suggestions for ace pilot/i })[0]);
+        fireEvent.click(screen.getAllByRole('button', { name: /dismiss merge suggestion for ace pilot/i })[0]);
         expect(gameDataState.dismissRosterMergeSuggestionPairs).toHaveBeenCalledWith(['ace pilot::ace squad']);
     });
 
@@ -922,15 +926,14 @@ describe('PlayerHub', () => {
         render(<PlayerHub />);
 
         fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
+        fireEvent.click(screen.getByRole('button', { name: /merge suggestions/i }));
 
-        expect(screen.getAllByText(/keep "ace pilot"/i).length).toBeGreaterThan(0);
-        expect(screen.getAllByText(/merge "ace pliot" into "ace pilot"/i).length).toBeGreaterThan(0);
+        expect(screen.getByRole('button', { name: /merge into ace pilot/i })).toBeInTheDocument();
         expect(screen.getAllByText(/ace pliot/i).length).toBeGreaterThan(0);
-        expect(screen.queryByText(/merge "ace pliot" into "🛸 ace pilot"/i)).toBeNull();
         expect(screen.queryByText(/keep "🛸 ace pilot"/i)).toBeNull();
 
-        fireEvent.click(screen.getAllByRole('button', { name: /merge listed roster variants into ace pilot/i })[0]);
-        expect(gameDataState.mergePilots).toHaveBeenCalledWith('Ace Pliot', '🛸 Ace Pilot');
+        fireEvent.click(screen.getAllByRole('button', { name: /merge into ace pilot/i })[0]);
+        expect(gameDataState.mergePilotsBatch).toHaveBeenCalledWith('🛸 Ace Pilot', ['Ace Pliot']);
     });
 
     it('focuses a requested player profile when the players tab opens from another workspace', () => {
@@ -938,9 +941,9 @@ describe('PlayerHub', () => {
 
         render(<PlayerHub />);
 
-        expect(screen.getByText(/pilotone profile loaded/i)).toBeInTheDocument();
-        expect(uiState.setPlayerHubFocusName).toHaveBeenCalledWith(null);
         expect(screen.getByDisplayValue('PilotOne')).toBeInTheDocument();
+        expect(screen.getAllByText(/1 encounter/i).length).toBeGreaterThan(0);
+        expect(uiState.setPlayerHubFocusName).toHaveBeenCalledWith(null);
     });
 
     it('keeps OCR merge suggestions lazy in details mode and supports large-roster search with virtualization', async () => {

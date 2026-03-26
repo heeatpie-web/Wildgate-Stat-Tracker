@@ -1,16 +1,14 @@
 import React, { type Dispatch, type FC, type RefObject, type SetStateAction } from 'react';
-import { Users, Search, Star, ChevronRight, Undo2, X } from 'lucide-react';
+import { Users, Search, Star, ChevronRight, Undo2, X, ScanEye } from 'lucide-react';
 import type { MergeHistoryEntry, PendingReview } from '../../store/slices/createDataSlice';
 import type { PlayerDetail, PlayerFilterMode, PlayerHubMode, SortMode } from './playerHubTypes';
 import { getPlayerStatusChips, getStatusChipClassName } from './playerHubUtils';
-import { PlayerHubOcrWorkbench, type PlayerHubOcrWorkbenchProps } from './PlayerHubOcrWorkbench';
 
 export interface PlayerHubRosterColumnProps {
     panelMode: PlayerHubMode;
     setPanelMode: Dispatch<SetStateAction<PlayerHubMode>>;
     rosteredPlayerCount: number;
     trackedOnlyPlayerCount: number;
-    ocrWorkbenchCount: number;
     searchTerm: string;
     setSearchTerm: Dispatch<SetStateAction<string>>;
     sortMode: SortMode;
@@ -32,15 +30,20 @@ export interface PlayerHubRosterColumnProps {
     selectedPilot: string | null;
     setSelectedPilot: Dispatch<SetStateAction<string | null>>;
     timeAgo: (ts: number | null) => string;
-    ocrWorkbenchProps: Omit<PlayerHubOcrWorkbenchProps, 'containerClassName'>;
 }
+
+const SORT_OPTIONS: { id: SortMode; label: string }[] = [
+    { id: 'favorites', label: 'Pinned' },
+    { id: 'alpha', label: 'A–Z' },
+    { id: 'recent', label: 'Recent' },
+    { id: 'encounters', label: 'Most Seen' },
+];
 
 export const PlayerHubRosterColumn: FC<PlayerHubRosterColumnProps> = ({
     panelMode,
     setPanelMode,
     rosteredPlayerCount,
     trackedOnlyPlayerCount,
-    ocrWorkbenchCount,
     searchTerm,
     setSearchTerm,
     sortMode,
@@ -62,237 +65,245 @@ export const PlayerHubRosterColumn: FC<PlayerHubRosterColumnProps> = ({
     selectedPilot,
     setSelectedPilot,
     timeAgo,
-    ocrWorkbenchProps,
-}) => (
-    <div className="w-full lg:w-full shrink-0 flex flex-col gap-3 h-full min-h-0">
-        <div className="md3-card mg-surface shadow-lg p-4 flex flex-col gap-3 shrink-0">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <div className="w-9 h-9 rounded-xl bg-md-sys-secondaryContainer text-md-sys-onSecondaryContainer flex items-center justify-center">
-                        <Users size={16} />
-                    </div>
-                    <div>
-                        <h2 className="text-body font-bold text-md-sys-on-surface uppercase tracking-tight">Players</h2>
-                        <span className="text-label-xs text-md-sys-on-surface/60">
-                            {rosteredPlayerCount} rostered
-                            {trackedOnlyPlayerCount > 0 ? ` · ${trackedOnlyPlayerCount} tracked only` : ''}
-                        </span>
-                    </div>
-                </div>
-            </div>
+}) => {
+    const scopeOptions = [
+        { id: 'all' as PlayerFilterMode, label: 'All', count: enrichedPilots.length },
+        { id: 'roster' as PlayerFilterMode, label: 'Roster', count: rosteredPlayerCount },
+        { id: 'tracked-only' as PlayerFilterMode, label: 'Tracked', count: trackedOnlyPlayerCount },
+        { id: 'needs-review' as PlayerFilterMode, label: 'Review', count: needsReviewPlayerCount },
+    ];
 
-            <div className="lg:hidden grid grid-cols-2 gap-1 rounded-xl bg-md-sys-surface-container-high p-1">
-                <button
-                    type="button"
-                    onClick={() => setPanelMode('roster')}
-                    className={`h-7 rounded-lg text-label-xs font-bold uppercase tracking-wide transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary/35 ${panelMode === 'roster'
-                        ? 'bg-md-sys-surface text-md-sys-on-surface border border-md-sys-outline/30'
-                        : 'text-md-sys-on-surface/68 hover:bg-md-sys-on-surface/5'
-                        }`}
-                >
-                    Details
-                </button>
-                <button
-                    type="button"
-                    onClick={() => setPanelMode('ocr-work')}
-                    className={`h-7 rounded-lg text-label-xs font-bold uppercase tracking-wide transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary/35 ${panelMode === 'ocr-work'
-                        ? 'bg-md-sys-surface text-md-sys-on-surface border border-md-sys-outline/30'
-                        : 'text-md-sys-on-surface/68 hover:bg-md-sys-on-surface/5'
-                        }`}
-                >
-                    OCR Work {ocrWorkbenchCount > 0 ? `(${ocrWorkbenchCount})` : ''}
-                </button>
-            </div>
+    return (
+        <div className="w-full shrink-0 flex flex-col h-full min-h-0">
+            <div className="rounded-card overflow-hidden border border-md-sys-outline/10 mg-surface shadow-xl flex flex-col h-full min-h-0">
 
-            <div className="relative">
-                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-md-sys-on-surface/40 pointer-events-none" />
-                <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Search players..."
-                    className="w-full md3-textfield--outlined rounded-xl pl-10 pr-12 py-2 text-label-sm outline-none"
-                />
-                {searchTerm && (
-                    <button type="button" onClick={() => setSearchTerm('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full inline-flex items-center justify-center text-md-sys-on-surface/40 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/10" aria-label="Clear player search">
-                        <X size={14} />
-                    </button>
-                )}
-            </div>
-
-            <div className="pt-1 border-t border-md-sys-outline/10">
-                <div className="mb-1.5 text-label-xs font-semibold uppercase tracking-wide text-md-sys-on-surface/50">
-                    Sort
-                </div>
-                <div className="flex gap-1">
-                    {([
-                        { id: 'favorites', label: 'Pinned' },
-                        { id: 'alpha', label: 'A-Z' },
-                        { id: 'recent', label: 'Recent' },
-                        { id: 'encounters', label: 'Most Seen' },
-                    ] as { id: SortMode; label: string }[]).map((s) => (
-                        <button
-                            key={s.id}
-                            type="button"
-                            onClick={() => setSortMode(s.id)}
-                            className={`flex-1 h-7 rounded-lg text-label-xs font-bold uppercase tracking-wide transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary/35 ${sortMode === s.id
-                                ? 'bg-md-sys-surface text-md-sys-on-surface border border-md-sys-outline/30'
-                                : 'text-md-sys-on-surface/68 hover:bg-md-sys-on-surface/5'
-                                }`}
-                        >
-                            {s.label}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            <div className="pt-1 border-t border-md-sys-outline/10">
-                <div className="mb-1.5 text-label-xs font-semibold uppercase tracking-wide text-md-sys-on-surface/50">
-                    Scope
-                </div>
-                <div className="flex gap-1 overflow-x-auto no-scrollbar">
-                    {([
-                        { id: 'all', label: 'All', count: enrichedPilots.length },
-                        { id: 'roster', label: 'Roster', count: rosteredPlayerCount },
-                        { id: 'tracked-only', label: 'Tracked Only', count: trackedOnlyPlayerCount },
-                        { id: 'needs-review', label: 'Needs Review', count: needsReviewPlayerCount },
-                    ] as { id: PlayerFilterMode; label: string; count: number }[]).map((filter) => (
-                        <button
-                            key={filter.id}
-                            type="button"
-                            onClick={() => setPlayerFilterMode(filter.id)}
-                            className={`h-7 shrink-0 whitespace-nowrap rounded-lg px-2.5 text-label-xs font-bold uppercase tracking-wide transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary/35 ${playerFilterMode === filter.id
-                                ? 'bg-md-sys-surface text-md-sys-on-surface border border-md-sys-outline/30 ring-1 ring-inset ring-md-sys-outline/35'
-                                : 'text-md-sys-on-surface/68 hover:bg-md-sys-on-surface/5'
-                                }`}
-                        >
-                            {filter.label} {filter.count > 0 ? `(${filter.count})` : ''}
-                        </button>
-                    ))}
-                </div>
-            </div>
-        </div>
-
-        {activeMergeNotification && (() => {
-            const ago = Math.round((Date.now() - activeMergeNotification.timestamp) / 1000);
-            const agoLabel = ago < 60 ? `${ago}s ago` : `${Math.round(ago / 60)}m ago`;
-            return (
-                <div className="flex items-center justify-between gap-2 bg-warning-soft border border-warning-soft rounded-xl px-3 py-2 shrink-0">
-                    <span className="text-label-xs text-warning truncate">
-                        Merged <strong>{activeMergeNotification.sourceName}</strong> → <strong>{activeMergeNotification.targetName}</strong> ({agoLabel})
-                    </span>
-                    <div className="flex items-center gap-1 shrink-0">
-                        <button
-                            type="button"
-                            onClick={onUndoLastMerge}
-                            className="flex items-center gap-1 px-2 py-1 bg-warning-soft hover:bg-warning hover:text-ink-strong text-warning rounded text-label-xs font-bold transition-colors shrink-0"
-                        >
-                            <Undo2 size={10} /> Undo
-                        </button>
-                        <button
-                            type="button"
-                            onClick={onDismissActiveMergeNotification}
-                            className="flex items-center gap-1 px-2 py-1 bg-md-sys-on-surface/10 hover:bg-md-sys-on-surface/15 text-warning rounded text-label-xs font-bold transition-colors shrink-0"
-                            aria-label="Dismiss merge notification"
-                            title="Dismiss merge notification"
-                        >
-                            <X size={10} />
-                            Dismiss
-                        </button>
-                    </div>
-                </div>
-            );
-        })()}
-
-        {pendingRosterCandidates.length > 0 && (
-            <div className="md3-card mg-surface shadow-lg p-3 border border-info/20 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                    <div className="text-label-sm font-semibold uppercase tracking-wide text-info">
-                        OCR Workbench Ready
-                    </div>
-                    <p className="text-label-xs text-md-sys-on-surface/62 truncate">
-                        {pendingRosterCandidates.length} pending roster candidate{pendingRosterCandidates.length === 1 ? '' : 's'} to review.
-                    </p>
-                </div>
-                <button
-                    type="button"
-                    onClick={() => setPanelMode('ocr-work')}
-                    className={`h-8 shrink-0 rounded-lg px-3 text-label-xs font-bold uppercase tracking-wide transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/45 ${panelMode === 'ocr-work'
-                        ? 'bg-info/16 text-info border border-info/35'
-                        : 'text-info hover:bg-info/12 border border-info/25'
-                        }`}
-                >
-                    {panelMode === 'ocr-work' ? 'Viewing OCR work' : 'Review'}
-                </button>
-            </div>
-        )}
-
-        <div className="flex-1 min-h-0 flex flex-col gap-3">
-            {filtered.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center py-12 text-md-sys-on-surface/40">
-                    <Users size={32} className="mb-2 opacity-40" />
-                    <span className="text-label-sm font-semibold">
-                        {searchTerm ? 'No tracked players match your search' : 'No tracked players yet'}
-                    </span>
-                </div>
-            ) : (
-                <div
-                    ref={rosterScrollRef}
-                    data-testid="playerhub-roster-viewport"
-                    onScroll={(event) => onRosterScroll(event.currentTarget.scrollTop)}
-                    className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1"
-                >
-                    <div style={{ height: `${rosterTotalHeight}px` }}>
-                        <div
-                            className="grid grid-cols-2 2xl:grid-cols-3 gap-1.5 content-start"
-                            style={{ transform: `translateY(${rosterVisibleOffsetY}px)` }}
-                        >
-                            {rosterVisiblePilots.map((pilot) => {
-                                const statusChips = getPlayerStatusChips(pilot);
-                                return (
-                                    <button
-                                        key={pilot.name}
-                                        type="button"
-                                        onClick={() => {
-                                            setSelectedPilot(pilot.name);
-                                        }}
-                                        className={`player-list-item w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-3 transition-all group ${selectedPilot === pilot.name
-                                            ? 'bg-md-sys-primary/10 border border-md-sys-primary/20 text-md-sys-on-surface'
-                                            : 'hover:bg-md-sys-on-surface/5 text-md-sys-on-surface/60'
-                                            }`}
-                                    >
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-1.5 min-w-0">
-                                                {pilot.isFavorite && <Star size={10} className="text-warning fill-amber-400 shrink-0" />}
-                                                <span className="player-list-name text-label-sm font-semibold truncate">{pilot.name}</span>
-                                                {statusChips.map((chip) => (
-                                                    <span
-                                                        key={`${pilot.name}-${chip.key}`}
-                                                        className={`shrink-0 px-1.5 py-0.5 rounded-pill text-[10px] font-bold uppercase tracking-wide ${getStatusChipClassName(chip.key)}`}
-                                                    >
-                                                        {chip.label}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                            {pilot.totalEncounters > 0 && (
-                                                <span className="text-label-xs text-md-sys-on-surface/40">
-                                                    {pilot.totalEncounters} encounter{pilot.totalEncounters !== 1 ? 's' : ''}
-                                                    {pilot.lastSeen ? ` | ${timeAgo(pilot.lastSeen)}` : ''}
-                                                </span>
-                                            )}
-                                        </div>
-                                        {pilot.isRoster && pilot.note && (
-                                            <span className="w-1.5 h-1.5 rounded-full bg-md-sys-primary/40 shrink-0" title="Has note" />
-                                        )}
-                                        <ChevronRight size={14} className="text-md-sys-on-surface/40 group-hover:text-md-sys-on-surface/40 shrink-0" />
-                                    </button>
-                                );
-                            })}
+                {/* Toolbar */}
+                <div className="p-4 flex flex-col gap-3 border-b border-md-sys-outline/[0.06] shrink-0">
+                    <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-card bg-gradient-to-br from-md-sys-primary/20 to-md-sys-tertiary/20 border border-md-sys-outline/10 flex items-center justify-center shrink-0">
+                            <Users size={16} className="text-md-sys-primary" />
+                        </div>
+                        <div className="min-w-0">
+                            <h2 className="text-lg font-bold tracking-tight text-md-sys-on-surface">Players</h2>
+                            <p className="text-label-sm text-md-sys-on-surface/40 font-medium">
+                                {rosteredPlayerCount} rostered{trackedOnlyPlayerCount > 0 ? ` · ${trackedOnlyPlayerCount} tracked` : ''}
+                            </p>
                         </div>
                     </div>
+
+                    {/* Search */}
+                    <div className="relative group">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-md-sys-on-surface/40 group-focus-within:text-md-sys-primary transition-colors pointer-events-none" />
+                        <input
+                            type="text"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            placeholder="Search players..."
+                            className="w-full pl-9 pr-9 py-2.5 text-label-sm outline-none text-md-sys-on-surface rounded-control border border-md-sys-outline/10 focus:border-md-sys-primary/40 focus:ring-2 focus:ring-md-sys-primary/10 transition-all"
+                            style={{ background: 'var(--md-sys-color-surface-container-high)' }}
+                        />
+                        {searchTerm && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchTerm('')}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full inline-flex items-center justify-center text-md-sys-on-surface/40 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/10"
+                                aria-label="Clear search"
+                            >
+                                <X size={12} />
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Sort */}
+                    <div className="flex gap-1">
+                        {SORT_OPTIONS.map((s) => {
+                            const active = sortMode === s.id;
+                            return (
+                                <button
+                                    key={s.id}
+                                    type="button"
+                                    onClick={() => setSortMode(s.id)}
+                                    className={`flex-1 h-7 rounded-control text-label-xs font-semibold transition-all border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary/35 ${
+                                        active
+                                            ? 'border-md-sys-primary/30 bg-md-sys-primary/10 text-md-sys-primary'
+                                            : 'border-md-sys-outline/10 text-md-sys-on-surface/55 hover:bg-md-sys-on-surface/[0.06]'
+                                    }`}
+                                    style={!active ? { background: 'var(--md-sys-color-surface-container-high)' } : undefined}
+                                >
+                                    {s.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {/* Scope */}
+                    <div className="flex gap-1 flex-wrap">
+                        {scopeOptions.map((f) => {
+                            const active = playerFilterMode === f.id;
+                            return (
+                                <button
+                                    key={f.id}
+                                    type="button"
+                                    onClick={() => setPlayerFilterMode(f.id)}
+                                    className={`h-7 px-2.5 rounded-control text-label-xs font-semibold whitespace-nowrap transition-all border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary/35 ${
+                                        active
+                                            ? 'border-md-sys-primary/30 bg-md-sys-primary/10 text-md-sys-primary'
+                                            : 'border-md-sys-outline/10 text-md-sys-on-surface/55 hover:bg-md-sys-on-surface/[0.06]'
+                                    }`}
+                                    style={!active ? { background: 'var(--md-sys-color-surface-container-high)' } : undefined}
+                                >
+                                    {f.label}{f.count > 0 ? ` (${f.count})` : ''}
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
-            )}
-            <PlayerHubOcrWorkbench {...ocrWorkbenchProps} containerClassName="lg:hidden shrink-0" />
+
+                {/* Merge notification banner */}
+                {activeMergeNotification && (() => {
+                    const ago = Math.round((Date.now() - activeMergeNotification.timestamp) / 1000);
+                    const agoLabel = ago < 60 ? `${ago}s ago` : `${Math.round(ago / 60)}m ago`;
+                    return (
+                        <div className="flex items-center justify-between gap-2 border-b border-warning-soft px-4 py-2 shrink-0 bg-warning-soft/50">
+                            <span className="text-label-xs text-warning truncate">
+                                Merged <strong>{activeMergeNotification.sourceName}</strong> → <strong>{activeMergeNotification.targetName}</strong> ({agoLabel})
+                            </span>
+                            <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                    type="button"
+                                    onClick={onUndoLastMerge}
+                                    className="flex items-center gap-1 px-2 py-1 hover:bg-warning hover:text-ink-strong text-warning rounded text-label-xs font-bold transition-colors"
+                                >
+                                    <Undo2 size={10} /> Undo
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={onDismissActiveMergeNotification}
+                                    className="p-1 text-warning/60 hover:text-warning rounded transition-colors"
+                                    aria-label="Dismiss merge notification"
+                                >
+                                    <X size={12} />
+                                </button>
+                            </div>
+                        </div>
+                    );
+                })()}
+
+                {/* OCR ready banner */}
+                {pendingRosterCandidates.length > 0 && (
+                    <div className="flex items-center justify-between gap-3 border-b border-md-sys-outline/[0.06] px-4 py-2 shrink-0" style={{ background: 'var(--md-sys-color-surface-container)' }}>
+                        <div className="flex items-center gap-2 min-w-0">
+                            <ScanEye size={13} className="text-info shrink-0" />
+                            <span className="text-label-xs text-md-sys-on-surface/65 truncate">
+                                <span className="font-semibold text-info">{pendingRosterCandidates.length}</span> OCR candidate{pendingRosterCandidates.length !== 1 ? 's' : ''} to review
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setPanelMode('ocr-work')}
+                            className={`h-7 shrink-0 rounded-control px-2.5 text-label-xs font-semibold transition-all border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/35 ${
+                                panelMode === 'ocr-work'
+                                    ? 'border-info/30 bg-info/10 text-info'
+                                    : 'border-info/20 text-info/80 hover:bg-info/8'
+                            }`}
+                        >
+                            {panelMode === 'ocr-work' ? 'Viewing' : 'Review'}
+                        </button>
+                    </div>
+                )}
+
+                {/* Player list */}
+                {filtered.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center py-12 text-md-sys-on-surface/40">
+                        <Users size={32} className="mb-2 opacity-40" />
+                        <span className="text-label-sm font-semibold">
+                            {searchTerm ? 'No players match your search' : 'No tracked players yet'}
+                        </span>
+                    </div>
+                ) : (
+                    <div
+                        ref={rosterScrollRef}
+                        data-testid="playerhub-roster-viewport"
+                        onScroll={(e) => onRosterScroll(e.currentTarget.scrollTop)}
+                        className="flex-1 min-h-0 overflow-y-auto custom-scrollbar"
+                    >
+                        <div style={{ height: `${rosterTotalHeight}px` }}>
+                            <div style={{ transform: `translateY(${rosterVisibleOffsetY}px)` }}>
+                                {rosterVisiblePilots.map((pilot) => {
+                                    const statusChips = getPlayerStatusChips(pilot);
+                                    const isSelected = selectedPilot === pilot.name;
+                                    const teammateWr = pilot.asTeammate && pilot.asTeammate.total > 0
+                                        ? Math.round((pilot.asTeammate.wins / pilot.asTeammate.total) * 100)
+                                        : null;
+                                    const opponentWr = pilot.asOpponent && pilot.asOpponent.total > 0
+                                        ? Math.round((pilot.asOpponent.wins / pilot.asOpponent.total) * 100)
+                                        : null;
+                                    return (
+                                        <button
+                                            key={pilot.name}
+                                            type="button"
+                                            onClick={() => setSelectedPilot(pilot.name)}
+                                            className={`player-list-item w-full text-left flex items-center gap-3 px-4 py-3 border-b border-md-sys-outline/[0.06] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-md-sys-primary/35 ${
+                                                isSelected
+                                                    ? 'bg-md-sys-primary/[0.08]'
+                                                    : 'hover:bg-md-sys-on-surface/[0.04]'
+                                            }`}
+                                        >
+                                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-label-xs font-bold shrink-0 ${
+                                                pilot.isFavorite
+                                                    ? 'bg-warning/15 text-warning'
+                                                    : pilot.isDetected
+                                                        ? 'bg-info/12 text-info'
+                                                        : isSelected
+                                                            ? 'bg-md-sys-primary/20 text-md-sys-primary'
+                                                            : 'bg-md-sys-on-surface/8 text-md-sys-on-surface/55'
+                                            }`}>
+                                                {pilot.name.slice(0, 2).toUpperCase()}
+                                            </div>
+
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-1.5 min-w-0">
+                                                    {pilot.isFavorite && <Star size={10} className="text-warning fill-amber-400 shrink-0" />}
+                                                    <span className="player-list-name text-label-sm font-semibold text-md-sys-on-surface truncate">{pilot.name}</span>
+                                                    {statusChips.map((chip) => (
+                                                        <span
+                                                            key={`${pilot.name}-${chip.key}`}
+                                                            className={`shrink-0 px-1.5 py-0.5 rounded-pill text-[10px] font-bold uppercase tracking-wide ${getStatusChipClassName(chip.key)}`}
+                                                        >
+                                                            {chip.label}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                                <div className="flex items-center gap-x-2 mt-0.5 text-label-xs text-md-sys-on-surface/40 flex-wrap">
+                                                    {pilot.totalEncounters > 0 && (
+                                                        <span>{pilot.totalEncounters} enc</span>
+                                                    )}
+                                                    {teammateWr !== null && (
+                                                        <span className="text-success font-medium">{teammateWr}% with</span>
+                                                    )}
+                                                    {opponentWr !== null && (
+                                                        <span className="text-danger font-medium">{opponentWr}% vs</span>
+                                                    )}
+                                                    {pilot.lastSeen && (
+                                                        <span>{timeAgo(pilot.lastSeen)}</span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                {pilot.isRoster && pilot.note && (
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-md-sys-primary/40" title="Has note" />
+                                                )}
+                                                <ChevronRight size={13} className={isSelected ? 'text-md-sys-primary/50' : 'text-md-sys-on-surface/25'} />
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
-    </div>
-);
+    );
+};
