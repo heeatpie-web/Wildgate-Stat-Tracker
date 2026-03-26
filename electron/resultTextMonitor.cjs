@@ -6,7 +6,6 @@ const DEFAULT_SAMPLE_INTERVAL_MS = 100;
 const TEXT_TRIPWIRE_SUSTAIN_MS = 300;
 const TRIPWIRE_BASELINE_ALPHA = 0.18;
 const TRIPWIRE_MIN_CONSECUTIVE_HITS = Math.max(1, Math.ceil(TEXT_TRIPWIRE_SUSTAIN_MS / DEFAULT_SAMPLE_INTERVAL_MS));
-const TRIPWIRE_MIN_ACTIVE_BOXES = 1;
 const TRIPWIRE_MIN_BOX_WHITE_RATIO = 0.09;
 const TRIPWIRE_MIN_BOX_WHITE_DELTA = 0.045;
 const TRIPWIRE_MIN_TOTAL_WHITE_DELTA = 0.045;
@@ -103,9 +102,16 @@ function buildTripwireSnapshot(metrics, baseline) {
 
   const activeBoxCount = boxMetrics.reduce((count, metric) => count + (metric.active ? 1 : 0), 0);
   const totalWhiteDelta = boxMetrics.reduce((sum, metric) => sum + metric.whiteDelta, 0);
+  const activeBoxIds = new Set(
+    boxMetrics
+      .filter((metric) => metric.active)
+      .map((metric) => metric.id)
+  );
+  const leftAlignedTriggered = activeBoxIds.has('result-a');
+  const centeredTriggered = activeBoxIds.has('result-b') && activeBoxIds.has('result-c');
 
   return {
-    triggered: activeBoxCount >= TRIPWIRE_MIN_ACTIVE_BOXES
+    triggered: (leftAlignedTriggered || centeredTriggered)
       && totalWhiteDelta >= TRIPWIRE_MIN_TOTAL_WHITE_DELTA,
     activeBoxCount,
     totalWhiteDelta,

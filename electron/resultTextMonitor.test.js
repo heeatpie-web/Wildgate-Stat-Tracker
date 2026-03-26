@@ -90,14 +90,26 @@ describe('resultTextMonitor text parsing', () => {
 });
 
 describe('resultTextMonitor tripwire helpers', () => {
-  it('marks the tripwire as triggered when the headline box spikes above baseline', async () => {
+  it('marks the tripwire as triggered when both centered headline boxes spike above baseline', async () => {
+    const baselineMetrics = await __test__.analyzeTripwireBoxes(await createTripwireImage());
+    const hotMetrics = await __test__.analyzeTripwireBoxes(await createTripwireImage(['result-b', 'result-c']));
+    const baseline = __test__.createTripwireBaseline(baselineMetrics);
+
+    const snapshot = __test__.buildTripwireSnapshot(hotMetrics, baseline);
+
+    expect(snapshot.triggered).toBe(true);
+    expect(snapshot.activeBoxCount).toBe(2);
+    expect(snapshot.totalWhiteDelta).toBeGreaterThan(0.02);
+  });
+
+  it('does not trigger when only one centered headline box is active', async () => {
     const baselineMetrics = await __test__.analyzeTripwireBoxes(await createTripwireImage());
     const hotMetrics = await __test__.analyzeTripwireBoxes(await createTripwireImage(['result-b']));
     const baseline = __test__.createTripwireBaseline(baselineMetrics);
 
     const snapshot = __test__.buildTripwireSnapshot(hotMetrics, baseline);
 
-    expect(snapshot.triggered).toBe(true);
+    expect(snapshot.triggered).toBe(false);
     expect(snapshot.activeBoxCount).toBe(1);
     expect(snapshot.totalWhiteDelta).toBeGreaterThan(0.02);
   });
@@ -134,7 +146,7 @@ describe('resultTextMonitor loop', () => {
 
   it('keeps OCR asleep until the tripwire sees sustained white result text', async () => {
     const baselineMetrics = await __test__.analyzeTripwireBoxes(await createTripwireImage());
-    const hotMetrics = await __test__.analyzeTripwireBoxes(await createTripwireImage(['result-b']));
+    const hotMetrics = await __test__.analyzeTripwireBoxes(await createTripwireImage(['result-b', 'result-c']));
     const sampler = vi.fn()
       .mockResolvedValue(hotMetrics)
       .mockResolvedValueOnce(baselineMetrics);
@@ -160,13 +172,13 @@ describe('resultTextMonitor loop', () => {
     expect(onDetected.mock.calls[0][0]).toMatchObject({
       detectionMethod: 'text',
       result: null,
-      tripwireActiveBoxCount: 1,
-      activeBoxIds: ['result-b'],
+      tripwireActiveBoxCount: 2,
+      activeBoxIds: ['result-b', 'result-c'],
     });
   });
 
   it('samples during the arm delay to build baseline but does not fire before the monitor is armed', async () => {
-    const hotMetrics = await __test__.analyzeTripwireBoxes(await createTripwireImage(['result-b']));
+    const hotMetrics = await __test__.analyzeTripwireBoxes(await createTripwireImage(['result-b', 'result-c']));
     const sampler = vi.fn().mockResolvedValue(hotMetrics);
     const onDetected = vi.fn();
 

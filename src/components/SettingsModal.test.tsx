@@ -203,6 +203,7 @@ describe('SettingsModal', () => {
     render(<SettingsModal />);
 
     const dialog = screen.getByRole('dialog');
+    expect(dialog.parentElement?.className).toContain('top-9');
     expect(dialog.className).toContain('h-full');
     expect(screen.getByRole('button', { name: /back to app/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /save & apply/i })).toBeInTheDocument();

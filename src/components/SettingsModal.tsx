@@ -664,7 +664,7 @@ const SettingsModalContent: React.FC = () => {
 
     return (
         <>
-            <div className="fixed inset-0 z-modal overflow-hidden">
+            <div className="fixed inset-x-0 bottom-0 top-9 z-modal overflow-hidden">
                 <div className={`absolute inset-0 bg-md-sys-background/88 backdrop-blur-sm transition-opacity duration-200 ${showSettings && !isOverlayMode ? 'opacity-100' : 'opacity-0'}`} />
                 <div
                     ref={focusTrapRef}

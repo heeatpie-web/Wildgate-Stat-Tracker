@@ -4329,14 +4329,7 @@ const App: React.FC = () => {
 
     const navigationOpen = isCompactNav ? mobileNavOpen : true;
     const desktopNavigationWidthClass = sidebarCollapsed ? 'w-14' : 'w-32';
-
-    if (!isStoreLoading && !startupFlowReady) {
-        return (
-            <div className="h-screen w-screen flex items-center justify-center bg-md-sys-background text-md-sys-on-surface/70">
-                <div className="text-label-sm font-bold uppercase tracking-widest">Preparing Startup...</div>
-            </div>
-        );
-    }
+    const showStartupSplash = !isStoreLoading && !startupFlowReady;
 
     return (
         <div ref={appRef} className={`app-container h-screen w-screen flex flex-col text-md-sys-onSurface ${!isOverlayMode ? 'bg-md-sys-background' : ''} ${hiddenForScan ? 'invisible' : ''} font-sans transition-colors duration-300`}>
@@ -4349,87 +4342,93 @@ const App: React.FC = () => {
                 <>
                     <WindowFrame />
 
-                    <div className="relative flex-1 flex overflow-hidden p-3 gap-3">
-                        {isCompactNav ? (
-                            <>
-                                {navigationOpen && (
-                                    <button
-                                        type="button"
-                                        className="absolute inset-0 z-20 bg-scrim-50"
-                                        onClick={() => {
-                                            setMobileNavOpen(false);
-                                            requestAnimationFrame(() => navToggleRef.current?.focus());
-                                        }}
-                                        aria-label="Close navigation"
-                                    />
-                                )}
+                    {showStartupSplash ? (
+                        <div className="flex-1 flex items-center justify-center bg-md-sys-background text-md-sys-on-surface/70">
+                            <div className="text-label-sm font-bold uppercase tracking-widest">Preparing Startup...</div>
+                        </div>
+                    ) : (
+                        <div className="relative flex-1 flex overflow-hidden p-3 gap-3">
+                            {isCompactNav ? (
+                                <>
+                                    {navigationOpen && (
+                                        <button
+                                            type="button"
+                                            className="absolute inset-0 z-20 bg-scrim-50"
+                                            onClick={() => {
+                                                setMobileNavOpen(false);
+                                                requestAnimationFrame(() => navToggleRef.current?.focus());
+                                            }}
+                                            aria-label="Close navigation"
+                                        />
+                                    )}
+                                    <aside
+                                        id="main-navigation"
+                                        ref={mobileNavRef}
+                                        aria-label="Main navigation"
+                                        className={`absolute left-3 top-3 bottom-3 z-30 transition-transform duration-200 ${navigationOpen ? 'translate-x-0' : '-translate-x-full'}`}
+                                    >
+                                        <Sidebar
+                                            isMobileDrawer
+                                            onRequestClose={() => {
+                                                setMobileNavOpen(false);
+                                                requestAnimationFrame(() => navToggleRef.current?.focus());
+                                            }}
+                                        />
+                                    </aside>
+                                </>
+                            ) : (
                                 <aside
                                     id="main-navigation"
-                                    ref={mobileNavRef}
                                     aria-label="Main navigation"
-                                    className={`absolute left-3 top-3 bottom-3 z-30 transition-transform duration-200 ${navigationOpen ? 'translate-x-0' : '-translate-x-full'}`}
+                                    className={`relative z-40 shrink-0 overflow-visible opacity-100 transition-[width] duration-300 ease-emphasized-enter ${desktopNavigationWidthClass}`}
                                 >
-                                    <Sidebar
-                                        isMobileDrawer
-                                        onRequestClose={() => {
-                                            setMobileNavOpen(false);
-                                            requestAnimationFrame(() => navToggleRef.current?.focus());
-                                        }}
-                                    />
+                                    <Sidebar />
                                 </aside>
-                            </>
-                        ) : (
-                            <aside
-                                id="main-navigation"
-                                aria-label="Main navigation"
-                                className={`relative z-40 shrink-0 overflow-visible opacity-100 transition-[width] duration-300 ease-emphasized-enter ${desktopNavigationWidthClass}`}
-                            >
-                                <Sidebar />
-                            </aside>
-                        )}
+                            )}
 
-                        <div className="flex-1 flex flex-col overflow-hidden gap-3 min-w-0">
-                            <Header
-                                onToggleNavigation={() => {
-                                    if (isCompactNav) {
-                                        setMobileNavOpen(v => !v);
-                                        return;
+                            <div className="flex-1 flex flex-col overflow-hidden gap-3 min-w-0">
+                                <Header
+                                    onToggleNavigation={() => {
+                                        if (isCompactNav) {
+                                            setMobileNavOpen(v => !v);
+                                            return;
+                                        }
+                                        setSidebarCollapsed(!sidebarCollapsed);
+                                    }}
+                                    navigationAriaLabel={
+                                        isCompactNav
+                                            ? (mobileNavOpen ? 'Close navigation' : 'Open navigation')
+                                            : (sidebarCollapsed ? 'Expand navigation' : 'Collapse navigation')
                                     }
-                                    setSidebarCollapsed(!sidebarCollapsed);
-                                }}
-                                navigationAriaLabel={
-                                    isCompactNav
-                                        ? (mobileNavOpen ? 'Close navigation' : 'Open navigation')
-                                        : (sidebarCollapsed ? 'Expand navigation' : 'Collapse navigation')
-                                }
-                                navigationExpanded={isCompactNav ? mobileNavOpen : !sidebarCollapsed}
-                                navigationControlsId="main-navigation"
-                                navigationButtonRef={navToggleRef}
-                            />
+                                    navigationExpanded={isCompactNav ? mobileNavOpen : !sidebarCollapsed}
+                                    navigationControlsId="main-navigation"
+                                    navigationButtonRef={navToggleRef}
+                                />
 
-                            <main className="flex-1 overflow-hidden bg-md-sys-surface rounded-card">
-                                <div className="h-full app-view-transition">
-                                    {APP_VIEW_ORDER.map((view) => {
-                                        const isActiveView = activeView === view;
-                                        if (!isActiveView && !mountedViews[view]) return null;
-                                        return (
-                                            <section
-                                                key={view}
-                                                aria-hidden={!isActiveView}
-                                                className={isActiveView ? 'h-full min-h-0' : 'hidden h-full min-h-0'}
-                                            >
-                                                <Suspense fallback={isActiveView ? viewFallback : null}>
-                                                    <ErrorBoundary>
-                                                        {renderView(view, isActiveView)}
-                                                    </ErrorBoundary>
-                                                </Suspense>
-                                            </section>
-                                        );
-                                    })}
-                                </div>
-                            </main>
+                                <main className="flex-1 overflow-hidden bg-md-sys-surface rounded-card">
+                                    <div className="h-full app-view-transition">
+                                        {APP_VIEW_ORDER.map((view) => {
+                                            const isActiveView = activeView === view;
+                                            if (!isActiveView && !mountedViews[view]) return null;
+                                            return (
+                                                <section
+                                                    key={view}
+                                                    aria-hidden={!isActiveView}
+                                                    className={isActiveView ? 'h-full min-h-0' : 'hidden h-full min-h-0'}
+                                                >
+                                                    <Suspense fallback={isActiveView ? viewFallback : null}>
+                                                        <ErrorBoundary>
+                                                            {renderView(view, isActiveView)}
+                                                        </ErrorBoundary>
+                                                    </Suspense>
+                                                </section>
+                                            );
+                                        })}
+                                    </div>
+                                </main>
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     <WindowResizer />
                 </>
