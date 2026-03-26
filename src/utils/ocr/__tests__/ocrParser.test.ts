@@ -81,6 +81,12 @@ describe('isNoiseText', () => {
     expect(isNoiseText('')).toBe(true);
     expect(isNoiseText(' ')).toBe(true);
   });
+
+  it('filters REACH modifier HUD lines misread as player names', () => {
+    expect(isNoiseText('reducefiresonshipby50')).toBe(true);
+    expect(isNoiseText('shipby50')).toBe(true);
+    expect(isNoiseText('reducefires')).toBe(true);
+  });
 });
 
 // ── cleanPlayerName ──

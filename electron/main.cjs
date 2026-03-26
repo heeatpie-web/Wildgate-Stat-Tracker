@@ -1760,7 +1760,7 @@ function startDevRendererWithRetry(win, targetUrl) {
   let attempt = 0;
   let retryTimer = null;
   const waitStartedAt = Date.now();
-  const RETRY_DELAY_MS = Math.max(1000, parseInt(process.env.WILDGATE_DEV_RETRY_DELAY_MS || '2000', 10) || 2000);
+  const RETRY_DELAY_MS = Math.max(250, parseInt(process.env.WILDGATE_DEV_RETRY_DELAY_MS || '500', 10) || 500);
   const MAX_DEV_ATTEMPTS = Math.max(60, parseInt(process.env.WILDGATE_DEV_MAX_ATTEMPTS || '240', 10) || 240);
 
   const stop = () => {

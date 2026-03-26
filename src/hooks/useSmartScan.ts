@@ -15,6 +15,7 @@ import {
     deriveCanonicalRosterCandidateTargetKey,
     shouldQueueCanonicalRosterCandidate,
 } from '../utils/pendingReviewUtils';
+import { isReachModifierUiPlayerNoise } from '../utils/reachModifierUiNoise';
 
 const OCR_THRESHOLDS = {
     REJECT: 55,
@@ -39,6 +40,7 @@ const MODE_NOISE_WORDS: Record<string, RegExp[]> = {
 
 const isNoiseName = (name: string, mode: string) => {
     if (!name) return true;
+    if (isReachModifierUiPlayerNoise(name)) return true;
     const cleaned = normalizeOcrName(name);
     if (cleaned.length < 3) return true;
     const patterns = MODE_NOISE_WORDS[mode] || [];

@@ -215,6 +215,25 @@ describe('resultScreenExtractor heuristics', () => {
     expect(__test__.parsePlacement(['BRDPLACE', 'LIMINATED'])).toBe(3);
   });
 
+  it('recovers placement when ordinal and PLACE are split across OCR tokens', () => {
+    expect(__test__.parsePlacement(['2ND', 'PLACE'])).toBe(2);
+  });
+
+  it('treats placement + finish banner + damage as combat loss without a DEFEAT token', () => {
+    expect(__test__.parseResultSignals({
+      placementTexts: ['2ND', 'PLACE'],
+      headlineTexts: ['MATCHFINISH'],
+      damageTexts: ['442'],
+    }, { detectionMethod: 'flash' })).toEqual({
+      result: 'Loss',
+      winType: 'combat',
+      placement: 2,
+      detectionMethod: 'flash',
+      damageTaken: 442,
+      damageSourcesAvailable: true,
+    });
+  });
+
   it('extracts damage totals from noisy OCR digits', () => {
     expect(__test__.parseDamageTaken(['I14', 'AFINALDAMAGETAKEN114'])).toBe(114);
   });

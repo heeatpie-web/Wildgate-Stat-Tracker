@@ -229,6 +229,18 @@ function parsePlacement(texts, options = {}) {
     if ((text.includes('5TH') || text.includes('STH')) && text.includes('PLA')) return 5;
   }
 
+  // Split-line OCR often yields separate tokens ("2ND", "PLACE"). Glue tokens and re-run
+  // ordinal+place patterns so centered/stacked banners still resolve placement.
+  const glued = normalized.join('');
+  const gluedExact = glued.match(/([1-5])(ST|ND|RD|TH)?PLAC(?:E)?/);
+  if (gluedExact) return Number.parseInt(gluedExact[1], 10);
+  const gluedReversed = glued.match(/PLAC(?:E)?([1-5])(ST|ND|RD|TH)?/);
+  if (gluedReversed) return Number.parseInt(gluedReversed[1], 10);
+  if ((glued.includes('2ND') || glued.includes('2N0')) && glued.includes('PLA')) return 2;
+  if ((glued.includes('3RD') || glued.includes('BRD')) && glued.includes('PLA')) return 3;
+  if ((glued.includes('4TH') || glued.includes('ATH')) && glued.includes('PLA')) return 4;
+  if ((glued.includes('5TH') || glued.includes('STH')) && glued.includes('PLA')) return 5;
+
   if (contextualHints) {
     for (const text of normalized) {
       const bareOrdinal = text.match(/(^|[^0-9])([1-5])(?:ST|ND|RD|TH)?([^0-9]|$)/);
@@ -426,6 +438,26 @@ function parseResultSignals({
   if (hasDefeat) {
     return {
       result: 'Loss',
+      detectionMethod,
+      damageTaken: resolvedDamageTaken,
+      damageSourcesAvailable: resolvedDamageSourcesAvailable,
+    };
+  }
+
+  // Placement-only end screens: "2ND PLACE" + finish/damage may appear without DEFEAT
+  // in the OCR crops (layout/resolution), but tripwire already confirmed a result UI.
+  const hasFinishCue = joined.includes('FINISH') || joined.includes('INISH');
+  if (
+    !hasArtifactSignal
+    && placement
+    && placement >= 2
+    && placement <= 5
+    && (hasFinishCue || hasDamagePanel || damageTaken != null)
+  ) {
+    return {
+      result: 'Loss',
+      winType: 'combat',
+      placement,
       detectionMethod,
       damageTaken: resolvedDamageTaken,
       damageSourcesAvailable: resolvedDamageSourcesAvailable,

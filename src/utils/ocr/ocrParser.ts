@@ -21,6 +21,7 @@ import {
 import { capTeammatePlayers } from '../teamLimits';
 import { deduplicatePlayersByLikelyName } from './playerNameMatching';
 import { normalizePipeSpacerPlayerName } from '../stringUtils';
+import { isReachModifierUiPlayerNoise } from '../reachModifierUiNoise';
 
 function distance(a: string, b: string): number {
   const matrix: number[][] = [];
@@ -66,7 +67,8 @@ const isUnderCrewShipBonusText = (value?: string | null): boolean => {
     .replace(/\s+/g, ' ')
     .trim();
   if (!normalized) return false;
-  return UNDERCREW_SHIP_BONUS_PHRASES.has(normalized);
+  if (UNDERCREW_SHIP_BONUS_PHRASES.has(normalized)) return true;
+  return isReachModifierUiPlayerNoise(value);
 };
 
 const capOpponentPlayers = (players: ExtractedPlayer[] = []): ExtractedPlayer[] => {

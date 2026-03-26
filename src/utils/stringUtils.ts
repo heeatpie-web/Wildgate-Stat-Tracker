@@ -1,4 +1,6 @@
-﻿export const levenshteinDistance = (a: string, b: string): number => {
+import { isReachModifierUiPlayerNoise } from './reachModifierUiNoise';
+
+export const levenshteinDistance = (a: string, b: string): number => {
     const matrix = [];
     for (let i = 0; i <= b.length; i++) {
         matrix[i] = [i];
@@ -209,6 +211,7 @@ export const isPipeSpacerPlayerName = (value: string): boolean => (
  */
 export const isOcrNoise = (line: string): boolean => {
     if (isPipeSpacerPlayerName(line)) return false;
+    if (isReachModifierUiPlayerNoise(line)) return true;
     const upper = line.toUpperCase();
     if (upper.includes('GANE:') || upper.includes('RENDER:') || upper.includes('GPU:')) return true;
     if (upper.includes('LOSS:') && upper.includes('RATE:')) return true;

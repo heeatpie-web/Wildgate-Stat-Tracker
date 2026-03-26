@@ -420,9 +420,12 @@ function registerArtifactHandlers(ipcMain, ctx) {
         onCopy: () => {},
       };
 
+      // Keep originals in userData/screenshots after bundling so mis-timed or wrong-match
+      // bundles do not silently delete captures. Re-enable consumeSource: true when
+      // auto-detection/bundling is reliably accurate (or gate behind a user setting).
       const fromScreenshots = await artifactHelpers.scanDirForImagesInWindow(paths.screenshotsDir, matchDir, startTime, endTime, {
         ...state,
-        consumeSource: true,
+        consumeSource: false,
       });
       const fromOcrDebug = await artifactHelpers.scanDirForImagesInWindow(paths.ocrDebugDir, matchDir, startTime, endTime, state);
       const bundledImages = [...fromScreenshots, ...fromOcrDebug];

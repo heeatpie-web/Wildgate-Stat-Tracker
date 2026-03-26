@@ -262,7 +262,9 @@ const UNDERCREW_SHIP_BONUS_PHRASES = new Set([
   'REDUCED FIRED',
   'REDUCEDFIRED',
 ]);
-const UNDERCREW_SHIP_BONUS_COMPACT_PATTERN = /(?:SMALLCREWBONUS|REDUCE(?:D)?FIRES?(?:ONSHIP)?(?:BY50)?)/;
+// Glued OCR for REACH lines, e.g. reducefiresonshipby50, reducefires, shipby50.
+// Keep in sync with src/utils/reachModifierUiNoise.ts
+const UNDERCREW_SHIP_BONUS_COMPACT_PATTERN = /(?:SMALLCREWBONUS|REDUCE(?:D)?FIRES?(?:ONSHIP)?(?:BY\d+)?|SHIPBY\d+|FIRESONSHIP(?:BY\d+)?|ONSHIPBY\d+)/;
 
 function containsUiNoisePhrase(input) {
   const normalized = String(input || '')

@@ -3253,6 +3253,10 @@ const App: React.FC = () => {
             && latestTelemetryDraftIdRef.current != null
             && latestTelemetryDraftIdRef.current !== requestedMatchId
         ) {
+            Logger.warn('ResultMonitor', 'Skipping auto result capture — telemetry draft changed mid-flight', {
+                requestedMatchId,
+                activeDraftMatchId: latestTelemetryDraftIdRef.current,
+            });
             return;
         }
         let currentReason = options?.reason || 'manual';
@@ -3363,7 +3367,9 @@ const App: React.FC = () => {
 
                 let persistedPrimaryArtifactPath: string | null = null;
                 const recognizedContext = hasRecognizedResultContext(resultData);
-                if (recognizedContext && normalizedCaptureBase64) {
+                const shouldPersistRawCapture = Boolean(normalizedCaptureBase64)
+                    && (recognizedContext || currentReason === 'flash' || currentReason === 'text');
+                if (shouldPersistRawCapture) {
                     try {
                         const persistedCapture = await api.invoke('save-screenshot', {
                             imageBase64: normalizedCaptureBase64,
