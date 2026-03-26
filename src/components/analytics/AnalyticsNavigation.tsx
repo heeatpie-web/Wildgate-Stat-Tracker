@@ -8,31 +8,39 @@ interface AnalyticsNavigationProps {
     onSelectCategory: (category: AnalyticsCategory) => void;
 }
 
-const CATEGORIES: { id: AnalyticsCategory; label: string; icon: React.ReactNode; tone: string; activeTone: string }[] = [
-    { id: 'overview', label: 'Overview', icon: <LayoutDashboard size={16} />, tone: 'text-md-sys-primary', activeTone: 'bg-md-sys-primary text-md-sys-onPrimary' },
-    { id: 'performance', label: 'Performance', icon: <Gauge size={16} />, tone: 'text-success', activeTone: 'bg-success-soft text-success border border-success/25' },
-    { id: 'team', label: 'Team', icon: <Users size={16} />, tone: 'text-info', activeTone: 'bg-info-soft text-info border border-info/25' },
-    { id: 'environment', label: 'Environment', icon: <Globe size={16} />, tone: 'text-warning', activeTone: 'bg-warning-soft text-warning border border-warning/25' },
-    { id: 'entities', label: 'Entities', icon: <Target size={16} />, tone: 'text-accent', activeTone: 'bg-accent-soft text-accent border border-accent/25' },
+const CATEGORIES: {
+    id: AnalyticsCategory;
+    label: string;
+    icon: React.ReactNode;
+    tone: 'primary' | 'success' | 'info' | 'warning' | 'accent';
+    iconIdleClass: string;
+}[] = [
+    { id: 'overview', label: 'Overview', icon: <LayoutDashboard size={16} aria-hidden />, tone: 'primary', iconIdleClass: 'text-md-sys-primary' },
+    { id: 'performance', label: 'Performance', icon: <Gauge size={16} aria-hidden />, tone: 'success', iconIdleClass: 'text-success' },
+    { id: 'team', label: 'Team', icon: <Users size={16} aria-hidden />, tone: 'info', iconIdleClass: 'text-info' },
+    { id: 'environment', label: 'Environment', icon: <Globe size={16} aria-hidden />, tone: 'warning', iconIdleClass: 'text-warning' },
+    { id: 'entities', label: 'Entities', icon: <Target size={16} aria-hidden />, tone: 'accent', iconIdleClass: 'text-accent' },
 ];
 
 export const AnalyticsNavigation: React.FC<AnalyticsNavigationProps> = ({ activeCategory, onSelectCategory }) => {
     return (
-        <div className="md3-surface rounded-card p-1 flex gap-1 overflow-x-auto no-scrollbar">
-            {CATEGORIES.map((cat) => (
-                <button
-                    key={cat.id}
-                    onClick={() => onSelectCategory(cat.id)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-control text-label-sm font-bold uppercase tracking-wide transition-all whitespace-nowrap border border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary ${
-                        activeCategory === cat.id
-                            ? `${cat.activeTone} shadow-sm`
-                            : `text-md-sys-on-surface/72 hover:bg-md-sys-surfaceContainerHigh hover:text-md-sys-on-surface`
-                    }`}
-                >
-                    <span className={activeCategory === cat.id ? '' : cat.tone}>{cat.icon}</span>
-                    {cat.label}
-                </button>
-            ))}
+        <div className="at-cat-nav no-scrollbar">
+            {CATEGORIES.map((cat) => {
+                const active = activeCategory === cat.id;
+                return (
+                    <button
+                        key={cat.id}
+                        type="button"
+                        data-active={active ? 'true' : 'false'}
+                        data-tone={cat.tone}
+                        onClick={() => onSelectCategory(cat.id)}
+                        className="at-cat-btn px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary focus-visible:ring-offset-2 focus-visible:ring-offset-md-sys-surface"
+                    >
+                        <span className={active ? 'text-md-sys-on-primary' : cat.iconIdleClass}>{cat.icon}</span>
+                        {cat.label}
+                    </button>
+                );
+            })}
         </div>
     );
 };

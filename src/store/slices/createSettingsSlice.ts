@@ -275,7 +275,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   enableAutoBackup: true,
   startupSmartPreloadEnabled: true,
   overlayStyle: 'compact',
-  visualMode: 'dense',
+  visualMode: 'editorial',
   ocrMode: 'local',
   captureMode: 'deferred',
   resultOcrFlowMode: 'background',

@@ -32,8 +32,11 @@ type PauseableDashboardProps = { isActive?: boolean };
 type PauseableLazyDashboardModule = { default: React.ComponentType<PauseableDashboardProps> };
 type StandardLazyDashboardModule = { default: React.ComponentType<object> };
 type AnyLazyDashboardModule = PauseableLazyDashboardModule | StandardLazyDashboardModule;
+// In dev, skip idle preload of `analytics`: background pre-mount can bind an early Vite chunk and
+// make heavy analytics edits look like "nothing changed" until a full restart. Load analytics on
+// first visit instead (still fast on localhost). Production keeps eager preload for UX.
 const DEFAULT_PRELOAD_QUEUE: LazyDashboardView[] = IS_DEV_BUILD
-    ? ['analytics', 'smart-captures', 'players', 'dev-ocr']
+    ? ['smart-captures', 'players', 'dev-ocr']
     : ['analytics', 'smart-captures', 'players'];
 const lazyDashboardStatus: Record<LazyDashboardView, 'idle' | 'loading' | 'ready' | 'error'> = {
     analytics: 'idle',

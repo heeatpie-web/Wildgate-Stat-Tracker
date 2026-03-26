@@ -1,6 +1,6 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 const analyticsData = {
@@ -163,6 +163,7 @@ describe('AnalyticsShell', () => {
 
     expect(screen.getByRole('heading', { name: /analytics cockpit/i }).closest('.twilight-solid-scope')).not.toBeNull();
     expect(screen.getByTestId('analytics-cockpit')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^filters$/i }));
     expect(screen.getByRole('option', { name: /all updates/i })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /drill charge \/ ram bastion - 3\/12\/2026/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /all updates/i })).toBeNull();

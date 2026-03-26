@@ -50,9 +50,9 @@ const RailStat: React.FC<{
     value: string;
     tone?: string;
 }> = ({ label, value, tone = 'text-md-sys-on-surface' }) => (
-    <div className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-2">
-        <div className="text-label-xs font-bold uppercase tracking-widest text-md-sys-on-surface/45">{label}</div>
-        <div className={`mt-1 text-title font-black tracking-tight ${tone}`}>{value}</div>
+    <div className="at-dd-stat px-3 py-2">
+        <div className="text-label-xs font-mono font-bold uppercase tracking-widest text-md-sys-on-surface/45">{label}</div>
+        <div className={`at-display mt-1 text-title font-extrabold tracking-tight ${tone}`}>{value}</div>
     </div>
 );
 
@@ -63,12 +63,9 @@ const TabButton: React.FC<{
 }> = ({ tab, active, onClick }) => (
     <button
         type="button"
+        data-active={active ? 'true' : 'false'}
         onClick={onClick}
-        className={`rounded-control px-3 py-2 text-label-sm font-bold uppercase tracking-wide transition-colors ${
-            active
-                ? 'bg-md-sys-primary text-md-sys-onPrimary'
-                : 'bg-md-sys-surface-container-high text-md-sys-on-surface/70 hover:bg-md-sys-surface-container-highest'
-        }`}
+        className="at-dd-tab px-3 py-2"
     >
         {tabLabelMap[tab]}
     </button>
@@ -82,7 +79,7 @@ const DrillRowButton: React.FC<{
     <button
         type="button"
         onClick={onClick}
-        className="w-full rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-2 text-left hover:bg-md-sys-surface-container-highest"
+        className="at-dd-row w-full px-3 py-2 text-left"
     >
         <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
@@ -102,7 +99,7 @@ const MatchCard: React.FC<{
     onShipClick: () => void;
     onHeroClick: () => void;
 }> = ({ row, onShipClick, onHeroClick }) => (
-    <div className="rounded-card border border-md-sys-outline/10 bg-md-sys-surface-container-high p-4">
+    <div className="at-dd-match p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
                 <span className={`rounded-pill px-2 py-0.5 text-label-xs font-bold uppercase tracking-wide ${
@@ -147,7 +144,7 @@ const MatchCard: React.FC<{
 );
 
 const EmptyState: React.FC<{ label: string }> = ({ label }) => (
-    <div className="rounded-card border border-dashed border-md-sys-outline/18 bg-md-sys-surface-container-high px-4 py-6 text-center text-label-sm text-md-sys-on-surface/48">
+    <div className="at-dd-empty px-4 py-6 text-center text-label-sm text-md-sys-on-surface/48 font-mono">
         {label}
     </div>
 );
@@ -158,13 +155,13 @@ const SectionShell: React.FC<{
     icon: React.ReactNode;
     children: React.ReactNode;
 }> = ({ title, subtitle, icon, children }) => (
-    <section className="rounded-card border border-md-sys-outline/10 bg-md-sys-surface p-4">
+    <section className="at-dd-section p-4">
         <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-xl bg-md-sys-surface-container-high flex items-center justify-center text-md-sys-primary">
+            <div className="w-9 h-9 rounded-xl bg-md-sys-surface-container-high flex items-center justify-center text-md-sys-primary border border-md-sys-primary/12 shadow-sm">
                 {icon}
             </div>
             <div className="min-w-0">
-                <h3 className="text-body font-black tracking-tight text-md-sys-on-surface">{title}</h3>
+                <h3 className="at-display text-body font-extrabold tracking-tight text-md-sys-on-surface">{title}</h3>
                 {subtitle ? <div className="text-label-sm text-md-sys-on-surface/58">{subtitle}</div> : null}
             </div>
         </div>
@@ -349,8 +346,8 @@ export const DrillDownOverlay: React.FC = () => {
             </div>
 
             {model.trend.length >= 2 ? (
-                <section className="rounded-card border border-md-sys-outline/10 bg-md-sys-surface p-4">
-                    <div className="text-label-sm font-bold uppercase tracking-wide text-md-sys-on-surface/55">
+                <section className="at-dd-section p-4">
+                    <div className="text-label-sm font-mono font-bold uppercase tracking-widest text-md-sys-on-surface/50">
                         Rolling win rate
                     </div>
                     <div className="mt-4 h-72">
@@ -541,7 +538,7 @@ export const DrillDownOverlay: React.FC = () => {
             <SectionShell title="Normalized loadout combinations" subtitle="Readable combinations surfaced from the patch catalog helpers." icon={<Package2 size={18} />}>
                 <div className="grid gap-2 xl:grid-cols-2">
                     {model.loadouts.combos.slice(0, 8).map((combo) => (
-                        <div key={combo.label} className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-2">
+                        <div key={combo.label} className="at-dd-row px-3 py-2">
                             <div className="text-label-sm font-semibold text-md-sys-on-surface line-clamp-2">{combo.label}</div>
                             <div className="mt-1 text-label-xs text-md-sys-on-surface/55">
                                 {combo.total} matches · {combo.winRate}% win rate
@@ -569,19 +566,19 @@ export const DrillDownOverlay: React.FC = () => {
     );
 
     return (
-        <div className="fixed inset-0 z-overlay flex items-center justify-center p-4 md:p-6 md3-dialog-scrim animate-fade-in" onClick={() => setDrillDownTarget(null)}>
+        <div className="drilldown-scrim fixed inset-0 z-overlay flex items-center justify-center p-4 md:p-6 md3-dialog-scrim animate-fade-in" onClick={() => setDrillDownTarget(null)}>
             <div
                 ref={focusTrapRef}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={dialogTitleId}
                 aria-describedby={dialogDescriptionId}
-                className="w-full max-w-7xl max-h-90vh rounded-2xl border border-md-sys-outline/18 bg-md-sys-surface shadow-2xl flex flex-col overflow-hidden"
+                className="drilldown-telemetry-scope w-full max-w-7xl max-h-90vh flex flex-col overflow-hidden"
                 onClick={(event) => event.stopPropagation()}
             >
-                <div className="flex items-start justify-between gap-4 border-b border-md-sys-outline/10 px-4 py-4 md:px-6">
+                <div className="flex items-start justify-between gap-4 border-b border-md-sys-outline/10 px-4 py-4 md:px-6 bg-md-sys-surface/80">
                     <div className="min-w-0">
-                        <div id={dialogDescriptionId} className="text-label-xs font-bold uppercase tracking-widest text-md-sys-on-surface/40">
+                        <div id={dialogDescriptionId} className="at-dd-eyebrow">
                             Scoped drill-down explorer
                         </div>
                         <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -592,18 +589,15 @@ export const DrillDownOverlay: React.FC = () => {
                                         key={`${targetKey(target)}-${index}`}
                                         type="button"
                                         onClick={() => setNavigationStack((current) => current.slice(0, index + 1))}
-                                        className={`rounded-pill px-2.5 py-1 text-label-sm font-bold ${
-                                            isCurrent
-                                                ? 'bg-md-sys-primary text-md-sys-onPrimary'
-                                                : 'bg-md-sys-surface-container-high text-md-sys-on-surface/68 hover:bg-md-sys-surface-container-highest'
-                                        }`}
+                                        data-current={isCurrent ? 'true' : 'false'}
+                                        className="at-dd-crumb rounded-pill px-2.5 py-1 text-label-sm font-bold font-mono tracking-tight"
                                     >
                                         {target.name}
                                     </button>
                                 );
                             })}
                         </div>
-                        <h2 id={dialogTitleId} className="mt-3 text-3xl md:text-5xl font-black tracking-tight text-md-sys-on-surface">
+                        <h2 id={dialogTitleId} className="at-display mt-3 text-3xl md:text-5xl font-extrabold tracking-tight text-md-sys-on-surface">
                             {currentTarget.name}
                         </h2>
                         <div className="mt-1 text-body text-md-sys-on-surface/58">
@@ -615,12 +609,9 @@ export const DrillDownOverlay: React.FC = () => {
                                     <button
                                         key={role}
                                         type="button"
+                                        data-active={roleFilter === role ? 'true' : 'false'}
                                         onClick={() => setRoleFilter(role)}
-                                        className={`rounded-pill px-3 py-1 text-label-sm font-bold transition-colors ${
-                                            roleFilter === role
-                                                ? 'bg-md-sys-primary text-md-sys-onPrimary'
-                                                : 'bg-md-sys-surface-container-high text-md-sys-on-surface/70 hover:bg-md-sys-surface-container-highest'
-                                        }`}
+                                        className="at-dd-tab rounded-full px-3 py-1"
                                     >
                                         {role === 'Teammate' ? 'As Wingman' : role === 'Opponent' ? 'As Rival' : 'Both'}
                                     </button>
@@ -642,7 +633,7 @@ export const DrillDownOverlay: React.FC = () => {
 
                 <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
                     <div className="flex min-h-full flex-col xl:flex-row">
-                        <aside className="w-full xl:w-80 shrink-0 border-b xl:border-b-0 xl:border-r border-md-sys-outline/10 bg-md-sys-surface-container-lowest/35 p-4 md:p-5 xl:sticky xl:top-0 xl:self-start">
+                        <aside className="at-dd-rail w-full xl:w-80 shrink-0 border-b xl:border-b-0 xl:border-r p-4 md:p-5 xl:sticky xl:top-0 xl:self-start">
                             <div className="space-y-3">
                                 <RailStat label="Win rate" value={`${model.summary.winRate}%`} tone={model.summary.winRate >= 50 ? 'text-md-sys-primary' : 'text-danger'} />
                                 <RailStat label="Wins / losses" value={`${model.summary.wins} / ${model.summary.losses}`} />
@@ -651,7 +642,7 @@ export const DrillDownOverlay: React.FC = () => {
                             </div>
 
                             <div className="mt-5">
-                                <div className="text-label-xs font-bold uppercase tracking-widest text-md-sys-on-surface/42">
+                                <div className="at-dd-eyebrow">
                                     Quick links
                                 </div>
                                 <div className="mt-2 space-y-2">
@@ -669,7 +660,7 @@ export const DrillDownOverlay: React.FC = () => {
                         </aside>
 
                         <div className="flex-1 min-h-0 flex flex-col">
-                            <div className="border-b border-md-sys-outline/10 px-4 py-3 md:px-5">
+                            <div className="border-b border-md-sys-outline/10 px-4 py-3 md:px-5 bg-md-sys-surface/50">
                                 <div className="flex flex-wrap gap-2">
                                     {model.availableTabs.map((tab) => (
                                         <TabButton key={tab} tab={tab} active={tab === activeTab} onClick={() => setActiveTab(tab)} />

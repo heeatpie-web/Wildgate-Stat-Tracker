@@ -92,4 +92,26 @@ describe('AnalyticsCockpit', () => {
 
         expect(onDrillDown).toHaveBeenCalledWith('Hunter', 'Ship');
     });
+
+    it('dense mode drops narrative chrome and shows compact cockpit header', () => {
+        render(
+            <AnalyticsCockpit
+                visualMode="dense"
+                onNavigate={vi.fn()}
+                onDrillDown={vi.fn()}
+                winRate={50}
+                totalMatches={2}
+                momentum={{ currentMomentum: 11 }}
+                placementData={{ avgPlacement: 3.5 }}
+                filteredMatches={matches}
+                contextTags={['Range: All Time']}
+            />
+        );
+
+        expect(screen.getByText(/data-dense/i)).toBeInTheDocument();
+        expect(screen.queryByText(/See what is actually moving the needle/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Suggested next drill-down/i)).not.toBeInTheDocument();
+        expect(screen.queryByText('Next moves')).not.toBeInTheDocument();
+        expect(screen.queryByText('Top Ship')).not.toBeInTheDocument();
+    });
 });

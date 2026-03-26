@@ -365,15 +365,517 @@ body[data-mode='twilight'] .toast-card-standard {
 /* Explicit gradient shells to avoid mg-surface override flattening. */
 .analytics-shell-gradient {
   background:
-    radial-gradient(circle at top right, rgba(56, 189, 248, 0.08), transparent 35%),
-    radial-gradient(circle at top left, rgba(251, 146, 60, 0.06), transparent 40%),
-    color-mix(in srgb, var(--md-sys-color-surface-container-high), var(--md-sys-color-surface) 12%) !important;
-  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 70%);
+    linear-gradient(155deg, color-mix(in srgb, var(--md-sys-color-primary), transparent 96%) 0%, transparent 38%),
+    radial-gradient(ellipse 90% 55% at 100% 0%, color-mix(in srgb, var(--md-sys-color-primary), transparent 91%), transparent),
+    radial-gradient(ellipse 70% 45% at 0% 100%, color-mix(in srgb, var(--color-warning, #f59e0b), transparent 92%), transparent),
+    color-mix(in srgb, var(--md-sys-color-surface-container-high), var(--md-sys-color-surface) 10%) !important;
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 68%);
 }
 
 .analytics-shell-surface {
   background: color-mix(in srgb, var(--md-sys-color-surface-container-high), var(--md-sys-color-surface) 12%) !important;
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 70%);
+}
+
+/* --- Analytics + drill-down: shared “orbital telemetry” language --- */
+.analytics-telemetry-scope {
+  --at-accent: var(--md-sys-color-primary);
+  --at-accent-dim: color-mix(in srgb, var(--md-sys-color-primary), transparent 78%);
+  --at-amber: color-mix(in srgb, var(--color-warning, #fbbf24), var(--md-sys-color-on-surface) 35%);
+  --at-line: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 55%);
+  --at-glow: color-mix(in srgb, var(--md-sys-color-primary), transparent 94%);
+  --at-font-display: var(--md-ref-typeface-brand), ui-sans-serif, system-ui, sans-serif;
+  --at-font-body: var(--md-ref-typeface-plain), ui-sans-serif, system-ui, sans-serif;
+  --at-font-mono: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', monospace;
+  font-family: var(--at-font-body);
+}
+
+.analytics-telemetry-scope h2,
+.analytics-telemetry-scope .at-display {
+  font-family: var(--at-font-display);
+  letter-spacing: -0.02em;
+}
+
+.analytics-telemetry-scope .at-eyebrow {
+  font-family: var(--at-font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 52%);
+}
+
+.analytics-telemetry-scope .at-header-slab {
+  position: relative;
+  border-radius: var(--md-sys-shape-corner-large);
+  border: 1px solid var(--at-line);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--at-accent), transparent 96%) 0%, transparent 38%),
+    linear-gradient(125deg, transparent 40%, color-mix(in srgb, var(--at-amber), transparent 94%) 100%),
+    var(--md-sys-color-surface-container-high);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--md-sys-color-surface), transparent 40%) inset,
+    0 1px 24px color-mix(in srgb, #000, transparent 88%);
+}
+
+.analytics-telemetry-scope .at-header-slab::before {
+  content: '';
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 0;
+  height: 2px;
+  border-radius: 0 0 4px 4px;
+  background: linear-gradient(90deg, transparent, var(--at-accent), var(--at-amber), transparent);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.analytics-telemetry-scope .at-segment-track {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 14px;
+  border: 1px solid var(--at-line);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-lowest), transparent 20%);
+  box-shadow: 0 1px 0 color-mix(in srgb, #fff, transparent 97%) inset;
+}
+
+.analytics-telemetry-scope .at-segment-btn {
+  border-radius: 10px;
+  font-family: var(--at-font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition:
+    background 160ms var(--md-motion-easing-standard),
+    color 160ms var(--md-motion-easing-standard),
+    box-shadow 160ms var(--md-motion-easing-standard);
+}
+
+.analytics-telemetry-scope .at-segment-btn[data-active='true'] {
+  background: linear-gradient(165deg, color-mix(in srgb, var(--at-accent), #fff 8%), var(--at-accent));
+  color: var(--md-sys-color-on-primary);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--at-accent), #000 22%) inset,
+    0 4px 14px color-mix(in srgb, var(--at-accent), transparent 72%);
+}
+
+.analytics-telemetry-scope .at-chip {
+  font-family: var(--at-font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.analytics-telemetry-scope .at-chip[data-active='true'] {
+  border-color: color-mix(in srgb, var(--at-accent), transparent 55%);
+  background: linear-gradient(165deg, color-mix(in srgb, var(--at-accent), transparent 88%), color-mix(in srgb, var(--at-accent), transparent 94%));
+  color: var(--md-sys-color-primary);
+  box-shadow: 0 0 20px var(--at-glow);
+}
+
+.analytics-telemetry-scope .at-chip[data-active='false'] {
+  border-color: color-mix(in srgb, var(--at-line), transparent 30%);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-low), transparent 15%);
+  color: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 42%);
+}
+
+.analytics-telemetry-scope .at-chip[data-active='false']:hover {
+  border-color: var(--at-accent-dim);
+  color: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 22%);
+}
+
+.analytics-telemetry-scope .at-subnav {
+  border-radius: var(--md-sys-shape-corner-large);
+  border: 1px solid var(--at-line);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container), transparent 8%);
+  box-shadow: 0 1px 0 color-mix(in srgb, #fff, transparent 96%) inset;
+}
+
+.analytics-telemetry-scope .at-pro-drill {
+  border-radius: var(--md-sys-shape-corner-large);
+  border: 1px solid var(--at-line);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-low), transparent 5%);
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms var(--md-motion-easing-decelerate);
+}
+
+.analytics-telemetry-scope .at-pro-drill:hover {
+  border-color: color-mix(in srgb, var(--at-accent), transparent 62%);
+  box-shadow: 0 12px 40px color-mix(in srgb, #000, transparent 82%), 0 0 0 1px var(--at-glow);
+}
+
+.analytics-telemetry-scope .at-pro-drill:focus-visible {
+  outline: 2px solid var(--at-accent);
+  outline-offset: 2px;
+}
+
+.analytics-telemetry-scope .at-open-detail-pill {
+  font-family: var(--at-font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--at-accent), transparent 50%);
+  background: color-mix(in srgb, var(--at-accent), transparent 92%);
+  color: var(--md-sys-color-primary);
+  transition: background 150ms ease, box-shadow 150ms ease;
+}
+
+.analytics-telemetry-scope .at-open-detail-pill:hover {
+  background: color-mix(in srgb, var(--at-accent), transparent 85%);
+  box-shadow: 0 0 20px var(--at-glow);
+}
+
+.analytics-telemetry-scope .at-empty-state {
+  border-radius: var(--md-sys-shape-corner-large);
+  border: 1px dashed var(--at-line);
+  background: radial-gradient(ellipse 70% 80% at 50% 0%, var(--at-glow), transparent 65%);
+}
+
+.analytics-telemetry-scope .at-cat-nav {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--md-sys-shape-corner-large);
+  border: 1px solid var(--at-line);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container), transparent 8%);
+  box-shadow: 0 1px 0 color-mix(in srgb, #fff, transparent 96%) inset;
+  overflow-x: auto;
+}
+
+.analytics-telemetry-scope .at-cat-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  border-radius: var(--md-sys-shape-corner-medium);
+  border: 1px solid transparent;
+  font-family: var(--at-font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease;
+}
+
+.analytics-telemetry-scope .at-cat-btn[data-active='false'] {
+  color: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 30%);
+}
+
+.analytics-telemetry-scope .at-cat-btn[data-active='false']:hover {
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 20%);
+  color: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 12%);
+}
+
+.analytics-telemetry-scope .at-cat-btn[data-active='true'] {
+  color: var(--md-sys-color-on-primary);
+  border-color: color-mix(in srgb, var(--at-cat-accent, var(--md-sys-color-primary)), transparent 35%);
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--at-cat-accent, var(--md-sys-color-primary)), #fff 8%),
+    var(--at-cat-accent, var(--md-sys-color-primary))
+  );
+  box-shadow:
+    0 6px 22px color-mix(in srgb, #000, transparent 84%),
+    0 0 28px color-mix(in srgb, var(--at-cat-accent, var(--md-sys-color-primary)), transparent 82%);
+}
+
+.analytics-telemetry-scope .at-cat-btn[data-active='true'][data-tone='primary'] {
+  --at-cat-accent: var(--md-sys-color-primary);
+}
+
+.analytics-telemetry-scope .at-cat-btn[data-active='true'][data-tone='success'] {
+  --at-cat-accent: var(--color-success, #22c55e);
+}
+
+.analytics-telemetry-scope .at-cat-btn[data-active='true'][data-tone='info'] {
+  --at-cat-accent: var(--color-info, #38bdf8);
+}
+
+.analytics-telemetry-scope .at-cat-btn[data-active='true'][data-tone='warning'] {
+  --at-cat-accent: var(--color-warning, #f59e0b);
+}
+
+.analytics-telemetry-scope .at-cat-btn[data-active='true'][data-tone='accent'] {
+  --at-cat-accent: var(--color-accent, #a78bfa);
+}
+
+/* Cockpit internals */
+.analytics-telemetry-scope .at-hero-panel {
+  border-radius: var(--md-sys-shape-corner-large);
+  border: 1px solid var(--at-line);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--at-accent), transparent 97%) 0%, transparent 48%),
+    color-mix(in srgb, var(--md-sys-color-surface), transparent 4%);
+  box-shadow: 0 20px 56px color-mix(in srgb, #000, transparent 88%);
+}
+
+.analytics-telemetry-scope .at-summary-tile {
+  position: relative;
+  border-radius: var(--md-sys-shape-corner-medium);
+  border: 1px solid var(--at-line);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container), transparent 6%);
+  box-shadow: 0 1px 0 color-mix(in srgb, #fff, transparent 97%) inset;
+  overflow: hidden;
+}
+
+.analytics-telemetry-scope .at-summary-tile::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--at-accent), color-mix(in srgb, var(--at-amber), transparent 30%));
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.analytics-telemetry-scope .at-focus-card {
+  border-radius: var(--md-sys-shape-corner-large);
+  border: 1px solid var(--at-line);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 20%) 0%, var(--md-sys-color-surface) 100%);
+  box-shadow: 0 10px 36px color-mix(in srgb, #000, transparent 88%);
+  transition:
+    border-color 180ms ease,
+    transform 200ms var(--md-motion-easing-decelerate),
+    box-shadow 200ms ease;
+}
+
+.analytics-telemetry-scope .at-focus-card:hover {
+  border-color: color-mix(in srgb, var(--md-sys-color-primary), transparent 55%);
+  transform: translateY(-2px);
+}
+
+.analytics-telemetry-scope .at-explorer-section {
+  border-radius: var(--md-sys-shape-corner-large);
+  border: 1px solid var(--at-line);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-low), transparent 12%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--md-sys-color-surface), transparent 35%) inset;
+}
+
+.analytics-telemetry-scope .at-explorer-row {
+  border-radius: var(--md-sys-shape-corner-small);
+  border: 1px solid transparent;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease;
+}
+
+.analytics-telemetry-scope .at-explorer-row:hover {
+  background: color-mix(in srgb, var(--at-accent), transparent 94%);
+  border-color: color-mix(in srgb, var(--at-accent), transparent 78%);
+}
+
+.analytics-telemetry-scope .at-combo-tile {
+  border-radius: var(--md-sys-shape-corner-small);
+  border: 1px solid var(--at-line);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 25%);
+}
+
+.analytics-telemetry-scope .at-next-move {
+  border-radius: var(--md-sys-shape-corner-medium);
+  border: 1px solid var(--at-line);
+  background: linear-gradient(180deg, var(--md-sys-color-surface-container-high), var(--md-sys-color-surface-container));
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.analytics-telemetry-scope .at-next-move:hover {
+  border-color: color-mix(in srgb, var(--at-accent), transparent 60%);
+  box-shadow: 0 8px 28px color-mix(in srgb, #000, transparent 86%);
+}
+
+.analytics-telemetry-scope .at-context-tag {
+  font-family: var(--at-font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--at-accent), transparent 70%);
+  background: color-mix(in srgb, var(--at-accent), transparent 92%);
+  color: var(--md-sys-color-primary);
+}
+
+.analytics-telemetry-scope .at-drill-hint {
+  border-radius: var(--md-sys-shape-corner-small);
+  border: 1px dashed color-mix(in srgb, var(--at-accent), transparent 65%);
+  background: color-mix(in srgb, var(--at-accent), transparent 96%);
+  font-family: var(--at-font-mono);
+  font-size: 11px;
+}
+
+/* Drill-down overlay (modal) */
+.drilldown-telemetry-scope {
+  position: relative;
+  --at-accent: var(--md-sys-color-primary);
+  --at-amber: color-mix(in srgb, var(--color-warning, #fbbf24), var(--md-sys-color-on-surface) 35%);
+  --at-line: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 50%);
+  --at-glow: color-mix(in srgb, var(--md-sys-color-primary), transparent 92%);
+  --at-font-display: var(--md-ref-typeface-brand), ui-sans-serif, system-ui, sans-serif;
+  --at-font-body: var(--md-ref-typeface-plain), ui-sans-serif, system-ui, sans-serif;
+  --at-font-mono: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', monospace;
+  font-family: var(--at-font-body);
+  border-radius: 20px !important;
+  border: 1px solid var(--at-line) !important;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--at-accent), transparent 97%) 0%, transparent 42%),
+    var(--md-sys-color-surface) !important;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, #fff, transparent 96%) inset,
+    0 24px 80px color-mix(in srgb, #000, transparent 55%),
+    0 0 120px color-mix(in srgb, var(--at-accent), transparent 94%) !important;
+}
+
+.drilldown-telemetry-scope::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  border-radius: 20px 20px 0 0;
+  background: linear-gradient(90deg, transparent 5%, var(--at-accent) 45%, var(--at-amber) 72%, transparent 95%);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.drilldown-telemetry-scope h2 {
+  font-family: var(--at-font-display);
+  letter-spacing: -0.03em;
+}
+
+.drilldown-scrim {
+  backdrop-filter: blur(14px) saturate(1.15);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-lowest), transparent 28%) !important;
+}
+
+.drilldown-telemetry-scope .at-dd-eyebrow {
+  font-family: var(--at-font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 48%);
+}
+
+.drilldown-telemetry-scope .at-dd-rail {
+  border-color: var(--at-line) !important;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--at-accent), transparent 97%), transparent 55%),
+    color-mix(in srgb, var(--md-sys-color-surface-container-low), transparent 8%) !important;
+}
+
+.drilldown-telemetry-scope .at-dd-stat {
+  border-radius: var(--md-sys-shape-corner-medium);
+  border: 1px solid var(--at-line) !important;
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 15%) !important;
+  box-shadow: 0 1px 0 color-mix(in srgb, #fff, transparent 97%) inset;
+}
+
+.drilldown-telemetry-scope .at-dd-tab {
+  font-family: var(--at-font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
+}
+
+.drilldown-telemetry-scope .at-dd-tab[data-active='true'] {
+  border-color: color-mix(in srgb, var(--at-accent), transparent 45%);
+  background: linear-gradient(165deg, color-mix(in srgb, var(--at-accent), transparent 82%), color-mix(in srgb, var(--at-accent), transparent 92%));
+  color: var(--md-sys-color-primary);
+  box-shadow: 0 0 24px var(--at-glow);
+}
+
+.drilldown-telemetry-scope .at-dd-tab[data-active='false'] {
+  border-color: color-mix(in srgb, var(--at-line), transparent 20%);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 10%);
+  color: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 38%);
+}
+
+.drilldown-telemetry-scope .at-dd-tab[data-active='false']:hover {
+  border-color: var(--at-line);
+  color: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 18%);
+}
+
+.drilldown-telemetry-scope .at-dd-row {
+  border-radius: var(--md-sys-shape-corner-small);
+  border: 1px solid var(--at-line) !important;
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 12%) !important;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    background 150ms ease;
+}
+
+.drilldown-telemetry-scope .at-dd-row:hover {
+  border-color: color-mix(in srgb, var(--at-accent), transparent 55%) !important;
+  box-shadow: 0 0 20px var(--at-glow);
+}
+
+.drilldown-telemetry-scope .at-dd-section {
+  border-radius: var(--md-sys-shape-corner-large);
+  border: 1px solid var(--at-line) !important;
+  background: color-mix(in srgb, var(--md-sys-color-surface), transparent 5%) !important;
+  box-shadow: 0 12px 40px color-mix(in srgb, #000, transparent 92%);
+}
+
+.drilldown-telemetry-scope .at-dd-match {
+  border-radius: var(--md-sys-shape-corner-large);
+  border: 1px solid var(--at-line) !important;
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 18%) !important;
+}
+
+.drilldown-telemetry-scope .at-dd-empty {
+  border-radius: var(--md-sys-shape-corner-large);
+  border: 1px dashed var(--at-line) !important;
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 35%) !important;
+}
+
+.drilldown-telemetry-scope .at-dd-crumb[data-current='true'] {
+  border-color: color-mix(in srgb, var(--at-accent), transparent 40%) !important;
+  background: linear-gradient(165deg, var(--at-accent), color-mix(in srgb, var(--at-accent), #000 12%)) !important;
+  color: var(--md-sys-color-on-primary) !important;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--at-accent), transparent 65%);
+}
+
+.drilldown-telemetry-scope .at-dd-crumb[data-current='false'] {
+  border: 1px solid var(--at-line);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 8%);
+  color: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 28%);
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.drilldown-telemetry-scope .at-dd-crumb[data-current='false']:hover {
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-highest), transparent 6%);
+  border-color: color-mix(in srgb, var(--at-accent), transparent 70%);
 }
 
 .players-shell-surface {

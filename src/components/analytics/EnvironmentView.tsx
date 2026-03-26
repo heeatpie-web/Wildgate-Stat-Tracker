@@ -6,6 +6,7 @@ import { Zap, Trophy, TrendingUp, TrendingDown } from 'lucide-react';
 import { generateEnvironmentEditorial } from '../../utils/analyticsEditorial';
 
 const MIN_HAZARD_SAMPLE_SIZE = 3;
+const TOOLTIP_STYLE = { backgroundColor: 'var(--md-sys-color-surface-container-high)', borderRadius: '12px', border: '1px solid var(--md-sys-color-outline-variant)' };
 
 const getColor = (name: string) => {
     if (!name) return PIE_COLORS[0];
@@ -50,7 +51,7 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
         <div className="flex-1 flex flex-col gap-4 overflow-y-auto custom-scrollbar animate-fade-in p-1">
             {/* Editorial Summary */}
             {!dense && (
-                <div className="md3-card rounded-2xl p-6">
+                <div className="md3-card rounded-card p-6">
                     <p className="text-body leading-relaxed opacity-60">{generateEnvironmentEditorial(matches)}</p>
                 </div>
             )}
@@ -63,7 +64,7 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
                             key={d.name}
                             type="button"
                             onClick={() => onDrillDown?.(d.name, 'Modifier')}
-                            className={`md3-card rounded-xl ${dense ? 'p-2' : 'p-3'} text-center transition-all ${onDrillDown ? 'hover:border-md-sys-primary/25 hover:bg-md-sys-surface-container-highest' : ''}`}
+                            className={`md3-card rounded-card ${dense ? 'p-2' : 'p-3'} text-center transition-all ${onDrillDown ? 'hover:border-md-sys-primary/25 hover:bg-md-sys-surface-container-highest' : ''}`}
                         >
                             <div className="text-label-xs font-black uppercase opacity-40 truncate mb-1">{d.name}</div>
                             {d.isLowSample ? (
@@ -92,21 +93,25 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
             )}
 
             <div className={`grid gap-4 ${dense ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
-                <div className={`md3-card rounded-2xl flex flex-col ${dense ? 'p-6 min-h-300px' : 'p-8 min-h-400px'}`}>
+                <div className={`md3-card rounded-card flex flex-col ${dense ? 'p-4 min-h-[280px]' : 'p-6 min-h-[360px]'}`}>
                     <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-body' : 'text-base'}`}><Zap size={16} /> Hazard Frequency</h3>
                     <ResponsiveContainer width="100%" height="100%">
-                        <PieChart><Pie data={data} dataKey="total" nameKey="name" cx="50%" cy="50%" outerRadius="80%" innerRadius="50%" paddingAngle={2}>
-                            {data.map((entry, index) => <Cell key={`cell-${index}`} fill={getColor(entry.name)} stroke="var(--md-sys-color-surface2)" strokeWidth={2} />)}
-                        </Pie><Tooltip contentStyle={{ backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '12px', border: 'none' }} /><Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} /></PieChart>
+                        <PieChart>
+                            <Pie data={data} dataKey="total" nameKey="name" cx="50%" cy="50%" outerRadius="80%" innerRadius="50%" paddingAngle={2}>
+                                {data.map((entry, index) => <Cell key={`cell-${index}`} fill={getColor(entry.name)} stroke="var(--md-sys-color-surface-container)" strokeWidth={2} />)}
+                            </Pie>
+                            <Tooltip contentStyle={TOOLTIP_STYLE} />
+                            <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
+                        </PieChart>
                     </ResponsiveContainer>
                 </div>
-                <div className={`md3-card rounded-2xl flex flex-col ${dense ? 'p-6 min-h-300px' : 'p-8 min-h-400px'}`}>
+                <div className={`md3-card rounded-card flex flex-col ${dense ? 'p-4 min-h-[280px]' : 'p-6 min-h-[360px]'}`}>
                     <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-body' : 'text-base'}`}><Trophy size={16} /> Win Rate by Hazard</h3>
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={data} layout="vertical" margin={{ left: 30, right: 16 }}>
                             <XAxis type="number" hide domain={[0, 100]} />
                             <YAxis dataKey="name" type="category" width={90} tick={{ fontSize: 9, fontWeight: 'bold', fill: 'var(--md-sys-color-on-surface-variant)' }} axisLine={false} tickLine={false} />
-                            <Tooltip cursor={{ fill: 'var(--md-sys-color-surface3)', opacity: 0.4 }} contentStyle={{ backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '12px', border: 'none' }} />
+                            <Tooltip cursor={{ fill: 'var(--md-sys-color-surface-container-highest)', opacity: 0.4 }} contentStyle={TOOLTIP_STYLE} />
                             <Bar dataKey="winRate" name="Win Rate %" radius={[0, 4, 4, 0]}>
                                 {data.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.isLowSample ? 'var(--md-sys-color-surface-variant)' : (entry.winRate >= 50 ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-surface-variant)')} />))}
                                 <LabelList dataKey="winRate" position="right" formatter={(v: number) => `${v}%`} style={{ fontSize: 9, fontWeight: 'bold', fill: 'var(--md-sys-color-on-surface)' }} />
@@ -115,13 +120,13 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
                     </ResponsiveContainer>
                 </div>
                 {/* Stacked Win/Loss Breakdown */}
-                <div className={`md3-card rounded-2xl flex flex-col ${dense ? 'p-6 min-h-300px' : 'p-8 min-h-400px'}`}>
+                <div className={`md3-card rounded-card flex flex-col ${dense ? 'p-4 min-h-[280px]' : 'p-6 min-h-[360px]'}`}>
                     <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-body' : 'text-base'}`}><Trophy size={16} /> Win/Loss Breakdown</h3>
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={data} layout="vertical" margin={{ left: 30, right: 16 }}>
                             <XAxis type="number" hide />
                             <YAxis dataKey="name" type="category" width={90} tick={{ fontSize: 9, fontWeight: 'bold', fill: 'var(--md-sys-color-on-surface-variant)' }} axisLine={false} tickLine={false} />
-                            <Tooltip contentStyle={{ backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '12px', border: 'none' }} />
+                            <Tooltip contentStyle={TOOLTIP_STYLE} />
                             <Bar dataKey="wins" name="Wins" stackId="wl" fill="var(--md-sys-color-primary)" radius={[0, 0, 0, 0]} />
                             <Bar dataKey="losses" name="Losses" stackId="wl" fill="var(--md-sys-color-surface-variant)" radius={[0, 4, 4, 0]} />
                         </BarChart>
@@ -130,7 +135,7 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
             </div>
 
             {data.length > 0 && (
-                <div className="md3-card rounded-2xl p-4 md:p-5">
+                <div className="md3-card rounded-card p-4 md:p-5">
                     <div className="flex items-center justify-between gap-3">
                         <div>
                             <h3 className="text-body font-black uppercase opacity-60">Hazard Explorer</h3>
@@ -161,8 +166,3 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
         </div>
     );
 };
-
-
-
-
-

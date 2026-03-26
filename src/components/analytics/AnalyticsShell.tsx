@@ -1,12 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { AnalyticsView, AnalyticsTimeRange, DrillDownTarget, EntityAnalyticsFilters } from '../../types';
-import { Activity, ArrowLeft, Download, LayoutGrid, Pin, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Activity, ArrowLeft, Download, Pin, SlidersHorizontal } from 'lucide-react';
 import { useGameData } from '../../providers/GameDataProvider';
 import { useUIState } from '../../providers/UIStateProvider';
 import { useUserPreferences } from '../../providers/UserPreferencesProvider';
 import { TRANSLATIONS } from '../../utils/translations';
 import { useAnalyticsData } from './useAnalyticsData';
-import { InlineNarrativeToggle } from './DenseEditorialToggle';
 import { exportAnalyticsAsImage } from './analyticsExport';
 import { AnalyticsCockpit } from './AnalyticsCockpit';
 import { ControlPanelView } from './ControlPanelView';
@@ -56,16 +55,6 @@ const VIEW_TO_TILE_ID: Partial<Record<AnalyticsView, string>> = {
     streaks: 'streaks',
 };
 
-const STAT_TILE_CHIPS = [
-    { id: 'winRate', label: 'Win Rate' },
-    { id: 'totalMatches', label: 'Matches' },
-    { id: 'avgKills', label: 'Avg Kills' },
-    { id: 'avgDamage', label: 'Avg Dmg' },
-    { id: 'avgPlacement', label: 'Avg Place' },
-    { id: 'bestStreak', label: 'Best Streak' },
-    { id: 'currentStreak', label: 'Streak' },
-] as const;
-
 const TIME_RANGE_OPTIONS: { value: AnalyticsTimeRange; label: string }[] = [
     { value: 'today', label: 'Today' },
     { value: 'lastN', label: 'Last 20' },
@@ -84,6 +73,7 @@ const CATEGORY_SUBVIEWS: Record<AnalyticsCategory, AnalyticsView[]> = {
 };
 
 type ProCategory = 'all' | 'core' | 'timeline' | 'team' | 'environment' | 'detailed';
+type DisplayMode = 'standard' | 'dense' | 'all';
 
 const PRO_CATEGORY_OPTIONS: Array<{ value: ProCategory; label: string }> = [
     { value: 'all', label: 'All' },
@@ -94,6 +84,12 @@ const PRO_CATEGORY_OPTIONS: Array<{ value: ProCategory; label: string }> = [
     { value: 'detailed', label: 'Detailed' },
 ];
 
+const MODE_OPTIONS: Array<{ value: DisplayMode; label: string }> = [
+    { value: 'standard', label: 'Standard' },
+    { value: 'dense', label: 'Dense' },
+    { value: 'all', label: 'All Views' },
+];
+
 interface AnalyticsShellProps {
     isActive?: boolean;
 }
@@ -102,7 +98,8 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
     const { setDrillDownTarget } = useGameData();
     const { activeMode: currentMode, activeUser: currentUser } = useUIState();
     const { language, visualMode, setVisualMode } = useUserPreferences();
-    const t = TRANSLATIONS[language];
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _t = TRANSLATIONS[language];
 
     const [currentView, setCurrentView] = useState<AnalyticsView>('overview');
     const [timeRange, setTimeRange] = useState<AnalyticsTimeRange>('all');
@@ -122,10 +119,31 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
     const contentRef = useRef<HTMLDivElement>(null);
     const [pinnedTiles, setPinnedTiles] = useState<Set<string>>(new Set());
     const [showExportModal, setShowExportModal] = useState(false);
+    const [showFilters, setShowFilters] = useState(false);
+    const filterRef = useRef<HTMLDivElement>(null);
+
+    // Derived 3-state display mode: standard (editorial) / dense / all (pro grid)
+    const displayMode: DisplayMode = isProMode ? 'all' : (visualMode === 'dense' ? 'dense' : 'standard');
+    const setDisplayMode = (mode: DisplayMode) => {
+        if (mode === 'all') {
+            setIsProMode(true);
+        } else {
+            setIsProMode(false);
+            setVisualMode(mode === 'dense' ? 'dense' : 'editorial');
+        }
+    };
+
+    const activeFilterCount = [
+        entityFilters.ship[0],
+        entityFilters.prospectorWeapon[0],
+        entityFilters.equipment[0],
+        entityFilters.perk[0],
+        entityFilters.update[0],
+    ].filter(Boolean).length;
 
     const requestedDataView = useMemo<AnalyticsView | undefined>(() => {
         // Standard overview only needs lightweight metrics.
-        // Pro overview renders many tiles and should request full analytics.
+        // All-Views (pro) overview renders many tiles and should request full analytics.
         if (isProMode && currentView === 'overview') return undefined;
         return currentView;
     }, [currentView, isProMode]);
@@ -177,6 +195,7 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
         }
         return tags;
     }, [entityFilters, timeRange, customDateFrom, customDateTo]);
+
     const filterSelectClassName = 'px-2.5 py-1.5 rounded-control border border-md-sys-outline/20 bg-md-sys-surface text-md-sys-on-surface text-label-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary';
 
     const onDrillDown = useCallback((name: string, type: DrillDownTarget['type']) => {
@@ -219,6 +238,18 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
         return () => window.removeEventListener('analytics:navigate-view', onExternalNavigate as EventListener);
     }, [isActive]);
 
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+                setShowFilters(false);
+            }
+        };
+        if (showFilters) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showFilters]);
+
     const isInteractiveTarget = (target: EventTarget | null) => {
         const el = target as HTMLElement | null;
         if (!el) return false;
@@ -239,7 +270,7 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
                 e.preventDefault();
                 openDetailedFromPro(view);
             }}
-            className="group relative rounded-card cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary"
+            className="at-pro-drill group relative cursor-pointer overflow-hidden"
         >
             <button
                 type="button"
@@ -248,7 +279,7 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
                     e.stopPropagation();
                     openDetailedFromPro(view);
                 }}
-                className="absolute right-3 top-3 z-10 px-2 py-1 rounded-pill text-label-xs font-bold uppercase tracking-wide bg-md-sys-primary/14 text-md-sys-primary border border-md-sys-primary/25"
+                className="at-open-detail-pill absolute right-3 top-3 z-10 px-2.5 py-1"
             >
                 Open detail
             </button>
@@ -439,104 +470,146 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
         periodComparison: data.periodComparison,
         timePatterns: data.timePatterns,
     };
-    const entitySelectorControls = (
-        <>
-            <select
-                value={entityFilters.ship[0] || ''}
-                onChange={(e) => setEntityFilters((prev) => ({ ...prev, ship: e.target.value ? [e.target.value] : [] }))}
-                className={filterSelectClassName}
-            >
-                <option value="">All Ships</option>
-                {shipFilterOptions.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                ))}
-            </select>
-            <select
-                value={entityFilters.prospectorWeapon[0] || ''}
-                onChange={(e) => setEntityFilters((prev) => ({ ...prev, prospectorWeapon: e.target.value ? [e.target.value] : [] }))}
-                className={filterSelectClassName}
-            >
-                <option value="">All Weapons</option>
-                {weaponFilterOptions.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                ))}
-            </select>
-            <select
-                value={entityFilters.equipment[0] || ''}
-                onChange={(e) => setEntityFilters((prev) => ({ ...prev, equipment: e.target.value ? [e.target.value] : [] }))}
-                className={filterSelectClassName}
-            >
-                <option value="">All Equipment</option>
-                {equipmentFilterOptions.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                ))}
-            </select>
-            <select
-                value={entityFilters.perk[0] || ''}
-                onChange={(e) => setEntityFilters((prev) => ({ ...prev, perk: e.target.value ? [e.target.value] : [] }))}
-                className={filterSelectClassName}
-            >
-                <option value="">All Perk Sets</option>
-                {perkFilterOptions.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                ))}
-            </select>
-            <select
-                value={entityFilters.update[0] || ''}
-                onChange={(e) => setEntityFilters((prev) => ({ ...prev, update: e.target.value ? [e.target.value] : [] }))}
-                className={filterSelectClassName}
-            >
-                <option value="">All Updates</option>
-                {UPDATE_DEFINITIONS.map((update) => (
-                    <option key={update.key} value={update.key}>{update.label}</option>
-                ))}
-            </select>
-        </>
-    );
 
     return (
-        <div className={`twilight-solid-scope twilight-soft-shadows h-full flex flex-col gap-3 overflow-hidden rounded-modal shadow-lg ${isCockpitView ? 'analytics-shell-surface' : 'analytics-shell-gradient'}`}>
+        <div className={`twilight-solid-scope twilight-soft-shadows analytics-telemetry-scope h-full flex flex-col gap-3 overflow-hidden rounded-modal shadow-lg ${isCockpitView ? 'analytics-shell-surface' : 'analytics-shell-gradient'}`}>
             {/* Header */}
-            <div className="flex-shrink-0 rounded-card mg-surface-high p-3 md:p-4">
+            <div className="flex-shrink-0 at-header-slab p-3 md:p-4">
                 <div className="flex flex-col gap-3">
+                    {/* Row 1: Title + Controls */}
                     <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
-                            {/* In standard mode, show Back button if not in overview */}
                             {!isProMode && currentView !== 'overview' && (
-                                <button onClick={goBack} className="md3-icon-btn" aria-label="Back to analytics overview">
+                                <button onClick={goBack} className="md3-icon-btn shrink-0" aria-label="Back to analytics overview">
                                     <ArrowLeft size={16} />
                                 </button>
                             )}
                             <div className="min-w-0">
-                                <h2 className="text-base md:text-lg font-bold tracking-tight flex items-center gap-2 text-md-sys-on-surface">
-                                    <Activity className="text-md-sys-primary" size={18} />
+                                <div className="at-eyebrow">Wildgate · signal deck</div>
+                                <h2 className="at-display text-base md:text-lg font-extrabold tracking-tight flex items-center gap-2 text-md-sys-on-surface mt-1.5">
+                                    <Activity className="text-md-sys-primary shrink-0" size={18} aria-hidden />
                                     <span className="truncate">
-                                        {isProMode ? 'Pro Analytics' : (currentView === 'overview' ? 'Analytics Cockpit' : VIEW_LABELS[currentView])}
+                                        {isProMode ? 'All Views' : (currentView === 'overview' ? 'Analytics Cockpit' : VIEW_LABELS[currentView])}
                                     </span>
                                 </h2>
-                                <div className="mt-1 flex items-center gap-2 text-label-sm font-semibold uppercase tracking-wider text-md-sys-on-surface/60">
-                                    <span className={`px-2 py-0.5 rounded-pill border ${modeBadge}`}>{currentMode}</span>
-                                    <span>
-                                        {isProMode ? 'High Density View' : (currentView === 'overview' ? 'Performance Overview' : 'Deep Dive View')}
+                                <div className="mt-1.5 flex flex-wrap items-center gap-2 text-label-sm font-semibold text-md-sys-on-surface/55">
+                                    <span className={`px-2 py-0.5 rounded-pill border font-mono text-[10px] tracking-wide uppercase ${modeBadge}`}>{currentMode}</span>
+                                    <span className="font-mono text-[10px] tracking-widest uppercase text-md-sys-on-surface/45">
+                                        {isProMode ? 'Lattice grid' : (currentView === 'overview' ? 'Orbit overview' : 'Deep slice')}
                                     </span>
                                 </div>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                            {/* Pro Mode Toggle */}
-                            <button
-                                onClick={() => setIsProMode(!isProMode)}
-                                className={`flex items-center gap-2 px-3 py-1.5 rounded-control text-label-sm font-bold uppercase tracking-wide transition-all border ${
-                                    isProMode
-                                        ? 'bg-md-sys-primary text-md-sys-onPrimary border-md-sys-primary'
-                                        : 'bg-md-sys-surfaceContainerHigh text-md-sys-on-surface/60 border-transparent hover:bg-md-sys-surfaceContainerHighest'
-                                }`}
-                            >
-                                <LayoutGrid size={14} />
-                                {isProMode ? 'Pro' : 'Standard'}
-                                {isProMode ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
-                            </button>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                            {/* 3-state mode segmented control: Standard / Dense / All Views */}
+                            <div className="at-segment-track" role="group" aria-label="Display density">
+                                {MODE_OPTIONS.map(({ value, label }) => (
+                                    <button
+                                        key={value}
+                                        type="button"
+                                        data-active={displayMode === value ? 'true' : 'false'}
+                                        onClick={() => setDisplayMode(value)}
+                                        className={`at-segment-btn px-3 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary ${
+                                            displayMode === value ? '' : 'text-md-sys-on-surface/55 hover:text-md-sys-on-surface/80'
+                                        }`}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
 
+                            {/* Filter button with popover */}
+                            <div className="relative" ref={filterRef}>
+                                <button
+                                    onClick={() => setShowFilters(!showFilters)}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-control text-label-sm font-bold uppercase tracking-wide transition-all border ${
+                                        activeFilterCount > 0 || showFilters
+                                            ? 'bg-md-sys-primary/15 text-md-sys-primary border-md-sys-primary/30'
+                                            : 'bg-md-sys-surfaceContainerHigh text-md-sys-on-surface/60 border-transparent hover:bg-md-sys-surfaceContainerHighest'
+                                    }`}
+                                    aria-label={`Filters${activeFilterCount > 0 ? ` (${activeFilterCount} active)` : ''}`}
+                                >
+                                    <SlidersHorizontal size={13} />
+                                    Filter
+                                    {activeFilterCount > 0 && (
+                                        <span className="min-w-[16px] h-4 rounded-full bg-md-sys-primary text-md-sys-onPrimary text-[10px] font-black flex items-center justify-center px-1">
+                                            {activeFilterCount}
+                                        </span>
+                                    )}
+                                </button>
+                                {showFilters && (
+                                    <div className="absolute right-0 top-full mt-2 z-30 w-72 rounded-card mg-surface-high border border-md-sys-outline/20 shadow-xl p-4 flex flex-col gap-3">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-label-xs font-bold uppercase tracking-widest text-md-sys-on-surface/50">Filters</span>
+                                            {activeFilterCount > 0 && (
+                                                <button
+                                                    onClick={() => setEntityFilters({ ship: [], prospectorWeapon: [], equipment: [], perk: [], update: [] })}
+                                                    className="text-label-xs font-bold text-md-sys-primary hover:underline"
+                                                >
+                                                    Clear all
+                                                </button>
+                                            )}
+                                        </div>
+                                        <label className="flex flex-col gap-1">
+                                            <span className="text-label-xs text-md-sys-on-surface/50 font-semibold">Ship</span>
+                                            <select
+                                                value={entityFilters.ship[0] || ''}
+                                                onChange={(e) => setEntityFilters((prev) => ({ ...prev, ship: e.target.value ? [e.target.value] : [] }))}
+                                                className={filterSelectClassName + ' w-full'}
+                                            >
+                                                <option value="">All Ships</option>
+                                                {shipFilterOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+                                            </select>
+                                        </label>
+                                        <label className="flex flex-col gap-1">
+                                            <span className="text-label-xs text-md-sys-on-surface/50 font-semibold">Weapon</span>
+                                            <select
+                                                value={entityFilters.prospectorWeapon[0] || ''}
+                                                onChange={(e) => setEntityFilters((prev) => ({ ...prev, prospectorWeapon: e.target.value ? [e.target.value] : [] }))}
+                                                className={filterSelectClassName + ' w-full'}
+                                            >
+                                                <option value="">All Weapons</option>
+                                                {weaponFilterOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+                                            </select>
+                                        </label>
+                                        <label className="flex flex-col gap-1">
+                                            <span className="text-label-xs text-md-sys-on-surface/50 font-semibold">Equipment</span>
+                                            <select
+                                                value={entityFilters.equipment[0] || ''}
+                                                onChange={(e) => setEntityFilters((prev) => ({ ...prev, equipment: e.target.value ? [e.target.value] : [] }))}
+                                                className={filterSelectClassName + ' w-full'}
+                                            >
+                                                <option value="">All Equipment</option>
+                                                {equipmentFilterOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+                                            </select>
+                                        </label>
+                                        <label className="flex flex-col gap-1">
+                                            <span className="text-label-xs text-md-sys-on-surface/50 font-semibold">Perk Set</span>
+                                            <select
+                                                value={entityFilters.perk[0] || ''}
+                                                onChange={(e) => setEntityFilters((prev) => ({ ...prev, perk: e.target.value ? [e.target.value] : [] }))}
+                                                className={filterSelectClassName + ' w-full'}
+                                            >
+                                                <option value="">All Perk Sets</option>
+                                                {perkFilterOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+                                            </select>
+                                        </label>
+                                        <label className="flex flex-col gap-1">
+                                            <span className="text-label-xs text-md-sys-on-surface/50 font-semibold">Update</span>
+                                            <select
+                                                value={entityFilters.update[0] || ''}
+                                                onChange={(e) => setEntityFilters((prev) => ({ ...prev, update: e.target.value ? [e.target.value] : [] }))}
+                                                className={filterSelectClassName + ' w-full'}
+                                            >
+                                                <option value="">All Updates</option>
+                                                {UPDATE_DEFINITIONS.map((u) => <option key={u.key} value={u.key}>{u.label}</option>)}
+                                            </select>
+                                        </label>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Download */}
                             <button
                                 onClick={async () => {
                                     setExporting(true);
@@ -550,19 +623,19 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
                             >
                                 <Download size={16} className={exporting ? 'animate-pulse' : ''} />
                             </button>
-                            <InlineNarrativeToggle visualMode={visualMode} onChange={setVisualMode} />
                         </div>
                     </div>
 
+                    {/* Row 2: Time range pills */}
                     <div className="flex flex-wrap items-center gap-2">
+                        <span className="at-eyebrow mr-1 self-center hidden sm:inline">Time scope</span>
                         {TIME_RANGE_OPTIONS.map(opt => (
                             <button
                                 key={opt.value}
+                                type="button"
+                                data-active={timeRange === opt.value ? 'true' : 'false'}
                                 onClick={() => setTimeRange(opt.value)}
-                                className={`px-3 py-1.5 rounded-control text-label-sm font-bold uppercase tracking-wide transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary ${timeRange === opt.value
-                                    ? 'bg-md-sys-primary text-md-sys-onPrimary shadow'
-                                    : 'bg-md-sys-surfaceContainerLowest/70 text-md-sys-on-surface/60 hover:bg-md-sys-surfaceContainerHigh/70'
-                                    }`}
+                                className="at-chip px-3 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary"
                             >
                                 {opt.label}
                             </button>
@@ -588,15 +661,23 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
                             </>
                         )}
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                        {entitySelectorControls}
-                    </div>
+
+                    {/* Active filter tags — shown beneath time range when filters are set */}
+                    {activeFilterCount > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            {activeContextTags.slice(1).map((tag) => (
+                                <span key={tag} className="at-context-tag px-2.5 py-0.5 text-label-xs">
+                                    {tag}
+                                </span>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
 
             {/* Main Content Area */}
             {isProMode ? (
-                // Pro Mode: High Density Grid
+                // All Views Mode: High Density Grid
                 <div ref={contentRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar rounded-card mg-surface-high p-3">
                     <div className="space-y-4">
                         <ControlPanelView timeRange={timeRange} lastN={lastN} />
@@ -628,7 +709,7 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
                     </div>
                 </div>
             ) : (
-                // Standard Mode
+                // Standard / Dense Mode
                 <>
                     {/* Navigation Strip */}
                     {data.filteredMatches.length > 0 && (
@@ -640,89 +721,73 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
                         </div>
                     )}
 
-                    {data.filteredMatches.length === 0 ? (
-                        <div className="flex-1 flex flex-col items-center justify-center gap-4 text-md-sys-on-surface/40 animate-fade-in">
-                            <div className="w-16 h-16 rounded-card bg-md-sys-primaryContainer/30 flex items-center justify-center">
-                                <Activity size={28} className="text-md-sys-primary/40" />
+                    {/* Sub-view nav — outside scroll, same tier as category nav */}
+                    {data.filteredMatches.length > 0 && currentView !== 'overview' && (
+                        <div className="flex-shrink-0">
+                            <div className="at-subnav p-1 flex items-center gap-1 overflow-x-auto no-scrollbar">
+                                {CATEGORY_SUBVIEWS[activeCategory]?.map((view) => (
+                                    <button
+                                        key={view}
+                                        type="button"
+                                        onClick={() => navigateTo(view)}
+                                        className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-control text-label-sm font-bold uppercase tracking-wide whitespace-nowrap transition-all border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary ${
+                                            currentView === view
+                                                ? 'bg-md-sys-surfaceContainerHighest text-md-sys-on-surface shadow-sm border-md-sys-outline/15'
+                                                : 'text-md-sys-on-surface/60 border-transparent hover:bg-md-sys-surfaceContainerHigh hover:text-md-sys-on-surface'
+                                        }`}
+                                    >
+                                        {VIEW_LABELS[view]}
+                                    </button>
+                                ))}
+                                {!!VIEW_TO_TILE_ID[currentView] && (
+                                    <button
+                                        type="button"
+                                        onClick={() => togglePin(VIEW_TO_TILE_ID[currentView] ?? currentView)}
+                                        className={`ml-auto flex items-center gap-1.5 px-3 py-2 rounded-control text-label-sm font-bold uppercase tracking-wide whitespace-nowrap transition-all border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary ${
+                                            pinnedTiles.has(VIEW_TO_TILE_ID[currentView] ?? currentView)
+                                                ? 'bg-md-sys-primary/12 text-md-sys-primary border-md-sys-primary/25'
+                                                : 'text-md-sys-on-surface/40 border-transparent hover:text-md-sys-on-surface/70'
+                                        }`}
+                                        aria-label={pinnedTiles.has(VIEW_TO_TILE_ID[currentView] ?? currentView) ? 'Unpin this view' : 'Pin this view for export'}
+                                    >
+                                        <Pin size={11} fill={pinnedTiles.has(VIEW_TO_TILE_ID[currentView] ?? currentView) ? 'currentColor' : 'none'} />
+                                        {pinnedTiles.has(VIEW_TO_TILE_ID[currentView] ?? currentView) ? 'Pinned' : 'Pin'}
+                                    </button>
+                                )}
                             </div>
-                            <div className="text-center">
-                                <h3 className="text-body font-bold text-md-sys-on-surface/60">No match data yet</h3>
-                                <p className="text-label-sm mt-1 text-md-sys-on-surface/40">Record some matches to unlock analytics</p>
+                        </div>
+                    )}
+
+                    {data.filteredMatches.length === 0 ? (
+                        <div className="flex-1 flex flex-col items-center justify-center gap-4 text-md-sys-on-surface/40 animate-fade-in px-4">
+                            <div className="at-empty-state w-full max-w-sm flex flex-col items-center justify-center gap-4 px-6 py-10">
+                                <div className="w-16 h-16 rounded-2xl bg-md-sys-primaryContainer/25 border border-md-sys-primary/15 flex items-center justify-center shadow-lg">
+                                    <Activity size={28} className="text-md-sys-primary/50" aria-hidden />
+                                </div>
+                                <div className="text-center">
+                                    <h3 className="at-display text-body font-extrabold text-md-sys-on-surface/65">No signal yet</h3>
+                                    <p className="text-label-sm mt-2 text-md-sys-on-surface/45 font-mono uppercase tracking-wider">Record matches to populate the deck</p>
+                                </div>
                             </div>
                         </div>
                     ) : (
                         <div ref={contentRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar rounded-card mg-surface-high p-3">
                             {currentView === 'overview' ? (
-                                <>
-                                {/* Stat tile pin chips — overview only */}
-                                <div className="mb-3 flex flex-wrap items-center gap-2">
-                                    <span className="text-label-xs font-bold uppercase tracking-widest text-md-sys-on-surface/40 mr-1">
-                                        Pin for export:
-                                    </span>
-                                    {STAT_TILE_CHIPS.map(chip => (
-                                        <button
-                                            key={chip.id}
-                                            type="button"
-                                            onClick={() => togglePin(chip.id)}
-                                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-control text-label-xs font-bold uppercase tracking-wide transition-all border ${
-                                                pinnedTiles.has(chip.id)
-                                                    ? 'bg-md-sys-primary/15 text-md-sys-primary border-md-sys-primary/30'
-                                                    : 'bg-transparent text-md-sys-on-surface/40 border-md-sys-outline/20 hover:text-md-sys-on-surface/70 hover:border-md-sys-outline/40'
-                                            }`}
-                                            aria-label={pinnedTiles.has(chip.id) ? `Unpin ${chip.label}` : `Pin ${chip.label} for export`}
-                                        >
-                                            <Pin size={10} fill={pinnedTiles.has(chip.id) ? 'currentColor' : 'none'} />
-                                            {chip.label}
-                                        </button>
-                                    ))}
-                                </div>
                                 <AnalyticsCockpit
                                     visualMode={visualMode}
                                     onNavigate={navigateTo}
                                     onDrillDown={onDrillDown}
                                     winRate={data.winRate}
-                                totalMatches={data.filteredMatches.length}
-                                momentum={data.momentum}
-                                placementData={data.placementData}
-                                filteredMatches={data.filteredMatches}
-                                contextTags={activeContextTags}
-                            />
-                                </>
+                                    totalMatches={data.filteredMatches.length}
+                                    momentum={data.momentum}
+                                    placementData={data.placementData}
+                                    filteredMatches={data.filteredMatches}
+                                    contextTags={activeContextTags}
+                                    pinnedTiles={pinnedTiles}
+                                    onTogglePin={togglePin}
+                                />
                             ) : (
-                                <>
-                                    {/* Sub-Navigation for Detailed Views */}
-                                    <div className="flex gap-2 overflow-x-auto pb-2 mb-2 no-scrollbar px-1">
-                                        {CATEGORY_SUBVIEWS[activeCategory]?.map((view) => (
-                                            <button
-                                                key={view}
-                                                onClick={() => navigateTo(view)}
-                                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-control text-label-sm font-bold uppercase tracking-wide whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary ${currentView === view
-                                                    ? 'bg-md-sys-primary text-md-sys-onPrimary'
-                                                    : 'bg-md-sys-surfaceContainerLowest/70 text-md-sys-on-surface/60 hover:bg-md-sys-primaryContainer hover:text-md-sys-onPrimaryContainer'
-                                                    }`}
-                                            >
-                                                {VIEW_LABELS[view]}
-                                            </button>
-                                        ))}
-                                        {/* Pin button for current view */}
-                                        {!!VIEW_TO_TILE_ID[currentView] && (
-                                            <button
-                                                type="button"
-                                                onClick={() => togglePin(VIEW_TO_TILE_ID[currentView] ?? currentView)}
-                                                className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-control text-label-sm font-bold uppercase tracking-wide transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary ${
-                                                    pinnedTiles.has(VIEW_TO_TILE_ID[currentView] ?? currentView)
-                                                        ? 'bg-md-sys-primary/15 text-md-sys-primary border border-md-sys-primary/30'
-                                                        : 'text-md-sys-on-surface/40 hover:text-md-sys-on-surface/70 border border-transparent'
-                                                }`}
-                                                aria-label={pinnedTiles.has(VIEW_TO_TILE_ID[currentView] ?? currentView) ? 'Unpin this view' : 'Pin this view for export'}
-                                            >
-                                                <Pin size={12} fill={pinnedTiles.has(VIEW_TO_TILE_ID[currentView] ?? currentView) ? 'currentColor' : 'none'} />
-                                                {pinnedTiles.has(VIEW_TO_TILE_ID[currentView] ?? currentView) ? 'Pinned' : 'Pin'}
-                                            </button>
-                                        )}
-                                    </div>
-                                    {renderExpandedView()}
-                                </>
+                                renderExpandedView()
                             )}
                             {pinnedTiles.size > 0 && (
                                 <div className="sticky bottom-0 mt-4 flex items-center justify-between gap-3 md3-card rounded-card p-3 border border-md-sys-primary/20 bg-md-sys-primary/5">
