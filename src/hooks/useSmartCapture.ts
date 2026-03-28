@@ -29,6 +29,7 @@ import type { LobbyScanResult, SmartScanResult } from '../utils/scanService';
 import Logger from '../utils/logger';
 import { runtimeConfig } from '../config/runtimeConfig';
 import { resolveTagShipMetadata } from '../utils/scan/localScan';
+import { buildTelemetryDraftPregamePreviewPatch } from '../utils/pregameAdvice/previewSync';
 
 const IMAGE_PATH_PATTERN = /\.(png|jpe?g|webp|bmp|gif)$/i;
 
@@ -261,6 +262,27 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       ocrState: scopedMatch.ocrState || 'queued',
     });
   }, [mergeArtifactPaths, normalizeMatchScope]);
+
+  const syncPregamePreviewToDraft = useCallback((matchId: string | number | null | undefined, data: OCRExtractedData) => {
+    const scope = normalizeMatchScope(matchId);
+    const numericScope = Number(scope);
+    if (!scope || !Number.isInteger(numericScope) || numericScope <= 0) {
+      return;
+    }
+
+    const state = useAppStore.getState();
+    const scopedMatch = (state.matches || []).find((match) => Number(match.id || 0) === numericScope);
+    const patch = buildTelemetryDraftPregamePreviewPatch(scopedMatch, data);
+    if (!scopedMatch || !patch) {
+      return;
+    }
+
+    // Keep the active telemetry draft reactive while queued lobby OCR is still in-flight.
+    state.updateMatch({
+      ...scopedMatch,
+      ...patch,
+    });
+  }, [normalizeMatchScope]);
 
   const withScopeArtifacts = useCallback((data: OCRExtractedData, matchId?: string | number | null): OCRExtractedData => ({
     ...data,
@@ -1039,6 +1061,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       }, matchId);
       pendingDataByScopeRef.current[scope] = created;
       setPendingData(created);
+      syncPregamePreviewToDraft(matchId, created);
       return;
     }
 
@@ -1078,7 +1101,8 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     }, matchId);
     pendingDataByScopeRef.current[scope] = updated;
     setPendingData(updated);
-  }, [applyTemporalFusion, canonicalizeOcrData, normalizeMatchScope, withScopeArtifacts]);
+    syncPregamePreviewToDraft(matchId, updated);
+  }, [applyTemporalFusion, canonicalizeOcrData, normalizeMatchScope, syncPregamePreviewToDraft, withScopeArtifacts]);
 
   const processSingleCapture = useCallback(async (activeUser?: string | null) => {
     prepareAudio();
