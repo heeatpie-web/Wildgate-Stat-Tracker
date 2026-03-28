@@ -229,6 +229,8 @@ const SettingsModalContent: React.FC = () => {
 
     const fullAutoEnabled = useAppStore(s => s.fullAutoEnabled);
     const setFullAutoEnabled = useAppStore(s => s.setFullAutoEnabled);
+    const pregameAdviceEnabled = useAppStore(s => s.pregameAdviceEnabled);
+    const setPregameAdviceEnabled = useAppStore(s => s.setPregameAdviceEnabled);
 
     const handleTacticalMapKeybindKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
         const ignoredCodes = new Set([
@@ -1322,6 +1324,28 @@ const SettingsModalContent: React.FC = () => {
                             </div>
                             <div className="mt-3 rounded-control border border-md-sys-outline/10 bg-md-sys-surface px-3 py-3 text-label-sm leading-relaxed text-md-sys-on-surface/60">
                                 Full Auto is now the only automatic result path. Turning it off falls back to manual capture and OCR tools instead of the old pixel watcher.
+                            </div>
+                        </div>
+
+                        <div className="mt-4 rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-4 py-4">
+                            <div className="flex items-start justify-between gap-3">
+                                <div>
+                                    <div className="text-label-sm font-semibold text-md-sys-on-surface">Pregame advice</div>
+                                    <div className="mt-0.5 text-label-sm text-md-sys-on-surface/60">
+                                        Auto-opens a compact intel panel once lobby OCR completes, showing estimated win rate and 3–5 plain-language recommendations for the active match.
+                                    </div>
+                                </div>
+                                <label className="flex cursor-pointer items-center gap-2 shrink-0 mt-0.5">
+                                    <input
+                                        type="checkbox"
+                                        checked={pregameAdviceEnabled}
+                                        onChange={e => setPregameAdviceEnabled(e.target.checked)}
+                                        className="h-4 w-4 accent-md-sys-primary"
+                                    />
+                                    <span className="text-label-sm text-md-sys-on-surface/70">
+                                        Enabled
+                                    </span>
+                                </label>
                             </div>
                         </div>
 

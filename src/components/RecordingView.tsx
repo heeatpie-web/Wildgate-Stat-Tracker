@@ -4,7 +4,20 @@ import { RosterPanel } from './recording/RosterPanel';
 import { MissionPanel } from './recording/MissionPanel';
 import { ActionPanel } from './recording/ActionPanel';
 import { useUIState } from '../providers/UIStateProvider';
+import { useAppStore } from '../store/useAppStore';
+import { useGameData } from '../providers/GameDataProvider';
+import { findActiveTelemetryDraftMatch } from '../utils/smartCaptureScope';
+import { PregameAdvicePanel, PregameAdviceReopenButton } from './PregameAdvicePanel';
 // TimelinePanel archived
+
+/** Automation phases that indicate lobby OCR has fully completed for the active draft. */
+const POST_LOBBY_PHASES = new Set([
+  'lobby-complete',
+  'watching-result',
+  'watching-result-flash',
+  'result-flash-detected',
+  'live-match',
+]);
 
 interface RecordingViewProps {
     onSmartCaptureData?: (data: any) => void;
@@ -13,6 +26,11 @@ interface RecordingViewProps {
 
 export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData, isActive = true }) => {
     const { telemetryLifecycleStage, telemetryAutomationStatus } = useUIState();
+    const { matches } = useGameData();
+    const activeUser = useAppStore((s) => s.activeUser);
+    const sessionStartTime = useAppStore((s) => s.sessionStartTime);
+    const pregameAdviceEnabled = useAppStore((s) => s.pregameAdviceEnabled);
+
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const [viewport, setViewport] = React.useState(() => ({
         w: typeof window !== 'undefined' ? window.innerWidth : 1920,
@@ -89,6 +107,82 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
         if (density === 'standard') setLeftTab('actions');
     }, [density]);
 
+    // ── Pregame advice panel state ──────────────────────────────────────────
+
+    const activeTelemetryDraftMatch = React.useMemo(
+        () => findActiveTelemetryDraftMatch({ activeUser, matches, sessionStartTime }),
+        [activeUser, matches, sessionStartTime]
+    );
+    const activeDraftId = activeTelemetryDraftMatch?.id ?? null;
+
+    // Track which draft ID we've already auto-opened for (component-lifetime ref).
+    const autoOpenedForDraftIdRef = React.useRef<number | null>(null);
+    // Track which draft ID the user explicitly dismissed.
+    const [dismissedForDraftId, setDismissedForDraftId] = React.useState<number | null>(null);
+    // Whether the panel is currently open.
+    const [advicePanelOpen, setAdvicePanelOpen] = React.useState(false);
+
+    // Reset dismissed + open state when the active draft changes or stops.
+    React.useEffect(() => {
+        if (activeDraftId == null) {
+            setAdvicePanelOpen(false);
+            setDismissedForDraftId(null);
+            autoOpenedForDraftIdRef.current = null;
+        } else if (activeDraftId !== dismissedForDraftId) {
+            // New draft started — clear any stale dismissed marker for a different draft.
+            setDismissedForDraftId((prev) => (prev !== activeDraftId ? null : prev));
+        }
+    }, [activeDraftId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Auto-open: fires once per draft when all lobby screenshots are processed.
+    React.useEffect(() => {
+        if (!pregameAdviceEnabled) return;
+        if (activeDraftId == null) return;
+
+        const phase = telemetryAutomationStatus?.phase;
+        if (!phase || !POST_LOBBY_PHASES.has(phase)) return;
+
+        // The status matchId must belong to the active draft (or be unset).
+        const statusMatchId = telemetryAutomationStatus?.matchId;
+        if (statusMatchId != null && statusMatchId !== activeDraftId) return;
+
+        // Already auto-opened for this draft.
+        if (autoOpenedForDraftIdRef.current === activeDraftId) return;
+
+        // User already dismissed this draft.
+        if (dismissedForDraftId === activeDraftId) return;
+
+        autoOpenedForDraftIdRef.current = activeDraftId;
+        setAdvicePanelOpen(true);
+    }, [
+        pregameAdviceEnabled,
+        activeDraftId,
+        telemetryAutomationStatus?.phase,
+        telemetryAutomationStatus?.matchId,
+        dismissedForDraftId,
+    ]);
+
+    const handleAdviceDismiss = React.useCallback(() => {
+        setAdvicePanelOpen(false);
+        if (activeDraftId != null) {
+            setDismissedForDraftId(activeDraftId);
+        }
+    }, [activeDraftId]);
+
+    const handleAdviceReopen = React.useCallback(() => {
+        setAdvicePanelOpen(true);
+        setDismissedForDraftId(null);
+    }, []);
+
+    // Show the reopen button in the automation strip when dismissed but draft is still active.
+    const showReopenButton =
+        pregameAdviceEnabled &&
+        !advicePanelOpen &&
+        dismissedForDraftId != null &&
+        dismissedForDraftId === activeDraftId;
+
+    // ── Tab bar (compact density) ───────────────────────────────────────────
+
     const LeftTabBar = density === 'compact' ? (
         <div className="grid grid-cols-2 gap-1 md3-surface rounded-xl p-0.5 border border-md-sys-outline/10 h-8">
             <button
@@ -116,6 +210,18 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
 
     const LeftPanel = (
         <div className={`min-h-0 ${!isNarrow ? 'h-full' : ''} flex flex-col gap-3 ${leftShellChrome} ${shouldScrollLeftPanel ? 'overflow-y-auto custom-scrollbar pr-1' : 'overflow-hidden'}`}>
+            {/* Pregame Advice Panel */}
+            {pregameAdviceEnabled && advicePanelOpen && activeTelemetryDraftMatch && (
+                <div className="shrink-0">
+                    <PregameAdvicePanel
+                        activeDraftMatch={activeTelemetryDraftMatch}
+                        allMatches={matches}
+                        onDismiss={handleAdviceDismiss}
+                    />
+                </div>
+            )}
+
+            {/* Automation Strip */}
             {shouldShowAutomationStrip ? (
                 <div className={`rounded-2xl border px-3 py-3 shadow-sm ${automationLevelClass}`}>
                     <div className="flex items-center justify-between gap-3">
@@ -127,8 +233,13 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
                                 {automationMessage}
                             </div>
                         </div>
-                        <div className="shrink-0 rounded-full border border-white/10 bg-white/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em]">
-                            {lifecycleBadgeLabel}
+                        <div className="flex items-center gap-2 shrink-0">
+                            {showReopenButton && (
+                                <PregameAdviceReopenButton onClick={handleAdviceReopen} />
+                            )}
+                            <div className="rounded-full border border-white/10 bg-white/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em]">
+                                {lifecycleBadgeLabel}
+                            </div>
                         </div>
                     </div>
                 </div>

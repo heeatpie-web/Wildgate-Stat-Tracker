@@ -240,6 +240,9 @@ export interface SettingsSlice {
 
   fullAutoEnabled: boolean;
   setFullAutoEnabled: (enabled: boolean) => void;
+
+  pregameAdviceEnabled: boolean;
+  setPregameAdviceEnabled: (enabled: boolean) => void;
 }
 
 const defaultPreloadStats = (): Record<DashboardPreloadView, DashboardPreloadStat> => ({
@@ -319,6 +322,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   ocrRegions: createDefaultOcrRegions(),
   tutorialCompleted: false,
   fullAutoEnabled: true,
+  pregameAdviceEnabled: true,
 
   setActiveMode: (mode) => set({ activeMode: mode }),
   setActiveUser: (user) => set({ activeUser: user }),
@@ -520,4 +524,5 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   resetOcrRegions: () => set({ ocrRegions: createDefaultOcrRegions() }),
   setTutorialCompleted: (completed) => set({ tutorialCompleted: completed }),
   setFullAutoEnabled: (enabled) => set({ fullAutoEnabled: Boolean(enabled) }),
+  setPregameAdviceEnabled: (enabled) => set({ pregameAdviceEnabled: Boolean(enabled) }),
 });
