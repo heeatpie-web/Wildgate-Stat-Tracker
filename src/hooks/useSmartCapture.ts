@@ -1608,7 +1608,13 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   const reanalyzeCaptures = useCallback((matchId?: string | number | null) => {
     const scope = normalizeMatchScope(matchId);
     const scopedSavedCaptures = scope
-      ? savedCaptures.filter((capture) => normalizeMatchScope(capture.matchId) === scope)
+      ? savedCaptures.filter((capture) => {
+          const capScope = normalizeMatchScope(capture.matchId);
+          // Include exact scope matches AND null-scoped captures — auto-captures
+          // taken before the match ID was established are stored with matchId: null
+          // and would otherwise be silently excluded.
+          return capScope === scope || capScope === null;
+        })
       : savedCaptures;
     const scopedOcrData = scopedSavedCaptures
       .map((capture) => capture.ocrData)

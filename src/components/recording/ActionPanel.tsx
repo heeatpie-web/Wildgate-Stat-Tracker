@@ -1074,11 +1074,11 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                             {pendingDataForQueueScope ? 'Review & Apply' : 'Process Queue'}
                         </button>
                         <button
-                            onClick={() => reanalyzeCaptures(queueScopeMatchId)}
+                            onClick={() => processAllStored(activeUser || null, queueScopeMatchId ?? null)}
                             disabled={isBusy || queuedCaptureCountForScope === 0}
                             className="md3-icon-btn mg-surface"
-                            title={`Re-analyze ${queuedCaptureCountForScope} screenshots`}
-                            aria-label={`Re-analyze ${queuedCaptureCountForScope} screenshots`}
+                            title={`Re-run OCR on ${queuedCaptureCountForScope} screenshots`}
+                            aria-label={`Re-run OCR on ${queuedCaptureCountForScope} screenshots`}
                         >
                             <RefreshCw size={14} />
                         </button>

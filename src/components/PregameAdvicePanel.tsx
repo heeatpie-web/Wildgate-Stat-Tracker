@@ -219,7 +219,7 @@ export const PregameAdvicePanel: React.FC<PregameAdvicePanelProps> = ({
         </span>
         {advice.hasUsableData && (
           <span className="text-[10px] text-md-sys-on-surface/30">
-            {advice.mode || activeDraftMatch?.mode}
+            {activeDraftMatch?.mode}
           </span>
         )}
       </div>

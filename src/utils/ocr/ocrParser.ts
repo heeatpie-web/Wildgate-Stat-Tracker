@@ -47,7 +47,7 @@ function distance(a: string, b: string): number {
   return matrix[b.length][a.length];
 }
 
-const MAX_OPPONENT_TEAMS = 4;
+const MAX_OPPONENT_TEAMS = 8;
 const MAX_OPPONENT_PLAYERS_PER_TEAM = 4;
 const UNDERCREW_SHIP_BONUS_PHRASES = new Set([
   'SMALL CREW BONUS',
