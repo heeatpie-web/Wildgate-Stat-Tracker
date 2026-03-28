@@ -1341,9 +1341,10 @@ const SettingsModalContent: React.FC = () => {
                                         checked={pregameAdviceEnabled}
                                         onChange={e => setPregameAdviceEnabled(e.target.checked)}
                                         className="h-4 w-4 accent-md-sys-primary"
+                                        aria-label="Pregame advice toggle"
                                     />
                                     <span className="text-label-sm text-md-sys-on-surface/70">
-                                        Enabled
+                                        On
                                     </span>
                                 </label>
                             </div>

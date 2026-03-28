@@ -21,6 +21,7 @@ import { OcrCorrectionModal } from './OcrCorrectionModal';
 import { useAppStore } from '../store/useAppStore';
 import { getElectronAPI } from '../utils/electronAPI';
 import type { OCRProcessRuntimeOptions } from '../utils/electronBridge';
+import type { OCRExtractedData } from '../utils/ocr/ocrTypes';
 import { bundleMatchArtifacts, rerunOCRMulti } from '../utils/artifactService';
 import {
     buildOcrNameConfidenceMapFromExtractedData,

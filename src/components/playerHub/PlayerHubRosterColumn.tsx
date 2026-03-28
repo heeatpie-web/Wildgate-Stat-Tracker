@@ -222,7 +222,7 @@ export const PlayerHubRosterColumn: FC<PlayerHubRosterColumnProps> = ({
                     </div>
                 ) : (
                     <div
-                        ref={rosterScrollRef}
+                        ref={rosterScrollRef as React.Ref<HTMLDivElement>}
                         data-testid="playerhub-roster-viewport"
                         onScroll={(e) => onRosterScroll(e.currentTarget.scrollTop)}
                         className="flex-1 min-h-0 overflow-y-auto custom-scrollbar"

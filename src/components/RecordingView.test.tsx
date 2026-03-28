@@ -35,6 +35,10 @@ vi.mock('../providers/UIStateProvider', () => ({
   }),
 }));
 
+vi.mock('../providers/GameDataProvider', () => ({
+  useGameData: () => ({ matches: [] }),
+}));
+
 function setViewport(w: number, h: number) {
   (window as any).innerWidth = w;
   (window as any).innerHeight = h;

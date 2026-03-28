@@ -94,10 +94,15 @@ const WILDGATE_COLORS = [
   { name: 'lightNavyBlue', hex: '#2C6288', r:  44, g:  98, b: 136 },
 ];
 
-// Raw palette names are now passed through unchanged so the front-end
-// normaliseColorToken can map them to the correct UI colour family.
-// Keeping the alias table empty retains the API surface for callers.
-const TEAM_BADGE_COLOR_ALIASES = {};
+const TEAM_BADGE_COLOR_ALIASES = {
+    salmon: 'red',
+    magentaRed: 'red',
+    grape: 'red',
+    cognac: 'orange',
+    tangerine: 'orange',
+    mustard: 'goldenrod',
+    marigold: 'goldenrod',
+};
 
 // Tolerance values for HSL matching
 // SAT_TOLERANCE is set wide because team name text on the bar dilutes average saturation
