@@ -540,6 +540,12 @@ export const Wizard: React.FC = () => {
         timeMin,
         timeSec,
     ]);
+    const disableEmbeddedOcrFooterActions = isPendingOcrProcessing || isRerunningOcr;
+    const embeddedOcrFooterBusyTitle = isPendingOcrProcessing
+        ? 'Wait for OCR processing to finish before applying review'
+        : (isRerunningOcr
+            ? 'Wait for OCR rerun to finish before applying review'
+            : undefined);
     const handleFinalizeWizardSave = React.useCallback(() => {
         if (!canFinalizeResult || submitting) return;
         commitWizardState();
@@ -1670,16 +1676,18 @@ export const Wizard: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={embeddedOcrFooterActions.discard}
-                                className="w-full sm:w-auto px-5 py-3 rounded-2xl font-bold uppercase tracking-wide-30 text-label-sm border border-danger/22 bg-danger-soft text-danger transition-colors hover:bg-danger-soft-strong"
-                                title="Discard all OCR review edits and return to results"
+                                disabled={disableEmbeddedOcrFooterActions}
+                                className="w-full sm:w-auto px-5 py-3 rounded-2xl font-bold uppercase tracking-wide-30 text-label-sm border border-danger/22 bg-danger-soft text-danger transition-colors hover:bg-danger-soft-strong disabled:opacity-disabled disabled:cursor-not-allowed disabled:hover:bg-danger-soft"
+                                title={embeddedOcrFooterBusyTitle || 'Discard all OCR review edits and return to results'}
                             >
                                 Discard
                             </button>
                             <button
                                 type="button"
                                 onClick={embeddedOcrFooterActions.saveAndClose}
-                                className="w-full sm:w-auto px-5 py-3 rounded-2xl font-bold uppercase tracking-wide-30 text-label-sm bg-md-sys-primary text-md-sys-onPrimary shadow-xl active:scale-95 transition-all"
-                                title={wizardCloseOnOcrApply ? 'Save reviewed OCR corrections and close the wizard' : 'Save reviewed OCR corrections and apply them'}
+                                disabled={disableEmbeddedOcrFooterActions}
+                                className="w-full sm:w-auto px-5 py-3 rounded-2xl font-bold uppercase tracking-wide-30 text-label-sm bg-md-sys-primary text-md-sys-onPrimary shadow-xl active:scale-95 transition-all disabled:opacity-disabled disabled:cursor-not-allowed disabled:active:scale-100"
+                                title={embeddedOcrFooterBusyTitle || (wizardCloseOnOcrApply ? 'Save reviewed OCR corrections and close the wizard' : 'Save reviewed OCR corrections and apply them')}
                             >
                                 {wizardCloseOnOcrApply ? 'Save and Close' : 'Save and Apply'}
                             </button>

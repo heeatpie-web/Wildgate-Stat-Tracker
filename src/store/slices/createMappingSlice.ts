@@ -10,6 +10,7 @@
 import { StateCreator } from 'zustand';
 import Logger from '../../utils/logger';
 import { isBogusTertiaryLoadoutEntry } from '../../utils/loadout';
+import { measureSyncRuntime } from '../../utils/runtimePerf';
 import { normalizeOcrName } from '../../utils/stringUtils';
 import type { DetectedUnknownMapping, MappingEntityType, Match } from '../../types';
 import { normalizeDetectedUnknownMappings, normalizeSharedUidMappings, normalizeUidMappingName } from '../../services/mappingContract';
@@ -211,6 +212,8 @@ export interface MappingSlice {
     setUidSeedVersionApplied: (version: number | null) => void;
 }
 
+type MappingState = MappingSlice & { playerIdMap?: Record<string, string> };
+
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
@@ -335,6 +338,9 @@ const buildIdAliases = (value: unknown): string[] => {
     ));
 };
 
+const normalizeMatchNameKey = (value: string | null | undefined): string =>
+    normalizeOcrName(value || '').toLowerCase();
+
 const idsEquivalent = (left: unknown, right: unknown): boolean => {
     const leftAliases = buildIdAliases(left);
     const rightAliases = new Set(buildIdAliases(right));
@@ -364,7 +370,7 @@ export const resolvePlayerProfileDisplayName = (
 };
 
 const findMappedPlayerName = (
-    state: MappingSlice & { playerIdMap?: Record<string, string> },
+    state: MappingState,
     playerId: string,
 ): string => {
     const candidateIds = buildIdAliases(playerId);
@@ -380,24 +386,97 @@ const findMappedPlayerName = (
     return '';
 };
 
-const findProfileEntryByDisplayName = (
-    state: MappingSlice & { playerIdMap?: Record<string, string> },
-    displayName: string,
-): [string, PlayerProfile] | null => {
-    const displayKey = normalizeMatchNameKey(displayName);
-    if (!displayKey) return null;
-    return Object.entries(state.playerProfiles || {}).find(([profileId, profile]) => {
+interface PlayerProfileLookupIndex {
+    profileKeysByAliasId: Record<string, string>;
+    profileKeysByDisplayName: Record<string, string>;
+}
+
+const playerProfileLookupIndexCache = new WeakMap<
+    Record<string, PlayerProfile>,
+    WeakMap<Record<string, string>, PlayerProfileLookupIndex>
+>();
+
+const buildPlayerProfileLookupIndex = (state: MappingState): PlayerProfileLookupIndex => {
+    const profileKeysByAliasId: Record<string, string> = Object.create(null);
+    const profileKeysByDisplayName: Record<string, string> = Object.create(null);
+
+    Object.entries(state.playerProfiles || {}).forEach(([profileId, profile]) => {
+        buildIdAliases(profileId).forEach((alias) => {
+            if (!profileKeysByAliasId[alias]) {
+                profileKeysByAliasId[alias] = profileId;
+            }
+        });
+
         const resolvedDisplayName = resolvePlayerProfileDisplayName(profileId, profile, state.knownMappings)
             || normalizeOcrName(profile?.name || '')
             || String(profileId || '').trim();
-        return normalizeMatchNameKey(resolvedDisplayName) === displayKey;
-    }) || null;
+        const displayKey = normalizeMatchNameKey(resolvedDisplayName);
+        if (displayKey && !profileKeysByDisplayName[displayKey]) {
+            profileKeysByDisplayName[displayKey] = profileId;
+        }
+    });
+
+    return {
+        profileKeysByAliasId,
+        profileKeysByDisplayName,
+    };
+};
+
+const getPlayerProfileLookupIndex = (state: MappingState): PlayerProfileLookupIndex => {
+    const playerProfiles = state.playerProfiles || {};
+    const knownMappings = state.knownMappings || {};
+    const cachedByMappings = playerProfileLookupIndexCache.get(playerProfiles);
+    const cachedIndex = cachedByMappings?.get(knownMappings);
+    if (cachedIndex) return cachedIndex;
+
+    const builtIndex = buildPlayerProfileLookupIndex(state);
+    const mappingCache = cachedByMappings || new WeakMap<Record<string, string>, PlayerProfileLookupIndex>();
+    mappingCache.set(knownMappings, builtIndex);
+    if (!cachedByMappings) {
+        playerProfileLookupIndexCache.set(playerProfiles, mappingCache);
+    }
+    return builtIndex;
+};
+
+const findProfileEntryByDisplayName = (
+    state: MappingState,
+    displayName: string,
+    lookupIndex?: PlayerProfileLookupIndex,
+): [string, PlayerProfile] | null => {
+    const displayKey = normalizeMatchNameKey(displayName);
+    if (!displayKey) return null;
+    const profileKey = (lookupIndex || getPlayerProfileLookupIndex(state)).profileKeysByDisplayName[displayKey];
+    if (!profileKey) return null;
+    const profile = state.playerProfiles[profileKey];
+    return profile ? [profileKey, profile] : null;
+};
+
+const findProfileKeyByEquivalentId = (
+    state: MappingState,
+    playerId: string,
+    lookupIndex?: PlayerProfileLookupIndex,
+): string | null => {
+    const aliases = buildIdAliases(playerId);
+    if (aliases.length === 0) return null;
+
+    for (const alias of aliases) {
+        if (state.playerProfiles[alias]) return alias;
+    }
+
+    const indexedAliases = (lookupIndex || getPlayerProfileLookupIndex(state)).profileKeysByAliasId;
+    for (const alias of aliases) {
+        const indexedProfileKey = indexedAliases[alias];
+        if (indexedProfileKey) return indexedProfileKey;
+    }
+
+    return null;
 };
 
 const resolvePlayerProfileKey = (
-    state: MappingSlice & { playerIdMap?: Record<string, string> },
+    state: MappingState,
     playerId: string,
     preferredDisplayName?: string,
+    lookupIndex?: PlayerProfileLookupIndex,
 ): { profileKey: string; displayName: string } => {
     const rawId = String(playerId || '').trim();
     const normalizedId = normalizeTeammatePlayerId(rawId);
@@ -411,18 +490,22 @@ const resolvePlayerProfileKey = (
         || (!!displayNameKey && displayNameKey !== rawIdKey)
     );
 
-    if (normalizedId) {
-        const existingIdEntry = Object.entries(state.playerProfiles || {})
-            .find(([profileId]) => idsEquivalent(profileId, normalizedId));
-        if (existingIdEntry) {
-            return {
-                profileKey: existingIdEntry[0],
-                displayName,
-            };
-        }
+    if (normalizedId && state.playerProfiles[normalizedId]) {
+        return {
+            profileKey: normalizedId,
+            displayName,
+        };
     }
 
-    const existingNameEntry = findProfileEntryByDisplayName(state, displayName);
+    const existingIdKey = findProfileKeyByEquivalentId(state, rawId, lookupIndex);
+    if (existingIdKey) {
+        return {
+            profileKey: existingIdKey,
+            displayName,
+        };
+    }
+
+    const existingNameEntry = findProfileEntryByDisplayName(state, displayName, lookupIndex);
     if (existingNameEntry) {
         const [profileKey, profile] = existingNameEntry;
         return {
@@ -447,9 +530,6 @@ const resolvePlayerProfileKey = (
         displayName,
     };
 };
-
-const normalizeMatchNameKey = (value: string | null | undefined): string =>
-    normalizeOcrName(value || '').toLowerCase();
 
 const dedupeFriendlyNames = (values: string[]): string[] => {
     const seen = new Set<string>();
@@ -616,12 +696,30 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
     playerEncounterRoleCorrections: {},
 
     recordPlayerSighting: (playerId, teamColor, allTeamPlayers, allOpponentPlayers, shipType, source = 'manual', ocrOnly = false) => {
-        set((state) => {
-            const keyResolution = resolvePlayerProfileKey(
-                state as MappingSlice & { playerIdMap?: Record<string, string> },
-                playerId,
-            );
-            const profileKey = keyResolution.profileKey;
+        set((state) => measureSyncRuntime('MappingSlice', 'recordPlayerSighting', () => {
+            const mappingState = state as MappingState;
+            const lookupIndex = getPlayerProfileLookupIndex(mappingState);
+            const resolvedProfileKeys = new Map<string, string>();
+            const resolveEncounterProfileKey = (candidateId: string): string => {
+                const rawCandidateId = String(candidateId || '').trim();
+                if (!rawCandidateId) return '';
+                const cacheKey = normalizeTeammatePlayerId(rawCandidateId) || rawCandidateId;
+                const cachedProfileKey = resolvedProfileKeys.get(cacheKey);
+                if (cachedProfileKey) return cachedProfileKey;
+
+                const nextProfileKey = resolvePlayerProfileKey(
+                    mappingState,
+                    rawCandidateId,
+                    undefined,
+                    lookupIndex,
+                ).profileKey;
+                if (nextProfileKey) {
+                    resolvedProfileKeys.set(cacheKey, nextProfileKey);
+                }
+                return nextProfileKey;
+            };
+
+            const profileKey = resolveEncounterProfileKey(playerId);
             if (!profileKey) return {};
             const existing = state.playerProfiles[profileKey] || createEmptyProfile(profileKey);
             const now = Date.now();
@@ -645,22 +743,16 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
                 }
 
                 // Update playedWith (teammates)
-                allTeamPlayers.forEach(id => {
-                    const teammateKey = resolvePlayerProfileKey(
-                        state as MappingSlice & { playerIdMap?: Record<string, string> },
-                        id,
-                    ).profileKey;
+                allTeamPlayers.forEach((id) => {
+                    const teammateKey = resolveEncounterProfileKey(id);
                     if (teammateKey && teammateKey !== profileKey) {
                         playedWith[teammateKey] = (playedWith[teammateKey] || 0) + 1;
                     }
                 });
 
                 // Update playedAgainst (opponents)
-                allOpponentPlayers.forEach(id => {
-                    const opponentKey = resolvePlayerProfileKey(
-                        state as MappingSlice & { playerIdMap?: Record<string, string> },
-                        id,
-                    ).profileKey;
+                allOpponentPlayers.forEach((id) => {
+                    const opponentKey = resolveEncounterProfileKey(id);
                     if (opponentKey) {
                         playedAgainst[opponentKey] = (playedAgainst[opponentKey] || 0) + 1;
                     }
@@ -695,7 +787,10 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
             return {
                 playerProfiles: { ...state.playerProfiles, [profileKey]: updated }
             };
-        });
+        }, {
+            logEvery: 100,
+            sampleSize: 256,
+        }));
     },
 
     setPlayerName: (playerId, name) => {

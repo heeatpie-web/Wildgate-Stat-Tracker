@@ -3,6 +3,8 @@ import { renderHook, act } from '@testing-library/react';
 import { resolveLobbyTagShipType, useSmartCapture } from '../useSmartCapture';
 import { captureGameWindow, saveScreenshot, isElectron } from '../../utils/electronBridge';
 import { rerunOCROnArtifact } from '../../utils/artifactService';
+import { combinedNameSimilarityScore, findClosestMatch } from '../../utils/stringUtils';
+import { BUNDLED_OCR_LEXICON } from '../../utils/bundledOcrLexicon';
 
 const mockStoreState: Record<string, unknown> = {
   ocrMode: 'local',
@@ -15,6 +17,8 @@ const mockStoreState: Record<string, unknown> = {
   ocrCorrections: {},
   ocrAliasModel: null,
   playerProfiles: {},
+  knownMappings: {},
+  uidMappings: { players: {} },
 };
 
 const playCaptureMock = vi.fn();
@@ -63,6 +67,7 @@ vi.mock('../../hooks/useSoundEffects', () => ({
 vi.mock('../../utils/stringUtils', () => ({
   combinedNameSimilarityScore: vi.fn((a: string, b: string) => (a === b ? 100 : 65)),
   findClosestMatch: vi.fn().mockReturnValue(null),
+  getAdaptiveNameDistanceThreshold: vi.fn().mockReturnValue(2),
   getAdaptiveNameSimilarityThreshold: vi.fn().mockReturnValue(68),
   findBestVariantMatch: vi.fn().mockReturnValue(null),
   normalizeOcrName: vi.fn((s: string) => s),
@@ -109,6 +114,9 @@ describe('useSmartCapture', () => {
     mockStoreState.ocrCorrections = {};
     mockStoreState.ocrAliasModel = null;
     mockStoreState.playerProfiles = {};
+    mockStoreState.knownMappings = {};
+    mockStoreState.uidMappings = { players: {} };
+    vi.mocked(findClosestMatch).mockReturnValue(null);
     vi.mocked(isElectron).mockReturnValue(false);
     vi.mocked(captureGameWindow).mockResolvedValue({ success: false, error: 'not-mocked' });
     vi.mocked(saveScreenshot).mockResolvedValue({ success: true, filePath: '', filename: '' });
@@ -731,6 +739,104 @@ describe('useSmartCapture', () => {
     const teammate = pending?.teammates?.find((entry) => entry.name === 'Wingman');
     expect(teammate).toBeTruthy();
     expect(Number(teammate?.confidence || 0)).toBeGreaterThanOrEqual(88);
+  });
+
+  it('uses historical profile names as background OCR candidates even when roster is empty', async () => {
+    vi.mocked(isElectron).mockReturnValue(true);
+    mockStoreState.pilotRegistry = [];
+    mockStoreState.playerProfiles = {
+      profileA: { name: 'BarbiePrime' },
+    };
+    vi.mocked(findClosestMatch).mockImplementation((_input, candidates) => (
+      Array.isArray(candidates) && candidates.includes('BarbiePrime') ? 'BarbiePrime' : null
+    ));
+
+    vi.mocked(captureGameWindow).mockResolvedValue({
+      success: true,
+      imageBase64: 'ZmFrZQ==',
+    });
+    vi.mocked(saveScreenshot).mockResolvedValue({
+      success: true,
+      filePath: 'C:\\captures\\history-candidate.png',
+      filename: 'history-candidate.png',
+    });
+    vi.mocked(rerunOCROnArtifact).mockResolvedValue({
+      success: true,
+      data: {
+        screenshotType: 'crew_hub',
+        playerShip: undefined,
+        playerTeamName: '',
+        reachModifiers: [],
+        enemyShips: [],
+        teammates: [{ name: 'BarbiePrirne', confidence: 76, isTeammate: true, rawText: 'BarbiePrirne' }],
+        opponentTeams: [],
+        overallConfidence: 76,
+        captureTimestamp: Date.now(),
+      },
+    });
+
+    const { result } = renderHook(() => useSmartCapture());
+    const [, actions] = result.current;
+
+    await act(async () => {
+      await actions.captureOnly('match-history-candidate');
+    });
+    await act(async () => {
+      await actions.processStoredImage('C:\\captures\\history-candidate.png', 'Pilot');
+    });
+
+    expect(actions.getPendingData('match-history-candidate')?.teammates?.[0]?.name).toBe('BarbiePrime');
+  });
+
+  it('uses bundled OCR lexicon names as a background fallback when local history is empty', async () => {
+    vi.mocked(isElectron).mockReturnValue(true);
+    mockStoreState.pilotRegistry = [];
+    mockStoreState.playerProfiles = {};
+    expect(BUNDLED_OCR_LEXICON).toContain('Askao');
+    vi.mocked(combinedNameSimilarityScore).mockImplementation((left: string, right: string) => {
+      const pair = [String(left || '').toLowerCase(), String(right || '').toLowerCase()].sort().join(':');
+      if (pair === 'ask4o:askao') return 80;
+      return left === right ? 100 : 65;
+    });
+    vi.mocked(findClosestMatch).mockImplementation((_input, candidates) => (
+      Array.isArray(candidates) && candidates.includes('Askao') ? 'Askao' : null
+    ));
+
+    vi.mocked(captureGameWindow).mockResolvedValue({
+      success: true,
+      imageBase64: 'ZmFrZQ==',
+    });
+    vi.mocked(saveScreenshot).mockResolvedValue({
+      success: true,
+      filePath: 'C:\\captures\\seeded-candidate.png',
+      filename: 'seeded-candidate.png',
+    });
+    vi.mocked(rerunOCROnArtifact).mockResolvedValue({
+      success: true,
+      data: {
+        screenshotType: 'crew_hub',
+        playerShip: undefined,
+        playerTeamName: '',
+        reachModifiers: [],
+        enemyShips: [],
+        teammates: [{ name: 'Ask4o', confidence: 76, isTeammate: true, rawText: 'Ask4o' }],
+        opponentTeams: [],
+        overallConfidence: 76,
+        captureTimestamp: Date.now(),
+      },
+    });
+
+    const { result } = renderHook(() => useSmartCapture());
+    const [, actions] = result.current;
+
+    await act(async () => {
+      await actions.captureOnly('match-seeded-candidate');
+    });
+    await act(async () => {
+      await actions.processStoredImage('C:\\captures\\seeded-candidate.png', 'Pilot');
+    });
+
+    expect(actions.getPendingData('match-seeded-candidate')?.teammates?.[0]?.name).toBe('Askao');
   });
 
   it('does not apply temporal fusion boost when enhancement is disabled', async () => {

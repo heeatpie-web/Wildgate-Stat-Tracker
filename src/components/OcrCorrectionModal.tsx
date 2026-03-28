@@ -22,7 +22,14 @@ import { BatchActionConfirmDialog } from './BatchActionConfirmDialog';
 import { Match, SHIPS } from '../types';
 import Logger from '../utils/logger';
 import { getElectronAPI } from '../utils/electronAPI';
-import { findClosestMatch, normalizeOcrName, similarityScore } from '../utils/stringUtils';
+import {
+    findClosestMatch,
+    getAdaptiveNameDistanceThreshold,
+    normalizeOcrName,
+    similarityScore,
+} from '../utils/stringUtils';
+import { buildOcrCandidatePool } from '../utils/ocrNameResolver';
+import { BUNDLED_OCR_LEXICON } from '../utils/bundledOcrLexicon';
 import { OcrTeamAssignmentBoard } from './ocr/OcrTeamAssignmentBoard';
 import { WorkspaceImageViewer } from './media/WorkspaceImageViewer';
 import { UI_REACH_MODIFIERS, UNKNOWN_PLAYER_LABELS } from '../utils/constants';
@@ -104,6 +111,8 @@ interface SubmitCorrectionsOptions {
 
 const IMAGE_FILE_PATTERN = /\.(png|jpe?g|webp|bmp|gif)$/i;
 const OCR_REVIEW_HELP_DISMISSED_STORAGE_KEY = 'wg_ocr_review_help_dismissed_v1';
+const EMBEDDED_FOOTER_SAFE_INSET_PX = 132;
+const MODAL_FOOTER_SAFE_INSET_PX = 96;
 
 const getStoredHelpBannerDismissed = (): boolean => {
     if (typeof window === 'undefined') return false;
@@ -722,7 +731,21 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                 availableSpace = alternateSpace;
             }
         }
-        const fallbackMinHeight = Math.min(minDropdownHeight, Math.max(spaceAbove, spaceBelow));
+        const footerSafeInset = embedded
+            ? EMBEDDED_FOOTER_SAFE_INSET_PX
+            : (hideFooterActions ? viewportPadding : MODAL_FOOTER_SAFE_INSET_PX);
+        const viewportBottom = Math.max(
+            viewportPadding,
+            window.innerHeight - footerSafeInset
+        );
+        const safeSpaceBelow = Math.max(0, viewportBottom - rect.bottom - viewportPadding);
+        if (!placeAbove && safeSpaceBelow < approxDropdownHeight && spaceAbove > safeSpaceBelow) {
+            placeAbove = true;
+            availableSpace = spaceAbove;
+        } else if (!placeAbove) {
+            availableSpace = safeSpaceBelow;
+        }
+        const fallbackMinHeight = Math.min(minDropdownHeight, Math.max(spaceAbove, safeSpaceBelow));
         const maxHeight = Math.max(
             fallbackMinHeight,
             Math.min(maxDropdownHeight, availableSpace)
@@ -734,7 +757,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         const anchorTop = placeAbove ? (rect.top - 8) : (rect.bottom + 8);
         const top = placeAbove
             ? Math.max(viewportPadding + maxHeight, anchorTop)
-            : Math.max(viewportPadding, Math.min(anchorTop, window.innerHeight - viewportPadding - maxHeight));
+            : Math.max(viewportPadding, Math.min(anchorTop, viewportBottom - maxHeight));
         setDropdownAnchor({
             top,
             left,
@@ -742,7 +765,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
             maxHeight,
             placeAbove,
         });
-    }, []);
+    }, [embedded, hideFooterActions]);
 
     useEffect(() => {
         if (!isOpen) {
@@ -824,12 +847,17 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         return players;
     }, [ignored, previewCorrections, sessionShipTypes, storedNameConfidenceByKey, teamDraft]);
     const fuzzyMatchByPlayer = useMemo<Record<string, string>>(() => {
-        if (!Array.isArray(pilotRegistry) || pilotRegistry.length === 0) return {};
-        const registryByKey = new Map<string, string>();
-        pilotRegistry.forEach((pilot) => {
+        const primaryCandidates = buildOcrCandidatePool({
+            seedNames: pilotRegistry,
+        });
+        const fallbackCandidates = buildOcrCandidatePool({
+            bundledSeedNames: BUNDLED_OCR_LEXICON,
+        });
+        const exactCandidateByKey = new Map<string, string>();
+        [...primaryCandidates, ...fallbackCandidates].forEach((pilot) => {
             const key = normalizeNameKey(pilot);
-            if (!key || registryByKey.has(key)) return;
-            registryByKey.set(key, pilot);
+            if (!key || exactCandidateByKey.has(key)) return;
+            exactCandidateByKey.set(key, pilot);
         });
         const next: Record<string, string> = {};
         previewTeamDraft.forEach((team) => {
@@ -837,9 +865,10 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                 const cleaned = normalizeSubmittedName(rawName);
                 const key = normalizeNameKey(cleaned);
                 if (!cleaned || !key) return;
-                if (registryByKey.has(key)) return;
-                const threshold = cleaned.length > 8 ? 2 : 1;
-                const match = findClosestMatch(cleaned, pilotRegistry, threshold);
+                if (exactCandidateByKey.has(key)) return;
+                const threshold = getAdaptiveNameDistanceThreshold(cleaned.length);
+                const primaryMatch = findClosestMatch(cleaned, primaryCandidates, threshold);
+                const match = primaryMatch || findClosestMatch(cleaned, fallbackCandidates, threshold);
                 if (!match) return;
                 if (normalizeNameKey(match) === key) return;
                 next[key] = match;

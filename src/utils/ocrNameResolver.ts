@@ -1,5 +1,12 @@
 import type { OcrAliasModel } from './ocrAliasEngine';
-import { findBestVariantMatch, findClosestMatch, normalizeOcrName } from './stringUtils';
+import {
+  combinedNameSimilarityScore,
+  findBestVariantMatch,
+  findClosestMatch,
+  getAdaptiveNameDistanceThreshold,
+  getAdaptiveNameSimilarityThreshold,
+  normalizeOcrName,
+} from './stringUtils';
 
 export interface OcrCorrectionLike {
   correctedTo: string;
@@ -13,6 +20,7 @@ export interface SocialProfileLike {
 export interface ResolveOcrNameOptions {
   rawName: string;
   candidates: string[];
+  fallbackCandidates?: string[];
   ocrCorrections?: Record<string, OcrCorrectionLike>;
   aliasModel?: OcrAliasModel;
   aliasVariantMap?: Record<string, string[]>;
@@ -25,6 +33,18 @@ export interface ResolveOcrNameOptions {
 export interface SocialResolutionOptions {
   minAnchors?: number;
   minPlayedWith?: number;
+}
+
+export interface CandidateProfileLike {
+  name?: string | null;
+}
+
+export interface BuildOcrCandidatePoolOptions {
+  seedNames?: Array<string | null | undefined>;
+  playerProfiles?: Record<string, CandidateProfileLike>;
+  knownMappings?: Record<string, string>;
+  uidPlayerMappings?: Record<string, string>;
+  bundledSeedNames?: Array<string | null | undefined>;
 }
 
 const normalizeLower = (value: string) => normalizeOcrName(value || '').toLowerCase();
@@ -42,6 +62,29 @@ const uniquePush = (list: string[], value: string) => {
   if (!list.some((entry) => normalizeLower(entry) === normalizedValue)) {
     list.push(value);
   }
+};
+
+export const buildOcrCandidatePool = ({
+  seedNames = [],
+  playerProfiles,
+  knownMappings,
+  uidPlayerMappings,
+  bundledSeedNames = [],
+}: BuildOcrCandidatePoolOptions): string[] => {
+  const candidates: string[] = [];
+  const addCandidate = (value: string | null | undefined) => {
+    const normalized = normalizeOcrName(value || '');
+    if (!normalized || normalized.length < 2) return;
+    uniquePush(candidates, normalized);
+  };
+
+  (seedNames || []).forEach(addCandidate);
+  Object.values(playerProfiles || {}).forEach((profile) => addCandidate(profile?.name || ''));
+  Object.values(knownMappings || {}).forEach(addCandidate);
+  Object.values(uidPlayerMappings || {}).forEach(addCandidate);
+  (bundledSeedNames || []).forEach(addCandidate);
+
+  return candidates;
 };
 
 export const buildAliasVariantMap = (aliasModel?: OcrAliasModel): Record<string, string[]> => {
@@ -130,6 +173,7 @@ export const resolveWithSocialContext = (
 export const resolveOcrName = ({
   rawName,
   candidates,
+  fallbackCandidates = [],
   ocrCorrections,
   aliasModel,
   aliasVariantMap,
@@ -141,28 +185,54 @@ export const resolveOcrName = ({
   const normalized = normalizeOcrName(rawName || '');
   if (!normalized || normalized.length < 2) return '';
 
-  if (aliasResolvedName) {
-    const aliasCandidate = findCaseInsensitive(candidates || [], aliasResolvedName);
-    return aliasCandidate || normalizeOcrName(aliasResolvedName);
-  }
-
-  const direct = ocrCorrections?.[rawName] || ocrCorrections?.[normalized];
-  if (direct && direct.count >= 2) {
-    const corrected = normalizeOcrName(direct.correctedTo || '');
-    const exactCorrected = findCaseInsensitive(candidates || [], corrected);
-    return exactCorrected || corrected || normalized;
-  }
-
-  const exact = findCaseInsensitive(candidates || [], normalized);
-  if (exact) return exact;
-
-  const threshold = normalized.length > 8 ? longThreshold : shortThreshold;
-  const closest = findClosestMatch(normalized, candidates || [], threshold);
-  if (closest) return closest;
-
   const variants = aliasVariantMap || buildAliasVariantMap(aliasModel);
-  const variantMatch = findBestVariantMatch(normalized, candidates || [], variants, variantMinScore);
-  if (variantMatch?.match) return variantMatch.match;
+  const resolveAgainstPool = (pool: string[]): string => {
+    if (aliasResolvedName) {
+      const aliasCandidate = findCaseInsensitive(pool, aliasResolvedName);
+      return aliasCandidate || normalizeOcrName(aliasResolvedName);
+    }
 
-  return normalized;
+    const direct = ocrCorrections?.[rawName] || ocrCorrections?.[normalized];
+    if (direct && direct.count >= 2) {
+      const corrected = normalizeOcrName(direct.correctedTo || '');
+      const exactCorrected = findCaseInsensitive(pool, corrected);
+      return exactCorrected || corrected || normalized;
+    }
+
+    const exact = findCaseInsensitive(pool, normalized);
+    if (exact) return exact;
+
+    const configuredThreshold = normalized.length > 8 ? longThreshold : shortThreshold;
+    const threshold = Math.max(
+      configuredThreshold,
+      getAdaptiveNameDistanceThreshold(normalized.length)
+    );
+    const closest = findClosestMatch(normalized, pool, threshold);
+    if (closest) return closest;
+
+    const variantMatch = findBestVariantMatch(normalized, pool, variants, variantMinScore);
+    if (variantMatch?.match) return variantMatch.match;
+
+    return normalized;
+  };
+
+  const primaryCandidates = candidates || [];
+  const primaryResolved = resolveAgainstPool(primaryCandidates);
+  if (primaryResolved !== normalized || !Array.isArray(fallbackCandidates) || fallbackCandidates.length === 0) {
+    return primaryResolved;
+  }
+
+  const fallbackResolved = resolveAgainstPool(buildOcrCandidatePool({
+    seedNames: primaryCandidates.filter((candidate) => normalizeLower(candidate) !== normalizeLower(normalized)),
+    bundledSeedNames: fallbackCandidates,
+  }));
+  if (fallbackResolved === normalized) {
+    return fallbackResolved;
+  }
+
+  const minSimilarity = getAdaptiveNameSimilarityThreshold(
+    Math.max(normalized.length, fallbackResolved.length)
+  );
+  const similarity = combinedNameSimilarityScore(normalized, fallbackResolved);
+  return similarity >= minSimilarity ? fallbackResolved : normalized;
 };

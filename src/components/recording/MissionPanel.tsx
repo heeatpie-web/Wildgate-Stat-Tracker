@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Layout, Clock, HeartCrack, Target, Crosshair, Zap, X, Camera, Loader2, ChevronDown, ChevronRight, Check, Tag } from 'lucide-react';
 import { WEAPONS, UI_REACH_MODIFIERS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT } from '../../types';
+import type { Match } from '../../types';
 import { useGameData } from '../../providers/GameDataProvider';
 import { useUIState } from '../../providers/UIStateProvider';
 import { captureScreen, processMatchScreenshot, ScanOptions } from '../../utils/scanService';
 import { EQUIPMENT_DB } from '../../utils/equipmentDb';
 import Logger from '../../utils/logger';
+import { measureSyncRuntime } from '../../utils/runtimePerf';
 import { normalizeMatchCategory } from '../../utils/matchCategory';
 import { MatchCategoryBadge } from '../MatchCategoryBadge';
 import {
@@ -28,6 +30,29 @@ interface MissionPanelProps {
 // Accordion section types
 type SectionId = 'stats' | 'poi' | 'weapons' | 'charWeapons' | 'equipment' | 'perks' | 'modifiers';
 const MAX_PROSPECTOR_LOADOUT_SLOTS = 2;
+
+const findLatestOngoingDraftMatch = (
+    matches: Match[],
+    activeUserKey: string,
+    pendingId: number,
+): Match | null => {
+    let latestMatch: Match | null = null;
+
+    matches.forEach((match) => {
+        if (!match || match.result !== 'Ongoing') return;
+        if (pendingId > 0) {
+            if (Number(match.id) !== pendingId) return;
+        } else if (activeUserKey) {
+            if (String(match.player || '').trim().toLowerCase() !== activeUserKey) return;
+        }
+
+        if (!latestMatch || Number(match.timestamp || 0) > Number(latestMatch.timestamp || 0)) {
+            latestMatch = match;
+        }
+    });
+
+    return latestMatch;
+};
 
 export const MissionPanel: React.FC<MissionPanelProps> = ({
     variant = 'default',
@@ -194,14 +219,12 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
     useEffect(() => {
         const activeUserKey = String(activeUser || '').trim().toLowerCase();
         const pendingId = Number(pendingMatchData?.id || 0);
-        const liveDraft = [...matches]
-            .filter((match) => match.result === 'Ongoing')
-            .filter((match) => {
-                if (pendingId > 0) return Number(match.id) === pendingId;
-                if (!activeUserKey) return true;
-                return String(match.player || '').trim().toLowerCase() === activeUserKey;
-            })
-            .sort((a, b) => b.timestamp - a.timestamp)[0];
+        const liveDraft = measureSyncRuntime('MissionPanel', 'liveDraftSyncLookup', () => (
+            findLatestOngoingDraftMatch(matches, activeUserKey, pendingId)
+        ), {
+            logEvery: 50,
+            sampleSize: 128,
+        });
         if (!liveDraft) return;
 
         const liveCategory = normalizeMatchCategory(liveDraft.matchCategory || '');

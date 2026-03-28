@@ -225,6 +225,35 @@ describe('OcrCorrectionModal', () => {
         expect(screen.getByRole('button', { name: 'chrismario' })).toBeInTheDocument();
     });
 
+    it('shows a fuzzy roster recovery hint for short OCR names that differ by two edits', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        gameData.sessionTeams = { red: ['gre4d1'] };
+        gameData.sessionShipTypes = { red: 'Hunter (2 Player)' };
+        gameData.pilotRegistry = ['greéd'];
+
+        render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
+
+        expect(screen.getByRole('button', { name: /~ greéd/i })).toBeInTheDocument();
+    });
+
+    it('shows a bundled OCR recovery hint even when the visible roster is empty', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        gameData.sessionTeams = { red: ['Ask4o'] };
+        gameData.sessionShipTypes = { red: 'Hunter (2 Player)' };
+        gameData.pilotRegistry = [];
+
+        render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
+
+        expect(screen.getByRole('button', { name: /~ Askao/i })).toBeInTheDocument();
+        expect(gameData.addToRegistry).not.toHaveBeenCalled();
+    });
+
     it('writes drag payload data on drag start for deterministic reassignment', async () => {
         const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
         const onClose = vi.fn();
@@ -403,6 +432,110 @@ describe('OcrCorrectionModal', () => {
 
         expect(gameData.setSessionTeams).toHaveBeenCalled();
         expect(onAcceptAll).not.toHaveBeenCalled();
+    });
+
+    it('applies embedded footer save on the first click even when a roster search input is still focused', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        gameData.sessionTeams = { red: ['chrismar10'] };
+        gameData.sessionShipTypes = { red: 'Hunter (2 Player)' };
+        gameData.pilotRegistry = ['chrismario'];
+
+        const EmbeddedHarness = () => {
+            const [footerActions, setFooterActions] = React.useState<{
+                discard: () => void;
+                saveAndClose: () => void;
+                commitDraft: () => boolean;
+            } | null>(null);
+
+            return (
+                <div>
+                    <button
+                        type="button"
+                        onClick={() => footerActions?.saveAndClose()}
+                    >
+                        External Save
+                    </button>
+                    <OcrCorrectionModal
+                        isOpen
+                        embedded
+                        hideFooterActions
+                        onEmbeddedFooterActionsChange={setFooterActions}
+                        onClose={onClose}
+                        onAcceptAll={onAcceptAll}
+                    />
+                </div>
+            );
+        };
+
+        render(<EmbeddedHarness />);
+
+        const searchInput = screen.getByPlaceholderText(/search roster or type name/i);
+        fireEvent.focus(searchInput);
+        fireEvent.change(searchInput, { target: { value: 'chrismario' } });
+        fireEvent.click(screen.getByRole('button', { name: /external save/i }));
+
+        expect(appStoreState.setPendingMatchData).toHaveBeenCalledWith(expect.objectContaining({
+            teammates: ['chrismario'],
+            opponentTeams: [],
+            ocrState: 'saved',
+        }));
+        expect(onAcceptAll).toHaveBeenCalledTimes(1);
+    });
+
+    it('positions the roster dropdown above the embedded footer when the active input is near the bottom of the viewport', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+        const originalInnerHeight = window.innerHeight;
+
+        gameData.sessionTeams = { red: ['chrismar10'] };
+        gameData.sessionShipTypes = { red: 'Hunter (2 Player)' };
+        gameData.pilotRegistry = ['chrismario', 'chrismarine'];
+
+        Object.defineProperty(window, 'innerHeight', {
+            configurable: true,
+            value: 1100,
+        });
+
+        render(
+            <OcrCorrectionModal
+                isOpen
+                embedded
+                hideFooterActions
+                onClose={onClose}
+                onAcceptAll={onAcceptAll}
+            />
+        );
+
+        const searchInput = screen.getByPlaceholderText(/search roster or type name/i) as HTMLInputElement;
+        vi.spyOn(searchInput, 'getBoundingClientRect').mockReturnValue({
+            x: 40,
+            y: 600,
+            width: 300,
+            height: 36,
+            top: 600,
+            right: 340,
+            bottom: 760,
+            left: 40,
+            toJSON: () => ({}),
+        } as DOMRect);
+
+        fireEvent.focus(searchInput);
+        fireEvent.change(searchInput, { target: { value: 'chr' } });
+
+        await waitFor(() => {
+            const dropdown = document.querySelector('.ocr-roster-dropdown') as HTMLDivElement | null;
+            expect(dropdown).not.toBeNull();
+            expect(dropdown?.style.transform).toBe('translateY(-100%)');
+        });
+
+        Object.defineProperty(window, 'innerHeight', {
+            configurable: true,
+            value: originalInnerHeight,
+        });
     });
 
     it('auto-accepts high-confidence unresolved names on save-and-apply for smart-captures OCR review', async () => {

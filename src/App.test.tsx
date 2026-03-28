@@ -162,6 +162,9 @@ const appStoreState = {
   dismissedRosterCandidateKeys: [] as string[],
   ocrCorrections: {},
   ocrAliasModel: {},
+  playerProfiles: {},
+  knownMappings: {},
+  uidMappings: { players: {} },
   matches: [] as any[],
   addMatch: vi.fn((match: any) => {
     appStoreState.matches = [...appStoreState.matches, match];
@@ -329,8 +332,11 @@ describe('App', () => {
     uiState.setTelemetryAutomationStatus.mockClear();
     uiState.setTelemetryLifecycleStage.mockClear();
     uiState.setTelemetryLifecycleIsPracticeRange.mockClear();
+    gameDataState.pilotRegistry = [];
+    gameDataState.selectedTeammates = [];
     gameDataState.selectedOpponents = [];
     gameDataState.selectedReachModifiers = [];
+    gameDataState.pendingReviews = [];
     gameDataState.matches = [];
     gameDataState.sessionTeams = {};
     gameDataState.sessionShipTypes = {};
@@ -353,6 +359,9 @@ describe('App', () => {
     appStoreState.isMatchInProgress = false;
     appStoreState.fullAutoEnabled = false;
     appStoreState.telemetryAutomationStatus = null;
+    appStoreState.playerProfiles = {};
+    appStoreState.knownMappings = {};
+    appStoreState.uidMappings = { players: {} };
     uiState.showSetupWizard = false;
   });
 

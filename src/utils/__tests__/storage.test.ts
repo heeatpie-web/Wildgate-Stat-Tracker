@@ -179,6 +179,7 @@ describe('StorageService', () => {
           },
           perks: {
             A7291E13434D4D67CFEAD0928F4CEA69: 'Boarder',
+            '4F09C2D142262A675213A494006700AB': 'Charlie Teleport',
           },
         };
       }
@@ -194,6 +195,7 @@ describe('StorageService', () => {
     expect(loaded?.uidMappings.weapons.F350FD964B4A0E59F068AE88D6D9650C).toBe('The Doctor');
     expect(loaded?.uidMappings.equipment.F2B54FEC47BBDBEA641EB9AD846A0A8D).toBe('Repair Drone');
     expect(loaded?.uidMappings.perks.A7291E13434D4D67CFEAD0928F4CEA69).toBe('Boarder');
+    expect(loaded?.uidMappings.perks['4F09C2D142262A675213A494006700AB']).toBe('Charlie Teleport');
     expect(loaded?.uidSeedState.seedVersionApplied).toBe(2);
   });
 

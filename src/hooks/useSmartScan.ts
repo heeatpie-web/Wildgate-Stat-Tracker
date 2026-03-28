@@ -10,7 +10,8 @@ import { normalizeOcrName, similarityScore } from '../utils/stringUtils';
 import { SHIPS, UNNAMED_PLAYER_PREFIX } from '../utils/constants';
 import Logger from '../utils/logger';
 import { shouldQueueLearningReview, type OcrAliasContext } from '../utils/ocrAliasEngine';
-import { buildAliasVariantMap, resolveOcrName } from '../utils/ocrNameResolver';
+import { buildAliasVariantMap, buildOcrCandidatePool, resolveOcrName } from '../utils/ocrNameResolver';
+import { BUNDLED_OCR_LEXICON } from '../utils/bundledOcrLexicon';
 import {
     deriveCanonicalRosterCandidateTargetKey,
     shouldQueueCanonicalRosterCandidate,
@@ -73,6 +74,9 @@ export const useSmartScan = () => {
     const ocrRegions = useAppStore(state => state.ocrRegions);
     const ocrCorrections = useAppStore(state => state.ocrCorrections);
     const ocrAliasModel = useAppStore(state => state.ocrAliasModel);
+    const playerProfiles = useAppStore(state => state.playerProfiles);
+    const knownMappings = useAppStore(state => state.knownMappings);
+    const uidPlayerMappings = useAppStore(state => state.uidMappings.players);
     const resolveOcrAlias = useAppStore(state => state.resolveOcrAlias);
     const ocrLearningEnabled = useAppStore(state => state.ocrLearningEnabled);
     const ocrAutoApplyMinScore = useAppStore(state => state.ocrAutoApplyMinScore);
@@ -333,11 +337,17 @@ export const useSmartScan = () => {
                                 if (teamList.includes(finalName) && !isGenericShip) continue;
 
                                 if (!aliasResolution?.resolvedName || queueAutoResolve) {
-                                    const allCandidates = [...uniqueKnownNames, ...(pilotRegistry || [])];
-                                    const uniqueCandidates = Array.from(new Set(allCandidates));
+                                    const uniqueCandidates = buildOcrCandidatePool({
+                                        seedNames: [...uniqueKnownNames, ...(pilotRegistry || [])],
+                                        playerProfiles,
+                                        knownMappings,
+                                        uidPlayerMappings,
+                                        bundledSeedNames: BUNDLED_OCR_LEXICON,
+                                    });
                                     const resolvedFallback = resolveOcrName({
                                         rawName: finalName || rawName,
                                         candidates: uniqueCandidates,
+                                        fallbackCandidates: BUNDLED_OCR_LEXICON,
                                         ocrCorrections,
                                         aliasModel: ocrAliasModel,
                                         aliasVariantMap,

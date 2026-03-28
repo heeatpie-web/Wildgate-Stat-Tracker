@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createEmptyOcrAliasModel, recordAliasCorrection } from '../ocrAliasEngine';
 import {
   buildAliasVariantMap,
+  buildOcrCandidatePool,
   resolveOcrName,
   resolveWithSocialContext,
 } from '../ocrNameResolver';
@@ -40,6 +41,72 @@ describe('ocrNameResolver', () => {
     });
 
     expect(resolved).toBe('Adrian');
+  });
+
+  it('uses adaptive fuzzy distance for short OCR names so roster entries still resolve', () => {
+    const resolved = resolveOcrName({
+      rawName: 'gre4d1',
+      candidates: ['greéd', 'Askao'],
+      shortThreshold: 1,
+      longThreshold: 2,
+    });
+
+    expect(resolved).toBe('greéd');
+  });
+
+  it('prefers primary candidates before falling back to bundled seed names', () => {
+    const resolved = resolveOcrName({
+      rawName: 'gre4d1',
+      candidates: ['greéd'],
+      fallbackCandidates: ['gre4d'],
+      shortThreshold: 1,
+      longThreshold: 2,
+    });
+
+    expect(resolved).toBe('greéd');
+  });
+
+  it('does not let bundled fallback hijack arbitrary unknown names', () => {
+    const resolved = resolveOcrName({
+      rawName: 'Enemy1',
+      candidates: [],
+      fallbackCandidates: ['EnemyCrew', 'Askao'],
+      shortThreshold: 1,
+      longThreshold: 2,
+    });
+
+    expect(resolved).toBe('Enemy1');
+  });
+
+  it('still considers bundled fallback when the primary pool contains the raw OCR text', () => {
+    const resolved = resolveOcrName({
+      rawName: 'Ask4o',
+      candidates: ['Ask4o'],
+      fallbackCandidates: ['Askao'],
+      shortThreshold: 1,
+      longThreshold: 2,
+    });
+
+    expect(resolved).toBe('Askao');
+  });
+
+  it('builds a deduped OCR candidate pool from roster, profiles, and saved mappings', () => {
+    const candidates = buildOcrCandidatePool({
+      seedNames: ['Wingman', 'wingman', 'Anchor'],
+      playerProfiles: {
+        profileA: { name: 'HistoryPilot' },
+        profileB: { name: 'Anchor' },
+      },
+      knownMappings: {
+        guidA: 'MappedPilot',
+      },
+      uidPlayerMappings: {
+        guidB: 'UidPilot',
+      },
+      bundledSeedNames: ['Anchor', 'SeededPilot'],
+    });
+
+    expect(candidates).toEqual(['Wingman', 'Anchor', 'HistoryPilot', 'MappedPilot', 'UidPilot', 'SeededPilot']);
   });
 
   it('returns unique contextual candidate when social anchors are strong', () => {

@@ -133,12 +133,13 @@ import {
 import { StorageService } from './utils/storage';
 import { playSoundCue } from './utils/soundCues';
 import { shouldQueueLearningReview } from './utils/ocrAliasEngine';
-import { buildAliasVariantMap, resolveOcrName } from './utils/ocrNameResolver';
+import { buildAliasVariantMap, buildOcrCandidatePool, resolveOcrName } from './utils/ocrNameResolver';
 import { assignDeterministicTeamColors, buildPlayerColorHints, normalizeTeamColor } from './utils/ocr/teamColorAssignment';
 import { backfillOpponentTeamShipTypes } from './utils/ocr/opponentTeamShipTypes';
 import { sanitizeOpponentTeamsAgainstFriendlyRoster } from './utils/ocr/friendlyTeamDeduper';
 import { capTeammatePlayers, getMaxTeammatesForShip } from './utils/teamLimits';
 import { buildActiveWeaponsFromLoadout, cloneLoadout, sanitizeUnknownLoadout } from './utils/loadout';
+import { BUNDLED_OCR_LEXICON } from './utils/bundledOcrLexicon';
 import { extractArtifactSourceFromOcrData } from './utils/artifactSource';
 import { buildOcrNameConfidenceMapFromExtractedData } from './utils/ocr/nameSourceHints';
 import { buildAutoCaptureStateSnapshot } from './utils/autoCaptureState';
@@ -616,6 +617,9 @@ const App: React.FC = () => {
     const ocrAutoApplyMinScore = useAppStore(s => s.ocrAutoApplyMinScore);
     const dismissedRosterCandidateKeys = useAppStore(s => s.dismissedRosterCandidateKeys);
     const recordOcrAliasCorrection = useAppStore(s => s.recordOcrAliasCorrection);
+    const playerProfiles = useAppStore(s => s.playerProfiles);
+    const knownMappings = useAppStore(s => s.knownMappings);
+    const uidPlayerMappings = useAppStore(s => s.uidMappings.players);
     const telemetryPerformanceProfile = useAppStore(s => s.telemetryPerformanceProfile);
     const tacticalMapKeybind = useAppStore(s => s.tacticalMapKeybind);
     const fullAutoEnabled = useAppStore(s => s.fullAutoEnabled);
@@ -3704,10 +3708,16 @@ const App: React.FC = () => {
                     });
                 }
             }
-            const allKnown = [...new Set([...existingList, ...pilotRegistry])];
+            const allKnown = buildOcrCandidatePool({
+                seedNames: [...existingList, ...pilotRegistry],
+                playerProfiles,
+                knownMappings,
+                uidPlayerMappings,
+            });
             const resolved = resolveOcrName({
                 rawName: ocrName,
                 candidates: allKnown,
+                fallbackCandidates: BUNDLED_OCR_LEXICON,
                 ocrCorrections: state.ocrCorrections,
                 aliasModel: state.ocrAliasModel,
                 aliasVariantMap: buildAliasVariantMap(state.ocrAliasModel),
@@ -4197,7 +4207,7 @@ const App: React.FC = () => {
                 detail: { source: 'app-ocr-gate', matchId: targetMatchId },
             }));
         }, 0);
-    }, [activeShip, activeUser, addPendingReview, dismissedRosterCandidateKeys, pendingReviews, pilotRegistry, selectedOpponents, selectedReachModifiers, sessionShipTypes, setActiveShip, setSelectedReachModifiers, setSelectedTeammates, setShowWizard, setToast, showWizard]);
+    }, [activeShip, activeUser, addPendingReview, dismissedRosterCandidateKeys, knownMappings, pendingReviews, pilotRegistry, playerProfiles, selectedOpponents, selectedReachModifiers, sessionShipTypes, setActiveShip, setSelectedReachModifiers, setSelectedTeammates, setShowWizard, setToast, showWizard, uidPlayerMappings]);
 
     const handleSmartCaptureData = useCallback((data: OCRExtractedData) => {
         handleApplyOCRData(data, null, null);

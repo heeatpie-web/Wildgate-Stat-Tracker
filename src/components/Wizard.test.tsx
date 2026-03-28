@@ -788,6 +788,35 @@ describe('Wizard', () => {
         expect(screen.queryByTestId('wizard-ocr-processing-overlay')).toBeNull();
     });
 
+    it('disables embedded OCR footer actions while background OCR processing is still running', async () => {
+        const { Wizard } = await import('./Wizard');
+        gameData.pendingMatchData = {
+            id: 914,
+            ocrState: 'processing',
+            loadout: {
+                hero: 'Adrian',
+                ship: 'Hunter',
+                weapons: [],
+                equipment: [],
+            },
+            kills: { 'AI Legion': 0 },
+        };
+        appStoreState.pendingMatchData = {
+            ...gameData.pendingMatchData,
+            result: 'Win',
+        };
+        uiState.showWizard = 'Win';
+
+        render(<Wizard />);
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr review/i })[0]);
+
+        expect(screen.getByRole('button', { name: /discard/i })).toBeDisabled();
+        expect(screen.getByRole('button', { name: /save and apply/i })).toBeDisabled();
+
+        fireEvent.click(screen.getByRole('button', { name: /save and apply/i }));
+        expect(gameData.updateMatch).not.toHaveBeenCalled();
+    });
+
     it('returns to the result tab after embedded OCR save-and-apply when close-on-apply is disabled', async () => {
         const { Wizard } = await import('./Wizard');
         gameData.pendingMatchData = {
@@ -991,6 +1020,103 @@ describe('Wizard', () => {
         expect(uiState.pushNotification).not.toHaveBeenCalledWith(expect.objectContaining({
             message: 'Smart Capture requested from wizard.',
         }));
+    });
+
+    it('disables save-and-apply while OCR rerun is in flight, then re-enables it when rerun completes', async () => {
+        const { Wizard } = await import('./Wizard');
+        let resolveRerun: ((value: any) => void) | null = null;
+        rerunOCRMulti.mockReturnValue(new Promise((resolve) => {
+            resolveRerun = resolve;
+        }));
+
+        gameData.pendingMatchData = {
+            id: 917,
+            ship: 'Hunter',
+            teammates: ['Wingman'],
+            opponents: ['Enemy'],
+            opponentTeams: [],
+            reachModifiers: [],
+            artifacts: ['C:\\captures\\wizard-2.png'],
+            loadout: {
+                hero: 'Adrian',
+                ship: 'Hunter',
+                weapons: [],
+                equipment: [],
+            },
+            kills: { 'AI Legion': 0 },
+            ocrState: 'reviewing',
+        };
+        appStoreState.pendingMatchData = {
+            ...gameData.pendingMatchData,
+            result: 'Win',
+        };
+        appStoreState.matches = [{
+            id: 917,
+            timestamp: 1_700_000_000_000,
+            date: '1/1/2024',
+            mode: 'Artifact Brawl',
+            player: 'TestPilot',
+            teammates: [],
+            opponents: [],
+            hero: 'Adrian',
+            ship: 'Hunter',
+            reachModifiers: [],
+            kills: { 'AI Legion': 0 },
+            result: 'Win',
+            subType: 'Combat',
+        }];
+        uiState.showWizard = 'Win';
+
+        render(<Wizard />);
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr review/i })[0]);
+        fireEvent.click(screen.getByRole('button', { name: /re-run ocr/i }));
+
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: /save and apply/i })).toBeDisabled();
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: /save and apply/i }));
+        expect(gameData.updateMatch).not.toHaveBeenCalled();
+
+        resolveRerun?.({
+            success: true,
+            data: {
+                screenshotType: 'crew_hub',
+                playerShip: { shipType: 'Bastion', confidence: 88, rawText: 'Bastion' },
+                reachModifiers: [{ name: 'Ice Storm', confidence: 84, rawText: 'ICE STORM' }],
+                enemyShips: [],
+                teammates: [{ name: 'Wingman', confidence: 86, isTeammate: true }],
+                opponentTeams: [{
+                    teamName: 'Red Team',
+                    shipType: 'Scout',
+                    color: 'red',
+                    players: [{ name: 'EnemyOne', confidence: 82, isTeammate: false }],
+                    confidence: 80,
+                }],
+                overallConfidence: 86,
+                captureTimestamp: Date.now(),
+                rawText: 'sample',
+                ocrSource: 'merged',
+            },
+            perFile: [{
+                imagePath: 'C:\\captures\\wizard-2.png',
+                success: true,
+                data: undefined,
+            }],
+        });
+
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: /save and apply/i })).toBeEnabled();
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: /save and apply/i }));
+
+        await waitFor(() => {
+            expect(gameData.updateMatch).toHaveBeenCalledWith(expect.objectContaining({
+                id: 917,
+                ocrState: 'saved',
+            }));
+        });
     });
 });
 

@@ -91,6 +91,7 @@ describe('MissionPanel', () => {
     };
     gameData.currentMatchCategory = '';
     gameData.matches = [];
+    gameData.pendingMatchData = null;
   });
 
   it('shows selected character loadout on section headers', async () => {
@@ -246,6 +247,52 @@ describe('MissionPanel', () => {
 
     expect(gameData.updateMatch).toHaveBeenCalledWith(expect.objectContaining({
       id: 77,
+      matchCategory: 'Spring Invitational',
+    }));
+  });
+
+  it('prefers the pending draft match over newer ongoing rows during category sync', async () => {
+    gameData.currentMatchCategory = 'Spring Invitational';
+    gameData.pendingMatchData = { id: 42 };
+    gameData.matches = [{
+      id: 42,
+      timestamp: Date.now() - 5_000,
+      date: '2026-03-27',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      notes: '',
+      artifacts: [],
+    }, {
+      id: 99,
+      timestamp: Date.now(),
+      date: '2026-03-27',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      notes: '',
+      artifacts: [],
+    }];
+
+    const { MissionPanel } = await import('./MissionPanel');
+    render(<MissionPanel />);
+
+    expect(gameData.updateMatch).toHaveBeenCalledWith(expect.objectContaining({
+      id: 42,
       matchCategory: 'Spring Invitational',
     }));
   });

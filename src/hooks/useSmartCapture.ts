@@ -13,11 +13,13 @@ import {
   normalizeOcrName,
 } from '../utils/stringUtils';
 import {
+  buildOcrCandidatePool,
   buildAliasVariantMap,
   dedupeNamedByCanonical,
   resolveOcrName,
   resolveWithSocialContext,
 } from '../utils/ocrNameResolver';
+import { BUNDLED_OCR_LEXICON } from '../utils/bundledOcrLexicon';
 import { shouldIgnorePendingReviewName } from '../utils/pendingReviewUtils';
 import { capTeammatePlayers } from '../utils/teamLimits';
 import { useUIState } from '../providers/UIStateProvider';
@@ -103,6 +105,8 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   const ocrCorrections = useAppStore(s => s.ocrCorrections);
   const ocrAliasModel = useAppStore(s => s.ocrAliasModel);
   const playerProfiles = useAppStore(s => s.playerProfiles);
+  const knownMappings = useAppStore(s => s.knownMappings);
+  const uidPlayerMappings = useAppStore(s => s.uidMappings.players);
   const { visionStatus, setVisionStatus, setToast } = useUIState();
   const { prepareAudio, playCapture, playSuccess, playError: playSoundError } = useSoundEffects();
   const {
@@ -135,6 +139,35 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   const [processingProgress, setProcessingProgress] = useState<{ current: number; total: number } | null>(null);
   const [qualityHint, setQualityHint] = useState<{ level: 'good' | 'fair' | 'poor'; message: string } | null>(null);
   const aliasVariantMap = useMemo(() => buildAliasVariantMap(ocrAliasModel), [ocrAliasModel]);
+  const backgroundOcrCandidates = useMemo(() => buildOcrCandidatePool({
+    seedNames: [
+      ...(pilotRegistry || []),
+      ...(selectedTeammates || []),
+      ...(selectedOpponents || []),
+      ...Object.values(sessionTeams || {}).flatMap((names) => names || []),
+    ],
+    playerProfiles,
+    knownMappings,
+    uidPlayerMappings,
+  }), [
+    pilotRegistry,
+    selectedTeammates,
+    selectedOpponents,
+    sessionTeams,
+    playerProfiles,
+    knownMappings,
+    uidPlayerMappings,
+  ]);
+  const backgroundOcrCandidateSet = useMemo(() => (
+    new Set(
+      buildOcrCandidatePool({
+        seedNames: backgroundOcrCandidates,
+        bundledSeedNames: BUNDLED_OCR_LEXICON,
+      })
+        .map((name) => normalizeOcrName(name).toLowerCase())
+        .filter(Boolean)
+    )
+  ), [backgroundOcrCandidates]);
   const nameEvidenceByScopeRef = useRef<Record<string, ScopeNameEvidence>>({});
 
   // Avoid stale closures in delayed processing (auto-bundling).
@@ -423,13 +456,16 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       const shipTypesByColor: Record<string, string> = {};
 
       const canonicalName = (rawName: string): string => {
-        const candidates = Array.from(new Set([
-          ...(pilotRegistry || []),
-          ...Object.values(mergedTeams).flatMap(names => names || []),
-        ]));
+        const candidates = buildOcrCandidatePool({
+          seedNames: [
+            ...backgroundOcrCandidates,
+            ...Object.values(mergedTeams).flatMap((names) => names || []),
+          ],
+        });
         return resolveOcrName({
           rawName,
           candidates,
+          fallbackCandidates: BUNDLED_OCR_LEXICON,
           ocrCorrections,
           aliasModel: ocrAliasModel,
           aliasVariantMap,
@@ -607,7 +643,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     setTimeMin, setTimeSec, setDamageTaken,
     setSessionShipTypes,
     pendingReviews, addPendingReview,
-    ocrCorrections, ocrAliasModel, aliasVariantMap, pilotRegistry, lockOcrTeams,
+    ocrCorrections, ocrAliasModel, aliasVariantMap, backgroundOcrCandidates, lockOcrTeams,
     setToast
   ]);
 
@@ -667,7 +703,8 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   const resolveCanonicalName = useCallback((rawName: string): string => {
     return resolveOcrName({
       rawName,
-      candidates: pilotRegistry || [],
+      candidates: backgroundOcrCandidates,
+      fallbackCandidates: BUNDLED_OCR_LEXICON,
       ocrCorrections,
       aliasModel: ocrAliasModel,
       aliasVariantMap,
@@ -675,7 +712,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       shortThreshold: 1,
       longThreshold: 2,
     });
-  }, [pilotRegistry, ocrCorrections, ocrAliasModel, aliasVariantMap]);
+  }, [backgroundOcrCandidates, ocrCorrections, ocrAliasModel, aliasVariantMap]);
 
   const normalizeTeamName = useCallback((teamName: string): string => {
     const cleaned = normalizeOcrName(teamName || '');
@@ -756,7 +793,6 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     data: OCRExtractedData,
     previousData: OCRExtractedData[]
   ): OCRExtractedData => {
-    const registrySet = new Set((pilotRegistry || []).map((name) => normalizeOcrName(name).toLowerCase()));
     const normalizedTeammates = Array.from(
       new Map(
         (data.teammates || [])
@@ -769,14 +805,14 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       ).values()
     );
     const resolvedTeammateAnchors = normalizedTeammates
-      .filter((teammate) => registrySet.has(normalizeOcrName(teammate.name).toLowerCase()))
+      .filter((teammate) => backgroundOcrCandidateSet.has(normalizeOcrName(teammate.name).toLowerCase()))
       .map((teammate) => teammate.name);
     const contextualTeammates = normalizedTeammates.map((teammate) => {
       const normalizedName = normalizeOcrName(teammate.name).toLowerCase();
-      if (registrySet.has(normalizedName)) return teammate;
+      if (backgroundOcrCandidateSet.has(normalizedName)) return teammate;
       const contextual = resolveWithSocialContext(
         teammate.name,
-        pilotRegistry || [],
+        backgroundOcrCandidates,
         resolvedTeammateAnchors,
         playerProfiles,
         { minAnchors: 2, minPlayedWith: 1 }
@@ -793,7 +829,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       data.playerShip?.shipType
     );
     const contextualAnchors = finalTeammates
-      .filter((teammate) => registrySet.has(normalizeOcrName(teammate.name).toLowerCase()))
+      .filter((teammate) => backgroundOcrCandidateSet.has(normalizeOcrName(teammate.name).toLowerCase()))
       .map((teammate) => teammate.name);
 
     const currentTeams = (data.opponentTeams || []).map((team) => {
@@ -805,15 +841,15 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
         .filter((player) => player.name && player.name.length > 2);
 
       const teamResolvedAnchors = passOnePlayers
-        .filter((player) => registrySet.has(normalizeOcrName(player.name).toLowerCase()))
+        .filter((player) => backgroundOcrCandidateSet.has(normalizeOcrName(player.name).toLowerCase()))
         .map((player) => player.name);
 
       const passTwoPlayers = passOnePlayers.map((player) => {
         const normalizedPlayer = normalizeOcrName(player.name).toLowerCase();
-        if (registrySet.has(normalizedPlayer)) return player;
+        if (backgroundOcrCandidateSet.has(normalizedPlayer)) return player;
         const contextual = resolveWithSocialContext(
           player.name,
-          pilotRegistry || [],
+          backgroundOcrCandidates,
           teamResolvedAnchors,
           playerProfiles,
           { minAnchors: 2, minPlayedWith: 1 }
@@ -907,7 +943,8 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     resolveCanonicalName,
     normalizeTeamName,
     lockOcrTeams,
-    pilotRegistry,
+    backgroundOcrCandidates,
+    backgroundOcrCandidateSet,
     playerProfiles,
   ]);
 

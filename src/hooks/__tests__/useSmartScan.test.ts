@@ -39,6 +39,9 @@ const appStoreState = {
   ocrRegions: undefined,
   ocrCorrections: {},
   ocrAliasModel: null,
+  playerProfiles: {},
+  knownMappings: {},
+  uidMappings: { players: {} },
   resolveOcrAlias: vi.fn(() => null),
   ocrLearningEnabled: false,
   ocrAutoApplyMinScore: 0.85,
@@ -85,7 +88,8 @@ vi.mock('../../utils/ocrAliasEngine', () => ({
 
 vi.mock('../../utils/ocrNameResolver', () => ({
   buildAliasVariantMap: vi.fn(() => ({})),
-  resolveOcrName: vi.fn((value: string) => value),
+  buildOcrCandidatePool: vi.fn(({ seedNames = [] }: { seedNames?: string[] }) => seedNames),
+  resolveOcrName: vi.fn(({ rawName }: { rawName: string }) => rawName),
 }));
 
 vi.mock('../../utils/pendingReviewUtils', () => ({
@@ -106,6 +110,9 @@ describe('useSmartScan', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     uiState.visionStatus = 'idle';
+    appStoreState.playerProfiles = {};
+    appStoreState.knownMappings = {};
+    appStoreState.uidMappings = { players: {} };
   });
 
   it('ignores overlapping scan requests while one scan is already in flight', async () => {
