@@ -1,4 +1,11 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.6.0": [
+    "Add pregame advice panel with win rate and match recommendations",
+    "Fix enemy team detection and OCR re-run reliability",
+    "Fix OCR accuracy with improved line clustering and color detection",
+    "Fix player identity drift and add match categories",
+    "Resolve TypeScript errors and all test failures"
+  ],
   "v3.5.2": [
     "Reliability: Result flash detection now scales the HUD ROI by resolution so 1440p and ultrawide layouts sample the active-player name correctly.",
     "Detection: No-flash placement results now use five bright PLACE anchors with flash priority and immediate capture handoff for faster end-state recognition.",
