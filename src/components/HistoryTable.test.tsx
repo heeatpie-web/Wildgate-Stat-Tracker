@@ -91,6 +91,7 @@ describe('HistoryTable', () => {
     vi.clearAllMocks();
     confirmSpy.mockReturnValue(true);
     matches[0].isPracticeRange = false;
+    matches[0].matchCategory = undefined;
   });
 
   it('stops the relative-time refresh while inactive and preserves search input state', async () => {
@@ -161,5 +162,17 @@ describe('HistoryTable', () => {
     render(<HistoryTable />);
 
     expect(screen.getByLabelText('Practice Range')).toHaveAttribute('title', 'Practice Range');
+  });
+
+  it('shows match categories in history rows and the detail modal', async () => {
+    matches[0].matchCategory = 'League Night';
+    const { default: HistoryTable } = await import('./HistoryTable');
+    render(<HistoryTable />);
+
+    expect(screen.getByText('League Night')).toBeInTheDocument();
+
+    fireEvent.doubleClick(screen.getByText('Win'));
+
+    expect(await screen.findAllByText('League Night')).not.toHaveLength(0);
   });
 });

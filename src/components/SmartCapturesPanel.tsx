@@ -61,6 +61,7 @@ import { QueueItemRichPreview } from './smart-captures/QueueItemRichPreview';
 import OcrRegionEditorModal from './OcrRegionEditorModal';
 import { SmartCaptureSummaryBar } from './smart-captures/detail/SmartCaptureSummaryBar';
 import { SmartCaptureActionBar } from './smart-captures/detail/SmartCaptureActionBar';
+import { MatchCategoryBadge } from './MatchCategoryBadge';
 import { OcrTeamAssignmentBoard, type OcrTeamAssignmentTeam } from './ocr/OcrTeamAssignmentBoard';
 import { WorkspaceImageViewer } from './media/WorkspaceImageViewer';
 import {
@@ -443,6 +444,7 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
     const todayQueueDayKey = toLocalDateKey(Date.now());
     const [queueDayFilter, setQueueDayFilter] = useState<string>(todayQueueDayKey);
     const queueDayManuallySelectedRef = useRef(false);
+    const pendingFocusMatchIdRef = useRef<number | null>(null);
     const [modeFilter, setModeFilter] = useState<ModeFilter>('all');
     const [queueWidthPct, setQueueWidthPct] = useState(30);
     const [isResizing, setIsResizing] = useState(false);
@@ -545,6 +547,7 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
             : null;
 
         if (focusMatch) {
+            pendingFocusMatchIdRef.current = focusMatch.id;
             const focusDay = toLocalDateKey(focusMatch.timestamp);
             setQueueOnly(false);
             if (searchQuery) setSearchQuery('');
@@ -559,6 +562,10 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
             }
             setSelectedMatchId(focusMatch.id);
             setSmartCapturesFocusMatchId(null);
+            return;
+        }
+
+        if (pendingFocusMatchIdRef.current != null) {
             return;
         }
 
@@ -693,10 +700,23 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
     useEffect(() => {
         // Keep selected match aligned with current visible list (queue/day/search filters).
         if (visibleMatches.length === 0) return;
+        const pendingFocusMatchId = pendingFocusMatchIdRef.current;
+        if (pendingFocusMatchId != null) {
+            const targetStillExists = matches.some((match) => match.id === pendingFocusMatchId);
+            if (!targetStillExists) {
+                pendingFocusMatchIdRef.current = null;
+            } else if (visibleMatches.some((match) => match.id === pendingFocusMatchId)) {
+                if (selectedMatchId !== pendingFocusMatchId) {
+                    setSelectedMatchId(pendingFocusMatchId);
+                }
+                pendingFocusMatchIdRef.current = null;
+            }
+            return;
+        }
         if (!selectedMatchId || !visibleMatches.some(m => m.id === selectedMatchId)) {
             setSelectedMatchId(visibleMatches[0].id);
         }
-    }, [visibleMatches, selectedMatchId, setSelectedMatchId]);
+    }, [matches, visibleMatches, selectedMatchId, setSelectedMatchId]);
 
     const queueIndex = useMemo(() => {
         if (!queueOnly || !selectedMatchId) return { idx: -1, total: workQueueMatches.length };
@@ -1062,6 +1082,7 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
             artifactSource: keep.artifactSource || mergeFrom.find((match) => match.artifactSource)?.artifactSource,
             killedBy: keep.killedBy || mergeFrom.find((match) => match.killedBy)?.killedBy,
             killedByShip: keep.killedByShip || mergeFrom.find((match) => match.killedByShip)?.killedByShip,
+            matchCategory: keep.matchCategory || mergeFrom.find((match) => match.matchCategory)?.matchCategory,
             opponentTeams: mergeOpponentTeams([keep.opponentTeams, ...mergeFrom.map((match) => match.opponentTeams)]),
             eliminatedByTeam: keep.eliminatedByTeam || mergeFrom.find((match) => match.eliminatedByTeam)?.eliminatedByTeam,
             notes: [keep.notes, ...mergeFrom.map((match) => match.notes)]
@@ -2164,6 +2185,7 @@ const RERUN_PHASE_LABELS: Record<RerunProgressPhase, string> = {
 
 type NonCurrentWizardSnapshot = {
     activeShip: string;
+    currentMatchCategory: string;
     selectedTeammates: string[];
     selectedOpponents: string[];
     sessionTeams: Record<string, string[]>;
@@ -2292,6 +2314,7 @@ export const resolveOpenWizardSeed = ({
             poiEpic: Number(pendingDraft?.poiEpic ?? liveMatch.poiEpic ?? 0),
             damageTaken: Number(pendingDraft?.damageTaken ?? liveMatch.damageTaken ?? 0),
             notes: String(pendingDraft?.notes || liveMatch.notes || ''),
+            matchCategory: String(pendingDraft?.matchCategory || liveMatch.matchCategory || '').trim() || undefined,
             artifacts: Array.isArray(pendingDraft?.artifacts)
                 ? [...pendingDraft.artifacts]
                 : [...(liveMatch.artifacts || [])],
@@ -2427,6 +2450,7 @@ export const buildOcrReviewPendingMatch = (
         poiEpic: Number(existingPending.poiEpic ?? baseMatch.poiEpic ?? 0),
         damageTaken: Number(existingPending.damageTaken ?? baseMatch.damageTaken ?? 0),
         notes: String(existingPending.notes || baseMatch.notes || ''),
+        matchCategory: String(existingPending.matchCategory || baseMatch.matchCategory || '').trim() || undefined,
         artifacts: Array.isArray(existingPending.artifacts)
             ? [...existingPending.artifacts]
             : [...(baseMatch.artifacts || [])],
@@ -2643,6 +2667,7 @@ const SmartMatchDetail: React.FC<{
             setSelectedTeammates,
             setSelectedOpponents,
             setActiveShip,
+            setCurrentMatchCategory,
             setSessionTeams,
             setSessionShipTypes,
             setSelectedReachModifiers,
@@ -2729,6 +2754,7 @@ const SmartMatchDetail: React.FC<{
             );
             nonCurrentWizardSnapshotRef.current = {
                 activeShip: String(storeState.activeShip || ''),
+                currentMatchCategory: String(storeState.currentMatchCategory || ''),
                 selectedTeammates: [...(storeState.selectedTeammates || [])],
                 selectedOpponents: [...(storeState.selectedOpponents || [])],
                 sessionTeams: clonedSessionTeams,
@@ -2888,6 +2914,7 @@ const SmartMatchDetail: React.FC<{
                     ? Math.min(5, Math.max(2, Number(latestMatch.placement)))
                     : null
             );
+            setCurrentMatchCategory(String(latestMatch.matchCategory || ''));
             setPendingKilledBy(String(latestMatch.killedBy || ''));
             setPendingKilledByShip(String(latestMatch.killedByShip || ''));
             const pendingNameSources = pendingDraft?.ocrDebug?.nameSources;
@@ -2918,6 +2945,7 @@ const SmartMatchDetail: React.FC<{
                 poiEpic: latestMatch.poiEpic || 0,
                 damageTaken: latestMatch.damageTaken || 0,
                 notes: latestMatch.notes || '',
+                matchCategory: latestMatch.matchCategory || undefined,
                 artifacts: [...(latestMatch.artifacts || [])],
                 ocrState: latestMatch.ocrState,
                 opponentTeams: latestMatch.opponentTeams || undefined,
@@ -2949,7 +2977,7 @@ const SmartMatchDetail: React.FC<{
                 useAppStore.getState().setWizardCloseOnOcrApply(false);
             }
             setShowWizard(wizardResult);
-        }, [activeUser, ensureNonCurrentWizardSnapshot, isActiveUserLike, match, setDamageTaken, setKills, setPendingKilledBy, setPendingKilledByShip, setPendingPlacement, setPoiEasy, setPoiEpic, setPoiMedium, setSelectedOpponents, setSelectedReachModifiers, setSelectedTeammates, setSessionShipTypes, setSessionTeams, setShowWizard, setTimeMin, setTimeSec, setToast]);
+        }, [activeUser, ensureNonCurrentWizardSnapshot, isActiveUserLike, match, setCurrentMatchCategory, setDamageTaken, setKills, setPendingKilledBy, setPendingKilledByShip, setPendingPlacement, setPoiEasy, setPoiEpic, setPoiMedium, setSelectedOpponents, setSelectedReachModifiers, setSelectedTeammates, setSessionShipTypes, setSessionTeams, setShowWizard, setTimeMin, setTimeSec, setToast]);
 
         useEffect(() => {
             if (!isActive) return;
@@ -2980,11 +3008,12 @@ const SmartMatchDetail: React.FC<{
             setPoiEasy(snapshot.poiEasy);
             setPoiMedium(snapshot.poiMedium);
             setPoiEpic(snapshot.poiEpic);
+            setCurrentMatchCategory(snapshot.currentMatchCategory || '');
             setPendingPlacement(snapshot.pendingPlacement);
             setPendingKilledBy(snapshot.pendingKilledBy);
             setPendingKilledByShip(snapshot.pendingKilledByShip);
             useAppStore.getState().setPendingMatchData(snapshot.pendingMatchData ? { ...snapshot.pendingMatchData } : null);
-        }, [activeShip, setActiveShip, setDamageTaken, setKills, setPendingKilledBy, setPendingKilledByShip, setPendingPlacement, setPoiEasy, setPoiEpic, setPoiMedium, setSelectedOpponents, setSelectedReachModifiers, setSelectedTeammates, setSessionShipTypes, setSessionTeams, setTimeMin, setTimeSec, showWizard]);
+        }, [activeShip, setActiveShip, setCurrentMatchCategory, setDamageTaken, setKills, setPendingKilledBy, setPendingKilledByShip, setPendingPlacement, setPoiEasy, setPoiEpic, setPoiMedium, setSelectedOpponents, setSelectedReachModifiers, setSelectedTeammates, setSessionShipTypes, setSessionTeams, setTimeMin, setTimeSec, showWizard]);
 
         const applyReviewDataToSession = useCallback((
             readyReviewData?: OCRExtractedData | null,
@@ -4261,6 +4290,12 @@ const SmartMatchDetail: React.FC<{
                                     <span>{summaryDateLabel}</span>
                                     <span aria-hidden="true" className="opacity-40">·</span>
                                     <span className="font-mono">{summaryTimeLabel}</span>
+                                    {match.matchCategory ? (
+                                        <>
+                                            <span aria-hidden="true" className="opacity-40">·</span>
+                                            <MatchCategoryBadge category={match.matchCategory} compact />
+                                        </>
+                                    ) : null}
                                 </div>
                             </div>
                         )}

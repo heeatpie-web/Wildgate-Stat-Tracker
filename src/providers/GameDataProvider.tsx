@@ -105,6 +105,8 @@ interface GameDataContextType {
 
     currentNote: string;
     setCurrentNote: (s: string) => void;
+    currentMatchCategory: string;
+    setCurrentMatchCategory: (s: string) => void;
 
     // Simulation / Sandbox State
     isSimulation: boolean;
@@ -206,6 +208,7 @@ export const GameDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         timeSec: s.timeSec, setTimeSec: s.setTimeSec,
         damageTaken: s.damageTaken, damageSource: s.damageSource, setDamageTaken: s.setDamageTaken,
         currentNote: s.currentNote, setCurrentNote: s.setCurrentNote,
+        currentMatchCategory: s.currentMatchCategory, setCurrentMatchCategory: s.setCurrentMatchCategory,
         isSimulation: s.isSimulation, setIsSimulation: s.setIsSimulation,
         pendingMatchData: s.pendingMatchData, setPendingMatchData: s.setPendingMatchData,
         pendingSubType: s.pendingSubType, setPendingSubType: s.setPendingSubType,

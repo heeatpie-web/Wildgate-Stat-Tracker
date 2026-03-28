@@ -29,6 +29,8 @@ const gameData = {
   setSelectedReachModifiers: vi.fn(),
   currentNote: '',
   setCurrentNote: vi.fn(),
+  currentMatchCategory: '',
+  setCurrentMatchCategory: vi.fn(),
   activeWeapons: {
     [selectedCharacterWeapon]: 1,
     [selectedCharacterEquipment]: 1,
@@ -47,9 +49,13 @@ const gameData = {
     characterEquipment: [selectedCharacterEquipment],
     characterPerks: [selectedCharacterPerk],
   },
+  matches: [] as Array<Record<string, unknown>>,
+  pendingMatchData: null,
+  updateMatch: vi.fn(),
 };
 
 const uiState = {
+  activeUser: 'Pilot',
   showArtifactSelect: false,
   setShowArtifactSelect: vi.fn(),
   telemetryStatus: { lastEventAt: Date.now() },
@@ -83,6 +89,8 @@ describe('MissionPanel', () => {
       characterEquipment: [selectedCharacterEquipment],
       characterPerks: [selectedCharacterPerk],
     };
+    gameData.currentMatchCategory = '';
+    gameData.matches = [];
   });
 
   it('shows selected character loadout on section headers', async () => {
@@ -199,6 +207,46 @@ describe('MissionPanel', () => {
       hero: 'Adrian',
       characterPerks: ['Boarder'],
       perks: ['Boarder'],
+    }));
+  });
+
+  it('lets users enter a sticky match category from the recording panel', async () => {
+    const { MissionPanel } = await import('./MissionPanel');
+    render(<MissionPanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: /add category/i }));
+    fireEvent.change(screen.getByPlaceholderText(/tournament, scrim, league/i), {
+      target: { value: 'Spring Invitational' },
+    });
+
+    expect(gameData.setCurrentMatchCategory).toHaveBeenCalledWith('Spring Invitational');
+  });
+
+  it('mirrors the current category onto the active ongoing draft match', async () => {
+    gameData.currentMatchCategory = 'Spring Invitational';
+    gameData.matches = [{
+      id: 77,
+      timestamp: Date.now(),
+      date: '2026-03-27',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      notes: '',
+      artifacts: [],
+    }];
+    const { MissionPanel } = await import('./MissionPanel');
+    render(<MissionPanel />);
+
+    expect(gameData.updateMatch).toHaveBeenCalledWith(expect.objectContaining({
+      id: 77,
+      matchCategory: 'Spring Invitational',
     }));
   });
 });

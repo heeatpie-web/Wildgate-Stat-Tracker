@@ -737,6 +737,112 @@ describe('PlayerHub', () => {
         expect(uiState.setActiveView).toHaveBeenCalledWith('analytics');
     });
 
+    it('ignores ambiguous learned OCR aliases when building player encounter scopes', () => {
+        gameDataState.pilotRegistry = ['PilotOne', 'PilotTwo'];
+        gameDataState.pilotAliases = {};
+        gameDataState.playerProfiles = {
+            PilotOne: {
+                id: 'PilotOne',
+                sightings: 1,
+                firstSeen: 1_700_000_000_000,
+                lastSeen: 1_700_000_000_000,
+                teamsObserved: {},
+                playedWith: { Pilot: 1 },
+                playedAgainst: {},
+                shipsObserved: { Hunter: 1 },
+                ocrSightings: 0,
+                manualSightings: 1,
+                lastOcrConfidence: null,
+            },
+            PilotTwo: {
+                id: 'PilotTwo',
+                sightings: 1,
+                firstSeen: 1_700_000_000_000,
+                lastSeen: 1_700_000_000_000,
+                teamsObserved: {},
+                playedWith: {},
+                playedAgainst: { Pilot: 1 },
+                shipsObserved: { Scout: 1 },
+                ocrSightings: 0,
+                manualSightings: 1,
+                lastOcrConfidence: null,
+            },
+        };
+        gameDataState.matches = [
+            {
+                id: 51,
+                timestamp: 1_700_000_000_000,
+                date: '2026-02-17',
+                mode: 'Artifact Brawl',
+                player: 'Pilot',
+                teammates: ['PilotOne'],
+                opponents: [],
+                hero: 'Hero',
+                ship: 'Hunter',
+                reachModifiers: [],
+                kills: {},
+                result: 'Win',
+                subType: 'Combat',
+            },
+            {
+                id: 52,
+                timestamp: 1_700_100_000_000,
+                date: '2026-02-18',
+                mode: 'Artifact Brawl',
+                player: 'Pilot',
+                teammates: [],
+                opponents: ['BlurredAce'],
+                hero: 'Hero',
+                ship: 'Scout',
+                reachModifiers: [],
+                kills: {},
+                result: 'Loss',
+                subType: 'Combat',
+            },
+        ];
+        appStoreState.ocrAliasModel = {
+            version: 1 as const,
+            entries: {
+                blurredace: [
+                    {
+                        rawKey: 'BlurredAce',
+                        normalizedKey: 'blurredace',
+                        targetName: 'PilotOne',
+                        count: 2,
+                        lastUpdatedAt: Date.now(),
+                        source: 'review_modal' as const,
+                        confidenceWeight: 0.8,
+                        contexts: { unknown: 2 },
+                    },
+                    {
+                        rawKey: 'BlurredAce',
+                        normalizedKey: 'blurredace',
+                        targetName: 'PilotTwo',
+                        count: 2,
+                        lastUpdatedAt: Date.now(),
+                        source: 'review_modal' as const,
+                        confidenceWeight: 0.8,
+                        contexts: { unknown: 2 },
+                    },
+                ],
+            },
+            blocklist: {},
+            stats: { totalEntries: 2, lastCompactedAt: Date.now() },
+        };
+
+        render(<PlayerHub />);
+
+        fireEvent.click(screen.getByRole('button', { name: /pilotone/i }));
+        fireEvent.click(screen.getByRole('button', { name: /open analytics profile/i }));
+
+        expect(gameDataState.setDrillDownTarget).toHaveBeenCalledWith({
+            name: 'PilotOne',
+            type: 'Teammate',
+            matchIds: [51],
+            encounterScope: 'all',
+        });
+    });
+
     it('lists encounter matches in the player detail pane and opens a selected match in Smart Captures', () => {
         gameDataState.pilotRegistry = ['Wingman'];
         gameDataState.pilotAliases = { Wingman: ['WingmanAlias'] };

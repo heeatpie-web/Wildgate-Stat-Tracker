@@ -6,6 +6,7 @@ import { Trash2, Edit2, Pin, Clock, Image as ImageIcon, Download, ArrowUpDown, S
 import { EditMatchModal } from './EditMatchModal';
 import { exportMatchesAsImage } from './history/historyExport';
 import { timeAgo, formatDayHeader, getRowBg } from './history/historyUtils';
+import { MatchCategoryBadge } from './MatchCategoryBadge';
 
 import { useGameData } from '../providers/GameDataProvider';
 import { LocalImage } from './LocalImage';
@@ -135,6 +136,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                 (m.hero?.toLowerCase() || '').includes(term) ||
                 (m.result?.toLowerCase() || '').includes(term) ||
                 (m.subType?.toLowerCase() || '').includes(term) ||
+                (m.matchCategory?.toLowerCase() || '').includes(term) ||
                 (m.notes?.toLowerCase() || '').includes(term) ||
                 (m.teammates || []).some(t => t.toLowerCase().includes(term)) ||
                 (m.opponents || []).some(o => o.toLowerCase().includes(term)) ||
@@ -748,8 +750,9 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                                                                 }`}>
                                                                     {m.result}
                                                                 </span>
-                                                                <div className="flex items-center gap-1.5 text-label-sm text-md-sys-on-surface/40 font-medium">
+                                                                <div className="flex flex-wrap items-center gap-1.5 text-label-sm text-md-sys-on-surface/40 font-medium">
                                                                     <span>{m.subType || 'Combat'}</span>
+                                                                    <MatchCategoryBadge category={m.matchCategory} compact />
                                                                     {m.isPracticeRange === true ? (
                                                                         <span
                                                                             aria-label="Practice Range"
@@ -967,7 +970,10 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                                                 ? 'text-info'
                                                 : 'text-md-sys-on-surface'
                                 }`}>{selectedMatchForDetails.result}</h2>
-                                <div className="text-body font-semibold text-md-sys-on-surface/60 mt-0.5">{selectedMatchForDetails.subType || 'Combat'}</div>
+                                <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-body font-semibold text-md-sys-on-surface/60">
+                                    <span>{selectedMatchForDetails.subType || 'Combat'}</span>
+                                    <MatchCategoryBadge category={selectedMatchForDetails.matchCategory} />
+                                </div>
                             </div>
                             <div className="flex items-center gap-2">
                                 <button

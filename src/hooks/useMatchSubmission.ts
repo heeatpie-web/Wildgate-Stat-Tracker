@@ -30,6 +30,7 @@ import {
     type ObservedTeammateName,
     type TeammateIdentitySource,
 } from '../utils/teammateIdentity';
+import { normalizeMatchCategory } from '../utils/matchCategory';
 
 const DEFAULT_ARTIFACT_LOOKBACK_MS = 10 * 60 * 1000;
 const SCOPED_ARTIFACT_REPAIR_POSTMATCH_GRACE_MS = 5 * 60 * 1000;
@@ -106,6 +107,14 @@ const mergeArtifactLists = (...artifactLists: Array<Array<string | null | undefi
         });
     });
     return merged;
+};
+
+const resolveMatchCategory = (...values: unknown[]): string | undefined => {
+    for (const value of values) {
+        const normalized = normalizeMatchCategory(value);
+        if (normalized) return normalized;
+    }
+    return undefined;
 };
 
 type DeleteMatchArtifactsParams = {
@@ -907,7 +916,7 @@ export const useMatchSubmission = () => {
             activeHero, activeShip, activeWeapons, currentLoadout,
             selectedReachModifiers, kills,
             timeMin, timeSec, isMatchInProgress, matchStartTime,
-            damageTaken, currentNote,
+            damageTaken, currentNote, currentMatchCategory,
             poiEasy, poiMedium, poiEpic,
             pendingMatchData,
             matches,
@@ -971,6 +980,7 @@ export const useMatchSubmission = () => {
         );
         const cappedResolvedTeammates = capTeammateNames(resolvedTeammates, teammateShipForCap);
         const teamWithSelf = ensureSelfInTeam(cappedResolvedTeammates, unresolvedDraft?.player || activeUser);
+        const matchCategory = resolveMatchCategory(currentMatchCategory, unresolvedDraft?.matchCategory);
 
         const data: Partial<Match> = {
             id: unresolvedDraft?.id,
@@ -998,6 +1008,7 @@ export const useMatchSubmission = () => {
             poiEpic,
             damageTaken: dmg,
             notes: currentNote || unresolvedDraft?.notes || '',
+            matchCategory,
             result,
             subType: result === 'Draw' ? 'Combat' : undefined,
             artifacts: unresolvedDraft?.artifacts ? [...unresolvedDraft.artifacts] : undefined,
@@ -1078,7 +1089,7 @@ export const useMatchSubmission = () => {
             selectedReachModifiers,
             selectedTeammates, selectedOpponents,
             kills, poiEasy, poiMedium, poiEpic,
-            damageTaken, currentNote,
+            damageTaken, currentNote, currentMatchCategory,
             matches,
             sessionStartTime,
             pilotRegistry,
@@ -1151,6 +1162,10 @@ export const useMatchSubmission = () => {
             const finalPoiMedium = Math.max(Number(pendingMatchData.poiMedium) || 0, Number(poiMedium) || 0);
             const finalPoiEpic = Math.max(Number(pendingMatchData.poiEpic) || 0, Number(poiEpic) || 0);
             const finalNotes = currentNote || pendingMatchData.notes || '';
+            const finalMatchCategory = resolveMatchCategory(
+                currentMatchCategory,
+                pendingMatchData.matchCategory,
+            );
             const finalPlacement = selectedResult === 'Win'
                 ? 1
                 : (selectedResult === 'Loss' && subType === 'Combat'
@@ -1229,6 +1244,7 @@ export const useMatchSubmission = () => {
                 killedBy: pendingKilledBy || undefined,
                 killedByShip: pendingKilledByShip || undefined,
                 notes: finalNotes,
+                matchCategory: finalMatchCategory,
                 timelineEvents: [...(timelineEvents || [])],
                 artifacts: mergeArtifactLists(existingMatch?.artifacts, pendingMatchData.artifacts),
                 ocrDebug: pendingMatchData?.ocrDebug || undefined,
@@ -1379,7 +1395,7 @@ export const useMatchSubmission = () => {
             selectedReachModifiers,
             selectedTeammates, selectedOpponents,
             kills, poiEasy, poiMedium, poiEpic,
-            damageTaken, currentNote,
+            damageTaken, currentNote, currentMatchCategory,
             matches,
             sessionStartTime,
             pilotRegistry,
@@ -1456,6 +1472,11 @@ export const useMatchSubmission = () => {
                 activeUser,
                 sessionStartTime,
             });
+            const finalMatchCategory = resolveMatchCategory(
+                currentMatchCategory,
+                pendingMatchData.matchCategory,
+                existingMatch?.matchCategory,
+            );
             const isTelemetryDraftSource = existingMatch?.subType === 'Telemetry Draft';
             const finalEliminatedByTeam = (() => {
                 const stored = String(pendingMatchData?.eliminatedByTeam || existingMatch?.eliminatedByTeam || '').trim();
@@ -1520,6 +1541,7 @@ export const useMatchSubmission = () => {
                 killedBy: pendingKilledBy || undefined,
                 killedByShip: pendingKilledByShip || undefined,
                 notes: finalNotes,
+                matchCategory: finalMatchCategory,
                 timelineEvents: [...(pendingMatchData.timelineEvents || [])],
                 artifacts: mergeArtifactLists(existingMatch?.artifacts, pendingMatchData.artifacts),
                 ocrDebug: pendingMatchData?.ocrDebug || undefined,
@@ -1581,7 +1603,7 @@ export const useMatchSubmission = () => {
             selectedReachModifiers,
             selectedTeammates, selectedOpponents,
             kills, poiEasy, poiMedium, poiEpic,
-            damageTaken, currentNote,
+            damageTaken, currentNote, currentMatchCategory,
             pendingKilledBy, pendingKilledByShip,
             matches,
             sessionStartTime,
@@ -1760,6 +1782,11 @@ export const useMatchSubmission = () => {
             const finalPoiMedium = Math.max(Number(existingMatch.poiMedium) || 0, Number(resolvedPendingMatchData.poiMedium) || 0, Number(poiMedium) || 0);
             const finalPoiEpic = Math.max(Number(existingMatch.poiEpic) || 0, Number(resolvedPendingMatchData.poiEpic) || 0, Number(poiEpic) || 0);
             const finalNotes = currentNote || resolvedPendingMatchData.notes || existingMatch.notes || '';
+            const finalMatchCategory = resolveMatchCategory(
+                currentMatchCategory,
+                resolvedPendingMatchData.matchCategory,
+                existingMatch.matchCategory,
+            );
             const finalPlacement = normalizedResult === 'Win'
                 ? 1
                 : normalizedResult === 'Draw'
@@ -1838,6 +1865,7 @@ export const useMatchSubmission = () => {
                 killedBy: pendingKilledBy || existingMatch.killedBy || undefined,
                 killedByShip: pendingKilledByShip || existingMatch.killedByShip || undefined,
                 notes: finalNotes,
+                matchCategory: finalMatchCategory,
                 timelineEvents: [...(resolvedPendingMatchData.timelineEvents || existingMatch.timelineEvents || [])],
                 artifacts: mergeArtifactLists(existingMatch.artifacts, resolvedPendingMatchData.artifacts, savedArtifactPaths),
                 ocrDebug: resolvedPendingMatchData.ocrDebug || existingMatch.ocrDebug || undefined,

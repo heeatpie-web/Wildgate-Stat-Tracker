@@ -65,6 +65,32 @@ describe('createMappingSlice', () => {
       const profile = store.getState().playerProfiles['p1'];
       expect(Object.keys(profile.teamsObserved)).toHaveLength(0);
     });
+
+    it('merges name-based sightings into an existing id-backed profile', () => {
+      store.getState().setPlayerName('p1', 'Wing Prime');
+
+      store.getState().recordPlayerSighting('Wing Prime', 'Red', ['Wing Prime', 'Ally Two'], ['Enemy Ace'], 'Hunter');
+
+      expect(store.getState().playerProfiles['Wing Prime']).toBeUndefined();
+      expect(store.getState().playerProfiles['p1']).toMatchObject({
+        name: 'Wing Prime',
+        sightings: 1,
+        playedWith: { 'Ally Two': 1 },
+        playedAgainst: { 'Enemy Ace': 1 },
+        shipsObserved: { Hunter: 1 },
+      });
+    });
+
+    it('normalizes teammate and opponent relationship keys when mappings already exist', () => {
+      store.getState().setPlayerName('p1', 'Wing Prime');
+      store.getState().setPlayerName('p2', 'Ally Two');
+      store.getState().setPlayerName('p3', 'Enemy Ace');
+
+      store.getState().recordPlayerSighting('Wing Prime', 'Red', ['Wing Prime', 'Ally Two'], ['Enemy Ace']);
+
+      expect(store.getState().playerProfiles['p1']?.playedWith).toEqual({ p2: 1 });
+      expect(store.getState().playerProfiles['p1']?.playedAgainst).toEqual({ p3: 1 });
+    });
   });
 
   // ── getPlayerRole ──
@@ -206,6 +232,16 @@ describe('createMappingSlice', () => {
       expect(record?.currentName).toBe('Manual Wing');
       expect(record?.status).toBe('confirmed');
       expect(record?.lockedByUser).toBe(true);
+    });
+
+    it('normalizes setPlayerName ids without creating duplicate raw profile keys', () => {
+      const rawId = 'accel:{bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb}';
+      const canonicalId = 'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
+
+      store.getState().setPlayerName(rawId, 'Manual Wing');
+
+      expect(Object.keys(store.getState().playerProfiles)).toEqual([canonicalId]);
+      expect(store.getState().playerProfiles[canonicalId]?.name).toBe('Manual Wing');
     });
   });
 

@@ -383,6 +383,65 @@ describe('SmartCapturesPanel paused lifecycle', () => {
     }
   });
 
+  it('does not let visibility reconciliation override a pending focused match', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-03-17T12:00:00-06:00'));
+      appStoreState.activeSection = 'capture';
+      appStoreState.queueOnly = true;
+      appStoreState.searchQuery = 'adrian';
+      appStoreState.selectedMatchId = null;
+      appStoreState.setSelectedMatchId = vi.fn();
+      gameData.matches = [
+        {
+          id: 401,
+          timestamp: Date.parse('2026-03-17T09:15:00-06:00'),
+          date: '3/17/2026',
+          mode: 'Artifact Brawl',
+          player: 'Pilot',
+          teammates: ['Wingman'],
+          opponents: ['Enemy'],
+          hero: 'Adrian',
+          ship: 'Hunter',
+          reachModifiers: [],
+          kills: {},
+          artifacts: ['C:\\captures\\match-401.png'],
+          result: 'Win',
+          ocrState: 'queued',
+        },
+        {
+          id: 402,
+          timestamp: Date.parse('2026-03-16T22:40:00-06:00'),
+          date: '3/16/2026',
+          mode: 'Fleet Battle',
+          player: 'Pilot',
+          teammates: ['Wingman'],
+          opponents: ['Specter'],
+          hero: 'Kae',
+          ship: 'Scout',
+          reachModifiers: [],
+          kills: {},
+          artifacts: ['C:\\captures\\match-402.png'],
+          result: 'Loss',
+          ocrState: 'queued',
+        },
+      ];
+      appStoreState.matches = gameData.matches;
+      uiState.smartCapturesFocusMatchId = 402;
+
+      const { default: SmartCapturesPanel } = await import('./SmartCapturesPanel');
+      await act(async () => {
+        render(<SmartCapturesPanel />);
+        await Promise.resolve();
+      });
+
+      expect(appStoreState.setSelectedMatchId).toHaveBeenCalledWith(402);
+      expect(appStoreState.setSelectedMatchId).not.toHaveBeenCalledWith(401);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('portals the screenshot viewer outside the clipped detail pane', async () => {
     appStoreState.activeSection = 'capture';
     appStoreState.selectedMatchId = 1;

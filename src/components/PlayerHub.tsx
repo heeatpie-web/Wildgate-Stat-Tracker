@@ -470,7 +470,8 @@ const PlayerHub: React.FC = () => {
     }, [ocrAliasModel]);
 
     const identityKeysByPilot = useMemo(() => {
-        const lookup = new Map<string, Set<string>>();
+        const rawLookup = new Map<string, Set<string>>();
+        const keyOwnerCounts = new Map<string, number>();
         allTrackedPilots.forEach((name) => {
             const keys = new Set<string>();
             const normalizedName = normalizeNameKey(name);
@@ -489,8 +490,25 @@ const PlayerHub: React.FC = () => {
                 const aliasKey = normalizeNameKey(alias.label);
                 if (aliasKey && aliasKey !== normalizedName) keys.add(aliasKey);
             });
-            lookup.set(name, keys);
+            rawLookup.set(name, keys);
+            keys.forEach((key) => {
+                keyOwnerCounts.set(key, (keyOwnerCounts.get(key) || 0) + 1);
+            });
         });
+
+        const lookup = new Map<string, Set<string>>();
+        rawLookup.forEach((keys, pilotName) => {
+            const canonicalKey = normalizeNameKey(pilotName);
+            const uniqueKeys = new Set<string>();
+            keys.forEach((key) => {
+                if (key === canonicalKey || (keyOwnerCounts.get(key) || 0) === 1) {
+                    uniqueKeys.add(key);
+                }
+            });
+            if (canonicalKey) uniqueKeys.add(canonicalKey);
+            lookup.set(pilotName, uniqueKeys);
+        });
+
         return lookup;
     }, [allTrackedPilots, learnedAliasInsightsByTarget, normalizedPilotNameMap, pilotAliases, rosterNameSet, trackedProfilesByPilot]);
 
@@ -2192,4 +2210,3 @@ const PlayerHub: React.FC = () => {
 };
 
 export default PlayerHub;
-

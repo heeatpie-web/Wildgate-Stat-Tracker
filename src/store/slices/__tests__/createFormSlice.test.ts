@@ -257,6 +257,17 @@ describe('createFormSlice', () => {
     });
   });
 
+  describe('setCurrentMatchCategory', () => {
+    it('normalizes the category and keeps pending match data in sync', () => {
+      store.getState().setPendingMatchData({ id: 88, matchCategory: undefined });
+
+      store.getState().setCurrentMatchCategory('  Spring   Invitational  ');
+
+      expect(store.getState().currentMatchCategory).toBe('Spring Invitational');
+      expect(store.getState().pendingMatchData?.matchCategory).toBe('Spring Invitational');
+    });
+  });
+
   // ── setActiveWeapons ──
 
   describe('setActiveWeapons', () => {
@@ -312,6 +323,7 @@ describe('createFormSlice', () => {
       store.getState().setPoiMedium(1);
       store.getState().setPoiEpic(1);
       store.getState().setCurrentNote('old note');
+      store.getState().setCurrentMatchCategory('Weekly Cup');
 
       store.getState().resetMatchTrackingForNewMatch();
 
@@ -323,6 +335,7 @@ describe('createFormSlice', () => {
       expect(store.getState().poiMedium).toBe(0);
       expect(store.getState().poiEpic).toBe(0);
       expect(store.getState().currentNote).toBe('');
+      expect(store.getState().currentMatchCategory).toBe('Weekly Cup');
     });
   });
 
@@ -393,6 +406,7 @@ describe('createFormSlice', () => {
       store.getState().setActiveHero('Ion', 'telemetry');
       store.getState().setActiveShip('Scout (3 Player)', 'telemetry');
       store.getState().setCurrentNote('discard me');
+      store.getState().setCurrentMatchCategory('Scrim Block');
       store.getState().toggleTeammate('Wing1');
 
       store.getState().discardMatch();
@@ -408,6 +422,7 @@ describe('createFormSlice', () => {
         'Repair Drone': 1,
       });
       expect(store.getState().currentNote).toBe('');
+      expect(store.getState().currentMatchCategory).toBe('Scrim Block');
       expect(store.getState().selectedTeammates).toEqual([]);
     });
   });

@@ -250,6 +250,8 @@ export interface Match {
   damageSourcesAvailable?: boolean;
   /** OCR lines captured from the damage sources panel for later analytics. */
   damageSourcesText?: string[];
+  /** Optional lightweight label used to group special match runs like tournaments or scrims. */
+  matchCategory?: string;
   /** Telemetry teammate IDs captured for the friendly roster, excluding the local player. */
   friendlyPlayerIds?: string[];
   /** Resolved teammate ID -> displayed name assignments used when this match was saved. */

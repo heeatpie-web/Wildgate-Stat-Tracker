@@ -5,6 +5,7 @@ import type { Loadout, Match } from '../../types';
 import { capTeammateNames } from '../../utils/teamLimits';
 import { buildActiveWeaponsFromLoadout, sanitizeLoadout } from '../../utils/loadout';
 import Logger from '../../utils/logger';
+import { normalizeMatchCategory } from '../../utils/matchCategory';
 
 const sanitizeTeammates = (teammates: string[] | null | undefined, ship: string): string[] => {
     return capTeammateNames(teammates, ship);
@@ -87,6 +88,7 @@ export interface FormSlice {
     poiEpic: number;
     elims: string;
     currentNote: string;
+    currentMatchCategory: string;
     pendingMatchData: Partial<Match> | null;
     pendingSubType: string;
     pendingPlacement: number | null;
@@ -114,6 +116,7 @@ export interface FormSlice {
     setPoiEpic: (val: number) => void;
     setElims: (val: string) => void;
     setCurrentNote: (val: string) => void;
+    setCurrentMatchCategory: (val: string) => void;
     setPendingMatchData: (data: Partial<Match> | null) => void;
     setPendingSubType: (type: string) => void;
     setPendingPlacement: (placement: number | null) => void;
@@ -150,6 +153,7 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
     poiEpic: 0,
     elims: "",
     currentNote: "",
+    currentMatchCategory: "",
     pendingMatchData: null,
     pendingSubType: '',
     pendingPlacement: null,
@@ -330,6 +334,18 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
     setPoiEpic: (val) => set({ poiEpic: val }),
     setElims: (val) => set({ elims: val }),
     setCurrentNote: (val) => set({ currentNote: val }),
+    setCurrentMatchCategory: (val) => set((state) => {
+        const nextCategory = normalizeMatchCategory(val);
+        return {
+            currentMatchCategory: nextCategory,
+            pendingMatchData: state.pendingMatchData
+                ? {
+                    ...state.pendingMatchData,
+                    matchCategory: nextCategory || undefined,
+                }
+                : state.pendingMatchData,
+        };
+    }),
     setPendingMatchData: (data) => set({ pendingMatchData: data }),
     setPendingSubType: (type) => set((state) => ({
         pendingSubType: type,

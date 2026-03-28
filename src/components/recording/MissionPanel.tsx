@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
-import { Layout, Clock, HeartCrack, Target, Crosshair, Zap, X, Camera, Loader2, ChevronDown, ChevronRight, Check } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Layout, Clock, HeartCrack, Target, Crosshair, Zap, X, Camera, Loader2, ChevronDown, ChevronRight, Check, Tag } from 'lucide-react';
 import { WEAPONS, UI_REACH_MODIFIERS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT } from '../../types';
 import { useGameData } from '../../providers/GameDataProvider';
 import { useUIState } from '../../providers/UIStateProvider';
 import { captureScreen, processMatchScreenshot, ScanOptions } from '../../utils/scanService';
 import { EQUIPMENT_DB } from '../../utils/equipmentDb';
 import Logger from '../../utils/logger';
+import { normalizeMatchCategory } from '../../utils/matchCategory';
+import { MatchCategoryBadge } from '../MatchCategoryBadge';
 import {
     getPerkCatalog,
     getProspectorEquipmentCatalog,
@@ -38,12 +40,14 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
         poiEasy, setPoiEasy, poiMedium, setPoiMedium, poiEpic, setPoiEpic,
         selectedReachModifiers, modifiersSource, toggleReachModifier, setSelectedReachModifiers,
         currentNote, setCurrentNote,
+        currentMatchCategory, setCurrentMatchCategory,
         activeWeapons: weapons, setActiveWeapons: setWeapons,
         currentLoadout, setCurrentLoadout, activeHero,
         telemetryDetectedHero, telemetryDetectedShip,
+        matches, pendingMatchData, updateMatch,
     } = useGameData();
 
-    const { showArtifactSelect, setShowArtifactSelect, telemetryStatus } = useUIState();
+    const { activeUser, showArtifactSelect, setShowArtifactSelect, telemetryStatus } = useUIState();
     const telemetryIsLive = typeof telemetryStatus?.lastEventAt === 'number'
         && (Date.now() - telemetryStatus.lastEventAt) < 5 * 60 * 1000;
     const hasFreshTelemetryLoadoutIdentity = Boolean(
@@ -53,6 +57,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
 
     const isTransparent = variant === 'transparent';
     const [isScanning, setIsScanning] = useState(false);
+    const [showCategoryEditor, setShowCategoryEditor] = useState(false);
 
     // Accordion state - track which section is expanded (null = all collapsed in accordion mode)
     const [expandedSection, setExpandedSection] = useState<SectionId | null>('stats');
@@ -130,6 +135,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
         });
     };
     const sanitizeMinuteInput = (value: string) => value.replace(/[^0-9]/g, '').slice(0, 2);
+    const normalizedMatchCategory = normalizeMatchCategory(currentMatchCategory);
     const sanitizeSecondInput = (value: string) => {
         const digits = value.replace(/[^0-9]/g, '').slice(0, 2);
         if (!digits) return '';
@@ -178,6 +184,34 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
             setIsScanning(false);
         }
     };
+
+    useEffect(() => {
+        if (normalizedMatchCategory) {
+            setShowCategoryEditor(true);
+        }
+    }, [normalizedMatchCategory]);
+
+    useEffect(() => {
+        const activeUserKey = String(activeUser || '').trim().toLowerCase();
+        const pendingId = Number(pendingMatchData?.id || 0);
+        const liveDraft = [...matches]
+            .filter((match) => match.result === 'Ongoing')
+            .filter((match) => {
+                if (pendingId > 0) return Number(match.id) === pendingId;
+                if (!activeUserKey) return true;
+                return String(match.player || '').trim().toLowerCase() === activeUserKey;
+            })
+            .sort((a, b) => b.timestamp - a.timestamp)[0];
+        if (!liveDraft) return;
+
+        const liveCategory = normalizeMatchCategory(liveDraft.matchCategory || '');
+        if (liveCategory === normalizedMatchCategory) return;
+
+        updateMatch({
+            ...liveDraft,
+            matchCategory: normalizedMatchCategory || undefined,
+        });
+    }, [activeUser, matches, normalizedMatchCategory, pendingMatchData?.id, updateMatch]);
 
     // Collapsible section header component for accordion mode
     const SectionHeader: React.FC<{
@@ -653,6 +687,55 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                         )}
                     </div>
                 )}
+
+                <div className="flex flex-col gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (normalizedMatchCategory) {
+                                    setShowCategoryEditor(true);
+                                    return;
+                                }
+                                setShowCategoryEditor((prev) => !prev);
+                            }}
+                            aria-pressed={showCategoryEditor || Boolean(normalizedMatchCategory)}
+                            className={`inline-flex items-center gap-1.5 rounded-pill border px-3 py-1.5 text-label-sm font-semibold transition-colors ${
+                                normalizedMatchCategory
+                                    ? 'border-md-sys-primary/20 bg-md-sys-primary/10 text-md-sys-primary'
+                                    : 'border-md-sys-outline/12 text-md-sys-on-surface/60 hover:border-md-sys-primary/16 hover:text-md-sys-on-surface'
+                            }`}
+                        >
+                            <Tag size={12} />
+                            <span>{normalizedMatchCategory ? 'Category On' : 'Add Category'}</span>
+                        </button>
+                        <MatchCategoryBadge category={normalizedMatchCategory} />
+                        {normalizedMatchCategory ? (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setCurrentMatchCategory('');
+                                    setShowCategoryEditor(false);
+                                }}
+                                className="inline-flex items-center gap-1 rounded-pill px-2.5 py-1 text-label-sm font-medium text-md-sys-on-surface/50 hover:text-md-sys-on-surface"
+                            >
+                                <X size={11} />
+                                <span>Clear</span>
+                            </button>
+                        ) : null}
+                    </div>
+
+                    {(showCategoryEditor || Boolean(normalizedMatchCategory)) ? (
+                        <input
+                            type="text"
+                            value={currentMatchCategory}
+                            onChange={(e) => setCurrentMatchCategory(e.target.value)}
+                            placeholder="Tournament, Scrim, League..."
+                            maxLength={48}
+                            className="w-full md3-textfield--outlined rounded-control px-3 py-2 text-body outline-none placeholder:text-md-sys-on-surface/40 focus:ring-2 focus:ring-md-sys-primary/40"
+                        />
+                    ) : null}
+                </div>
 
                 {/* Notes (Hidden in Transparent Mode to save space) */}
                 {!isTransparent && (

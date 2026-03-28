@@ -155,5 +155,37 @@ describe('QueueItemRichPreview', () => {
 
     expect(screen.getByLabelText('Practice Range')).toHaveAttribute('title', 'Practice Range');
   });
+
+  it('renders a category badge in both expanded and compact queue rows', () => {
+    const categorizedMatch: Match = {
+      ...baseMatch,
+      matchCategory: 'Winter Cup',
+    };
+
+    const { rerender } = render(
+      <QueueItemRichPreview
+        match={categorizedMatch}
+        displayNumber={44}
+        rawMatchId={categorizedMatch.id}
+        isSelected={false}
+        onClick={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Winter Cup')).toBeInTheDocument();
+
+    rerender(
+      <QueueItemRichPreview
+        match={categorizedMatch}
+        compact
+        displayNumber={44}
+        rawMatchId={categorizedMatch.id}
+        isSelected={false}
+        onClick={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Winter Cup')).toBeInTheDocument();
+  });
 });
 

@@ -18,6 +18,7 @@ import {
   getStatusMeta,
 } from './smartCaptureUtils';
 import { OutcomePill } from './primitives/OutcomePill';
+import { MatchCategoryBadge } from '../MatchCategoryBadge';
 
 interface QueueItemRichPreviewProps {
   match: Match;
@@ -141,6 +142,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
     if (collapsedGlyph === 'review') return <ShieldAlert size={14} />;
     return <Clock3 size={14} />;
   })();
+  const categoryBadge = <MatchCategoryBadge category={match.matchCategory} compact />;
 
   if (compact) {
     return (
@@ -167,6 +169,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
           </span>
           {practiceRangeIndicator ? <span className="h-4 w-4">{practiceRangeIndicator}</span> : null}
         </div>
+        {match.matchCategory ? categoryBadge : null}
       </button>
     );
   }
@@ -218,6 +221,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
               {statusMeta.label}
             </span>
             {practiceRangeIndicator ? <span className="h-5 w-5">{practiceRangeIndicator}</span> : null}
+            {match.matchCategory ? categoryBadge : null}
           </div>
         </div>
 
