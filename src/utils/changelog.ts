@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.6.2": [
+    "Pregame Intel: New matches now reset to the mode baseline until fresh lobby OCR arrives, so previous-match percentages do not carry over.",
+    "Pregame Intel: The live breakdown now shows squad context, ship matchup, enemy teams, player history, and ship-specific performance swings.",
+    "Auto-Capture: F10 now works on manually started match timers by treating ongoing telemetry drafts as valid active matches."
+  ],
   "v3.6.1": [
     "Workflow: Pregame intel now opens as a dedicated Recording tab during active matches instead of crowding the controls panel.",
     "Smart Captures: Each match now saves the pregame win estimate and factor breakdown so the intel stays attached after OCR and result review.",
