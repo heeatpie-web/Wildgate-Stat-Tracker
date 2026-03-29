@@ -1,14 +1,37 @@
 const SMART_CAPTURE_MATCH_LOOKBACK_MS = 6 * 60 * 60 * 1000;
 const SESSION_RECENCY_BUFFER_MS = 60_000;
+const UNKNOWN_PLAYER_KEYS = new Set(['unknown', 'unknown player', 'n/a', 'na', '?']);
 
 function normalizePlayerKey(value) {
   return String(value || '').trim().toLowerCase();
+}
+
+function isUnknownPlayerKey(value) {
+  const normalizedValue = normalizePlayerKey(value);
+  return !normalizedValue || UNKNOWN_PLAYER_KEYS.has(normalizedValue);
 }
 
 function getRecentCutoff(sessionStartTime, now = Date.now()) {
   return typeof sessionStartTime === 'number' && sessionStartTime > 0
     ? (sessionStartTime - SESSION_RECENCY_BUFFER_MS)
     : (now - SMART_CAPTURE_MATCH_LOOKBACK_MS);
+}
+
+function sortTelemetryDraftsNewestFirst(left, right) {
+  const rightTimestamp = Number(right.timestamp || 0);
+  const leftTimestamp = Number(left.timestamp || 0);
+  if (rightTimestamp !== leftTimestamp) {
+    return rightTimestamp - leftTimestamp;
+  }
+  return Number(right.id || 0) - Number(left.id || 0);
+}
+
+function matchesExpectedPlayer(match, expectedPlayer) {
+  const draftPlayer = normalizePlayerKey(match?.player);
+  if (isUnknownPlayerKey(expectedPlayer) || isUnknownPlayerKey(draftPlayer)) {
+    return true;
+  }
+  return draftPlayer === expectedPlayer;
 }
 
 function findActiveTelemetryDraftMatch({
@@ -21,28 +44,37 @@ function findActiveTelemetryDraftMatch({
 
   const expectedPlayer = normalizePlayerKey(activeUser);
   const recentCutoff = getRecentCutoff(sessionStartTime, now);
+  const broadCutoff = now - SMART_CAPTURE_MATCH_LOOKBACK_MS;
 
-  const telemetryDrafts = matches
+  const activeTelemetryDrafts = matches
     .filter(Boolean)
     .filter((match) => {
       if (match?.subType !== 'Telemetry Draft') return false;
       if (match?.telemetryDraftState !== 'active') return false;
       const timestamp = Number(match.timestamp || 0);
       if (!Number.isFinite(timestamp) || timestamp < recentCutoff) return false;
-      const draftPlayer = normalizePlayerKey(match.player);
-      if (expectedPlayer && draftPlayer && draftPlayer !== expectedPlayer) return false;
+      if (!matchesExpectedPlayer(match, expectedPlayer)) return false;
       return true;
     })
-    .sort((left, right) => {
-      const rightTimestamp = Number(right.timestamp || 0);
-      const leftTimestamp = Number(left.timestamp || 0);
-      if (rightTimestamp !== leftTimestamp) {
-        return rightTimestamp - leftTimestamp;
-      }
-      return Number(right.id || 0) - Number(left.id || 0);
-    });
+    .sort(sortTelemetryDraftsNewestFirst);
 
-  return telemetryDrafts[0] || null;
+  if (activeTelemetryDrafts[0]) {
+    return activeTelemetryDrafts[0];
+  }
+
+  const ongoingTelemetryDrafts = matches
+    .filter(Boolean)
+    .filter((match) => {
+      if (match?.subType !== 'Telemetry Draft') return false;
+      if (match?.result !== 'Ongoing') return false;
+      const timestamp = Number(match.timestamp || 0);
+      if (!Number.isFinite(timestamp) || timestamp < broadCutoff) return false;
+      if (!matchesExpectedPlayer(match, expectedPlayer)) return false;
+      return true;
+    })
+    .sort(sortTelemetryDraftsNewestFirst);
+
+  return ongoingTelemetryDrafts[0] || null;
 }
 
 function resolveSmartCaptureMatchId(options = {}) {

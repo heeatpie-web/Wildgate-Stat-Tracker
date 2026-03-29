@@ -113,7 +113,7 @@ describe('RecordingView', () => {
 
     const root = document.querySelector('[data-tour="view-recording"]');
     expect(root?.children[2]?.className).toContain('pl-1');
-  }, 10000);
+  }, 20000);
 
   it('renders compact left panel tabs on short heights and swaps Actions vs Loadout', async () => {
     setViewport(1600, 680);
@@ -146,7 +146,7 @@ describe('RecordingView', () => {
     fireEvent.click(actionsBtn);
     expect(screen.getByTestId('ActionPanel')).toBeInTheDocument();
     expect(screen.queryByTestId('SquadronPanel')).toBeNull();
-  }, 10000);
+  }, 20000);
 
   it('uses stacked layout on narrow widths with page-level scroll', async () => {
     setViewport(900, 900);

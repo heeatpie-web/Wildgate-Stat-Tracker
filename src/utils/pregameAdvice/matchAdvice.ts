@@ -53,12 +53,22 @@ export const buildPregameAdviceContextFromMatch = (
 
   return {
     mode,
+    ship: String(match.ship || '').trim() || undefined,
     teammates: dedupeStrings(match.teammates || []),
     opponentTeams: toOpponentTeamContext(match.opponentTeams || [], match.opponents || []),
     reachModifiers: dedupeStrings(match.reachModifiers || []),
     artifactSource: String(match.artifactSource || '').trim() || undefined,
     draftMatchId,
   };
+};
+
+export const hasPregameLobbyContext = (match: Match | null | undefined): boolean => {
+  const context = buildPregameAdviceContextFromMatch(match);
+  if (!context) return false;
+  return context.teammates.length > 0
+    || context.opponentTeams.some((team) => team.players.length > 0 || Boolean(String(team.shipType || '').trim()))
+    || context.reachModifiers.length > 0
+    || Boolean(String(context.artifactSource || '').trim());
 };
 
 export const computePregameAdviceForMatch = (
@@ -99,6 +109,7 @@ export const isPregameAdviceSnapshotEqual = (
   if (!left && !right) return true;
   if (!left || !right) return false;
   return left.overallWinRate === right.overallWinRate
+    && left.baselineWinRate === right.baselineWinRate
     && left.confidence === right.confidence
     && left.sampleSize === right.sampleSize
     && left.filteredPoolSize === right.filteredPoolSize

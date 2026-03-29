@@ -8,6 +8,7 @@
  * No side effects. Safe to call on every re-render; memoize at call-site.
  */
 import type { Match } from '../../types';
+import { normalizeShipName } from '../../types';
 import type {
   PregameAdviceContext,
   PregameAdviceFactor,
@@ -16,6 +17,7 @@ import type {
   PregameAdviceDirection,
   PregameAdviceResult,
 } from './types';
+import { getPregameAdviceHistoryPool } from './history';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -87,8 +89,8 @@ function makeCopy(
       if (soft) return direction === 'positive' ? `Hazards lean in your favor` : `Watch out for the current hazard conditions`;
       return direction === 'positive' ? `Good time to push — hazards favor you` : `Usually underperforms in these conditions`;
     case 'ship-performance':
-      if (soft) return direction === 'positive' ? `Your ship looks better here` : `Your ship can look weaker in this environment`;
-      return direction === 'positive' ? `Ship usually excels here` : `Ship usually underperforms here`;
+      if (soft) return direction === 'positive' ? `${extra || 'Your ship'} looks better here` : `${extra || 'Your ship'} can look weaker in this environment`;
+      return direction === 'positive' ? `${extra || 'Ship'} usually excels here` : `${extra || 'Ship'} usually underperforms here`;
     case 'artifact-objective':
       if (soft) return direction === 'positive' ? `Objective lean is positive` : `Objective historically looks trickier`;
       return direction === 'positive' ? `Objective historically boosts win rate` : `Objective historically hurts win rate`;
@@ -101,15 +103,6 @@ function makeCopy(
 }
 
 // ─── Match filters ───────────────────────────────────────────────────────────
-
-function isValidHistory(m: Match): boolean {
-  if (!m) return false;
-  if (m.result === 'Ongoing') return false;
-  if (m.isPracticeRange) return false;
-  if (m.subType === 'Telemetry Draft') return false;
-  if (m.telemetryDraftState === 'active') return false;
-  return true;
-}
 
 /** POI pool: artifact-brawl and custom-lobby modes only. */
 function isPoiEligible(m: Match): boolean {
@@ -125,6 +118,7 @@ export function computePregameAdvice(
   allMatches: Match[]
 ): PregameAdviceResult {
   const noData: PregameAdviceResult = {
+    baselineWinRate: undefined,
     overallWinRate: 0.5,
     confidence: 'low',
     sampleSize: 0,
@@ -136,9 +130,7 @@ export function computePregameAdvice(
   };
 
   // ── History pool: same mode, completed, not practice range ──────────────
-  const pool = (allMatches || []).filter(
-    (m) => isValidHistory(m) && m.mode === context.mode
-  );
+  const pool = getPregameAdviceHistoryPool(context.mode, allMatches || []);
 
   if (pool.length < MIN_BASELINE_MATCHES) return noData;
 
@@ -151,7 +143,7 @@ export function computePregameAdvice(
   const teammates = (context.teammates || []).map(normName).filter(Boolean);
 
   if (teammates.length > 0) {
-    const deltas: number[] = [];
+    const teammateSignals: Array<{ name: string; delta: number; n: number }> = [];
     let totalN = 0;
 
     for (const name of teammates) {
@@ -161,17 +153,23 @@ export function computePregameAdvice(
       const conf = toConfidence(withThem.length);
       if (!conf) continue;
       const wins = withThem.filter((m) => m.result === 'Win').length;
-      deltas.push(smoothedWR(wins, withThem.length) - baseline);
+      teammateSignals.push({
+        name,
+        delta: smoothedWR(wins, withThem.length) - baseline,
+        n: withThem.length,
+      });
       totalN += withThem.length;
     }
 
-    if (deltas.length > 0) {
-      const avgDelta = deltas.reduce((a, b) => a + b, 0) / deltas.length;
+    if (teammateSignals.length > 0) {
+      const avgDelta = teammateSignals.reduce((sum, signal) => sum + signal.delta, 0) / teammateSignals.length;
       const conf = toConfidence(totalN);
       if (conf) {
         const dir = dirFromDelta(avgDelta);
-        // Use the highest-contributing teammate name for copy
-        const topName = context.teammates[0] || 'your squad';
+        const topSignal = [...teammateSignals].sort((left, right) => (
+          Math.abs(right.delta) - Math.abs(left.delta) || right.n - left.n
+        ))[0];
+        const topName = topSignal?.name || context.teammates[0] || 'your squad';
         factors.push({
           kind: 'teammate-synergy',
           label: 'Teammate Synergy',
@@ -298,6 +296,27 @@ export function computePregameAdvice(
           copy: makeCopy('hazard-fit', dir, conf),
         });
       }
+    }
+  }
+
+  // ── Factor: Ship Performance ─────────────────────────────────────────────
+  const currentShip = normalizeShipName(context.ship);
+  if (currentShip && !String(currentShip).toLowerCase().startsWith('unknown')) {
+    const withShip = pool.filter((m) => normalizeShipName(m.ship) === currentShip);
+    const conf = toConfidence(withShip.length);
+    if (conf) {
+      const wins = withShip.filter((m) => m.result === 'Win').length;
+      const delta = smoothedWR(wins, withShip.length) - baseline;
+      const dir = dirFromDelta(delta);
+      factors.push({
+        kind: 'ship-performance',
+        label: 'Ship Performance',
+        direction: dir,
+        delta,
+        confidence: conf,
+        sampleSize: withShip.length,
+        copy: makeCopy('ship-performance', dir, conf, currentShip),
+      });
     }
   }
 
@@ -434,6 +453,7 @@ export function computePregameAdvice(
   const pct = Math.round(overallWinRate * 100);
 
   return {
+    baselineWinRate: baseline,
     overallWinRate,
     confidence: overallConf,
     sampleSize: pool.length,

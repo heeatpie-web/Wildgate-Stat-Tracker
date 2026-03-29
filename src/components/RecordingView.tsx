@@ -203,6 +203,7 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
             {workspaceTab === 'intel' && activeTelemetryDraftMatch ? (
                 <div className="min-h-0">
                     <PregameAdvicePanel
+                        key={activeTelemetryDraftMatch.id}
                         activeDraftMatch={activeTelemetryDraftMatch}
                         allMatches={matches}
                     />

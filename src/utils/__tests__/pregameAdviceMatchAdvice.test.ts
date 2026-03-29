@@ -3,6 +3,7 @@ import type { Match } from '../../types';
 import {
   buildPregameAdviceContextFromMatch,
   buildPregameAdviceSnapshotForMatch,
+  hasPregameLobbyContext,
   isPregameAdviceSnapshotEqual,
 } from '../pregameAdvice/matchAdvice';
 
@@ -35,6 +36,7 @@ describe('pregame advice match helpers', () => {
 
     expect(context).toEqual({
       mode: 'Artifact Brawl',
+      ship: 'Hunter',
       teammates: [],
       opponentTeams: [{
         teamName: 'Unknown Team',
@@ -89,5 +91,12 @@ describe('pregame advice match helpers', () => {
     };
 
     expect(isPregameAdviceSnapshotEqual(left, right)).toBe(true);
+  });
+
+  it('detects when a match has fresh lobby intel to score against', () => {
+    expect(hasPregameLobbyContext(makeMatch({ teammates: ['Wing1'] }))).toBe(true);
+    expect(hasPregameLobbyContext(makeMatch({ opponentTeams: [{ teamName: 'Raiders', shipType: 'Scout', color: 'red', players: ['Enemy1'] }] }))).toBe(true);
+    expect(hasPregameLobbyContext(makeMatch({ reachModifiers: ['Ion Storm'] }))).toBe(true);
+    expect(hasPregameLobbyContext(makeMatch())).toBe(false);
   });
 });

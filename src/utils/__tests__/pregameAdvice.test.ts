@@ -94,6 +94,7 @@ describe('computePregameAdvice — baseline', () => {
   it('produces hasUsableData=true with at least 3 same-mode matches', () => {
     const result = computePregameAdvice(makeContext(), makePool(2, 1));
     expect(result.hasUsableData).toBe(true);
+    expect(result.baselineWinRate).toBeGreaterThan(0);
   });
 
   it('excludes different-mode matches from the pool', () => {
@@ -423,6 +424,23 @@ describe('computePregameAdvice — factor weights', () => {
 
     // Teammate factor has higher weight → should produce larger overall deviation
     expect(teammateDev).toBeGreaterThanOrEqual(hazardDev);
+  });
+});
+
+describe('computePregameAdvice — ship performance', () => {
+  it('adds a ship-performance factor when the current ship has enough same-mode history', () => {
+    const pool: Match[] = [
+      ...Array.from({ length: 9 }, () => makeMatch({ ship: 'Hunter', result: 'Win' })),
+      ...Array.from({ length: 3 }, () => makeMatch({ ship: 'Hunter', result: 'Loss' })),
+      ...makePool(5, 5, { ship: 'Bastion' }),
+    ];
+
+    const result = computePregameAdvice(makeContext({ ship: 'Hunter' }), pool);
+    const factor = result.factors.find((entry) => entry.kind === 'ship-performance');
+
+    expect(factor).toBeDefined();
+    expect(factor?.sampleSize).toBe(12);
+    expect(factor?.copy).toContain('Hunter');
   });
 });
 

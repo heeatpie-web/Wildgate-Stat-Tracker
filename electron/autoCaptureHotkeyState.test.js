@@ -42,6 +42,39 @@ describe('autoCaptureHotkeyState', () => {
     }));
   });
 
+  it('falls back to the newest ongoing telemetry draft when no active draft exists', () => {
+    const matchId = resolveSmartCaptureMatchId({
+      activeUser: 'Pilot',
+      sessionStartTime: 100_000,
+      matches: [
+        { id: 21, subType: 'Telemetry Draft', telemetryDraftState: 'active', result: 'Ongoing', timestamp: 10_000, player: 'Pilot' },
+        { id: 22, subType: 'Telemetry Draft', telemetryDraftState: 'ready', result: 'Ongoing', timestamp: 95_000, player: 'Pilot' },
+      ],
+      pendingMatchData: null,
+      now: 100_000,
+    });
+
+    expect(matchId).toBe(22);
+  });
+
+  it('accepts manual timer drafts that are ongoing but have no telemetry draft state', () => {
+    const request = buildAutoCaptureRequestFromStateSnapshot({
+      activeUser: 'Pilot',
+      matches: [
+        { id: 333, subType: 'Telemetry Draft', result: 'Ongoing', timestamp: 95_000, player: 'Pilot' },
+      ],
+      pendingMatchData: null,
+      isMatchInProgress: true,
+      tacticalMapKeybind: 'Tab',
+    }, { now: 100_000 });
+
+    expect(request).toEqual(expect.objectContaining({
+      matchId: 333,
+      lifecycleActive: true,
+      autoCaptureTacticalMapKey: 'Tab',
+    }));
+  });
+
   it('builds the main-process request payload from synced renderer state', () => {
     const request = buildAutoCaptureRequestFromStateSnapshot({
       activeUser: 'Pilot',

@@ -37,6 +37,8 @@ export interface PregameAdviceFactor {
 
 /** Full result produced by the pregame advice engine. */
 export interface PregameAdviceResult {
+  /** Same-mode historical baseline before current-match signals are blended in. */
+  baselineWinRate?: number;
   /** Blended win-rate estimate clamped to [0.10, 0.90]. */
   overallWinRate: number;
   /** Aggregate confidence across all active factors. */
@@ -72,6 +74,8 @@ export interface PregameAdviceOpponentTeam {
 export interface PregameAdviceContext {
   /** Current game mode (e.g. "Artifact Brawl"). */
   mode: string;
+  /** Current ship selection for the draft if known. */
+  ship?: string;
   /** Teammate display names from lobby OCR. */
   teammates: string[];
   /** Enemy teams from lobby OCR. */
