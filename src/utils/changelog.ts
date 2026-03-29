@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.6.1": [
+    "Workflow: Pregame intel now opens as a dedicated Recording tab during active matches instead of crowding the controls panel.",
+    "Smart Captures: Each match now saves the pregame win estimate and factor breakdown so the intel stays attached after OCR and result review.",
+    "Performance: Match-start telemetry and lobby capture now batch more cleanly, cutting down on the app freezes that were showing up at the start of games."
+  ],
   "v3.6.0": [
     "Add pregame advice panel with win rate and match recommendations",
     "Fix enemy team detection and OCR re-run reliability",

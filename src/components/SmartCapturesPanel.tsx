@@ -62,6 +62,7 @@ import OcrRegionEditorModal from './OcrRegionEditorModal';
 import { SmartCaptureSummaryBar } from './smart-captures/detail/SmartCaptureSummaryBar';
 import { SmartCaptureActionBar } from './smart-captures/detail/SmartCaptureActionBar';
 import { MatchCategoryBadge } from './MatchCategoryBadge';
+import { PregameAdviceSnapshotCard } from './PregameAdvicePanel';
 import { OcrTeamAssignmentBoard, type OcrTeamAssignmentTeam } from './ocr/OcrTeamAssignmentBoard';
 import { WorkspaceImageViewer } from './media/WorkspaceImageViewer';
 import {
@@ -2951,6 +2952,7 @@ const SmartMatchDetail: React.FC<{
                 opponentTeams: latestMatch.opponentTeams || undefined,
                 ocrDebug: Object.keys(mergedOcrDebug).length > 0 ? mergedOcrDebug : undefined,
                 eliminatedByTeam: latestMatch.eliminatedByTeam || undefined,
+                pregameAdvice: latestMatch.pregameAdvice,
                 // Restore previously saved result so Wizard pre-selects it
                 result: latestMatch.result,
                 subType: latestMatch.subType || undefined,
@@ -3906,7 +3908,6 @@ const SmartMatchDetail: React.FC<{
             ocrRegions,
             onApplyToSession,
             onUpdate,
-            openWizardForMatch,
             persistNameSourceHintsToPendingDraft,
             pushNotification,
             rerunRuntimeOptions,
@@ -4537,6 +4538,17 @@ const SmartMatchDetail: React.FC<{
                                 </div>
                             </div>
                         </div>
+
+                        {match.pregameAdvice && (
+                            <Section
+                                title="Pregame Intel"
+                                collapsible
+                                collapsed={!!collapsedSections.pregameIntel}
+                                onToggle={() => toggleSection('pregameIntel')}
+                            >
+                                <PregameAdviceSnapshotCard match={match} />
+                            </Section>
+                        )}
 
                         <Section
                             title={`Screenshots (${artifacts.images.length})`}

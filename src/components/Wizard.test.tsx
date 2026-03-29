@@ -913,6 +913,33 @@ describe('Wizard', () => {
         expect(processFinalSubmission).toHaveBeenCalledWith('Combat');
     });
 
+    it('closes the wizard after OCR save-and-close even when results are not ready to finalize yet', async () => {
+        const { Wizard } = await import('./Wizard');
+        gameData.pendingMatchData = {
+            id: 917,
+            loadout: {
+                hero: 'Adrian',
+                ship: 'Hunter',
+                weapons: [],
+                equipment: [],
+            },
+            kills: { 'AI Legion': 0 },
+            ocrState: 'reviewing',
+        };
+        appStoreState.pendingMatchData = {
+            ...gameData.pendingMatchData,
+        };
+        appStoreState.wizardCloseOnOcrApply = true;
+        uiState.showWizard = 'Match Result';
+
+        render(<Wizard />);
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr review/i })[0]);
+        fireEvent.click(screen.getByRole('button', { name: /save and close/i }));
+
+        expect(uiState.setShowWizard).toHaveBeenCalledWith(null);
+        expect(processFinalSubmission).not.toHaveBeenCalled();
+    });
+
     it('keeps prospector loadout collapsed by default in the OCR tab', async () => {
         const { Wizard } = await import('./Wizard');
         gameData.pendingMatchData = {

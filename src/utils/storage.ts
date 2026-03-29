@@ -87,6 +87,7 @@ const LEGACY_V13_CHECK_KEY = 'wg_v13_migration_checked_v1';
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 let pendingResolvers: Array<(ok: boolean) => void> = [];
 let lastData: StorageData | null = null;
+let pendingSnapshotProducer: (() => StorageData) | null = null;
 let lastPersistedVersion = 0;
 let pendingVersion = 0;
 let lastAutoBackupCount: number | null = null;
@@ -95,6 +96,7 @@ let intervalFlushHandle: ReturnType<typeof setInterval> | number | null = null;
 const IS_STORAGE_DEBUG = import.meta.env.DEV || process.env.NODE_ENV === 'test';
 
 const hasUnsavedChanges = () => pendingVersion > lastPersistedVersion;
+const hasPendingSnapshot = () => Boolean(lastData || pendingSnapshotProducer);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
@@ -350,6 +352,7 @@ const coerceStorageData = (value: unknown): StorageData | null => {
 
 const rememberLoadedData = (data: StorageData): StorageData => {
   lastData = data;
+  pendingSnapshotProducer = null;
   lastPersistedVersion = pendingVersion;
   return data;
 };
@@ -556,16 +559,35 @@ const withPreservedMeta = (data: StorageData): StorageData => ({
   },
 });
 
+const resolvePendingSnapshot = (): StorageData | null => {
+  if (pendingSnapshotProducer) {
+    try {
+      lastData = withPreservedMeta(pendingSnapshotProducer());
+    } catch (error) {
+      pendingSnapshotProducer = null;
+      Logger.error('Storage', 'Failed to materialize pending snapshot', error);
+      return lastData;
+    }
+    pendingSnapshotProducer = null;
+  }
+  return lastData;
+};
+
 /** Drop any in-flight debounced save so it cannot overwrite a wipe/restore. */
 const cancelPendingDebouncedSave = () => {
   if (saveTimeout) {
     clearTimeout(saveTimeout);
     saveTimeout = null;
   }
+  pendingSnapshotProducer = null;
   const resolvers = pendingResolvers;
   pendingResolvers = [];
   resolvers.forEach((resolver) => resolver(true));
 };
+
+interface StorageSaveOptions {
+  debounceMs?: number;
+}
 
 export const StorageService = {
   ensureLifecycleGuards() {
@@ -591,7 +613,7 @@ export const StorageService = {
 
     // Failsafe in case lifecycle hooks are skipped/crash occurs.
     intervalFlushHandle = window.setInterval(() => {
-      if (lastData && hasUnsavedChanges()) void this.flush();
+      if (hasPendingSnapshot() && hasUnsavedChanges()) void this.flush();
     }, runtimeConfig.storage.flushIntervalMs);
   },
 
@@ -683,16 +705,19 @@ export const StorageService = {
     return rememberLoadedData(seeded);
   },
 
-  async save(data: StorageData) {
+  async save(data: StorageData | (() => StorageData), options: StorageSaveOptions = {}) {
     this.ensureLifecycleGuards();
-    lastData = withPreservedMeta(data);
+    pendingSnapshotProducer = typeof data === 'function' ? data : () => data;
     pendingVersion += 1;
     if (saveTimeout) clearTimeout(saveTimeout);
+    const debounceMs = Number.isFinite(options.debounceMs)
+      ? Math.max(50, Math.round(Number(options.debounceMs)))
+      : runtimeConfig.storage.saveDebounceMs;
 
     return new Promise<boolean>((resolve) => {
       pendingResolvers.push(resolve);
       saveTimeout = setTimeout(async () => {
-        const snapshot = lastData;
+        const snapshot = resolvePendingSnapshot();
         const snapshotVersion = pendingVersion;
         saveTimeout = null;
         const resolvers = pendingResolvers;
@@ -706,12 +731,12 @@ export const StorageService = {
         } finally {
           resolvers.forEach((resolver) => resolver(ok));
         }
-      }, runtimeConfig.storage.saveDebounceMs); // tighter debounce to reduce loss window
+      }, debounceMs);
     });
   },
 
   async flush() {
-    if (!lastData) return false;
+    if (!hasPendingSnapshot()) return false;
     if (saveTimeout) {
       clearTimeout(saveTimeout);
       saveTimeout = null;
@@ -723,9 +748,9 @@ export const StorageService = {
       return true;
     }
 
-    const snapshot = lastData;
+    const snapshot = resolvePendingSnapshot();
     const snapshotVersion = pendingVersion;
-    const ok = await writeNow(snapshot);
+    const ok = snapshot ? await writeNow(snapshot) : true;
     if (ok) {
       lastPersistedVersion = Math.max(lastPersistedVersion, snapshotVersion);
     }

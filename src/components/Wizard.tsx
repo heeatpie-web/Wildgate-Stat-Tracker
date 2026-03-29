@@ -552,6 +552,13 @@ export const Wizard: React.FC = () => {
         commitWizardState();
         void processFinalSubmission(submissionSubType);
     }, [canFinalizeResult, commitWizardState, processFinalSubmission, submissionSubType, submitting]);
+    const handleCloseAfterEmbeddedOcrSave = React.useCallback(() => {
+        if (canFinalizeResult && !submitting) {
+            handleFinalizeWizardSave();
+            return;
+        }
+        setShowWizard(null);
+    }, [canFinalizeResult, handleFinalizeWizardSave, setShowWizard, submitting]);
     const submitResultsHint = (() => {
         if (!hasSelectedResult) return 'Select Win, Loss, or Draw to submit.';
         if (!hasSelectedOutcomeType) {
@@ -1588,7 +1595,7 @@ export const Wizard: React.FC = () => {
                                             }
                                         }
                                         if (wizardCloseOnOcrApply) {
-                                            handleFinalizeWizardSave();
+                                            handleCloseAfterEmbeddedOcrSave();
                                             return;
                                         }
                                         React.startTransition(() => setActiveTab('result'));

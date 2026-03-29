@@ -3,8 +3,8 @@
  * Core type definitions and constants for the Wildgate Stat Tracker.
  * Re-exports constants from utils/constants.ts for convenience.
  */
-
 import { SHIP_CAPACITY, SHIP_NAME_ALIASES } from './utils/constants';
+import type { PregameAdviceSnapshot } from './utils/pregameAdvice/types';
 
 /** The two competitive game modes available in Wildgate. */
 export type GameMode = 'Artifact Brawl' | 'Fleet Battle';
@@ -256,6 +256,8 @@ export interface Match {
   friendlyPlayerIds?: string[];
   /** Resolved teammate ID -> displayed name assignments used when this match was saved. */
   friendlyIdentityAssignments?: Record<string, string>;
+  /** Persisted pregame win estimate and factor breakdown for this match. */
+  pregameAdvice?: PregameAdviceSnapshot;
 }
 
 /** Returns crew capacity (1-4) based on the ship display name. */

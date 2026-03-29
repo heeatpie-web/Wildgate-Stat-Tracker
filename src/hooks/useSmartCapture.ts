@@ -30,6 +30,10 @@ import Logger from '../utils/logger';
 import { runtimeConfig } from '../config/runtimeConfig';
 import { resolveTagShipMetadata } from '../utils/scan/localScan';
 import { buildTelemetryDraftPregamePreviewPatch } from '../utils/pregameAdvice/previewSync';
+import {
+  buildPregameAdviceSnapshotForMatch,
+  isPregameAdviceSnapshotEqual,
+} from '../utils/pregameAdvice/matchAdvice';
 
 const IMAGE_PATH_PATTERN = /\.(png|jpe?g|webp|bmp|gif)$/i;
 
@@ -273,14 +277,32 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     const state = useAppStore.getState();
     const scopedMatch = (state.matches || []).find((match) => Number(match.id || 0) === numericScope);
     const patch = buildTelemetryDraftPregamePreviewPatch(scopedMatch, data);
-    if (!scopedMatch || !patch) {
+    if (!scopedMatch) {
       return;
+    }
+
+    const nextMatch = patch
+      ? { ...scopedMatch, ...patch }
+      : scopedMatch;
+    const nextPregameAdvice = buildPregameAdviceSnapshotForMatch(nextMatch, state.matches || []);
+    const shouldUpdateAdvice = !isPregameAdviceSnapshotEqual(scopedMatch.pregameAdvice, nextPregameAdvice);
+    if (!patch && !shouldUpdateAdvice) {
+      return;
+    }
+
+    const pendingDraft = state.pendingMatchData;
+    if (pendingDraft && normalizeMatchScope(pendingDraft.id) === scope) {
+      state.setPendingMatchData({
+        ...pendingDraft,
+        ...(patch || {}),
+        pregameAdvice: nextPregameAdvice,
+      });
     }
 
     // Keep the active telemetry draft reactive while queued lobby OCR is still in-flight.
     state.updateMatch({
-      ...scopedMatch,
-      ...patch,
+      ...nextMatch,
+      pregameAdvice: nextPregameAdvice,
     });
   }, [normalizeMatchScope]);
 

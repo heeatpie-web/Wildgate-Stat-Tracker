@@ -28,6 +28,7 @@ const readEnvBoolean = (key: string, fallback: boolean): boolean => {
 export const runtimeConfig = {
   storage: {
     saveDebounceMs: readEnvNumber('VITE_STORAGE_SAVE_DEBOUNCE_MS', 300, 50, 5_000),
+    telemetryBurstSaveDebounceMs: readEnvNumber('VITE_STORAGE_TELEMETRY_BURST_SAVE_DEBOUNCE_MS', 1_500, 300, 10_000),
     flushIntervalMs: readEnvNumber('VITE_STORAGE_FLUSH_INTERVAL_MS', 3_000, 500, 60_000),
   },
   smartCapture: {

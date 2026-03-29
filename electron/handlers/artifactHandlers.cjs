@@ -165,19 +165,34 @@ function pickPreferredArtifactPath(currentPath, candidatePath) {
   return candidateName < currentName ? candidatePath : currentPath;
 }
 
-async function saveScreenshotImage({ app, artifactHelpers }, { imageBase64, matchId, captureSource, channel = 'save-screenshot' }) {
-  if (!imageBase64 || imageBase64.length < 100) {
+async function saveScreenshotImage(
+  { app, artifactHelpers },
+  { imageBase64, imageBuffer, matchId, captureSource, channel = 'save-screenshot' },
+) {
+  const hasBufferPayload = Buffer.isBuffer(imageBuffer);
+  const resolvedImageBuffer = (() => {
+    if (hasBufferPayload) return imageBuffer;
+    if (!imageBase64 || imageBase64.length < 100) return null;
+    return Buffer.from(imageBase64, 'base64');
+  })();
+
+  if (!resolvedImageBuffer || resolvedImageBuffer.length < 100) {
     recordSecurityBlock(channel, IpcErrorCode.INVALID_INPUT, 'Invalid image data');
     return fail(IpcErrorCode.INVALID_INPUT, 'Invalid image data');
   }
 
-  const sizeCheck = validateBase64PayloadSize(imageBase64, MAX_SCREENSHOT_BYTES, 'image payload');
-  if (!sizeCheck.success) {
-    recordSecurityBlock(channel, sizeCheck.code, sizeCheck.message);
-    return sizeCheck;
+  if (!hasBufferPayload) {
+    const sizeCheck = validateBase64PayloadSize(imageBase64, MAX_SCREENSHOT_BYTES, 'image payload');
+    if (!sizeCheck.success) {
+      recordSecurityBlock(channel, sizeCheck.code, sizeCheck.message);
+      return sizeCheck;
+    }
+  } else if (resolvedImageBuffer.length > MAX_SCREENSHOT_BYTES) {
+    const message = `Image payload exceeds ${MAX_SCREENSHOT_BYTES} bytes`;
+    recordSecurityBlock(channel, IpcErrorCode.INVALID_INPUT, message);
+    return fail(IpcErrorCode.INVALID_INPUT, message);
   }
 
-  const imageBuffer = Buffer.from(imageBase64, 'base64');
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const normalizedSource = normalizeCaptureSource(captureSource);
   const sourcePrefix = normalizedSource === 'result-macro'
@@ -202,10 +217,10 @@ async function saveScreenshotImage({ app, artifactHelpers }, { imageBase64, matc
   if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
 
   const filePath = path.join(destDir, filename);
-  await fsPromises.writeFile(filePath, imageBuffer);
-  console.log(`[Screenshot] Saved ${filename} (${(imageBuffer.length / 1024).toFixed(1)}KB) to ${destDir}`);
+  await fsPromises.writeFile(filePath, resolvedImageBuffer);
+  console.log(`[Screenshot] Saved ${filename} (${(resolvedImageBuffer.length / 1024).toFixed(1)}KB) to ${destDir}`);
 
-  return ok({ filePath, filename, size: imageBuffer.length, captureSource: normalizedSource || undefined });
+  return ok({ filePath, filename, size: resolvedImageBuffer.length, captureSource: normalizedSource || undefined });
 }
 
 function toPathKey(value) {
@@ -749,7 +764,6 @@ function registerArtifactHandlers(ipcMain, ctx) {
 }
 
 module.exports = { registerArtifactHandlers, saveScreenshotImage };
-
 
 
 

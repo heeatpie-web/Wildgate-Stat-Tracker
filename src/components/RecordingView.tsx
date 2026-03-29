@@ -1,4 +1,5 @@
 import React from 'react';
+import { Crosshair } from 'lucide-react';
 import { SquadronPanel } from './recording/SquadronPanel';
 import { RosterPanel } from './recording/RosterPanel';
 import { MissionPanel } from './recording/MissionPanel';
@@ -7,17 +8,8 @@ import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
 import { useGameData } from '../providers/GameDataProvider';
 import { findActiveTelemetryDraftMatch } from '../utils/smartCaptureScope';
-import { PregameAdvicePanel, PregameAdviceReopenButton } from './PregameAdvicePanel';
+import { PregameAdvicePanel } from './PregameAdvicePanel';
 // TimelinePanel archived
-
-/** Automation phases that indicate lobby OCR has fully completed for the active draft. */
-const POST_LOBBY_PHASES = new Set([
-  'lobby-complete',
-  'watching-result',
-  'watching-result-flash',
-  'result-flash-detected',
-  'live-match',
-]);
 
 interface RecordingViewProps {
     onSmartCaptureData?: (data: any) => void;
@@ -73,6 +65,7 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
     const shouldScrollLeftPanel = !isNarrow;
     const shouldScrollWideLayout = !isNarrow && isHeightConstrained;
     const [leftTab, setLeftTab] = React.useState<'actions' | 'loadout'>('actions');
+    const [workspaceTab, setWorkspaceTab] = React.useState<'controls' | 'intel'>('controls');
     const shouldShowAutomationStrip = telemetryLifecycleStage !== 'idle' || !!telemetryAutomationStatus;
     const automationLevelClass = telemetryAutomationStatus?.level === 'success'
         ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-100'
@@ -107,81 +100,57 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
         if (density === 'standard') setLeftTab('actions');
     }, [density]);
 
-    // ── Pregame advice panel state ──────────────────────────────────────────
+    // ── Match-scoped intel workspace state ──────────────────────────────────
 
     const activeTelemetryDraftMatch = React.useMemo(
         () => findActiveTelemetryDraftMatch({ activeUser, matches, sessionStartTime }),
         [activeUser, matches, sessionStartTime]
     );
-    const activeDraftId = activeTelemetryDraftMatch?.id ?? null;
+    const showPregameIntelTab = pregameAdviceEnabled && Boolean(activeTelemetryDraftMatch);
 
-    // Track which draft ID we've already auto-opened for (component-lifetime ref).
-    const autoOpenedForDraftIdRef = React.useRef<number | null>(null);
-    // Track which draft ID the user explicitly dismissed.
-    const [dismissedForDraftId, setDismissedForDraftId] = React.useState<number | null>(null);
-    // Whether the panel is currently open.
-    const [advicePanelOpen, setAdvicePanelOpen] = React.useState(false);
-
-    // Reset dismissed + open state when the active draft changes or stops.
     React.useEffect(() => {
-        if (activeDraftId == null) {
-            setAdvicePanelOpen(false);
-            setDismissedForDraftId(null);
-            autoOpenedForDraftIdRef.current = null;
-        } else if (activeDraftId !== dismissedForDraftId) {
-            // New draft started — clear any stale dismissed marker for a different draft.
-            setDismissedForDraftId((prev) => (prev !== activeDraftId ? null : prev));
+        if (!showPregameIntelTab && workspaceTab !== 'controls') {
+            setWorkspaceTab('controls');
         }
-    }, [activeDraftId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-    // Auto-open: fires once per draft when all lobby screenshots are processed.
-    React.useEffect(() => {
-        if (!pregameAdviceEnabled) return;
-        if (activeDraftId == null) return;
-
-        const phase = telemetryAutomationStatus?.phase;
-        if (!phase || !POST_LOBBY_PHASES.has(phase)) return;
-
-        // The status matchId must belong to the active draft (or be unset).
-        const statusMatchId = telemetryAutomationStatus?.matchId;
-        if (statusMatchId != null && statusMatchId !== activeDraftId) return;
-
-        // Already auto-opened for this draft.
-        if (autoOpenedForDraftIdRef.current === activeDraftId) return;
-
-        // User already dismissed this draft.
-        if (dismissedForDraftId === activeDraftId) return;
-
-        autoOpenedForDraftIdRef.current = activeDraftId;
-        setAdvicePanelOpen(true);
-    }, [
-        pregameAdviceEnabled,
-        activeDraftId,
-        telemetryAutomationStatus?.phase,
-        telemetryAutomationStatus?.matchId,
-        dismissedForDraftId,
-    ]);
-
-    const handleAdviceDismiss = React.useCallback(() => {
-        setAdvicePanelOpen(false);
-        if (activeDraftId != null) {
-            setDismissedForDraftId(activeDraftId);
-        }
-    }, [activeDraftId]);
-
-    const handleAdviceReopen = React.useCallback(() => {
-        setAdvicePanelOpen(true);
-        setDismissedForDraftId(null);
-    }, []);
-
-    // Show the reopen button in the automation strip when dismissed but draft is still active.
-    const showReopenButton =
-        pregameAdviceEnabled &&
-        !advicePanelOpen &&
-        dismissedForDraftId != null &&
-        dismissedForDraftId === activeDraftId;
+    }, [showPregameIntelTab, workspaceTab]);
 
     // ── Tab bar (compact density) ───────────────────────────────────────────
+
+    const WorkspaceTabBar = showPregameIntelTab ? (
+        <div
+            className="flex w-fit items-center gap-1 rounded-2xl border border-md-sys-outline/10 bg-md-sys-surface-container-high/90 p-1 shadow-sm"
+            role="tablist"
+            aria-label="Recording workspaces"
+        >
+            <button
+                type="button"
+                role="tab"
+                aria-selected={workspaceTab === 'controls'}
+                onClick={() => setWorkspaceTab('controls')}
+                className={`rounded-xl px-3 py-1.5 text-label-xs font-black uppercase tracking-[0.18em] transition-all ${
+                    workspaceTab === 'controls'
+                        ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-sm'
+                        : 'text-md-sys-on-surface/62 hover:bg-md-sys-on-surface/5'
+                }`}
+            >
+                Controls
+            </button>
+            <button
+                type="button"
+                role="tab"
+                aria-selected={workspaceTab === 'intel'}
+                onClick={() => setWorkspaceTab('intel')}
+                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-label-xs font-black uppercase tracking-[0.18em] transition-all ${
+                    workspaceTab === 'intel'
+                        ? 'bg-md-sys-secondary text-md-sys-onSecondary shadow-sm'
+                        : 'text-md-sys-on-surface/62 hover:bg-md-sys-on-surface/5'
+                }`}
+            >
+                <Crosshair size={12} />
+                Intel
+            </button>
+        </div>
+    ) : null;
 
     const LeftTabBar = density === 'compact' ? (
         <div className="grid grid-cols-2 gap-1 md3-surface rounded-xl p-0.5 border border-md-sys-outline/10 h-8">
@@ -210,17 +179,6 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
 
     const LeftPanel = (
         <div className={`min-h-0 ${!isNarrow ? 'h-full' : ''} flex flex-col gap-3 ${leftShellChrome} ${shouldScrollLeftPanel ? 'overflow-y-auto custom-scrollbar pr-1' : 'overflow-hidden'}`}>
-            {/* Pregame Advice Panel */}
-            {pregameAdviceEnabled && advicePanelOpen && activeTelemetryDraftMatch && (
-                <div className="shrink-0">
-                    <PregameAdvicePanel
-                        activeDraftMatch={activeTelemetryDraftMatch}
-                        allMatches={matches}
-                        onDismiss={handleAdviceDismiss}
-                    />
-                </div>
-            )}
-
             {/* Automation Strip */}
             {shouldShowAutomationStrip ? (
                 <div className={`rounded-2xl border px-3 py-3 shadow-sm ${automationLevelClass}`}>
@@ -234,9 +192,6 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
                             </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                            {showReopenButton && (
-                                <PregameAdviceReopenButton onClick={handleAdviceReopen} />
-                            )}
                             <div className="rounded-full border border-white/10 bg-white/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em]">
                                 {lifecycleBadgeLabel}
                             </div>
@@ -244,28 +199,40 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
                     </div>
                 </div>
             ) : null}
-            {LeftTabBar}
-            {density === 'standard' ? (
-                <>
-                    <div className="shrink-0">
-                        <SquadronPanel density="compact" />
-                    </div>
-                    <div data-tour="action-panel" className="shrink-0">
-                        <ActionPanel isActive={isActive} onSmartCaptureData={onSmartCaptureData} density="compact" />
-                    </div>
-                </>
-            ) : (
+            {WorkspaceTabBar}
+            {workspaceTab === 'intel' && activeTelemetryDraftMatch ? (
                 <div className="min-h-0">
-                    {leftTab === 'actions' ? (
-                        <div data-tour="action-panel" className="min-h-0">
-                            <ActionPanel isActive={isActive} onSmartCaptureData={onSmartCaptureData} density="compact" />
-                        </div>
+                    <PregameAdvicePanel
+                        activeDraftMatch={activeTelemetryDraftMatch}
+                        allMatches={matches}
+                    />
+                </div>
+            ) : (
+                <>
+                    {LeftTabBar}
+                    {density === 'standard' ? (
+                        <>
+                            <div className="shrink-0">
+                                <SquadronPanel density="compact" />
+                            </div>
+                            <div data-tour="action-panel" className="shrink-0">
+                                <ActionPanel isActive={isActive} onSmartCaptureData={onSmartCaptureData} density="compact" />
+                            </div>
+                        </>
                     ) : (
                         <div className="min-h-0">
-                            <SquadronPanel density="compact" />
+                            {leftTab === 'actions' ? (
+                                <div data-tour="action-panel" className="min-h-0">
+                                    <ActionPanel isActive={isActive} onSmartCaptureData={onSmartCaptureData} density="compact" />
+                                </div>
+                            ) : (
+                                <div className="min-h-0">
+                                    <SquadronPanel density="compact" />
+                                </div>
+                            )}
                         </div>
                     )}
-                </div>
+                </>
             )}
         </div>
     );

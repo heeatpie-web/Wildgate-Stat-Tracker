@@ -3,7 +3,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
-// Mock heavy child panels: we want to test RecordingView layout logic, not panel internals.
+const uiState = {
+  telemetryLifecycleStage: 'idle',
+  telemetryAutomationStatus: null as any,
+};
+
+const gameDataState = {
+  matches: [] as any[],
+};
+
+const appStoreState = {
+  activeUser: 'Pilot',
+  sessionStartTime: 1_700_000_000_000,
+  pregameAdviceEnabled: true,
+};
+
 vi.mock('./recording/ActionPanel', () => ({
   ActionPanel: (props: any) => (
     <div data-testid="ActionPanel" data-props={JSON.stringify(props)}>
@@ -28,15 +42,24 @@ vi.mock('./recording/MissionPanel', () => ({
   MissionPanel: () => <div data-testid="MissionPanel">MissionPanel</div>,
 }));
 
+vi.mock('./PregameAdvicePanel', () => ({
+  PregameAdvicePanel: (props: any) => (
+    <div data-testid="PregameAdvicePanel" data-props={JSON.stringify(props)}>
+      PregameAdvicePanel
+    </div>
+  ),
+}));
+
 vi.mock('../providers/UIStateProvider', () => ({
-  useUIState: () => ({
-    telemetryLifecycleStage: 'idle',
-    telemetryAutomationStatus: null,
-  }),
+  useUIState: () => uiState,
 }));
 
 vi.mock('../providers/GameDataProvider', () => ({
-  useGameData: () => ({ matches: [] }),
+  useGameData: () => gameDataState,
+}));
+
+vi.mock('../store/useAppStore', () => ({
+  useAppStore: (selector: (state: typeof appStoreState) => unknown) => selector(appStoreState),
 }));
 
 function setViewport(w: number, h: number) {
@@ -44,27 +67,45 @@ function setViewport(w: number, h: number) {
   (window as any).innerHeight = h;
 }
 
+const makeActiveDraftMatch = (overrides: Record<string, unknown> = {}) => ({
+  id: 404,
+  timestamp: 1_700_000_050_000,
+  date: '2026-03-28',
+  mode: 'Artifact Brawl',
+  player: 'Pilot',
+  teammates: ['Wing1'],
+  opponents: ['Enemy1'],
+  hero: 'Adrian',
+  ship: 'Hunter',
+  reachModifiers: [],
+  kills: {},
+  result: 'Ongoing',
+  subType: 'Telemetry Draft',
+  telemetryDraftState: 'active',
+  ...overrides,
+});
+
 describe('RecordingView', () => {
   beforeEach(() => {
-    // Reset to a stable viewport for each test; individual tests can override.
     setViewport(1920, 1080);
+    uiState.telemetryLifecycleStage = 'idle';
+    uiState.telemetryAutomationStatus = null;
+    gameDataState.matches = [];
+    appStoreState.activeUser = 'Pilot';
+    appStoreState.sessionStartTime = 1_700_000_000_000;
+    appStoreState.pregameAdviceEnabled = true;
   });
 
-  it('renders standard (wide + tall) layout with SquadronPanel primary and ActionPanel compact (no tab bar)', async () => {
+  it('renders standard layout with SquadronPanel primary and ActionPanel compact when no intel workspace is active', async () => {
     setViewport(1600, 1000);
     const { RecordingView } = await import('./RecordingView');
 
     render(<RecordingView />);
 
-    // Both panels visible simultaneously.
     expect(screen.getByTestId('SquadronPanel')).toBeInTheDocument();
     expect(screen.getByTestId('ActionPanel')).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /intel/i })).toBeNull();
 
-    // Compact tab bar should not exist in standard layout.
-    expect(screen.queryByRole('button', { name: /actions/i })).toBeNull();
-    expect(screen.queryByRole('button', { name: /loadout/i })).toBeNull();
-
-    // Wide layout keeps the loadout panel slightly compact; ActionPanel stays compact.
     const squadProps = screen.getByTestId('SquadronPanel').getAttribute('data-props') || '';
     const actionProps = screen.getByTestId('ActionPanel').getAttribute('data-props') || '';
     expect(squadProps).toContain('"density":"compact"');
@@ -74,8 +115,7 @@ describe('RecordingView', () => {
     expect(root?.children[2]?.className).toContain('pl-1');
   }, 10000);
 
-  it('renders compact left panel tabs on short heights and swaps Actions vs Loadout without scrolling the panel', async () => {
-    // Short height triggers compact density (even on wide screens).
+  it('renders compact left panel tabs on short heights and swaps Actions vs Loadout', async () => {
     setViewport(1600, 680);
     const { RecordingView } = await import('./RecordingView');
 
@@ -85,22 +125,17 @@ describe('RecordingView', () => {
     expect(root).not.toBeNull();
     expect(root?.className).toContain('overflow-y-auto');
 
-    // Compact tab bar exists (use first match in case of duplicates).
-    const actionsBtns = screen.getAllByRole('button', { name: /actions/i });
-    const loadoutBtns = screen.getAllByRole('button', { name: /loadout/i });
-    const actionsBtn = actionsBtns[0];
-    const loadoutBtn = loadoutBtns[0];
+    const actionsBtn = screen.getAllByRole('button', { name: /actions/i })[0];
+    const loadoutBtn = screen.getAllByRole('button', { name: /loadout/i })[0];
     expect(actionsBtn).toBeInTheDocument();
     expect(loadoutBtn).toBeInTheDocument();
 
-    // Default compact tab is Actions: compact ActionPanel rendered, SquadronPanel not.
     expect(screen.getByTestId('ActionPanel')).toBeInTheDocument();
     expect(screen.queryByTestId('SquadronPanel')).toBeNull();
 
     const actionProps = screen.getByTestId('ActionPanel').getAttribute('data-props') || '';
     expect(actionProps).toContain('"density":"compact"');
 
-    // Switch to Loadout: SquadronPanel rendered with compact density, ActionPanel removed.
     fireEvent.click(loadoutBtn);
     expect(screen.getByTestId('SquadronPanel')).toBeInTheDocument();
     expect(screen.queryByTestId('ActionPanel')).toBeNull();
@@ -108,13 +143,12 @@ describe('RecordingView', () => {
     const squadProps = screen.getByTestId('SquadronPanel').getAttribute('data-props') || '';
     expect(squadProps).toContain('"density":"compact"');
 
-    // Switch back to Actions.
     fireEvent.click(actionsBtn);
     expect(screen.getByTestId('ActionPanel')).toBeInTheDocument();
     expect(screen.queryByTestId('SquadronPanel')).toBeNull();
   }, 10000);
 
-  it('uses stacked layout on narrow widths with page-level scroll (not panel-level scroll)', async () => {
+  it('uses stacked layout on narrow widths with page-level scroll', async () => {
     setViewport(900, 900);
     const { RecordingView } = await import('./RecordingView');
 
@@ -124,15 +158,48 @@ describe('RecordingView', () => {
     expect(root).not.toBeNull();
     expect(root?.className).toContain('overflow-y-auto');
 
-    // Ensure we still render the left panel content (compact by definition in narrow mode).
     expect(screen.getAllByRole('button', { name: /actions/i })[0]).toBeInTheDocument();
     expect(screen.getByTestId('ActionPanel')).toBeInTheDocument();
 
     const actionProps = screen.getByTestId('ActionPanel').getAttribute('data-props') || '';
     expect(actionProps).toContain('"density":"compact"');
 
-    // Stacked layout includes the other panels.
     expect(screen.getByTestId('RosterPanel')).toBeInTheDocument();
     expect(screen.getByTestId('MissionPanel')).toBeInTheDocument();
+  });
+
+  it('shows a dedicated intel workspace tab only while an active telemetry draft exists', async () => {
+    gameDataState.matches = [makeActiveDraftMatch()];
+    const { RecordingView } = await import('./RecordingView');
+
+    render(<RecordingView />);
+
+    const intelTab = screen.getByRole('tab', { name: /intel/i });
+    expect(intelTab).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /controls/i })).toBeInTheDocument();
+    expect(screen.queryByTestId('PregameAdvicePanel')).toBeNull();
+
+    fireEvent.click(intelTab);
+
+    expect(screen.getByTestId('PregameAdvicePanel')).toBeInTheDocument();
+    expect(screen.queryByTestId('ActionPanel')).toBeNull();
+    expect(screen.queryByTestId('SquadronPanel')).toBeNull();
+  });
+
+  it('falls back to the controls workspace when the active match ends', async () => {
+    gameDataState.matches = [makeActiveDraftMatch()];
+    const { RecordingView } = await import('./RecordingView');
+
+    const { rerender } = render(<RecordingView />);
+    fireEvent.click(screen.getByRole('tab', { name: /intel/i }));
+    expect(screen.getByTestId('PregameAdvicePanel')).toBeInTheDocument();
+
+    gameDataState.matches = [];
+    rerender(<RecordingView />);
+
+    expect(screen.queryByRole('tab', { name: /intel/i })).toBeNull();
+    expect(screen.queryByTestId('PregameAdvicePanel')).toBeNull();
+    expect(screen.getByTestId('ActionPanel')).toBeInTheDocument();
+    expect(screen.getByTestId('SquadronPanel')).toBeInTheDocument();
   });
 });

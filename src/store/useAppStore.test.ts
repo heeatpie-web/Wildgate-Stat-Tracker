@@ -37,6 +37,7 @@ const loadStore = async (settings: Record<string, unknown>, overrides: Record<st
   });
   return {
     store: module.useAppStore,
+    module,
     saveMock,
   };
 };
@@ -131,9 +132,76 @@ describe('useAppStore OCR preference hydration', () => {
       expect(saveMock).toHaveBeenCalled();
     });
 
-    const savedPayload = saveMock.mock.calls.at(-1)?.[0];
+    const latestCall = saveMock.mock.calls.at(-1);
+    const savedPayloadFactory = latestCall?.[0];
+    const savedPayload = typeof savedPayloadFactory === 'function'
+      ? savedPayloadFactory()
+      : savedPayloadFactory;
     expect(savedPayload.settings).toEqual(expect.objectContaining({
       fullAutoEnabled: true,
     }));
+    expect(latestCall?.[1]).toEqual(expect.objectContaining({
+      debounceMs: 300,
+    }));
+  });
+
+  it('uses telemetry-burst debounce for telemetry draft-only match churn', async () => {
+    const { module } = await loadStore({});
+    const { shouldUseTelemetryBurstDebounce } = module.__test__;
+    const previousDraft = { id: 11, subType: 'Telemetry Draft', result: 'Ongoing' } as any;
+    const nextDraft = { ...previousDraft, notes: 'updated from telemetry' } as any;
+
+    const shouldDebounce = shouldUseTelemetryBurstDebounce(
+      {
+        matches: [previousDraft],
+        lastActivity: 100,
+        activeHero: 'Prospector',
+        activeShip: 'Hunter',
+        activeWeapons: { Railgun: 1 },
+        characterLoadouts: {},
+        currentLoadout: null,
+      },
+      {
+        matches: [nextDraft],
+        lastActivity: 101,
+        activeHero: 'Prospector',
+        activeShip: 'Hunter',
+        activeWeapons: { Railgun: 1 },
+        characterLoadouts: {},
+        currentLoadout: null,
+      },
+    );
+
+    expect(shouldDebounce).toBe(true);
+  });
+
+  it('does not use telemetry-burst debounce when a non-draft match changes', async () => {
+    const { module } = await loadStore({});
+    const { shouldUseTelemetryBurstDebounce } = module.__test__;
+    const previousMatch = { id: 22, subType: 'Manual', result: 'Win' } as any;
+    const nextMatch = { ...previousMatch, notes: 'edited' } as any;
+
+    const shouldDebounce = shouldUseTelemetryBurstDebounce(
+      {
+        matches: [previousMatch],
+        lastActivity: 100,
+        activeHero: 'Prospector',
+        activeShip: 'Hunter',
+        activeWeapons: {},
+        characterLoadouts: {},
+        currentLoadout: null,
+      },
+      {
+        matches: [nextMatch],
+        lastActivity: 101,
+        activeHero: 'Prospector',
+        activeShip: 'Hunter',
+        activeWeapons: {},
+        characterLoadouts: {},
+        currentLoadout: null,
+      },
+    );
+
+    expect(shouldDebounce).toBe(false);
   });
 });

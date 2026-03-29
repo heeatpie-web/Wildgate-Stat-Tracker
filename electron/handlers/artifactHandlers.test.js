@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 import { afterEach, describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const { registerArtifactHandlers } = require('./artifactHandlers.cjs');
+const { registerArtifactHandlers, saveScreenshotImage } = require('./artifactHandlers.cjs');
 
 function makeTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'artifact-handlers-'));
@@ -226,5 +226,25 @@ describe('artifactHandlers token-backed fallback artifacts', () => {
       expect.objectContaining({ captureSource: 'ocr-macro' }),
       expect.objectContaining({ captureSource: 'result-macro' }),
     ]));
+  });
+
+  it('saves internal buffer captures without requiring a base64 round-trip', async () => {
+    const rootDir = makeTempDir();
+    tempDirs.push(rootDir);
+
+    const result = await saveScreenshotImage(createArtifactContext(rootDir), {
+      imageBuffer: Buffer.alloc(512, 7),
+      matchId: 901,
+      captureSource: 'ocr-macro',
+      channel: 'unit-test-buffer-save',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data).toEqual(expect.objectContaining({
+      captureSource: 'ocr-macro',
+      filename: expect.stringMatching(/^capture_ocr_/i),
+      size: 512,
+    }));
+    expect(fs.existsSync(result.data.filePath)).toBe(true);
   });
 });

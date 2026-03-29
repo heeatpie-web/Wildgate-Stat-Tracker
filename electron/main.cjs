@@ -1040,19 +1040,27 @@ const autoCaptureCoordinator = createAutoCaptureCoordinator({
   beforeSequence: async () => beginAutoCaptureWindowSession(),
   afterSequence: async () => endAutoCaptureWindowSession(),
   captureAndProcess: async ({ matchId, activeUser = null, ocrMode = 'local', ocrRegions = null, runtimeOptions = {} }) => {
-    const captureResult = await captureGameWindowForAutomation({
-      keepWindowHidden: Boolean(autoCaptureHiddenWindow),
-    });
-    if (!captureResult?.success || !captureResult.imageBase64) {
+    let imageBuffer = null;
+    try {
+      imageBuffer = await captureGameWindowBufferForAutomation({
+        keepWindowHidden: Boolean(autoCaptureHiddenWindow),
+      });
+    } catch (error) {
       return {
         success: false,
-        error: captureResult?.error || 'Failed to capture game window',
+        error: error?.message || 'Failed to capture game window',
+      };
+    }
+    if (!Buffer.isBuffer(imageBuffer) || imageBuffer.length < 100) {
+      return {
+        success: false,
+        error: 'Failed to capture game window',
       };
     }
 
     const saved = await saveScreenshotImage(
       { app, artifactHelpers },
-      { imageBase64: captureResult.imageBase64, matchId, channel: 'start-auto-capture' }
+      { imageBuffer, matchId, channel: 'start-auto-capture' }
     );
     if (!saved?.success || !saved?.data?.filePath) {
       return {

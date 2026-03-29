@@ -777,6 +777,10 @@ describe('useMatchSubmission', () => {
     expect(updatedMatch.id).toBe(draftId);
     expect(updatedMatch.result).toBe('Win');
     expect(updatedMatch.subType).toBe('Combat');
+    expect(updatedMatch.pregameAdvice).toMatchObject({
+      hasUsableData: false,
+      overallWinRate: 0.5,
+    });
   });
 
   it('reuses the matching telemetry draft by timestamp when pendingMatchData has no id', async () => {

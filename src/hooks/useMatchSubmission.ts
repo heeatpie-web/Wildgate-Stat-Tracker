@@ -31,6 +31,7 @@ import {
     type TeammateIdentitySource,
 } from '../utils/teammateIdentity';
 import { normalizeMatchCategory } from '../utils/matchCategory';
+import { buildPregameAdviceSnapshotForMatch } from '../utils/pregameAdvice/matchAdvice';
 
 const DEFAULT_ARTIFACT_LOOKBACK_MS = 10 * 60 * 1000;
 const SCOPED_ARTIFACT_REPAIR_POSTMATCH_GRACE_MS = 5 * 60 * 1000;
@@ -1220,7 +1221,7 @@ export const useMatchSubmission = () => {
                 pilotRegistry,
             });
 
-            const newMatch: Match = {
+            const baseMatch: Match = {
                 id: matchId,
                 timestamp: matchTimestamp,
                 date: new Date(matchTimestamp).toLocaleDateString(),
@@ -1254,6 +1255,12 @@ export const useMatchSubmission = () => {
                 telemetryConsistency: finalTelemetryConsistency,
                 friendlyPlayerIds: friendlyIdentityMetadata.friendlyPlayerIds,
                 friendlyIdentityAssignments: friendlyIdentityMetadata.friendlyIdentityAssignments,
+                pregameAdvice: pendingMatchData?.pregameAdvice || existingMatch?.pregameAdvice,
+            };
+            const newMatch: Match = {
+                ...baseMatch,
+                pregameAdvice: buildPregameAdviceSnapshotForMatch(baseMatch, matches)
+                    || baseMatch.pregameAdvice,
             };
             const submittedResult = newMatch.result;
             if (existingMatch) {
@@ -1517,7 +1524,7 @@ export const useMatchSubmission = () => {
                 pilotRegistry,
             });
 
-            const savedMatch: Match = {
+            const baseSavedMatch: Match = {
                 id: matchId,
                 timestamp: matchTimestamp,
                 date: new Date(matchTimestamp).toLocaleDateString(),
@@ -1551,6 +1558,12 @@ export const useMatchSubmission = () => {
                 telemetryConsistency: finalTelemetryConsistency,
                 friendlyPlayerIds: friendlyIdentityMetadata.friendlyPlayerIds,
                 friendlyIdentityAssignments: friendlyIdentityMetadata.friendlyIdentityAssignments,
+                pregameAdvice: pendingMatchData?.pregameAdvice || existingMatch?.pregameAdvice,
+            };
+            const savedMatch: Match = {
+                ...baseSavedMatch,
+                pregameAdvice: buildPregameAdviceSnapshotForMatch(baseSavedMatch, matches)
+                    || baseSavedMatch.pregameAdvice,
             };
 
             if (existingMatch) {
@@ -1838,7 +1851,7 @@ export const useMatchSubmission = () => {
                 pilotRegistry,
             });
 
-            const savedMatch: Match = {
+            const baseSavedMatch: Match = {
                 ...existingMatch,
                 id: existingMatch.id,
                 timestamp: existingMatch.timestamp,
@@ -1878,6 +1891,12 @@ export const useMatchSubmission = () => {
                 telemetryConsistency: finalTelemetryConsistency,
                 friendlyPlayerIds: friendlyIdentityMetadata.friendlyPlayerIds,
                 friendlyIdentityAssignments: friendlyIdentityMetadata.friendlyIdentityAssignments,
+                pregameAdvice: resolvedPendingMatchData?.pregameAdvice || existingMatch?.pregameAdvice,
+            };
+            const savedMatch: Match = {
+                ...baseSavedMatch,
+                pregameAdvice: buildPregameAdviceSnapshotForMatch(baseSavedMatch, matches)
+                    || baseSavedMatch.pregameAdvice,
             };
 
             updateMatch(savedMatch);

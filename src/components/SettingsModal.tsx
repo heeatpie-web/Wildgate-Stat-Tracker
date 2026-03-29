@@ -1332,7 +1332,7 @@ const SettingsModalContent: React.FC = () => {
                                 <div>
                                     <div className="text-label-sm font-semibold text-md-sys-on-surface">Pregame advice</div>
                                     <div className="mt-0.5 text-label-sm text-md-sys-on-surface/60">
-                                        Auto-opens a compact intel panel once lobby OCR completes, showing estimated win rate and 3–5 plain-language recommendations for the active match.
+                                        Adds a dedicated Intel tab to Recording while a match is active, showing the estimated win rate and the pre-match factor breakdown tied to that Smart Capture.
                                     </div>
                                 </div>
                                 <label className="flex cursor-pointer items-center gap-2 shrink-0 mt-0.5">

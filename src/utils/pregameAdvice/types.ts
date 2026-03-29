@@ -55,6 +55,12 @@ export interface PregameAdviceResult {
   hasUsableData: boolean;
 }
 
+/** Persisted per-match snapshot of the pregame advice shown before the match. */
+export interface PregameAdviceSnapshot extends PregameAdviceResult {
+  /** Timestamp when this advice snapshot was last recalculated for the match. */
+  updatedAt: number;
+}
+
 /** Opponent team from current lobby OCR. */
 export interface PregameAdviceOpponentTeam {
   teamName: string;

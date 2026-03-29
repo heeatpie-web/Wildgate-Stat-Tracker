@@ -29,6 +29,7 @@ import {
 import { sanitizeUnknownLoadout } from '../utils/loadout';
 import { normalizeOcrBatchThreshold } from '../utils/ocrBatchActions';
 import { sanitizeCalibrationSamples } from '../utils/ocrCalibration';
+import { runtimeConfig } from '../config/runtimeConfig';
 import { CHARACTERS, SHIPS, normalizeShipName, type Match } from '../types';
 import { normalizeSharedUidMappings } from '../services/mappingContract';
 
@@ -165,6 +166,185 @@ const normalizeMatchShips = (match: Match): Match => {
   };
 };
 
+type TelemetryBurstPersistState = Pick<
+  AppState,
+  'matches' | 'lastActivity' | 'activeHero' | 'activeShip' | 'activeWeapons' | 'characterLoadouts' | 'currentLoadout'
+>;
+
+const TELEMETRY_BURST_ALLOWED_KEYS = new Set<keyof TelemetryBurstPersistState>([
+  'matches',
+  'lastActivity',
+  'activeHero',
+  'activeShip',
+  'activeWeapons',
+  'characterLoadouts',
+  'currentLoadout',
+]);
+
+let lastPersistHeuristicState: TelemetryBurstPersistState | null = null;
+
+const captureTelemetryBurstPersistState = (state: AppState): TelemetryBurstPersistState => ({
+  matches: state.matches,
+  lastActivity: state.lastActivity,
+  activeHero: state.activeHero,
+  activeShip: state.activeShip,
+  activeWeapons: state.activeWeapons,
+  characterLoadouts: state.characterLoadouts,
+  currentLoadout: state.currentLoadout,
+});
+
+const didOnlyTelemetryDraftMatchesChange = (prevMatches: Match[], nextMatches: Match[]): boolean => {
+  if (prevMatches === nextMatches) return false;
+
+  const prevById = new Map(prevMatches.map((match) => [match.id, match]));
+  const nextById = new Map(nextMatches.map((match) => [match.id, match]));
+  const candidateIds = new Set<number>([
+    ...prevById.keys(),
+    ...nextById.keys(),
+  ]);
+
+  let sawChange = false;
+  for (const matchId of candidateIds) {
+    const previous = prevById.get(matchId);
+    const next = nextById.get(matchId);
+    if (previous === next) continue;
+    sawChange = true;
+    const changedMatch = next || previous;
+    if (!changedMatch || changedMatch.subType !== 'Telemetry Draft') {
+      return false;
+    }
+  }
+
+  return sawChange;
+};
+
+const shouldUseTelemetryBurstDebounce = (
+  previous: TelemetryBurstPersistState | null,
+  next: TelemetryBurstPersistState,
+): boolean => {
+  if (!previous) return false;
+
+  const changedKeys = (Object.keys(next) as Array<keyof TelemetryBurstPersistState>)
+    .filter((key) => !Object.is(previous[key], next[key]));
+
+  if (changedKeys.length === 0) return false;
+  if (!changedKeys.every((key) => TELEMETRY_BURST_ALLOWED_KEYS.has(key))) return false;
+
+  const changedMatches = changedKeys.includes('matches');
+  const changedLiveSessionOnly = changedKeys.every((key) => key !== 'matches');
+  if (changedLiveSessionOnly) return true;
+  if (!changedMatches) return false;
+
+  return didOnlyTelemetryDraftMatchesChange(previous.matches, next.matches);
+};
+
+const buildStorageDataFromState = (state: AppState) => ({
+  matches: state.matches,
+  players: state.players,
+  pilotRegistry: state.pilotRegistry,
+  rosterEntryMeta: state.rosterEntryMeta,
+  favorites: state.favorites,
+  pilotNotes: state.pilotNotes,
+  pilotAliases: state.pilotAliases,
+  playerIdMap: state.playerIdMap,
+  lastActivity: state.lastActivity,
+  mappings: state.knownMappings,
+  uidMappings: state.uidMappings,
+  uidSeedState: { seedVersionApplied: state.uidSeedVersionApplied },
+  playerProfiles: state.playerProfiles,
+  teammateIdentityRecords: state.teammateIdentityRecords,
+  ocrLearningEvents: state.ocrLearningEvents,
+  ocrLearningQueue: state.ocrLearningQueue,
+  pendingReviews: state.pendingReviews,
+  dismissedRosterMergePairKeys: state.dismissedRosterMergePairKeys,
+  dismissedRosterCandidateKeys: state.dismissedRosterCandidateKeys,
+  settings: {
+    mode: state.appearanceMode,
+    theme: state.colorTheme,
+    hue: state.customHue,
+    colorblind: state.colorblindMode,
+    disableAnimations: state.disableAnimations,
+    performanceMode: state.performanceMode,
+    soundEnabled: state.soundEnabled,
+    showSmartCaptureInHeader: state.showSmartCaptureInHeader,
+    tipsEnabled: state.tipsEnabled,
+    tipLibraryIndex: state.tipLibraryIndex,
+    language: state.language,
+    showTimer: state.showSessionTimer,
+    lifecycleTrackingPaused: state.lifecycleTrackingPaused,
+    bgUrl: state.customBgUrl,
+    autoLog: state.enableAutoLogRecording,
+    telemetryPerformanceProfile: state.telemetryPerformanceProfile,
+    adaptiveTelemetryPollingEnabled: state.adaptiveTelemetryPollingEnabled,
+    telemetryDefaultsVersion: Number.isFinite(state.telemetryDefaultsVersion)
+      ? Math.max(1, Math.floor(Number(state.telemetryDefaultsVersion)))
+      : 1,
+    autoBackup: state.enableAutoBackup,
+    startupSmartPreloadEnabled: state.startupSmartPreloadEnabled,
+    alwaysOnTop: state.isAlwaysOnTop,
+    overlayStyle: state.overlayStyle,
+    visualMode: state.visualMode,
+    ocrMode: state.ocrMode,
+    captureMode: state.captureMode,
+    resultOcrFlowMode: state.resultOcrFlowMode,
+    ocrAutoOpenAfterRerun: state.ocrAutoOpenAfterRerun,
+    autoSequenceOnCapture: state.autoSequenceOnCapture,
+    autoCaptureSendKeypresses: state.autoCaptureSendKeypresses,
+    autoCaptureWaitMultiplier: state.autoCaptureWaitMultiplier,
+    autoCaptureTacticalMapKey: state.tacticalMapKeybind,
+    tacticalMapKeybind: state.tacticalMapKeybind,
+    holdTacticalMapKey: state.holdTacticalMapKey,
+    autoPopulateRosterOnSave: state.autoPopulateRosterOnSave,
+    fullAutoEnabled: state.fullAutoEnabled,
+    lockOcrTeams: state.lockOcrTeams,
+    ocrEnhancedNameRecoveryEnabled: state.ocrEnhancedNameRecoveryEnabled,
+    ocrNameRerouteThreshold: state.ocrNameRerouteThreshold,
+    ocrLearningEnabled: state.ocrLearningEnabled,
+    ocrAutoApplyMinScore: state.ocrAutoApplyMinScore,
+    ocrAutoApplyMinCount: state.ocrAutoApplyMinCount,
+    ocrLearningStrictMode: state.ocrLearningStrictMode,
+    ocrLearningReviewMode: state.ocrLearningReviewMode,
+    ocrLearningAutoPromoteCount: state.ocrLearningAutoPromoteCount,
+    ocrLearningQueueEnabled: state.ocrLearningQueueEnabled,
+    adaptivePreloadEnabled: state.adaptivePreloadEnabled,
+    adaptivePreloadBudgetMs: state.adaptivePreloadBudgetMs,
+    dashboardPreloadStats: state.dashboardPreloadStats,
+    ocrThresholdRecommendationMode: state.ocrThresholdRecommendationMode,
+    ocrThresholdHistory: state.ocrThresholdHistory,
+    ocrBestGuessThresholds: state.ocrBestGuessThresholds,
+    ocrCalibration: state.ocrCalibration,
+    ocrCalibrationSamples: state.ocrCalibrationSamples,
+    ocrBatchAcceptThreshold: state.ocrBatchAcceptThreshold,
+    ocrRegions: state.ocrRegions,
+    tutorialCompleted: state.tutorialCompleted,
+    smartCapturesActiveSection: state.activeSection,
+    smartCapturesQueueCollapsed: state.queueCollapsed,
+    smartCapturesQueueOnly: state.queueOnly,
+    smartCapturesShowResolved: state.showResolved,
+    smartCapturesSearchQuery: state.searchQuery,
+    smartCapturesSortMode: state.sortMode,
+    activeUser: state.activeUser,
+  },
+  storageMeta: {
+    nextCanonicalMatchNumber: Number.isInteger(Number(state.nextCanonicalMatchNumber))
+      ? Math.max(1, Number(state.nextCanonicalMatchNumber))
+      : 1,
+  },
+  layouts: state.layouts,
+  timelineEvents: state.timelineEvents,
+  ocrCorrections: state.ocrCorrections,
+  teamIdentityCorrections: state.teamIdentityCorrections,
+  playerEncounterRoleCorrections: state.playerEncounterRoleCorrections,
+  ocrAliasModel: state.ocrAliasModel,
+  liveSession: {
+    activeHero: state.activeHero,
+    activeShip: state.activeShip,
+    activeWeapons: state.activeWeapons,
+    characterLoadouts: state.characterLoadouts,
+    currentLoadout: state.currentLoadout,
+  },
+});
+
 const customStorage: PersistStorage<AppState> = {
   getItem: async (name) => {
     try {
@@ -219,7 +399,7 @@ const customStorage: PersistStorage<AppState> = {
         : 0;
       const shouldApplyTelemetryBaselineV1 = persistedTelemetryDefaultsVersion < 1;
 
-      return {
+      const hydratedState = {
         state: {
           // Data
           matches: recoveredMatches,
@@ -367,6 +547,8 @@ const customStorage: PersistStorage<AppState> = {
         } as any,
         version: 0,
       };
+      lastPersistHeuristicState = captureTelemetryBurstPersistState(hydratedState.state as AppState);
+      return hydratedState;
     } catch (e) {
       _hydrated = true;
       console.error('[store] Failed to hydrate persisted state:', e);
@@ -378,114 +560,14 @@ const customStorage: PersistStorage<AppState> = {
     // Without this, Zustand can save the initial empty state before
     // getItem resolves, overwriting real data on disk.
     if (!_hydrated) return;
-    const state = value.state;
-    const dbData = {
-      matches: state.matches,
-      players: state.players,
-      pilotRegistry: state.pilotRegistry,
-      rosterEntryMeta: state.rosterEntryMeta,
-      favorites: state.favorites,
-      pilotNotes: state.pilotNotes,
-      pilotAliases: state.pilotAliases,
-      playerIdMap: state.playerIdMap,
-      lastActivity: state.lastActivity,
-      mappings: state.knownMappings,
-      uidMappings: state.uidMappings,
-      uidSeedState: { seedVersionApplied: state.uidSeedVersionApplied },
-      playerProfiles: state.playerProfiles,
-      teammateIdentityRecords: state.teammateIdentityRecords,
-      ocrLearningEvents: state.ocrLearningEvents,
-      ocrLearningQueue: state.ocrLearningQueue,
-      pendingReviews: state.pendingReviews,
-      dismissedRosterMergePairKeys: state.dismissedRosterMergePairKeys,
-      dismissedRosterCandidateKeys: state.dismissedRosterCandidateKeys,
-      settings: {
-        mode: state.appearanceMode,
-        theme: state.colorTheme,
-        hue: state.customHue,
-        colorblind: state.colorblindMode,
-                disableAnimations: state.disableAnimations,
-                performanceMode: state.performanceMode,
-                soundEnabled: state.soundEnabled,
-                showSmartCaptureInHeader: state.showSmartCaptureInHeader,
-                tipsEnabled: state.tipsEnabled,
-                tipLibraryIndex: state.tipLibraryIndex,
-        language: state.language,
-        showTimer: state.showSessionTimer,
-        lifecycleTrackingPaused: state.lifecycleTrackingPaused,
-        bgUrl: state.customBgUrl,
-        autoLog: state.enableAutoLogRecording,
-        telemetryPerformanceProfile: state.telemetryPerformanceProfile,
-        adaptiveTelemetryPollingEnabled: state.adaptiveTelemetryPollingEnabled,
-        telemetryDefaultsVersion: Number.isFinite(state.telemetryDefaultsVersion)
-          ? Math.max(1, Math.floor(Number(state.telemetryDefaultsVersion)))
-          : 1,
-        autoBackup: state.enableAutoBackup,
-        startupSmartPreloadEnabled: state.startupSmartPreloadEnabled,
-        alwaysOnTop: state.isAlwaysOnTop,
-        overlayStyle: state.overlayStyle,
-        visualMode: state.visualMode,
-        ocrMode: state.ocrMode,
-                captureMode: state.captureMode,
-                resultOcrFlowMode: state.resultOcrFlowMode,
-                ocrAutoOpenAfterRerun: state.ocrAutoOpenAfterRerun,
-                autoSequenceOnCapture: state.autoSequenceOnCapture,
-                autoCaptureSendKeypresses: state.autoCaptureSendKeypresses,
-                autoCaptureWaitMultiplier: state.autoCaptureWaitMultiplier,
-                autoCaptureTacticalMapKey: state.tacticalMapKeybind,
-                tacticalMapKeybind: state.tacticalMapKeybind,
-                holdTacticalMapKey: state.holdTacticalMapKey,
-                autoPopulateRosterOnSave: state.autoPopulateRosterOnSave,
-                fullAutoEnabled: state.fullAutoEnabled,
-                lockOcrTeams: state.lockOcrTeams,
-                ocrEnhancedNameRecoveryEnabled: state.ocrEnhancedNameRecoveryEnabled,
-                ocrNameRerouteThreshold: state.ocrNameRerouteThreshold,
-                ocrLearningEnabled: state.ocrLearningEnabled,
-                ocrAutoApplyMinScore: state.ocrAutoApplyMinScore,
-                ocrAutoApplyMinCount: state.ocrAutoApplyMinCount,
-                ocrLearningStrictMode: state.ocrLearningStrictMode,
-                ocrLearningReviewMode: state.ocrLearningReviewMode,
-                ocrLearningAutoPromoteCount: state.ocrLearningAutoPromoteCount,
-                ocrLearningQueueEnabled: state.ocrLearningQueueEnabled,
-                adaptivePreloadEnabled: state.adaptivePreloadEnabled,
-                adaptivePreloadBudgetMs: state.adaptivePreloadBudgetMs,
-                dashboardPreloadStats: state.dashboardPreloadStats,
-                ocrThresholdRecommendationMode: state.ocrThresholdRecommendationMode,
-                ocrThresholdHistory: state.ocrThresholdHistory,
-                ocrBestGuessThresholds: state.ocrBestGuessThresholds,
-                ocrCalibration: state.ocrCalibration,
-                ocrCalibrationSamples: state.ocrCalibrationSamples,
-                ocrBatchAcceptThreshold: state.ocrBatchAcceptThreshold,
-                ocrRegions: state.ocrRegions,
-                tutorialCompleted: state.tutorialCompleted,
-                smartCapturesActiveSection: state.activeSection,
-                smartCapturesQueueCollapsed: state.queueCollapsed,
-                smartCapturesQueueOnly: state.queueOnly,
-                smartCapturesShowResolved: state.showResolved,
-                smartCapturesSearchQuery: state.searchQuery,
-                smartCapturesSortMode: state.sortMode,
-        activeUser: state.activeUser
-      },
-      storageMeta: {
-        nextCanonicalMatchNumber: Number.isInteger(Number(state.nextCanonicalMatchNumber))
-          ? Math.max(1, Number(state.nextCanonicalMatchNumber))
-          : 1,
-      },
-      layouts: state.layouts,
-      timelineEvents: state.timelineEvents,
-      ocrCorrections: state.ocrCorrections,
-      teamIdentityCorrections: state.teamIdentityCorrections,
-      playerEncounterRoleCorrections: state.playerEncounterRoleCorrections,
-      ocrAliasModel: state.ocrAliasModel,
-      liveSession: {
-        activeHero: state.activeHero,
-        activeShip: state.activeShip,
-        activeWeapons: state.activeWeapons,
-        characterLoadouts: state.characterLoadouts,
-        currentLoadout: state.currentLoadout,
-      },
-    };
-    await StorageService.save(dbData);
+    const state = value.state as AppState;
+    const nextHeuristicState = captureTelemetryBurstPersistState(state);
+    const debounceMs = shouldUseTelemetryBurstDebounce(lastPersistHeuristicState, nextHeuristicState)
+      ? runtimeConfig.storage.telemetryBurstSaveDebounceMs
+      : runtimeConfig.storage.saveDebounceMs;
+    lastPersistHeuristicState = nextHeuristicState;
+
+    await StorageService.save(() => buildStorageDataFromState(state), { debounceMs });
   },
   removeItem: async (name) => {
     console.warn("Storage removeItem not implemented");
@@ -627,3 +709,8 @@ export const useAppStore = create<AppState>()(
     }
   )
 );
+
+export const __test__ = {
+  didOnlyTelemetryDraftMatchesChange,
+  shouldUseTelemetryBurstDebounce,
+};
