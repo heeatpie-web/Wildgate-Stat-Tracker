@@ -52,7 +52,13 @@ const isArtifactFile = (value: unknown): value is ArtifactFile =>
     typeof value.artifactId === 'string' &&
     typeof value.filename === 'string' &&
     typeof value.path === 'string' &&
-    (value.captureSource == null || value.captureSource === 'ocr-macro' || value.captureSource === 'result-macro');
+    (value.captureSource == null || value.captureSource === 'ocr-macro' || value.captureSource === 'result-macro') &&
+    (
+        value.screenshotType == null
+        || value.screenshotType === 'crew_hub'
+        || value.screenshotType === 'tactical_map'
+        || value.screenshotType === 'result'
+    );
 
 const isLikelyOcrExtractedData = (value: unknown): value is OCRExtractedData =>
     isRecord(value) &&
@@ -81,6 +87,7 @@ export interface ArtifactFile {
     filename: string;
     path: string;
     captureSource?: 'ocr-macro' | 'result-macro' | null;
+    screenshotType?: 'crew_hub' | 'tactical_map' | 'result' | null;
 }
 
 export interface ArtifactRepairCandidate {
@@ -251,6 +258,7 @@ export const getMatchArtifactsStructured = async (
                 filename: imagePath.split(/[\\/]/).pop() || imagePath,
                 path: imagePath,
                 captureSource: null,
+                screenshotType: null,
             } as ArtifactFile;
         });
         return {

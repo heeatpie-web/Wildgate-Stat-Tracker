@@ -9,6 +9,8 @@ const getElectronAPIMock = vi.fn(() => null);
 const discardTelemetryDraftMock = vi.fn();
 const autoFinalizeResultScreenCaptureMock = vi.fn();
 const startAutoCaptureMock = vi.fn();
+const getMatchArtifactsStructuredMock = vi.fn();
+const rerunOCRMultiMock = vi.fn();
 const useResultFlashMonitorMock = vi.fn();
 const useResultTextMonitorMock = vi.fn();
 const sendGameUiActionMock = vi.fn();
@@ -143,9 +145,12 @@ const appStoreState = {
   ocrLearningStrictMode: false,
   ocrLearningReviewMode: 'balanced',
   ocrLearningAutoPromoteCount: 3,
-  autoSequenceOnCapture: false,
-   autoCaptureSendKeypresses: true,
-   autoCaptureWaitMultiplier: 1,
+  pregameAdviceEnabled: false,
+  ocrMode: 'local',
+  captureMode: 'deferred',
+   autoSequenceOnCapture: false,
+    autoCaptureSendKeypresses: true,
+    autoCaptureWaitMultiplier: 1,
    tacticalMapKeybind: 'Tab',
    holdTacticalMapKey: false,
     ocrEnhancedNameRecoveryEnabled: true,
@@ -237,6 +242,11 @@ vi.mock('./utils/electronBridge', () => ({
   sendGameUiAction: (...args: unknown[]) => sendGameUiActionMock(...args),
 }));
 
+vi.mock('./utils/artifactService', () => ({
+  getMatchArtifactsStructured: (...args: unknown[]) => getMatchArtifactsStructuredMock(...args),
+  rerunOCRMulti: (...args: unknown[]) => rerunOCRMultiMock(...args),
+}));
+
 vi.mock('./hooks/useResultMonitor', () => ({
   useResultMonitor: (options: Record<string, unknown>) => {
     useResultFlashMonitorMock({
@@ -311,6 +321,20 @@ describe('App', () => {
     autoFinalizeResultScreenCaptureMock.mockResolvedValue({ success: false, reason: 'unconfirmed' });
     startAutoCaptureMock.mockReset();
     startAutoCaptureMock.mockResolvedValue({ started: true });
+    getMatchArtifactsStructuredMock.mockReset();
+    getMatchArtifactsStructuredMock.mockResolvedValue({
+      images: [],
+      imageFiles: [],
+      telemetry: [],
+      missingImages: [],
+      resolvedFromDisk: false,
+    });
+    rerunOCRMultiMock.mockReset();
+    rerunOCRMultiMock.mockResolvedValue({
+      success: false,
+      perFile: [],
+      error: 'No auto OCR configured',
+    });
     useResultFlashMonitorMock.mockReset();
     useResultTextMonitorMock.mockReset();
     sendGameUiActionMock.mockReset();
@@ -349,6 +373,9 @@ describe('App', () => {
     appStoreState.sessionStartTime = Date.now() - 1_000;
     appStoreState.pendingMatchData = null;
     appStoreState.currentLoadout = null;
+    appStoreState.pregameAdviceEnabled = false;
+    appStoreState.ocrMode = 'local';
+    appStoreState.captureMode = 'deferred';
     appStoreState.autoSequenceOnCapture = false;
     appStoreState.autoCaptureSendKeypresses = true;
     appStoreState.autoCaptureWaitMultiplier = 1;
@@ -2045,7 +2072,7 @@ describe('App', () => {
     vi.useRealTimers();
   });
 
-  it('captures a cropped damage-sources follow-up when text detection wins the result race', async () => {
+  it('keeps the primary result capture only when text detection wins the result race', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
     uiState.telemetryLifecycleStage = 'live';
@@ -2082,11 +2109,6 @@ describe('App', () => {
           });
         }
         if (channel === 'scan-result-screen') {
-          // First call: result-screen scan (no imageBase64 in payload matching damage-region)
-          // Second call: tab1 discard check (imageBase64 = 'damage-region')
-          if (payload?.imageBase64 === 'damage-region') {
-            return Promise.resolve({ data: { result: 'Loss', damageTaken: 1234 } });
-          }
           return Promise.resolve({ data: { result: 'Loss', winType: 'combat', placement: 4, detectionMethod: 'text' } });
         }
         if (channel === 'capture-result-screen-region') {
@@ -2136,7 +2158,6 @@ describe('App', () => {
 
     expect(api.invoke).toHaveBeenCalledWith('capture-screen');
 
-    // Advance far enough for the early loss recap capture and the tab-2 toggle to complete.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2500);
       await Promise.resolve();
@@ -2148,18 +2169,9 @@ describe('App', () => {
       imageBase64: 'image-base64',
       detectionMethod: 'text',
     });
-    expect(sendGameUiActionMock).toHaveBeenCalledWith('show-damage-sources');
-
-    // Tab 1 and tab 2 are both fresh captures (no imageBase64 in payload)
-    expect(api.invoke).toHaveBeenCalledWith('capture-result-screen-region', expect.objectContaining({
-      cropRegion: expect.objectContaining({
-        left: expect.any(Number),
-        top: expect.any(Number),
-        width: expect.any(Number),
-        height: expect.any(Number),
-        normalized: true,
-      }),
-    }));
+    expect(sendGameUiActionMock).not.toHaveBeenCalled();
+    expect(api.invoke).not.toHaveBeenCalledWith('capture-result-screen-region', expect.anything());
+    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'capture-result-screen-region')).toHaveLength(0);
     expect(autoFinalizeResultScreenCaptureMock).toHaveBeenCalledWith(expect.objectContaining({
       imageBase64: 'image-base64',
       resultData: expect.objectContaining({
@@ -2169,15 +2181,12 @@ describe('App', () => {
       }),
       matchId: 5432,
       persistedPrimaryArtifactPath: 'C:\\match_artifacts\\5432\\capture_result.png',
-      supplementalArtifacts: [
-        { imageBase64: 'damage-region', kind: 'damage-sources' },
-        { imageBase64: 'damage-region', kind: 'damage-ships' },
-      ],
+      supplementalArtifacts: [],
     }));
     vi.useRealTimers();
   });
 
-  it('retries unconfirmed loss captures before starting the live damage follow-up', async () => {
+  it('retries unconfirmed loss captures without taking extra result-region screenshots', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;
     uiState.telemetryLifecycleStage = 'live';
@@ -2292,17 +2301,9 @@ describe('App', () => {
       await triggerPromise;
     });
 
-    expect(api.invoke).toHaveBeenCalledWith('capture-result-screen-region', expect.objectContaining({
-      cropRegion: expect.objectContaining({
-        left: expect.any(Number),
-        top: expect.any(Number),
-        width: expect.any(Number),
-        height: expect.any(Number),
-        normalized: true,
-      }),
-    }));
-    expect(sendGameUiActionMock).toHaveBeenCalledWith('show-damage-sources');
-  expect(autoFinalizeResultScreenCaptureMock).toHaveBeenCalledWith(expect.objectContaining({
+    expect(api.invoke).not.toHaveBeenCalledWith('capture-result-screen-region', expect.anything());
+    expect(sendGameUiActionMock).not.toHaveBeenCalled();
+    expect(autoFinalizeResultScreenCaptureMock).toHaveBeenCalledWith(expect.objectContaining({
       imageBase64: 'image-base64-2',
       resultData: expect.objectContaining({
         result: 'Loss',
@@ -2312,10 +2313,7 @@ describe('App', () => {
       }),
       matchId: 5444,
       persistedPrimaryArtifactPath: 'C:\\match_artifacts\\5444\\capture_result_2.png',
-      supplementalArtifacts: [
-        { imageBase64: 'damage-region', kind: 'damage-sources' },
-        { imageBase64: 'damage-region', kind: 'damage-ships' },
-      ],
+      supplementalArtifacts: [],
     }));
     vi.useRealTimers();
   });
@@ -2801,6 +2799,138 @@ describe('App', () => {
     expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({
       message: '2/3',
       type: 'info',
+    }));
+  });
+
+  it('runs lobby OCR after auto-capture completes and syncs the active telemetry draft', async () => {
+    appStoreState.captureMode = 'auto';
+    const crewHubPath = 'C:\\match_artifacts\\444\\capture_crew_hub_1.png';
+    const mapPath = 'C:\\match_artifacts\\444\\capture_map_2.png';
+    const resultPath = 'C:\\match_artifacts\\444\\capture_result_3.png';
+    const draft = {
+      id: 444,
+      timestamp: Date.now(),
+      date: '3/29/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      artifacts: [crewHubPath, mapPath, resultPath],
+    };
+    gameDataState.matches = [draft];
+    appStoreState.matches = [draft];
+    appStoreState.pendingMatchData = {
+      id: 444,
+      artifacts: [crewHubPath, mapPath, resultPath],
+      result: 'Ongoing',
+    };
+    getMatchArtifactsStructuredMock.mockResolvedValue({
+      images: [crewHubPath, mapPath, resultPath],
+      imageFiles: [
+        { artifactId: 'a1', filename: 'capture_crew_hub_1.png', path: crewHubPath, screenshotType: 'crew_hub' },
+        { artifactId: 'a2', filename: 'capture_map_2.png', path: mapPath, screenshotType: 'tactical_map' },
+        { artifactId: 'a3', filename: 'capture_result_3.png', path: resultPath, screenshotType: 'result' },
+      ],
+      telemetry: [],
+      missingImages: [],
+      resolvedFromDisk: false,
+    });
+    rerunOCRMultiMock.mockResolvedValue({
+      success: true,
+      data: {
+        screenshotType: 'crew_hub',
+        playerShip: { shipType: 'Bastion', teamName: 'Blue Crew', confidence: 91 },
+        playerTeamName: 'Blue Crew',
+        playerShipName: 'Blue Crew',
+        reachModifiers: [{ name: 'Ionized', confidence: 82, rawText: 'Ionized' }],
+        teammates: [{ name: 'Wing1', confidence: 90 }],
+        opponentTeams: [{
+          teamName: 'Enemy Team',
+          shipType: 'Scout',
+          color: 'red',
+          players: [{ name: 'Enemy1', confidence: 87 }],
+          confidence: 87,
+        }],
+        hazards: [],
+        enemyShips: [],
+        artifacts: [crewHubPath, mapPath],
+        overallConfidence: 89,
+        captureTimestamp: Date.now(),
+        ocrSource: 'local',
+      },
+      perFile: [
+        { imagePath: crewHubPath, success: true },
+        { imagePath: mapPath, success: true },
+      ],
+    });
+
+    const { default: App } = await import('./App');
+    const handlers: Record<string, (...args: unknown[]) => void> = {};
+    const api = {
+      invoke: vi.fn(() => Promise.resolve(null)),
+      send: vi.fn(),
+      on: vi.fn((channel: string, cb: (...args: unknown[]) => void) => {
+        handlers[channel] = cb;
+        return vi.fn();
+      }),
+      removeAllListeners: vi.fn(),
+    };
+    getElectronAPIMock.mockReturnValue(api);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(handlers['auto-capture-status']).toBeTypeOf('function');
+    });
+
+    await act(async () => {
+      handlers['auto-capture-status']({
+        phase: 'completed',
+        matchId: 444,
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(getMatchArtifactsStructuredMock).toHaveBeenCalledWith(444, [crewHubPath, mapPath, resultPath]);
+    });
+    expect(rerunOCRMultiMock).toHaveBeenCalledWith(
+      [crewHubPath, mapPath],
+      'Pilot',
+      'local',
+      appStoreState.ocrRegions,
+      expect.objectContaining({
+        routingProfile: 'names-only',
+        fontProfile: 'ealing-black-italic',
+      })
+    );
+    expect(appStoreState.setPendingMatchData).toHaveBeenCalledWith(expect.objectContaining({
+      id: 444,
+      ship: 'Bastion',
+      teammates: ['Wing1'],
+      opponents: ['Enemy1'],
+      reachModifiers: ['Ionized'],
+      artifacts: [crewHubPath, mapPath, resultPath],
+      ocrState: 'reviewing',
+      pregameAdvice: expect.any(Object),
+    }));
+    expect(appStoreState.updateMatch).toHaveBeenCalledWith(expect.objectContaining({
+      id: 444,
+      ship: 'Bastion',
+      teammates: ['Wing1'],
+      opponents: ['Enemy1'],
+      reachModifiers: ['Ionized'],
+      artifacts: [crewHubPath, mapPath, resultPath],
+      ocrState: 'reviewing',
+      pregameAdvice: expect.any(Object),
     }));
   });
 

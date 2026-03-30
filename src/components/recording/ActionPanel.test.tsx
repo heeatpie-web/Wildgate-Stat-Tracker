@@ -291,12 +291,38 @@ describe('ActionPanel', () => {
     expect(createdDraft).toMatchObject({
       result: 'Ongoing',
       subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
     });
 
     fireEvent.click(screen.getByRole('button', { name: /stop match timer/i }));
 
     expect(gameData.deleteMatch).toHaveBeenCalledWith(createdDraft.id);
     expect(appStoreState.matches).toEqual([]);
+  });
+
+  it('reuses an existing telemetry draft instead of adding a duplicate when the timer starts', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    const existingDraft = {
+      id: 7331,
+      timestamp: Date.now() - 5_000,
+      player: 'TestPilot',
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+    };
+    gameData.matches = [existingDraft] as any[];
+    appStoreState.matches = [existingDraft] as any[];
+
+    const { rerender } = render(<ActionPanel />);
+    fireEvent.click(screen.getByRole('button', { name: /start match timer/i }));
+    rerender(<ActionPanel />);
+
+    expect(appStoreState.addMatch).not.toHaveBeenCalled();
+    expect(appStoreState.matches).toEqual([existingDraft]);
+
+    fireEvent.click(screen.getByRole('button', { name: /stop match timer/i }));
+
+    expect(gameData.deleteMatch).toHaveBeenCalledWith(existingDraft.id);
   });
 
   it('stops the broader active ongoing draft when the timer was not started in the current component instance', async () => {

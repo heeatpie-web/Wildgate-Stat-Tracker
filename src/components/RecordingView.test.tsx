@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 const uiState = {
@@ -35,7 +35,12 @@ vi.mock('./recording/SquadronPanel', () => ({
 }));
 
 vi.mock('./recording/RosterPanel', () => ({
-  RosterPanel: () => <div data-testid="RosterPanel">RosterPanel</div>,
+  RosterPanel: ({ workspaceToggle }: { workspaceToggle?: React.ReactNode }) => (
+    <div data-testid="RosterPanel">
+      <div data-testid="RosterPanelWorkspaceToggle">{workspaceToggle}</div>
+      RosterPanel
+    </div>
+  ),
 }));
 
 vi.mock('./recording/MissionPanel', () => ({
@@ -174,9 +179,10 @@ describe('RecordingView', () => {
 
     render(<RecordingView />);
 
-    const intelTab = screen.getByRole('tab', { name: /intel/i });
+    const rosterPanel = screen.getByTestId('RosterPanel');
+    const intelTab = within(rosterPanel).getByRole('tab', { name: /intel/i });
     expect(intelTab).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /controls/i })).toBeInTheDocument();
+    expect(within(rosterPanel).getByRole('tab', { name: /controls/i })).toBeInTheDocument();
     expect(screen.queryByTestId('PregameAdvicePanel')).toBeNull();
 
     fireEvent.click(intelTab);
@@ -191,7 +197,7 @@ describe('RecordingView', () => {
     const { RecordingView } = await import('./RecordingView');
 
     const { rerender } = render(<RecordingView />);
-    fireEvent.click(screen.getByRole('tab', { name: /intel/i }));
+    fireEvent.click(within(screen.getByTestId('RosterPanel')).getByRole('tab', { name: /intel/i }));
     expect(screen.getByTestId('PregameAdvicePanel')).toBeInTheDocument();
 
     gameDataState.matches = [];

@@ -300,7 +300,7 @@ function createAutoCaptureCoordinator({
       }));
     };
 
-    const captureStep = async (step, captureIndex, attemptCaptures) => {
+    const captureStep = async (step, captureIndex, attemptCaptures, screenshotTypeHint = null) => {
       logAutoCaptureStep(step, '(capture)');
       // Fire sound immediately so the user hears it when the capture begins,
       // not after the PNG encode + file save completes.
@@ -311,6 +311,7 @@ function createAutoCaptureCoordinator({
         ocrMode,
         ocrRegions,
         runtimeOptions,
+        screenshotTypeHint,
       }), AUTO_CAPTURE_CAPTURE_TIMEOUT_MS, step.label);
 
       if (!result?.success || !result.filePath) {
@@ -318,7 +319,7 @@ function createAutoCaptureCoordinator({
         throw new Error(`${step.label}: ${reason}`);
       }
 
-      const detectedType = String(result?.ocrData?.screenshotType || result?.screenshotType || '').trim();
+      const detectedType = String(result?.ocrData?.screenshotType || result?.screenshotType || screenshotTypeHint || '').trim();
       const captureMeta = {
         captureIndex,
         filePath: result.filePath,
@@ -335,7 +336,7 @@ function createAutoCaptureCoordinator({
       try {
         const captureTacticalMapStep = async () => {
           if (!sendKeypresses) {
-            await captureStep(STEP_DEFINITIONS.captureMap, 1, attemptCaptures);
+            await captureStep(STEP_DEFINITIONS.captureMap, 1, attemptCaptures, 'tactical_map');
             return;
           }
 
@@ -346,7 +347,7 @@ function createAutoCaptureCoordinator({
               STEP_DEFINITIONS.openMap.label,
               async () => {
                 await waitStep(waitProfile.heldMapOpenMs);
-                await captureStep(STEP_DEFINITIONS.captureMap, 1, attemptCaptures);
+                await captureStep(STEP_DEFINITIONS.captureMap, 1, attemptCaptures, 'tactical_map');
               }
             );
             if (!heldResult?.success) {
@@ -359,7 +360,7 @@ function createAutoCaptureCoordinator({
           // Toggle mode: tap to open, capture, tap to close.
           await sendStepKeys(STEP_DEFINITIONS.openMap, tacticalMapKeybind.sendKeys);
           await waitStep(waitProfile.tacticalMapOpenMs);
-          await captureStep(STEP_DEFINITIONS.captureMap, 1, attemptCaptures);
+          await captureStep(STEP_DEFINITIONS.captureMap, 1, attemptCaptures, 'tactical_map');
           await sendStepKeys(STEP_DEFINITIONS.closeMap, tacticalMapKeybind.sendKeys);
           await waitStep(waitProfile.tacticalMapCloseMs);
         };
@@ -371,7 +372,7 @@ function createAutoCaptureCoordinator({
         await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{UP}{UP}{UP}{UP}{SPACE}', { useMenuSender: true });
         await waitStep(waitProfile.crewHubOpenMs);
 
-        await captureStep(STEP_DEFINITIONS.captureCrewHubA, 2, attemptCaptures);
+        await captureStep(STEP_DEFINITIONS.captureCrewHubA, 2, attemptCaptures, 'crew_hub');
 
         await sendStepKeys(STEP_DEFINITIONS.moveCrewHubRight, '{RIGHT}{RIGHT}{RIGHT}{RIGHT}', { useMenuSender: true });
         await waitStep(waitProfile.crewHubPanelStepMs);
@@ -379,7 +380,7 @@ function createAutoCaptureCoordinator({
         await sendStepKeys(STEP_DEFINITIONS.moveCrewHubEnd, '{END}', { useMenuSender: true });
         await waitStep(waitProfile.crewHubPanelEndMs);
 
-        await captureStep(STEP_DEFINITIONS.captureCrewHubB, 3, attemptCaptures);
+        await captureStep(STEP_DEFINITIONS.captureCrewHubB, 3, attemptCaptures, 'crew_hub');
 
         await sendStepKeys(STEP_DEFINITIONS.exit, '{ESC}', { useMenuSender: true });
         await waitStep(waitProfile.exitMs);

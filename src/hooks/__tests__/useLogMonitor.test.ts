@@ -1647,6 +1647,58 @@ describe('useLogMonitor', () => {
     expect(addMatch).not.toHaveBeenCalled();
   });
 
+  it('promotes a recent ongoing manual telemetry draft instead of creating a duplicate', async () => {
+    const now = Date.now();
+    appStoreState.matches = [{
+      id: 888001,
+      timestamp: now - 3_000,
+      date: new Date(now - 3_000).toLocaleDateString(),
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      loadout: {
+        hero: 'Adrian',
+        ship: 'Hunter',
+        weapons: [],
+        equipment: [],
+        characterWeapons: [],
+        characterEquipment: [],
+      },
+      weapons: {},
+      reachModifiers: [],
+      kills: { 'AI Legion': 0 },
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      time: '00:00',
+      damageTaken: 0,
+      notes: '',
+      timelineEvents: [],
+      artifacts: [],
+      ocrState: 'queued',
+    }];
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'DesolationReach' },
+          ClientTimestamp: Math.floor(now / 1000),
+        },
+      ]);
+    });
+
+    expect(addMatch).not.toHaveBeenCalled();
+    expect(updateMatch).toHaveBeenCalledWith(expect.objectContaining({
+      id: 888001,
+      telemetryDraftState: 'active',
+    }));
+  });
+
   it('resolves nested telemetry weapon/equipment payloads into current loadout', async () => {
     const { useLogMonitor } = await import('../useLogMonitor');
     renderHook(() => useLogMonitor('Pilot'));

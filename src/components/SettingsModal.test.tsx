@@ -1,6 +1,6 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 const userPrefs = {
@@ -145,6 +145,10 @@ const storeState = {
 };
 
 const getElectronAPIMock = vi.fn(() => null);
+const storageServiceMock = {
+  init: vi.fn().mockResolvedValue(null),
+  backup: vi.fn(),
+};
 
 vi.mock('../providers/UserPreferencesProvider', () => ({
   useUserPreferences: () => userPrefs,
@@ -175,9 +179,7 @@ vi.mock('../utils/electronAPI', () => ({
 }));
 
 vi.mock('../utils/storage', () => ({
-  StorageService: {
-    init: vi.fn().mockResolvedValue(null),
-  },
+  StorageService: storageServiceMock,
 }));
 
 vi.mock('./OcrRegionEditorModal', () => ({
@@ -188,6 +190,7 @@ describe('SettingsModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getElectronAPIMock.mockReturnValue(null);
+    storageServiceMock.backup.mockReset();
     userPrefs.customBgUrl = '';
     uiState.showSettings = true;
     uiState.isOverlayMode = false;
@@ -248,6 +251,42 @@ describe('SettingsModal', () => {
     expect(screen.getByText('Capture Mode')).toBeInTheDocument();
     expect(screen.getByText('Result Button')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /capture defaults/i })).not.toBeInTheDocument();
+  });
+
+  it('offers separate backup actions for database-only and full artifact backups', async () => {
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    storageServiceMock.backup
+      .mockResolvedValueOnce({ success: true, path: 'C:\\Backups\\backup.json' })
+      .mockResolvedValueOnce({
+        success: true,
+        path: 'C:\\Backups\\full-backup.json',
+        bundlePath: 'C:\\Backups\\full-backup_artifacts',
+      });
+
+    const { SettingsModal } = await import('./SettingsModal');
+    render(<SettingsModal />);
+
+    fireEvent.click(screen.getByRole('button', { name: /data & updates/i }));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /create backup/i }));
+      await Promise.resolve();
+    });
+    expect(storageServiceMock.backup).toHaveBeenNthCalledWith(1, {
+      includeArtifacts: false,
+      reason: 'manual',
+    });
+    expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining('C:\\Backups\\backup.json'));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /create full backup/i }));
+      await Promise.resolve();
+    });
+    expect(storageServiceMock.backup).toHaveBeenNthCalledWith(2, {
+      includeArtifacts: true,
+      reason: 'manual',
+    });
+    expect(alertSpy).toHaveBeenLastCalledWith(expect.stringContaining('Artifacts bundled at'));
   });
 
   it('lets users toggle F10 auto-sequence from the capture quick setup grid', async () => {

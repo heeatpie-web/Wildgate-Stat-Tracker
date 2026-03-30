@@ -109,6 +109,21 @@ describe('autoCaptureCoordinator sequencing', () => {
     expect(sendMenuKeySequence).toHaveBeenNthCalledWith(4, '{END}', 'Navigate to Crew Hub Panel End');
     expect(sendMenuKeySequence).toHaveBeenNthCalledWith(5, '{ESC}', 'Exit');
     expect(captureAndProcess).toHaveBeenCalledTimes(3);
+    expect(captureAndProcess).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      matchId: 44,
+      activeUser: 'Pilot',
+      screenshotTypeHint: 'tactical_map',
+    }));
+    expect(captureAndProcess).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      matchId: 44,
+      activeUser: 'Pilot',
+      screenshotTypeHint: 'crew_hub',
+    }));
+    expect(captureAndProcess).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      matchId: 44,
+      activeUser: 'Pilot',
+      screenshotTypeHint: 'crew_hub',
+    }));
     expect(waits).toEqual([140, 20, 50, 60, 20, 16, 20]);
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({
       phase: 'capture-progress',
@@ -164,7 +179,16 @@ describe('autoCaptureCoordinator sequencing', () => {
     });
 
     expect(captureAndProcess).toHaveBeenCalledTimes(3);
-    expect(captureAndProcess).toHaveBeenNthCalledWith(1, expect.objectContaining({ matchId: 44, activeUser: 'Pilot' }));
+    expect(captureAndProcess).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      matchId: 44,
+      activeUser: 'Pilot',
+      screenshotTypeHint: 'tactical_map',
+    }));
+    expect(captureAndProcess).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      matchId: 44,
+      activeUser: 'Pilot',
+      screenshotTypeHint: 'crew_hub',
+    }));
     expect(sendMenuKeySequence).toHaveBeenNthCalledWith(1, '{ESC}', 'Navigate to Crew Hub');
   });
 

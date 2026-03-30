@@ -98,26 +98,34 @@ export const SetupWizard: React.FC = () => {
         if (!api) return;
 
         const failures: string[] = [];
+        let dbStatus: {
+            ok?: boolean;
+            walExists?: boolean;
+            dbMtime?: number | null;
+            lastBackupMtime?: number | null;
+            error?: string;
+        } | null = null;
 
         try {
-            const status = await api.invoke('db-status') as {
+            dbStatus = await api.invoke('db-status') as {
                 ok?: boolean;
                 walExists?: boolean;
                 dbMtime?: number | null;
                 lastBackupMtime?: number | null;
                 error?: string;
             } | null;
-            if (!status?.ok) {
-                failures.push(`Data storage check failed: ${status?.error || 'Unknown error'}`);
+            if (!dbStatus?.ok) {
+                failures.push(`Data storage check failed: ${dbStatus?.error || 'Unknown error'}`);
             }
         } catch (error) {
             failures.push(`Data storage check failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
 
         try {
-            const result = await api.invoke('db-backup') as { success?: boolean; path?: string; error?: string } | null;
-            if (!result?.success) {
-                failures.push(`Backup check failed: ${result?.error || 'Unknown error'}`);
+            if (!dbStatus?.ok) {
+                failures.push(`Backup check failed: ${dbStatus?.error || 'Unknown error'}`);
+            } else if (!Number(dbStatus.lastBackupMtime || 0)) {
+                failures.push('Backup check warning: no backup file found yet. Create one from Settings when convenient.');
             }
         } catch (error) {
             failures.push(`Backup check failed: ${error instanceof Error ? error.message : 'Unknown error'}`);

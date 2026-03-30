@@ -194,7 +194,7 @@ describe('artifactHandlers token-backed fallback artifacts', () => {
     expect(listed.data.imageFiles[0].filename).toBe('capture_2026-03-19T20-28-32-675Z.png');
   });
 
-  it('flags saved screenshots by macro source and returns captureSource metadata', async () => {
+  it('persists screenshot category metadata for typed auto-captures and result captures', async () => {
     const rootDir = makeTempDir();
     tempDirs.push(rootDir);
     const ipcMain = createIpcMainHarness();
@@ -204,10 +204,17 @@ describe('artifactHandlers token-backed fallback artifacts', () => {
     const event = { sender: { id: 506 } };
     const imageBase64 = Buffer.from('x'.repeat(256), 'utf-8').toString('base64');
 
-    const savedOcr = await saveScreenshot(event, {
+    const savedMap = await saveScreenshot(event, {
       imageBase64,
       matchId: 777,
       captureSource: 'ocr-macro',
+      screenshotType: 'tactical_map',
+    });
+    const savedCrewHub = await saveScreenshot(event, {
+      imageBase64,
+      matchId: 777,
+      captureSource: 'ocr-macro',
+      screenshotType: 'crew_hub',
     });
     const savedResult = await saveScreenshot(event, {
       imageBase64,
@@ -215,16 +222,19 @@ describe('artifactHandlers token-backed fallback artifacts', () => {
       captureSource: 'result-macro',
     });
 
-    expect(savedOcr.success).toBe(true);
+    expect(savedMap.success).toBe(true);
+    expect(savedCrewHub.success).toBe(true);
     expect(savedResult.success).toBe(true);
-    expect(savedOcr.data.filename).toMatch(/^capture_ocr_/i);
+    expect(savedMap.data.filename).toMatch(/^capture_map_/i);
+    expect(savedCrewHub.data.filename).toMatch(/^capture_crew_hub_/i);
     expect(savedResult.data.filename).toMatch(/^capture_result_/i);
 
     const listed = await getArtifacts(event, { matchId: 777 });
     expect(listed.success).toBe(true);
     expect(listed.data.imageFiles).toEqual(expect.arrayContaining([
-      expect.objectContaining({ captureSource: 'ocr-macro' }),
-      expect.objectContaining({ captureSource: 'result-macro' }),
+      expect.objectContaining({ captureSource: 'ocr-macro', screenshotType: 'tactical_map' }),
+      expect.objectContaining({ captureSource: 'ocr-macro', screenshotType: 'crew_hub' }),
+      expect.objectContaining({ captureSource: 'result-macro', screenshotType: 'result' }),
     ]));
   });
 

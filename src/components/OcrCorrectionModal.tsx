@@ -126,6 +126,13 @@ const getStoredHelpBannerDismissed = (): boolean => {
 const normalizeNameKey = (name: string): string => String(name || '').trim().toLowerCase();
 const normalizeConfidenceKey = (name: string): string => normalizeOcrName(name || '').toLowerCase();
 const normalizeSubmittedName = (name: string): string => String(name || '').trim();
+const serializeNameSourceSeed = (value: unknown): string => {
+    if (!value || typeof value !== 'object') return '';
+    return Object.entries(value as Record<string, unknown>)
+        .map(([name, sources]) => `${normalizeNameKey(name)}:${Array.isArray(sources) ? sources.length : 0}`)
+        .sort((left, right) => left.localeCompare(right))
+        .join('|');
+};
 const normalizeConfidence = (value: unknown): number | null => {
     if (value === null || value === undefined || value === '') return null;
     const numeric = Number(value);
@@ -616,10 +623,27 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     );
     const [modifierDraft, setModifierDraft] = useState<string[]>(() => seededModifierDraft);
     const [modifierInput, setModifierInput] = useState('');
+    const reviewSeedOcrDebug = pendingMatchData?.ocrDebug as {
+        timestamp?: unknown;
+        rawText?: unknown;
+        playerTeamName?: unknown;
+        playerShipTeamName?: unknown;
+        playerShipName?: unknown;
+        nameSources?: unknown;
+    } | undefined;
     const reviewSeedSignature = useMemo(() => JSON.stringify({
         matchId: Number(pendingMatchData?.id || 0) || null,
         ocrState: normalizeSubmittedName(String(pendingMatchData?.ocrState || '')),
         ocrReviewedAt: Number(pendingMatchData?.ocrReviewedAt || 0) || 0,
+        ocrDebugTimestamp: Number(reviewSeedOcrDebug?.timestamp || 0) || 0,
+        ocrDebugRawText: String(reviewSeedOcrDebug?.rawText || '').trim().slice(0, 256),
+        ocrDebugPlayerTeamName: normalizeSubmittedName(String(
+            reviewSeedOcrDebug?.playerTeamName
+            || reviewSeedOcrDebug?.playerShipTeamName
+            || ''
+        )),
+        ocrDebugPlayerShipName: normalizeSubmittedName(String(reviewSeedOcrDebug?.playerShipName || '')),
+        ocrDebugNameSources: serializeNameSourceSeed(reviewSeedOcrDebug?.nameSources),
         teamDraft: seededTeamDraftSignature,
         modifierDraft: seededModifierDraftSignature,
         sessionShipTypes: serializeShipTypeMap(sessionShipTypes),
@@ -628,6 +652,12 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         pendingMatchData?.id,
         pendingMatchData?.ocrReviewedAt,
         pendingMatchData?.ocrState,
+        reviewSeedOcrDebug?.nameSources,
+        reviewSeedOcrDebug?.playerShipName,
+        reviewSeedOcrDebug?.playerShipTeamName,
+        reviewSeedOcrDebug?.playerTeamName,
+        reviewSeedOcrDebug?.rawText,
+        reviewSeedOcrDebug?.timestamp,
         reviewScreenshots.length,
         seededModifierDraftSignature,
         seededTeamDraftSignature,
@@ -1274,7 +1304,9 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
             });
         }
         if (closeAfterApply && invokeOnAcceptAll) {
-            onAcceptAll();
+            queueMicrotask(() => {
+                onAcceptAll();
+            });
         }
         return true;
     };

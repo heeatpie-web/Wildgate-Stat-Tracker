@@ -203,7 +203,7 @@ export const FirstRunHealthCheck: React.FC<FirstRunHealthCheckProps> = ({
     setBackupStatus('running');
     setBackupDetail('Creating manual backup...');
     try {
-      const result = await api.invoke('db-backup');
+      const result = await api.invoke('db-backup', { reason: 'manual' });
       if (result?.success) {
         setBackupStatus('pass');
         setBackupDetail(`Backup created: ${result.path || 'Documents/Wildgate Stat Tracker/Backups'}`);

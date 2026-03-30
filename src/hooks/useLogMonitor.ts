@@ -29,6 +29,7 @@ const ADAPTIVE_MATCH_TELEMETRY_PROFILE = 'low-power';
 const ADAPTIVE_LOW_TELEMETRY_PROFILE = 'adaptive-low';
 const ADAPTIVE_LOW_PROFILE_DELAY_MS = 60 * 1000;
 const MIN_SESSION_END_GRACE_SECONDS = 10;
+const MANUAL_TELEMETRY_DRAFT_REUSE_WINDOW_MS = 2 * 60 * 1000;
 const IS_TELEMETRY_DEBUG = import.meta.env.DEV || process.env.NODE_ENV === 'test';
 
 const isTrustedTelemetryDuration = (seconds: number) =>
@@ -840,41 +841,63 @@ export const useLogMonitor = (activeUser?: string) => {
         const recentCutoff = (typeof sessionStartTimeRef.current === 'number' && sessionStartTimeRef.current > 0)
             ? (sessionStartTimeRef.current - 60_000)
             : (Date.now() - (6 * 60 * 60 * 1000));
+        const manualDraftCutoff = gameTime - MANUAL_TELEMETRY_DRAFT_REUSE_WINDOW_MS;
         const existingDraft = useAppStore.getState().matches
             .filter((m: Match) => {
                 if (!m || m.subType !== 'Telemetry Draft') return false;
-                if (m.telemetryDraftState !== 'active') return false;
                 const ts = Number(m.timestamp || 0);
                 if (!Number.isFinite(ts) || ts < recentCutoff) return false;
+                const isActiveDraft = m.telemetryDraftState === 'active';
+                const isRecentManualDraft = m.telemetryDraftState == null
+                    && m.result === 'Ongoing'
+                    && ts >= manualDraftCutoff;
+                if (!isActiveDraft && !isRecentManualDraft) return false;
                 const draftPlayer = String(m.player || '').trim().toLowerCase();
                 if (activePlayer && draftPlayer && draftPlayer !== activePlayer) return false;
                 return true;
             })
-            .sort((a: Match, b: Match) => Number(b.timestamp || 0) - Number(a.timestamp || 0))[0];
+            .sort((a: Match, b: Match) => {
+                const activeScoreA = a.telemetryDraftState === 'active' ? 1 : 0;
+                const activeScoreB = b.telemetryDraftState === 'active' ? 1 : 0;
+                if (activeScoreB !== activeScoreA) return activeScoreB - activeScoreA;
+                return Number(b.timestamp || 0) - Number(a.timestamp || 0);
+            })[0];
         if (existingDraft) {
-            if (telemetryLifecycleIsPracticeRangeRef.current === true && existingDraft.isPracticeRange !== true) {
-                updateMatch({
-                    ...existingDraft,
-                    timestamp: Number(existingDraft.timestamp || gameTime) || gameTime,
-                    isPracticeRange: true,
-                });
+            let nextExistingDraft = existingDraft;
+            const nextTimestamp = Number(existingDraft.timestamp || gameTime) || gameTime;
+            if (existingDraft.telemetryDraftState !== 'active') {
+                nextExistingDraft = {
+                    ...nextExistingDraft,
+                    timestamp: nextTimestamp,
+                    telemetryDraftState: 'active',
+                };
             }
-            if (existingDraft.matchMode !== telemetryDraftMatchModeRef.current) {
-                updateMatch({
-                    ...existingDraft,
-                    timestamp: Number(existingDraft.timestamp || gameTime) || gameTime,
+            if (telemetryLifecycleIsPracticeRangeRef.current === true && nextExistingDraft.isPracticeRange !== true) {
+                nextExistingDraft = {
+                    ...nextExistingDraft,
+                    timestamp: nextTimestamp,
+                    isPracticeRange: true,
+                };
+            }
+            if (nextExistingDraft.matchMode !== telemetryDraftMatchModeRef.current) {
+                nextExistingDraft = {
+                    ...nextExistingDraft,
+                    timestamp: nextTimestamp,
                     matchMode: telemetryDraftMatchModeRef.current,
-                });
+                };
+            }
+            if (nextExistingDraft !== existingDraft) {
+                updateMatch(nextExistingDraft);
             }
             telemetryDraftMatchIdRef.current = existingDraft.id;
             telemetryDraftStartedAtRef.current = Number(existingDraft.timestamp || gameTime) || gameTime;
-            telemetryDraftLoadoutSignatureRef.current = buildLoadoutSignature(existingDraft.loadout || loadout || currentLoadoutRef.current || null);
+            telemetryDraftLoadoutSignatureRef.current = buildLoadoutSignature(nextExistingDraft.loadout || loadout || currentLoadoutRef.current || null);
             if (Object.keys(pendingTelemetryConsistencyRef.current || {}).length > 0) {
                 updateTelemetryDraftConsistency(pendingTelemetryConsistencyRef.current, gameTime);
             }
             syncFriendlyPlayerIdsToDraft(gameTime);
-            Logger.info('LogMonitor', `Reused existing telemetry draft (matchId=${existingDraft.id})`);
-            return existingDraft.id;
+            Logger.info('LogMonitor', `Reused existing telemetry draft (matchId=${nextExistingDraft.id})`);
+            return nextExistingDraft.id;
         }
         const matchId = Date.now() + Math.floor(Math.random() * 1000);
         const baselineLoadout = loadout || currentLoadoutRef.current || null;

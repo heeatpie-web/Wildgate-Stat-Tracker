@@ -20,6 +20,20 @@ interface StorageSettings extends Record<string, unknown> {
   autoBackup?: boolean;
 }
 
+export type BackupReason = 'manual' | 'auto' | 'health-check' | 'rolling';
+
+export interface BackupRequestOptions {
+  includeArtifacts?: boolean;
+  reason?: BackupReason;
+}
+
+export interface BackupResult {
+  success: boolean;
+  path?: string;
+  bundlePath?: string;
+  error?: string;
+}
+
 type StorageLayoutItem = Record<string, unknown>;
 type StorageLayouts = Record<string, StorageLayoutItem[]>;
 
@@ -509,7 +523,7 @@ const maybeAutoBackup = async (data: StorageData) => {
 
   lastAutoBackupCount = matchCount;
   try {
-    await ipc.invoke('db-backup');
+    await ipc.invoke('db-backup', { reason: 'auto' });
   } catch (error) {
     Logger.warn('AutoBackup', 'Failed to create backup', error);
   }
@@ -760,10 +774,10 @@ export const StorageService = {
     return ok;
   },
 
-  async backup() {
+  async backup(options: BackupRequestOptions = {}): Promise<BackupResult> {
     const ipc = getElectronAPI();
     if (ipc) {
-      return await ipc.invoke('db-backup');
+      return await ipc.invoke('db-backup', options);
     }
     return { success: false, error: 'Not in Electron' };
   },

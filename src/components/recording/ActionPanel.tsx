@@ -24,7 +24,7 @@ import type { OCRExtractedData } from '../../utils/ocr/ocrTypes';
 import type { Match } from '../../types';
 import { runtimeConfig } from '../../config/runtimeConfig';
 import { buildAutoCaptureTelemetryDraft } from '../../utils/telemetryDraft';
-import { resolveSmartCaptureMatchId } from '../../utils/smartCaptureScope';
+import { findActiveTelemetryDraftMatch, resolveSmartCaptureMatchId } from '../../utils/smartCaptureScope';
 import { buildAutoCaptureStateSnapshot } from '../../utils/autoCaptureState';
 import { startAutoCapture } from '../../utils/electronBridge';
 
@@ -45,6 +45,8 @@ type SmartCaptureRequestPayload = {
     forceOcr?: boolean;
     behavior?: SmartCaptureRequestBehavior;
 };
+
+const RECENT_MANUAL_DRAFT_REUSE_WINDOW_MS = 2 * 60 * 1000;
 
 export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', density = 'standard', onSmartCaptureData, isActive = true }) => {
     const {
@@ -155,6 +157,35 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         const numericId = Number(latestDraft.id || 0);
         return Number.isInteger(numericId) && numericId > 0 ? numericId : null;
     }, [activeUser, matches]);
+
+    const findReusableTelemetryDraft = React.useCallback((): Match | null => {
+        const now = Date.now();
+        const storeMatches = Array.isArray(useAppStore.getState().matches)
+            ? useAppStore.getState().matches
+            : [];
+        const activeMatches = storeMatches.length > 0 ? storeMatches : matches;
+        const activeDraft = findActiveTelemetryDraftMatch({
+            activeUser,
+            matches: activeMatches,
+            sessionStartTime,
+            now,
+        });
+        if (activeDraft) return activeDraft;
+
+        const activePlayer = String(activeUser || '').trim().toLowerCase();
+        const reuseCutoff = now - RECENT_MANUAL_DRAFT_REUSE_WINDOW_MS;
+        return activeMatches
+            .filter((match): match is Match => Boolean(match))
+            .filter((match) => match.subType === 'Telemetry Draft')
+            .filter((match) => String(match.result || '').trim() === 'Ongoing')
+            .filter((match) => Number(match.timestamp || 0) >= reuseCutoff)
+            .filter((match) => {
+                const matchPlayer = String(match.player || '').trim().toLowerCase();
+                if (activePlayer && matchPlayer && matchPlayer !== activePlayer) return false;
+                return true;
+            })
+            .sort((left, right) => Number(right.timestamp || 0) - Number(left.timestamp || 0))[0] || null;
+    }, [activeUser, matches, sessionStartTime]);
 
     const submissionMatchId = resolveSubmissionMatchId();
     const queueScopeMatchId = selectedSmartCapturesMatchId ?? submissionMatchId;
@@ -324,6 +355,17 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         const now = Date.now();
         setIsMatchInProgress(true);
         setMatchStartTime(now);
+        const existingDraft = findReusableTelemetryDraft();
+        if (existingDraft) {
+            manualDraftIdRef.current = Number(existingDraft.id || 0) || null;
+            if (existingDraft.telemetryDraftState !== 'active') {
+                useAppStore.getState().updateMatch({
+                    ...existingDraft,
+                    telemetryDraftState: 'active',
+                });
+            }
+            return;
+        }
         // Create a Telemetry Draft so Smart Captures immediately shows an active match
         const draftId = now + Math.floor(Math.random() * 1000);
         const draft = buildAutoCaptureTelemetryDraft({
@@ -337,7 +379,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         });
         addMatch(draft);
         manualDraftIdRef.current = draftId;
-    }, [activeHero, activeMode, activeShip, activeUser, addMatch, currentLoadout, resetMatchMetricsForNewMatch, resetMatchTrackingForNewMatch, setIsMatchInProgress, setMatchStartTime]);
+    }, [activeHero, activeMode, activeShip, activeUser, addMatch, currentLoadout, findReusableTelemetryDraft, resetMatchMetricsForNewMatch, resetMatchTrackingForNewMatch, setIsMatchInProgress, setMatchStartTime]);
 
     const stopManualMatch = React.useCallback(() => {
         setMatchStartTime(null);

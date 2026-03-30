@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { ArrowLeft, FileJson, Save, Download, RefreshCw, X, Check, Search, Upload, Copy, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Archive, FileJson, Save, Download, RefreshCw, X, Check, Search, Upload, Copy, ChevronDown, ChevronUp } from 'lucide-react';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { useGameData } from '../providers/GameDataProvider';
@@ -39,7 +39,7 @@ type SettingsSectionId =
     | 'telemetry-monitoring'
     | 'data-updates';
 type DashboardStatView = 'analytics' | 'history' | 'smart-captures' | 'players' | 'dev-ocr';
-type DataActionKey = 'backup' | 'exportCsv' | 'exportJson' | 'copyLogs';
+type DataActionKey = 'backup' | 'backupFull' | 'exportCsv' | 'exportJson' | 'copyLogs';
 type DataActionStatus = 'idle' | 'working' | 'done';
 interface SettingsFocusSectionRequest {
     tab?: SettingsTabId;
@@ -285,6 +285,7 @@ const SettingsModalContent: React.FC = () => {
     const [settingsSearch, setSettingsSearch] = useState('');
     const [dataActionStatus, setDataActionStatus] = useState<Record<DataActionKey, DataActionStatus>>({
         backup: 'idle',
+        backupFull: 'idle',
         exportCsv: 'idle',
         exportJson: 'idle',
         copyLogs: 'idle',
@@ -436,24 +437,28 @@ const SettingsModalContent: React.FC = () => {
         }, 600);
     }, [setShowSettings]);
 
-    const handleBackupDB = async () => {
-        setDataActionStatus((prev) => ({ ...prev, backup: 'working' }));
+    const handleBackupDB = async (includeArtifacts = false) => {
+        const actionKey: DataActionKey = includeArtifacts ? 'backupFull' : 'backup';
+        setDataActionStatus((prev) => ({ ...prev, [actionKey]: 'working' }));
         try {
-            const res = await StorageService.backup();
+            const res = await StorageService.backup({
+                includeArtifacts,
+                reason: 'manual',
+            });
             if (res && res.success) {
                 const lines = [`Backup saved to:\n${res.path}`];
-                if ((res as { bundlePath?: string }).bundlePath) {
-                    lines.push(`\nArtifacts bundled at:\n${(res as { bundlePath?: string }).bundlePath}`);
+                if (res.bundlePath) {
+                    lines.push(`\nArtifacts bundled at:\n${res.bundlePath}`);
                 }
                 alert(lines.join(''));
-                setDataActionStatus((prev) => ({ ...prev, backup: 'done' }));
-                window.setTimeout(() => setDataActionStatus((prev) => ({ ...prev, backup: 'idle' })), 1600);
+                setDataActionStatus((prev) => ({ ...prev, [actionKey]: 'done' }));
+                window.setTimeout(() => setDataActionStatus((prev) => ({ ...prev, [actionKey]: 'idle' })), 1600);
                 return;
             }
             alert("Backup failed: " + (res?.error || "Unknown error"));
         } finally {
             setDataActionStatus((prev) => (
-                prev.backup === 'working' ? { ...prev, backup: 'idle' } : prev
+                prev[actionKey] === 'working' ? { ...prev, [actionKey]: 'idle' } : prev
             ));
         }
     };
@@ -1744,7 +1749,7 @@ const SettingsModalContent: React.FC = () => {
                             <div className="md3-surface-high p-4 rounded-card flex items-center justify-between border border-md-sys-outline/10">
                                 <div>
                                     <div className="text-body font-bold">Auto Backup</div>
-                                    <div className="text-label-sm opacity-60 uppercase font-bold">Every 5 matches</div>
+                                    <div className="text-label-sm opacity-60 uppercase font-bold">Every 5 matches (database only)</div>
                                 </div>
                                 <button
                                     onClick={() => setEnableAutoBackup(!enableAutoBackup)}
@@ -1759,7 +1764,7 @@ const SettingsModalContent: React.FC = () => {
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <button
-                                    onClick={handleBackupDB}
+                                    onClick={() => handleBackupDB(false)}
                                     disabled={dataActionStatus.backup === 'working'}
                                     className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high rounded-card hover:bg-md-sys-on-surface/5 transition-colors border border-md-sys-outline/10"
                                 >
@@ -1768,8 +1773,22 @@ const SettingsModalContent: React.FC = () => {
                                         : (dataActionStatus.backup === 'done' ? <Check size={20} /> : <Save size={20} />)}
                                     <span className="text-label-sm font-bold">
                                         {dataActionStatus.backup === 'working'
-                                            ? 'Backing up...'
-                                            : (dataActionStatus.backup === 'done' ? 'Backed up!' : 'Backup')}
+                                            ? 'Creating backup...'
+                                            : (dataActionStatus.backup === 'done' ? 'Backup ready!' : 'Create Backup')}
+                                    </span>
+                                </button>
+                                <button
+                                    onClick={() => handleBackupDB(true)}
+                                    disabled={dataActionStatus.backupFull === 'working'}
+                                    className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high rounded-card hover:bg-md-sys-on-surface/5 transition-colors border border-md-sys-outline/10"
+                                >
+                                    {dataActionStatus.backupFull === 'working'
+                                        ? <RefreshCw size={20} className="animate-spin" />
+                                        : (dataActionStatus.backupFull === 'done' ? <Check size={20} /> : <Archive size={20} />)}
+                                    <span className="text-label-sm font-bold">
+                                        {dataActionStatus.backupFull === 'working'
+                                            ? 'Bundling artifacts...'
+                                            : (dataActionStatus.backupFull === 'done' ? 'Full backup ready!' : 'Create Full Backup')}
                                     </span>
                                 </button>
                                 <button

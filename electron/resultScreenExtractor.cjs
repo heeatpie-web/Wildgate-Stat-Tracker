@@ -308,9 +308,43 @@ function parseResultSignals({
   const damageTaken = parseDamageTaken([...damageTexts, ...panelTexts]);
 
   const hasVictory = joined.includes('VICTORY') || joined.includes('VICTOR');
-  const hasArtifact = joined.includes('ARTIFACT') || joined.includes('TIFACT');
-  const hasArtifactRecovered = joined.includes('ARTIFACTRECOVERED') || joined.includes('RTIFACTRECOVERED') || joined.includes('ARTIFACTRECOVERE');
-  const hasArtifactSignal = hasArtifact || hasArtifactRecovered;
+  const hasArtifactKeyword = joined.includes('ARTIFACT')
+    || joined.includes('ARIFACT')
+    || joined.includes('TIFACT')
+    || joined.includes('RTIFACT');
+  const hasExtractedKeyword = includesAnyToken(joined, [
+    'EXTRACTED',
+    'XTRACTED',
+    'EXTRACTE',
+    'XTRACTE',
+    'EXTRATED',
+    'TRACTED',
+  ]);
+  const hasRecoveredKeyword = includesAnyToken(joined, [
+    'RECOVERED',
+    'ECOVERED',
+    'RECOVERE',
+    'ECOVERE',
+    'RECOVER',
+  ]);
+  const hasArtifactExtracted = includesAnyToken(joined, [
+    'ARTIFACTEXTRACTED',
+    'ARIFACTEXTRACTED',
+    'RTIFACTEXTRACTED',
+    'ARTIFACTEXTRACTE',
+    'ARIFACTEXTRACTE',
+    'RTIFACTEXTRACTE',
+    'ARTIFACTXTRACTED',
+  ]) || (hasArtifactKeyword && hasExtractedKeyword) || (hasVictory && hasExtractedKeyword);
+  const hasArtifactRecovered = includesAnyToken(joined, [
+    'ARTIFACTRECOVERED',
+    'ARIFACTRECOVERED',
+    'RTIFACTRECOVERED',
+    'ARTIFACTRECOVERE',
+    'ARIFACTRECOVERE',
+    'RTIFACTRECOVERE',
+  ]) || (hasArtifactKeyword && hasRecoveredKeyword) || hasRecoveredKeyword;
+  const hasArtifactSignal = hasArtifactKeyword || hasArtifactExtracted || hasArtifactRecovered;
   const hasCombatWin = joined.includes('RIVALSELIMINATED') || joined.includes('IVALSELIMINAT');
   const hasEliminated = joined.includes('ELIMINATED') || joined.includes('LIMINATED');
   const hasVanguardWins = joined.includes('VANGUARDWINS') || joined.includes('ANGUARDWINS');
@@ -362,10 +396,21 @@ function parseResultSignals({
     };
   }
 
-  if (hasDefeat && hasArtifactSignal) {
+  if (hasArtifactRecovered || (hasDefeat && hasArtifactSignal)) {
     return {
       result: 'Loss',
       winType: 'artifact',
+      detectionMethod,
+      damageTaken: resolvedDamageTaken,
+      damageSourcesAvailable: resolvedDamageSourcesAvailable,
+    };
+  }
+
+  if (hasArtifactExtracted && !hasCombatWin) {
+    return {
+      result: 'Win',
+      winType: 'artifact',
+      placement: 1,
       detectionMethod,
       damageTaken: resolvedDamageTaken,
       damageSourcesAvailable: resolvedDamageSourcesAvailable,
@@ -383,17 +428,7 @@ function parseResultSignals({
     };
   }
 
-  if (hasArtifactRecovered) {
-    return {
-      result: 'Loss',
-      winType: 'artifact',
-      detectionMethod,
-      damageTaken: resolvedDamageTaken,
-      damageSourcesAvailable: resolvedDamageSourcesAvailable,
-    };
-  }
-
-  if (hasCombatWin || (hasVictory && !hasArtifact)) {
+  if (hasCombatWin || (hasVictory && !hasArtifactSignal)) {
     return {
       result: 'Win',
       winType: 'combat',
@@ -419,16 +454,6 @@ function parseResultSignals({
       result: 'Loss',
       winType: 'combat',
       placement,
-      detectionMethod,
-      damageTaken: resolvedDamageTaken,
-      damageSourcesAvailable: resolvedDamageSourcesAvailable,
-    };
-  }
-
-  if (hasDefeat && hasArtifactSignal) {
-    return {
-      result: 'Loss',
-      winType: 'artifact',
       detectionMethod,
       damageTaken: resolvedDamageTaken,
       damageSourcesAvailable: resolvedDamageSourcesAvailable,

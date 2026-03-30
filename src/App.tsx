@@ -143,8 +143,12 @@ import { BUNDLED_OCR_LEXICON } from './utils/bundledOcrLexicon';
 import { extractArtifactSourceFromOcrData } from './utils/artifactSource';
 import { buildOcrNameConfidenceMapFromExtractedData } from './utils/ocr/nameSourceHints';
 import { buildAutoCaptureStateSnapshot } from './utils/autoCaptureState';
-import { sendGameUiAction, startAutoCapture, type StartAutoCaptureResult } from './utils/electronBridge';
+import { startAutoCapture, type OCRProcessRuntimeOptions, type StartAutoCaptureResult } from './utils/electronBridge';
 import { findActiveTelemetryDraftMatch } from './utils/smartCaptureScope';
+import { getMatchArtifactsStructured, rerunOCRMulti } from './utils/artifactService';
+import { classifyArtifactScreenshotBucket } from './utils/artifactScreenshotBuckets';
+import { buildTelemetryDraftPregamePreviewPatch } from './utils/pregameAdvice/previewSync';
+import { buildPregameAdviceSnapshotForMatch, isPregameAdviceSnapshotEqual } from './utils/pregameAdvice/matchAdvice';
 import {
     deriveCanonicalRosterCandidateTargetKey,
     getAutoPrunablePendingReviewIds,
@@ -317,19 +321,6 @@ const FULL_AUTO_READY_FOR_NEXT_MATCH_DELAY_MS = 30_000;
 const FULL_AUTO_BACKGROUND_RESULT_OCR_INTERVAL_MS = 2_000;
 const FULL_AUTO_BACKGROUND_RESULT_OCR_MAX_ATTEMPTS = 4;
 const FULL_AUTO_FRONTEND_RESULT_CONFIRM_GRACE_MS = 8_000;
-// Grab the first loss recap panel aggressively so quick exits still preserve tab 1.
-const FULL_AUTO_DAMAGE_SOURCES_INITIAL_CAPTURE_DELAY_MS = 500;
-// Time to wait after pressing ] before capturing tab 2.
-const FULL_AUTO_DAMAGE_SOURCES_TRANSITION_MS = 125;
-// Damage panel region: x=1010, y=100, w=880, h=720 at 1920x1080 — fits the FINAL MOMENTS RECAP panel
-const FULL_AUTO_DAMAGE_SOURCES_CAPTURE_REGION = {
-    left: 0.526,
-    top: 0.093,
-    width: 0.458,
-    height: 0.667,
-    normalized: true,
-} as const;
-
 type FullAutoResultContext = {
     result?: 'Win' | 'Loss' | 'Draw' | null;
     winType?: 'combat' | 'artifact';
@@ -341,14 +332,6 @@ const hasRecognizedResultContext = (value: FullAutoResultContext | null | undefi
     if (value?.winType === 'combat' || value?.winType === 'artifact') return true;
     const placement = Number(value?.placement);
     return Number.isInteger(placement) && placement >= 1 && placement <= 5;
-};
-
-const shouldCaptureDamageSourcesFollowUp = (value: FullAutoResultContext | null | undefined): boolean => {
-    if (value?.result !== 'Loss') return false;
-    if (value?.winType === 'artifact') return false;
-    if (value?.winType === 'combat') return true;
-    const placement = Number(value?.placement);
-    return Number.isInteger(placement) && placement >= 2 && placement <= 5;
 };
 
 const isImageArtifactEntry = (value: unknown): value is string => {
@@ -576,6 +559,7 @@ const App: React.FC = () => {
     const telemetryAutoCaptureInFlightRef = React.useRef<Set<number>>(new Set());
     const telemetryAutoCaptureCompletedRef = React.useRef<Set<number>>(new Set());
     const telemetryAutoCaptureOriginRef = React.useRef<Map<number, 'pregame'>>(new Map());
+    const telemetryAutoCaptureOcrInFlightRef = React.useRef<Set<number>>(new Set());
     const latestTelemetryDraftIdRef = React.useRef<number | null>(null);
     const resultMonitorArmAnchorMatchIdRef = React.useRef<number | null>(null);
     const artifactsAndGatesFallbackWatchTimerRef = React.useRef<number | null>(null);
@@ -756,6 +740,210 @@ const App: React.FC = () => {
             ocrState: scopedMatch.ocrState || 'queued',
         });
     }, []);
+    const setTelemetryDraftAutoCaptureOcrState = useCallback((
+        matchId: number | null | undefined,
+        ocrState: Match['ocrState']
+    ) => {
+        const numericMatchId = Number(matchId || 0);
+        if (!Number.isInteger(numericMatchId) || numericMatchId <= 0 || !ocrState) {
+            return;
+        }
+
+        const state = useAppStore.getState();
+        const pendingDraft = state.pendingMatchData;
+        if (pendingDraft && Number(pendingDraft.id || 0) === numericMatchId) {
+            state.setPendingMatchData({
+                ...pendingDraft,
+                ocrState,
+            });
+        }
+
+        const scopedMatch = (state.matches || []).find((match) => Number(match.id || 0) === numericMatchId);
+        if (!scopedMatch) {
+            return;
+        }
+
+        state.updateMatch({
+            ...scopedMatch,
+            ocrState,
+        });
+    }, []);
+    const applyTelemetryAutoCaptureOcrResult = useCallback((
+        matchId: number | null | undefined,
+        data: OCRExtractedData
+    ): boolean => {
+        const numericMatchId = Number(matchId || 0);
+        if (!Number.isInteger(numericMatchId) || numericMatchId <= 0) {
+            return false;
+        }
+
+        const state = useAppStore.getState();
+        const scopedMatch = (state.matches || []).find((match) => Number(match.id || 0) === numericMatchId);
+        if (!scopedMatch) {
+            return false;
+        }
+
+        const pendingDraft = state.pendingMatchData && Number(state.pendingMatchData.id || 0) === numericMatchId
+            ? state.pendingMatchData
+            : null;
+        const mergedArtifacts = mergeCaptureArtifactPaths(
+            mergeCaptureArtifactPaths(scopedMatch.artifacts || [], pendingDraft?.artifacts || []),
+            data.artifacts || []
+        );
+        const patch = buildTelemetryDraftPregamePreviewPatch(scopedMatch, {
+            ...data,
+            artifacts: mergedArtifacts,
+        });
+        const nameConfidence = buildOcrNameConfidenceMapFromExtractedData(data);
+        const nextOcrDebug: Match['ocrDebug'] = {
+            ...(scopedMatch.ocrDebug || {}),
+            rawText: data.rawText?.substring(0, 2000),
+            confidence: data.overallConfidence,
+            hazards: Array.isArray(data.hazards)
+                ? data.hazards.map((hazard) => String(hazard || '').trim()).filter(Boolean)
+                : scopedMatch.ocrDebug?.hazards,
+            source: data.ocrSource,
+            fallbackReason: data.ocrFallbackReason,
+            cloudError: data.ocrCloudError,
+            geminiError: data.ocrGeminiError,
+            mergeStats: data.mergeStats,
+            fieldConfidence: data.fieldConfidence,
+            routing: data.ocrRouting,
+            nameConfidence: Object.keys(nameConfidence).length > 0
+                ? nameConfidence
+                : scopedMatch.ocrDebug?.nameConfidence,
+            playerTeamName: String(data.playerTeamName || data.playerShip?.teamName || '').trim() || undefined,
+            playerShipTeamName: String(data.playerShip?.teamName || data.playerTeamName || '').trim() || undefined,
+            playerShipName: String(data.playerShipName || data.playerTeamName || data.playerShip?.teamName || '').trim() || undefined,
+            timestamp: data.captureTimestamp || Date.now(),
+        };
+        const nextMatch: Match = {
+            ...scopedMatch,
+            ...(patch || {}),
+            artifacts: mergedArtifacts.length > 0 ? mergedArtifacts : scopedMatch.artifacts,
+            ocrState: 'reviewing',
+            ocrDebug: nextOcrDebug,
+        };
+        const nextPregameAdvice = buildPregameAdviceSnapshotForMatch(nextMatch, state.matches || []);
+
+        if (pendingDraft) {
+            state.setPendingMatchData({
+                ...pendingDraft,
+                ...(patch || {}),
+                artifacts: mergedArtifacts.length > 0 ? mergedArtifacts : pendingDraft.artifacts,
+                ocrState: 'reviewing',
+                ocrDebug: nextOcrDebug,
+                pregameAdvice: nextPregameAdvice,
+            });
+        }
+
+        state.updateMatch({
+            ...nextMatch,
+            pregameAdvice: nextPregameAdvice,
+        });
+
+        return (
+            Boolean(patch)
+            || !isPregameAdviceSnapshotEqual(scopedMatch.pregameAdvice, nextPregameAdvice)
+            || scopedMatch.ocrState !== 'reviewing'
+        );
+    }, []);
+    const runTelemetryAutoCaptureOcr = useCallback(async (matchId: number | null | undefined): Promise<boolean> => {
+        const numericMatchId = Number(matchId || 0);
+        const normalizedActiveUser = String(activeUser || '').trim();
+        if (!Number.isInteger(numericMatchId) || numericMatchId <= 0 || !normalizedActiveUser) {
+            return false;
+        }
+        if (telemetryAutoCaptureOcrInFlightRef.current.has(numericMatchId)) {
+            return false;
+        }
+
+        const state = useAppStore.getState();
+        const captureMode = String(state.captureMode || '').trim().toLowerCase();
+        if (captureMode !== 'auto' && state.pregameAdviceEnabled !== true) {
+            return false;
+        }
+
+        const scopedMatch = (state.matches || []).find((match) => Number(match.id || 0) === numericMatchId);
+        if (
+            !scopedMatch
+            || scopedMatch.subType !== 'Telemetry Draft'
+            || (scopedMatch.telemetryDraftState !== 'active' && scopedMatch.result !== 'Ongoing')
+        ) {
+            return false;
+        }
+
+        const pendingDraft = state.pendingMatchData && Number(state.pendingMatchData.id || 0) === numericMatchId
+            ? state.pendingMatchData
+            : null;
+        const fallbackArtifacts = mergeCaptureArtifactPaths(scopedMatch.artifacts || [], pendingDraft?.artifacts || []);
+
+        telemetryAutoCaptureOcrInFlightRef.current.add(numericMatchId);
+        setTelemetryDraftAutoCaptureOcrState(numericMatchId, 'processing');
+
+        try {
+            const structuredArtifacts = await getMatchArtifactsStructured(numericMatchId, fallbackArtifacts);
+            const ocrImagePaths = structuredArtifacts.images.filter((imagePath, index) => {
+                const bucket = classifyArtifactScreenshotBucket(
+                    imagePath,
+                    structuredArtifacts.imageFiles[index]
+                );
+                return bucket === 'crew_hub' || bucket === 'tactical_map';
+            });
+
+            if (ocrImagePaths.length === 0) {
+                setTelemetryDraftAutoCaptureOcrState(numericMatchId, 'queued');
+                return false;
+            }
+
+            const runtimeOptions: OCRProcessRuntimeOptions = {
+                routingProfile: state.ocrEnhancedNameRecoveryEnabled ? 'names-only' : 'default',
+                fontProfile: state.ocrEnhancedNameRecoveryEnabled ? 'ealing-black-italic' : 'default',
+                nameRerouteThreshold: Number.isFinite(state.ocrNameRerouteThreshold)
+                    ? Number(state.ocrNameRerouteThreshold)
+                    : 78,
+                maxReroutePasses: state.ocrEnhancedNameRecoveryEnabled ? 1 : 0,
+            };
+            const result = await rerunOCRMulti(
+                ocrImagePaths,
+                normalizedActiveUser,
+                typeof state.ocrMode === 'string' && state.ocrMode.trim().length > 0 ? state.ocrMode : 'local',
+                state.ocrRegions ?? null,
+                runtimeOptions
+            );
+
+            if (!result.success || !result.data) {
+                setTelemetryDraftAutoCaptureOcrState(numericMatchId, 'error');
+                Logger.warn('AutoCapture', 'Auto-capture OCR did not return merged pregame data', {
+                    matchId: numericMatchId,
+                    imageCount: ocrImagePaths.length,
+                    error: result.error || null,
+                });
+                return false;
+            }
+
+            const mergedData: OCRExtractedData = {
+                ...result.data,
+                artifacts: mergeCaptureArtifactPaths(
+                    mergeCaptureArtifactPaths(fallbackArtifacts, structuredArtifacts.images),
+                    result.data.artifacts || []
+                ),
+                captureTimestamp: result.data.captureTimestamp || Date.now(),
+            };
+
+            applyTelemetryAutoCaptureOcrResult(numericMatchId, mergedData);
+            return true;
+        } catch (error) {
+            setTelemetryDraftAutoCaptureOcrState(numericMatchId, 'error');
+            Logger.warn('AutoCapture', 'Failed to auto-run OCR after capture completion', {
+                matchId: numericMatchId,
+                error: error instanceof Error ? error.message : String(error),
+            });
+            return false;
+        } finally {
+            telemetryAutoCaptureOcrInFlightRef.current.delete(numericMatchId);
+        }
+    }, [activeUser, applyTelemetryAutoCaptureOcrResult, setTelemetryDraftAutoCaptureOcrState]);
 
     useEffect(() => {
         matchesRef.current = matches;
@@ -2179,12 +2367,16 @@ const App: React.FC = () => {
                         : 'Auto-capture complete.',
                     type: 'success',
                 });
+                if (normalizedMatchId != null) {
+                    void runTelemetryAutoCaptureOcr(normalizedMatchId);
+                }
                 return;
             }
             if (phase === 'failed') {
                 if (normalizedMatchId != null) {
                     telemetryAutoCaptureInFlightRef.current.delete(normalizedMatchId);
                     telemetryAutoCaptureOriginRef.current.delete(normalizedMatchId);
+                    telemetryAutoCaptureOcrInFlightRef.current.delete(normalizedMatchId);
                 }
                 const baseMessage = typeof payload?.message === 'string' && payload.message.trim()
                     ? payload.message
@@ -2226,6 +2418,7 @@ const App: React.FC = () => {
         setUpdateStatus,
         setIsOverlayMode,
         setToast,
+        runTelemetryAutoCaptureOcr,
         syncAutoCaptureArtifactToMatch,
         telemetryLifecycleStage,
     ]);
@@ -3135,45 +3328,6 @@ const App: React.FC = () => {
         }
     }, []);
 
-    const captureDamageSourcesArtifact = useCallback(async (
-        api: NonNullable<ReturnType<typeof getElectronAPI>>,
-        matchId: number,
-    ) => {
-        // The first recap tab is often visible shortly after the result screen lands.
-        // Capture it early so players who back out quickly still preserve the loss recap.
-        await waitForDuration(FULL_AUTO_DAMAGE_SOURCES_INITIAL_CAPTURE_DELAY_MS);
-
-        // --- Tab 1: Damage Sources (fresh capture) ---
-        const tab1Capture = await api.invoke('capture-result-screen-region', {
-            cropRegion: FULL_AUTO_DAMAGE_SOURCES_CAPTURE_REGION,
-        });
-        const tab1Base64 = normalizeImageBase64Payload(tab1Capture?.imageBase64);
-        if (!tab1Base64) {
-            console.warn('[FullAuto] Unable to capture damage panel tab 1', { matchId });
-            return null;
-        }
-
-        // --- Switch to Tab 2: Enemy Ships ---
-        await sendGameUiAction('show-damage-sources');
-        await waitForDuration(FULL_AUTO_DAMAGE_SOURCES_TRANSITION_MS);
-
-        // --- Tab 2: Enemy Ships (fresh capture) ---
-        const tab2Capture = await api.invoke('capture-result-screen-region', {
-            cropRegion: FULL_AUTO_DAMAGE_SOURCES_CAPTURE_REGION,
-        });
-        const tab2Base64 = normalizeImageBase64Payload(tab2Capture?.imageBase64);
-
-        if (!tab2Base64) {
-            console.warn('[FullAuto] Unable to capture damage panel tab 2', { matchId });
-            return [{ imageBase64: tab1Base64, kind: 'damage-sources' as const }];
-        }
-
-        return [
-            { imageBase64: tab1Base64, kind: 'damage-sources' as const },
-            { imageBase64: tab2Base64, kind: 'damage-ships' as const },
-        ];
-    }, []);
-
     const beginFullAutoResultDetection = useCallback((
         message: string,
         matchId?: number | null,
@@ -3330,9 +3484,6 @@ const App: React.FC = () => {
 
             let shouldReturnToWatching = true;
             let finalFailureMessage = 'Automatic result capture failed';
-            let supplementalArtifacts: Array<{ imageBase64: string; kind: 'damage-sources' | 'damage-ships' }> = [];
-            let supplementalArtifactsPromise: Promise<Array<{ imageBase64: string; kind: 'damage-sources' | 'damage-ships' }> | null> | null = null;
-
             for (let attemptIndex = 0; attemptIndex < FULL_AUTO_RESULT_OCR_MAX_ATTEMPTS; attemptIndex += 1) {
                 const capture = await api.invoke('capture-screen');
                 if (!capture) {
@@ -3365,12 +3516,6 @@ const App: React.FC = () => {
                     : (scanResult?.data ?? { result: null });
                 if (!resultData.detectionMethod && currentDetectionMethod) {
                     resultData.detectionMethod = currentDetectionMethod;
-                }
-                if (
-                    !supplementalArtifactsPromise
-                    && shouldCaptureDamageSourcesFollowUp(resultData)
-                ) {
-                    supplementalArtifactsPromise = captureDamageSourcesArtifact(api, normalizedDraftMatchId);
                 }
 
                 let persistedPrimaryArtifactPath: string | null = null;
@@ -3414,18 +3559,12 @@ const App: React.FC = () => {
                     });
                 }
 
-                // Keep the follow-up tied to the first confirmed combat-loss frame,
-                // even if that lands on a retry instead of the first burst attempt.
-                if (supplementalArtifactsPromise) {
-                    supplementalArtifacts = (await supplementalArtifactsPromise) ?? [];
-                }
-
                 const finalized = await autoFinalizeResultScreenCapture({
                     imageBase64,
                     resultData,
                     matchId: normalizedDraftMatchId,
                     persistedPrimaryArtifactPath,
-                    supplementalArtifacts,
+                    supplementalArtifacts: [],
                 });
 
                 if (finalized.success) {
@@ -3469,8 +3608,6 @@ const App: React.FC = () => {
                     )
                 );
                 if (shouldRetryAfterRecoverableMiss) {
-                    supplementalArtifacts = [];
-                    supplementalArtifactsPromise = null;
                     await waitForDuration(FULL_AUTO_RESULT_OCR_RETRY_INTERVAL_MS);
                 }
             }
@@ -3508,7 +3645,6 @@ const App: React.FC = () => {
         }
     }, [
         autoFinalizeResultScreenCapture,
-        captureDamageSourcesArtifact,
         fullAutoResultLatched,
         normalizedActiveTelemetryDraftMatchId,
         resetResultMonitorSuppression,

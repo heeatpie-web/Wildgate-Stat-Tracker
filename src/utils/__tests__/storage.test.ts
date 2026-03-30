@@ -146,6 +146,24 @@ describe('StorageService', () => {
     }
   });
 
+  it('uses lightweight auto backups without requesting artifact bundles', async () => {
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'db-write') return { success: true };
+      if (channel === 'db-backup') return { success: true };
+      return null;
+    });
+    const { StorageService } = await loadStorageModule({ invoke });
+
+    const savePromise = StorageService.save(createStorageData({
+      matches: Array.from({ length: 5 }, (_, index) => ({ id: index + 1 })) as StorageData['matches'],
+      settings: { autoBackup: true },
+    }));
+    await vi.advanceTimersByTimeAsync(305);
+
+    await expect(savePromise).resolves.toBe(true);
+    expect(invoke).toHaveBeenCalledWith('db-backup', { reason: 'auto' });
+  });
+
   it('applies bundled UID seed entries without overwriting user mappings', async () => {
     const invoke = vi.fn(async (channel: string) => {
       if (channel === 'db-read') {

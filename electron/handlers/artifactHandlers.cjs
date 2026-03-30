@@ -30,11 +30,15 @@ const blockedSecurityCounters = new Map();
 const MATCH_ARTIFACT_REL_PATTERN = /match_artifacts[\\/](\d+)[\\/](.+)$/i;
 const AUTO_CAPTURE_FILENAME_PATTERN = /^capture_/i;
 const RELINKED_SUFFIX_PATTERN = /(?:__relinked_\d+)+(?=\.[^.]+$)/ig;
-const CAPTURE_SOURCE_PREFIX_TO_FLAG = Object.freeze({
-  result: 'result-macro',
-  ocr: 'ocr-macro',
+const CAPTURE_PREFIX_METADATA = Object.freeze({
+  result: Object.freeze({ captureSource: 'result-macro', screenshotType: 'result' }),
+  ocr: Object.freeze({ captureSource: 'ocr-macro', screenshotType: null }),
+  map: Object.freeze({ captureSource: 'ocr-macro', screenshotType: 'tactical_map' }),
+  tactical_map: Object.freeze({ captureSource: 'ocr-macro', screenshotType: 'tactical_map' }),
+  crew_hub: Object.freeze({ captureSource: 'ocr-macro', screenshotType: 'crew_hub' }),
 });
 const ALLOWED_CAPTURE_SOURCES = new Set(['result-macro', 'ocr-macro']);
+const ALLOWED_SCREENSHOT_TYPES = new Set(['crew_hub', 'tactical_map', 'result']);
 
 function recordSecurityBlock(channel, code, message) {
   const key = `${channel}:${code}`;
@@ -134,11 +138,38 @@ function normalizeCaptureSource(value) {
   return ALLOWED_CAPTURE_SOURCES.has(normalized) ? normalized : null;
 }
 
-function classifyCaptureSourceFromFilename(value) {
+function normalizeScreenshotType(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === 'crewhub') return 'crew_hub';
+  if (normalized === 'map' || normalized === 'tacticalmap' || normalized === 'mapscreen' || normalized === 'map_screen') {
+    return 'tactical_map';
+  }
+  return ALLOWED_SCREENSHOT_TYPES.has(normalized) ? normalized : null;
+}
+
+function classifyCaptureMetadataFromFilename(value) {
   const baseName = stripRelinkSuffixes(value).toLowerCase();
-  const prefixMatch = baseName.match(/^capture_([a-z0-9]+)_/i);
-  if (!prefixMatch?.[1]) return null;
-  return CAPTURE_SOURCE_PREFIX_TO_FLAG[prefixMatch[1]] || null;
+  const prefixMatch = baseName.match(/^capture_([a-z0-9_]+)_/i);
+  if (!prefixMatch?.[1]) {
+    return { captureSource: null, screenshotType: null };
+  }
+  const metadata = CAPTURE_PREFIX_METADATA[prefixMatch[1]] || null;
+  if (!metadata) {
+    return { captureSource: null, screenshotType: null };
+  }
+  return {
+    captureSource: metadata.captureSource || null,
+    screenshotType: metadata.screenshotType || null,
+  };
+}
+
+function classifyCaptureSourceFromFilename(value) {
+  return classifyCaptureMetadataFromFilename(value).captureSource;
+}
+
+function classifyScreenshotTypeFromFilename(value) {
+  return classifyCaptureMetadataFromFilename(value).screenshotType;
 }
 
 function countRelinkSuffixes(value) {
@@ -167,7 +198,7 @@ function pickPreferredArtifactPath(currentPath, candidatePath) {
 
 async function saveScreenshotImage(
   { app, artifactHelpers },
-  { imageBase64, imageBuffer, matchId, captureSource, channel = 'save-screenshot' },
+  { imageBase64, imageBuffer, matchId, captureSource, screenshotType, channel = 'save-screenshot' },
 ) {
   const hasBufferPayload = Buffer.isBuffer(imageBuffer);
   const resolvedImageBuffer = (() => {
@@ -195,11 +226,23 @@ async function saveScreenshotImage(
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const normalizedSource = normalizeCaptureSource(captureSource);
-  const sourcePrefix = normalizedSource === 'result-macro'
+  const normalizedScreenshotType = normalizeScreenshotType(screenshotType);
+  const effectiveSource = normalizedScreenshotType === 'result'
+    ? 'result-macro'
+    : normalizedScreenshotType
+      ? 'ocr-macro'
+      : normalizedSource;
+  const sourcePrefix = normalizedScreenshotType === 'result'
     ? 'result'
-    : normalizedSource === 'ocr-macro'
-      ? 'ocr'
-      : '';
+    : normalizedScreenshotType === 'tactical_map'
+      ? 'map'
+      : normalizedScreenshotType === 'crew_hub'
+        ? 'crew_hub'
+        : effectiveSource === 'result-macro'
+          ? 'result'
+          : effectiveSource === 'ocr-macro'
+            ? 'ocr'
+            : '';
   const filename = sourcePrefix
     ? `capture_${sourcePrefix}_${timestamp}.png`
     : `capture_${timestamp}.png`;
@@ -220,7 +263,13 @@ async function saveScreenshotImage(
   await fsPromises.writeFile(filePath, resolvedImageBuffer);
   console.log(`[Screenshot] Saved ${filename} (${(resolvedImageBuffer.length / 1024).toFixed(1)}KB) to ${destDir}`);
 
-  return ok({ filePath, filename, size: resolvedImageBuffer.length, captureSource: normalizedSource || undefined });
+  return ok({
+    filePath,
+    filename,
+    size: resolvedImageBuffer.length,
+    captureSource: effectiveSource || undefined,
+    screenshotType: normalizedScreenshotType || undefined,
+  });
 }
 
 function toPathKey(value) {
@@ -472,11 +521,12 @@ function registerArtifactHandlers(ipcMain, ctx) {
       const imageFiles = images.map((imagePath) => {
         const filename = path.basename(imagePath);
         const captureSource = classifyCaptureSourceFromFilename(filename);
+        const screenshotType = classifyScreenshotTypeFromFilename(filename);
         const artifactId = artifactTokenRegistry.issue(scope, {
           filename,
           fullPath: imagePath,
         });
-        return { artifactId, filename, path: imagePath, captureSource };
+        return { artifactId, filename, path: imagePath, captureSource, screenshotType };
       });
       return ok({ images, imageFiles, telemetry });
     } catch (e) {
@@ -753,9 +803,9 @@ function registerArtifactHandlers(ipcMain, ctx) {
     }
   });
 
-  ipcMain.handle('save-screenshot', async (event, { imageBase64, matchId, captureSource }) => {
+  ipcMain.handle('save-screenshot', async (event, { imageBase64, matchId, captureSource, screenshotType }) => {
     try {
-      return await saveScreenshotImage({ app, artifactHelpers }, { imageBase64, matchId, captureSource });
+      return await saveScreenshotImage({ app, artifactHelpers }, { imageBase64, matchId, captureSource, screenshotType });
     } catch (e) {
       console.error('[Screenshot] Save error:', e.message);
       return internal('Failed to save screenshot');
@@ -764,7 +814,3 @@ function registerArtifactHandlers(ipcMain, ctx) {
 }
 
 module.exports = { registerArtifactHandlers, saveScreenshotImage };
-
-
-
-

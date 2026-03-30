@@ -24,8 +24,10 @@ const userPrefs = {
     customHue: '0',
     setCustomHue: vi.fn(),
     soundEnabled: true,
-    setSoundEnabled: vi.fn(),
+  setSoundEnabled: vi.fn(),
 };
+
+const getElectronAPIMock = vi.fn(() => null);
 
 vi.mock('../providers/UIStateProvider', () => ({
     useUIState: () => uiState,
@@ -48,7 +50,7 @@ vi.mock('../hooks/useKeyboardShortcuts', () => ({
 }));
 
 vi.mock('../utils/electronAPI', () => ({
-    getElectronAPI: () => null,
+    getElectronAPI: () => getElectronAPIMock(),
 }));
 
 describe('SetupWizard', () => {
@@ -58,6 +60,7 @@ describe('SetupWizard', () => {
         window.localStorage.clear();
         window.sessionStorage.clear();
         uiState.showSetupWizard = true;
+        getElectronAPIMock.mockReturnValue(null);
     });
 
     afterEach(() => {
@@ -85,5 +88,40 @@ describe('SetupWizard', () => {
         expect(uiState.setShowSetupWizard).toHaveBeenCalledWith(false);
         expect(window.localStorage.getItem('wg_startup_health_check_seen_v2:ace')).toBe('1');
         expect(window.sessionStorage.getItem('wg_startup_health_check_skipped_launch_v2:ace')).toBeNull();
+    });
+
+    it('uses db-status for backup health checks instead of creating a real backup', async () => {
+        const invoke = vi.fn(async (channel: string) => {
+            if (channel === 'db-status') {
+                return { ok: true, lastBackupMtime: null };
+            }
+            if (channel === 'capture-screen') {
+                return 'data:image/png;base64,abc123';
+            }
+            return null;
+        });
+        getElectronAPIMock.mockReturnValue({ invoke });
+
+        const { SetupWizard } = await import('./SetupWizard');
+        render(<SetupWizard />);
+
+        fireEvent.change(screen.getByPlaceholderText('Callsign...'), { target: { value: 'Ace' } });
+        fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+
+        for (let idx = 0; idx < 2; idx += 1) {
+            fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+        }
+
+        fireEvent.click(screen.getByRole('button', { name: /start wildgate stat tracker/i }));
+        await act(async () => {
+            vi.advanceTimersByTime(360);
+            await Promise.resolve();
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        expect(invoke).toHaveBeenCalledWith('db-status');
+        expect(invoke).toHaveBeenCalledWith('capture-screen');
+        expect(invoke).not.toHaveBeenCalledWith('db-backup');
     });
 });

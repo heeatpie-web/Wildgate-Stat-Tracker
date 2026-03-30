@@ -24,6 +24,10 @@ import type { OCRProcessRuntimeOptions } from '../utils/electronBridge';
 import type { OCRExtractedData } from '../utils/ocr/ocrTypes';
 import { bundleMatchArtifacts, rerunOCRMulti } from '../utils/artifactService';
 import {
+    ARTIFACT_SCREENSHOT_BUCKET_ORDER,
+    classifyArtifactScreenshotBucket,
+} from '../utils/artifactScreenshotBuckets';
+import {
     buildOcrNameConfidenceMapFromExtractedData,
     buildOcrNameSourceMap,
 } from '../utils/ocr/nameSourceHints';
@@ -816,26 +820,24 @@ export const Wizard: React.FC = () => {
                 }
             }
         }
-        const classifyBucket = (value: string): 'ocr' | 'result' | 'other' => {
-            const filename = String(value || '').split(/[\\/]/).pop()?.toLowerCase() || '';
-            if (filename.startsWith('capture_ocr_')) return 'ocr';
-            if (filename.startsWith('capture_result_')) return 'result';
-            return 'other';
+        const bucketedPaths = {
+            crew_hub: [] as string[],
+            tactical_map: [] as string[],
+            result: [] as string[],
+            other: [] as string[],
         };
-        const bucketedPaths: Record<'ocr' | 'result' | 'other', string[]> = { ocr: [], result: [], other: [] };
         imagePaths.forEach((entry) => {
             const cleaned = String(entry || '').trim();
             if (!cleaned) return;
-            const bucket = classifyBucket(cleaned);
+            const bucket = classifyArtifactScreenshotBucket(cleaned);
             const existing = bucketedPaths[bucket];
             if (existing.some((value) => value.toLowerCase() === cleaned.toLowerCase())) return;
             existing.push(cleaned);
         });
-        const buckets = [
-            { id: 'ocr' as const, paths: bucketedPaths.ocr },
-            { id: 'result' as const, paths: bucketedPaths.result },
-            { id: 'other' as const, paths: bucketedPaths.other },
-        ].filter((bucket) => bucket.paths.length > 0);
+        const buckets = ARTIFACT_SCREENSHOT_BUCKET_ORDER.map((bucket) => ({
+            id: bucket,
+            paths: bucketedPaths[bucket],
+        })).filter((bucket) => bucket.paths.length > 0);
         const totalImageCount = buckets.reduce((sum, bucket) => sum + bucket.paths.length, 0);
         if (totalImageCount === 0) {
             pushNotification({
@@ -876,7 +878,7 @@ export const Wizard: React.FC = () => {
                     runtimeOptions,
                 );
                 perFileResults.push(...(rerun.perFile || []));
-                if (bucket.id === 'ocr' && rerun.data) {
+                if ((bucket.id === 'crew_hub' || bucket.id === 'tactical_map') && rerun.data) {
                     mergedData = rerun.data;
                 } else if (!mergedData && rerun.data) {
                     mergedData = rerun.data;

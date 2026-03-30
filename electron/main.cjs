@@ -1039,7 +1039,14 @@ const autoCaptureCoordinator = createAutoCaptureCoordinator({
   sendMenuKeySequence: (sendKeys, action) => sendMenuKeySequenceInternal(sendKeys, action),
   beforeSequence: async () => beginAutoCaptureWindowSession(),
   afterSequence: async () => endAutoCaptureWindowSession(),
-  captureAndProcess: async ({ matchId, activeUser = null, ocrMode = 'local', ocrRegions = null, runtimeOptions = {} }) => {
+  captureAndProcess: async ({
+    matchId,
+    activeUser = null,
+    ocrMode = 'local',
+    ocrRegions = null,
+    runtimeOptions = {},
+    screenshotTypeHint = null,
+  }) => {
     let imageBuffer = null;
     try {
       imageBuffer = await captureGameWindowBufferForAutomation({
@@ -1060,7 +1067,13 @@ const autoCaptureCoordinator = createAutoCaptureCoordinator({
 
     const saved = await saveScreenshotImage(
       { app, artifactHelpers },
-      { imageBuffer, matchId, channel: 'start-auto-capture' }
+      {
+        imageBuffer,
+        matchId,
+        captureSource: 'ocr-macro',
+        screenshotType: screenshotTypeHint,
+        channel: 'start-auto-capture',
+      }
     );
     if (!saved?.success || !saved?.data?.filePath) {
       return {
@@ -1074,6 +1087,7 @@ const autoCaptureCoordinator = createAutoCaptureCoordinator({
       success: true,
       filePath: saved.data.filePath,
       filename: saved.data.filename,
+      screenshotType: saved.data.screenshotType || screenshotTypeHint || undefined,
       ocrData: null,
     };
   },
@@ -2412,10 +2426,15 @@ ipcMain.on('window-close', () => {
   if (win) win.close();
 });
 
-ipcMain.handle('db-backup', () => {
-  return dbHelpers.createDbBackup(DB_PATH, DB_BACKUP_DIR, 'manual', {
-    includeArtifacts: true,
-    userDataDir: app.getPath('userData'),
+ipcMain.handle('db-backup', (_event, options = {}) => {
+  const safeOptions = (options && typeof options === 'object' && !Array.isArray(options)) ? options : {};
+  const allowedReasons = new Set(['manual', 'auto', 'health-check', 'rolling']);
+  const requestedReason = typeof safeOptions.reason === 'string' ? safeOptions.reason : 'manual';
+  const reason = allowedReasons.has(requestedReason) ? requestedReason : 'manual';
+  const includeArtifacts = safeOptions.includeArtifacts === true;
+  return dbHelpers.createDbBackup(DB_PATH, DB_BACKUP_DIR, reason, {
+    includeArtifacts,
+    userDataDir: includeArtifacts ? app.getPath('userData') : undefined,
   });
 });
 
@@ -3154,6 +3173,26 @@ app.whenReady().then(async () => {
     _warmupGameWindow();
     setInterval(_warmupGameWindow, 25_000); // Every 25s — keep cache warm inside the 30s TTL
   }
+
+  // Legacy builds could accumulate massive artifact bundle copies in Documents.
+  // Clean those in the background without touching the retained JSON backups.
+  setTimeout(() => {
+    dbHelpers.cleanupArtifactBackupBundles(DB_BACKUP_DIR, 1)
+      .then((report) => {
+        if (report.removedArtifactBundles > 0) {
+          console.log(
+            `[Backups] Cleaned legacy artifact bundles removed=${report.removedArtifactBundles} `
+            + `freedBytes=${report.freedBytes} retained=${JSON.stringify(report.retainedArtifactBundlePaths)}`
+          );
+        }
+        if (report.failures.length > 0) {
+          console.warn(`[Backups] Artifact bundle cleanup had ${report.failures.length} failure(s)`);
+        }
+      })
+      .catch((error) => {
+        console.warn('[Backups] Artifact bundle cleanup failed:', error?.message || error);
+      });
+  }, 0);
 
   // Keep expensive artifact migration off the critical paint path.
   setTimeout(() => {

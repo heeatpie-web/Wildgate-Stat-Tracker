@@ -16,6 +16,7 @@ const fsPromises = require('fs').promises;
 const crypto = require('crypto');
 const os = require('os');
 const { requirePackagedModule } = require('./helpers/packagedModuleLoader.cjs');
+const { pruneOcrDebugFiles } = require('./helpers/ocrDebugRetention.cjs');
 const HAZARD_CATALOG = require('./hazardCatalog.json');
 
 // Import new extraction modules
@@ -51,6 +52,24 @@ function ensureDebugDir() {
   if (!fs.existsSync(DEBUG_DIR)) {
     fs.mkdirSync(DEBUG_DIR, { recursive: true });
   }
+}
+
+function scheduleOcrDebugPrune(reason = 'background') {
+  ensureDebugDir();
+  void pruneOcrDebugFiles(DEBUG_DIR)
+    .then((report) => {
+      if (report.deletedFiles > 0) {
+        console.log(
+          `[OCR] Pruned debug files reason=${reason} deletedFiles=${report.deletedFiles} deletedBytes=${report.deletedBytes}`
+        );
+      }
+      if (report.failures.length > 0) {
+        console.warn(`[OCR] Debug prune completed with ${report.failures.length} failure(s)`);
+      }
+    })
+    .catch((error) => {
+      console.warn('[OCR] Failed to prune debug files:', error?.message || error);
+    });
 }
 
 function ensureCorpusArchiveDir() {
@@ -2851,6 +2870,8 @@ function convertMapScreenToLegacy(mapScreenData, rawText) {
  * @param {import('electron').BrowserWindow} [mainWindow] - Main app window to hide during capture
  */
 function registerOCRHandlers(mainWindow) {
+  scheduleOcrDebugPrune('startup');
+
   // Helper: hide window before capture, restore after
   async function captureWithHiddenWindow() {
     const wasVisible = mainWindow && mainWindow.isVisible();
@@ -2901,6 +2922,7 @@ function registerOCRHandlers(mainWindow) {
       const buffer = Buffer.from(base64Data, 'base64');
 
       await fsPromises.writeFile(filepath, buffer);
+      scheduleOcrDebugPrune('save');
       return filepath;
     } catch (error) {
       console.error('[OCR] Failed to save debug image:', error);

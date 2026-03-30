@@ -24,6 +24,11 @@ import {
     type MatchArtifactsStructured,
     type RerunOcrResult,
 } from '../utils/artifactService';
+import {
+    ARTIFACT_SCREENSHOT_BUCKET_ORDER,
+    classifyArtifactScreenshotBucket,
+    type ArtifactScreenshotBucket,
+} from '../utils/artifactScreenshotBuckets';
 import type { OCRProcessRuntimeOptions } from '../utils/electronBridge';
 import { getElectronAPI } from '../utils/electronAPI';
 import { useAppStore } from '../store/useAppStore';
@@ -1136,24 +1141,18 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
             return;
         }
         const selectedMatches = matches.filter(m => selectedIds.has(m.id));
-        const artifactPathsByMatch = new Map<number, { ocr: string[]; result: string[]; other: string[] }>();
-        const classifyBucket = (value: string): 'ocr' | 'result' | 'other' => {
-            const filename = String(value || '').split(/[\\/]/).pop()?.toLowerCase() || '';
-            if (filename.startsWith('capture_ocr_')) return 'ocr';
-            if (filename.startsWith('capture_result_')) return 'result';
-            return 'other';
-        };
+        const artifactPathsByMatch = new Map<number, Record<ArtifactScreenshotBucket, string[]>>();
         for (const selectedMatch of selectedMatches) {
             try {
                 const structured = await getMatchArtifactsStructured(selectedMatch.id, selectedMatch.artifacts || []);
-                const bucketed = { ocr: [] as string[], result: [] as string[], other: [] as string[] };
+                const bucketed: Record<ArtifactScreenshotBucket, string[]> = {
+                    crew_hub: [],
+                    tactical_map: [],
+                    result: [],
+                    other: [],
+                };
                 (structured.images || []).forEach((imagePath, index) => {
-                    const explicit = structured.imageFiles?.[index]?.captureSource || null;
-                    const bucket = explicit === 'ocr-macro'
-                        ? 'ocr'
-                        : explicit === 'result-macro'
-                            ? 'result'
-                            : classifyBucket(imagePath);
+                    const bucket = classifyArtifactScreenshotBucket(imagePath, structured.imageFiles?.[index] || null);
                     const cleaned = String(imagePath || '').trim();
                     if (!cleaned) return;
                     if (bucketed[bucket].some((entry) => entry.toLowerCase() === cleaned.toLowerCase())) return;
@@ -1161,11 +1160,16 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
                 });
                 artifactPathsByMatch.set(selectedMatch.id, bucketed);
             } catch {
-                const bucketed = { ocr: [] as string[], result: [] as string[], other: [] as string[] };
+                const bucketed: Record<ArtifactScreenshotBucket, string[]> = {
+                    crew_hub: [],
+                    tactical_map: [],
+                    result: [],
+                    other: [],
+                };
                 (selectedMatch.artifacts || []).forEach((artifactPath) => {
                     const cleaned = String(artifactPath || '').trim();
                     if (!cleaned) return;
-                    const bucket = classifyBucket(cleaned);
+                    const bucket = classifyArtifactScreenshotBucket(cleaned);
                     if (bucketed[bucket].some((entry) => entry.toLowerCase() === cleaned.toLowerCase())) return;
                     bucketed[bucket].push(cleaned);
                 });
@@ -1173,7 +1177,7 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
             }
         }
         const hasAnyArtifacts = selectedMatches.some((selectedMatch) =>
-            (['ocr', 'result', 'other'] as const).some((bucket) =>
+            ARTIFACT_SCREENSHOT_BUCKET_ORDER.some((bucket) =>
                 (artifactPathsByMatch.get(selectedMatch.id)?.[bucket] || []).some((path) =>
                     IMAGE_EXTS.some((ext) => path.toLowerCase().endsWith(ext))
                 )
@@ -1192,8 +1196,13 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
             let autoOpenedMatchId: number | null = null;
 
             for (const match of selectedMatches) {
-                const bucketed = artifactPathsByMatch.get(match.id) || { ocr: [], result: [], other: [] };
-                const buckets = (['ocr', 'result', 'other'] as const).map((bucket) => ({
+                const bucketed = artifactPathsByMatch.get(match.id) || {
+                    crew_hub: [],
+                    tactical_map: [],
+                    result: [],
+                    other: [],
+                };
+                const buckets = ARTIFACT_SCREENSHOT_BUCKET_ORDER.map((bucket) => ({
                     bucket,
                     paths: (bucketed[bucket] || []).filter((path) => IMAGE_EXTS.some((ext) => path.toLowerCase().endsWith(ext))),
                 })).filter((entry) => entry.paths.length > 0);
@@ -1211,7 +1220,7 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
                         rerunRuntimeOptions,
                     );
                     hasSuccessfulBucket = hasSuccessfulBucket || rerun.success;
-                    if (entry.bucket === 'ocr' && rerun.data) {
+                    if ((entry.bucket === 'crew_hub' || entry.bucket === 'tactical_map') && rerun.data) {
                         combined = rerun.data as OCRExtractedData;
                     } else if (!combined && rerun.data) {
                         combined = rerun.data as OCRExtractedData;
@@ -3719,20 +3728,16 @@ const SmartMatchDetail: React.FC<{
             }
         };
         const handleRerunAnalysis = useCallback(async () => {
-            const classifyBucket = (value: string): 'ocr' | 'result' | 'other' => {
-                const filename = String(value || '').split(/[\\/]/).pop()?.toLowerCase() || '';
-                if (filename.startsWith('capture_ocr_')) return 'ocr';
-                if (filename.startsWith('capture_result_')) return 'result';
-                return 'other';
+            const classifySource = (pathValue: string, index: number): ArtifactScreenshotBucket => (
+                classifyArtifactScreenshotBucket(pathValue, artifacts.imageFiles[index] || null)
+            );
+            const bucketedCandidates: Record<ArtifactScreenshotBucket, string[]> = {
+                crew_hub: [],
+                tactical_map: [],
+                result: [],
+                other: [],
             };
-            const classifySource = (pathValue: string, index: number): 'ocr' | 'result' | 'other' => {
-                const explicit = artifacts.imageFiles[index]?.captureSource || null;
-                if (explicit === 'ocr-macro') return 'ocr';
-                if (explicit === 'result-macro') return 'result';
-                return classifyBucket(pathValue);
-            };
-            const bucketedCandidates: Record<'ocr' | 'result' | 'other', string[]> = { ocr: [], result: [], other: [] };
-            const pushUnique = (bucket: 'ocr' | 'result' | 'other', value: string) => {
+            const pushUnique = (bucket: ArtifactScreenshotBucket, value: string) => {
                 const cleaned = String(value || '').trim();
                 if (!cleaned) return;
                 const existing = bucketedCandidates[bucket];
@@ -3742,12 +3747,15 @@ const SmartMatchDetail: React.FC<{
             artifacts.images.forEach((imagePath, index) => {
                 pushUnique(classifySource(imagePath, index), imagePath);
             });
-            if ((bucketedCandidates.ocr.length + bucketedCandidates.result.length + bucketedCandidates.other.length) === 0) {
+            if (ARTIFACT_SCREENSHOT_BUCKET_ORDER.reduce((sum, bucket) => sum + bucketedCandidates[bucket].length, 0) === 0) {
                 (match.artifacts || []).forEach((artifactPath) => {
-                    pushUnique(classifyBucket(artifactPath), artifactPath);
+                    pushUnique(classifyArtifactScreenshotBucket(artifactPath), artifactPath);
                 });
             }
-            const totalCandidates = bucketedCandidates.ocr.length + bucketedCandidates.result.length + bucketedCandidates.other.length;
+            const totalCandidates = ARTIFACT_SCREENSHOT_BUCKET_ORDER.reduce(
+                (sum, bucket) => sum + bucketedCandidates[bucket].length,
+                0
+            );
             if (totalCandidates === 0) return;
             setRerunning(true);
             setRerunResults(null);
@@ -3762,11 +3770,10 @@ const SmartMatchDetail: React.FC<{
             const processingBaseMatch = getLatestMatchSnapshot();
             onUpdate({ ...processingBaseMatch, ocrState: 'processing' });
             const imageExts = ['.png', '.jpg', '.jpeg', '.bmp', '.webp'];
-            const buckets = [
-                { id: 'ocr' as const, paths: bucketedCandidates.ocr.filter((p) => imageExts.some((ext) => p.toLowerCase().endsWith(ext))) },
-                { id: 'result' as const, paths: bucketedCandidates.result.filter((p) => imageExts.some((ext) => p.toLowerCase().endsWith(ext))) },
-                { id: 'other' as const, paths: bucketedCandidates.other.filter((p) => imageExts.some((ext) => p.toLowerCase().endsWith(ext))) },
-            ].filter((bucket) => bucket.paths.length > 0);
+            const buckets = ARTIFACT_SCREENSHOT_BUCKET_ORDER.map((bucket) => ({
+                id: bucket,
+                paths: bucketedCandidates[bucket].filter((p) => imageExts.some((ext) => p.toLowerCase().endsWith(ext))),
+            })).filter((bucket) => bucket.paths.length > 0);
             const totalImageCount = buckets.reduce((sum, bucket) => sum + bucket.paths.length, 0);
             if (totalImageCount === 0) {
                 setRerunning(false);
@@ -3804,7 +3811,7 @@ const SmartMatchDetail: React.FC<{
                         rerunRuntimeOptions,
                     );
                     perFileRaw.push(...(rerun.perFile || []));
-                    if (bucket.id === 'ocr' && rerun.data) {
+                    if ((bucket.id === 'crew_hub' || bucket.id === 'tactical_map') && rerun.data) {
                         mergedData = rerun.data;
                     } else if (!mergedData && rerun.data) {
                         mergedData = rerun.data;
@@ -3864,7 +3871,17 @@ const SmartMatchDetail: React.FC<{
                 });
                 setReviewData(mergedData);
                 const reviewingBaseMatch = getLatestMatchSnapshot();
-                onUpdate({ ...reviewingBaseMatch, ocrState: 'reviewing' });
+                const reviewingPending = buildOcrReviewPendingMatch(reviewingBaseMatch, mergedData, {
+                    activeUser,
+                    existingPending: useAppStore.getState().pendingMatchData || null,
+                    nameSources: nextNameSources,
+                    normalizeModifierName,
+                });
+                onUpdate({
+                    ...reviewingBaseMatch,
+                    ...reviewingPending,
+                    ocrState: 'reviewing',
+                } as Match);
                 persistNameSourceHintsToPendingDraft(nextNameSources);
                 applyReviewDataToSession(mergedData, {
                     initialTab: getSmartCaptureWizardInitialTab('reanalyze-complete'),
@@ -3904,6 +3921,7 @@ const SmartMatchDetail: React.FC<{
             getLatestMatchSnapshot,
             match.artifacts,
             match.id,
+            normalizeModifierName,
             ocrMode,
             ocrRegions,
             onApplyToSession,
@@ -3961,13 +3979,18 @@ const SmartMatchDetail: React.FC<{
         const hasResult = match.result === 'Win' || match.result === 'Loss' || match.result === 'Draw';
         const hasArtifacts = (artifacts.images && artifacts.images.length > 0) || (match.artifacts && match.artifacts.length > 0);
         const screenshotBucketMeta = {
-            ocr: {
-                title: 'Crew/Map Macro',
-                badgeLabel: 'Crew/Map',
+            crew_hub: {
+                title: 'Crew Hub',
+                badgeLabel: 'Crew Hub',
                 className: 'bg-md-sys-secondary/16 text-md-sys-secondary',
             },
+            tactical_map: {
+                title: 'Map',
+                badgeLabel: 'Map',
+                className: 'bg-info/16 text-info',
+            },
             result: {
-                title: 'Result Macro',
+                title: 'Result',
                 badgeLabel: 'Result',
                 className: 'bg-md-sys-primary/16 text-md-sys-primary',
             },
@@ -3978,21 +4001,25 @@ const SmartMatchDetail: React.FC<{
             },
         } as const;
         const screenshotBuckets = (() => {
-            const ocrIndices: number[] = [];
+            const crewHubIndices: number[] = [];
+            const tacticalMapIndices: number[] = [];
             const resultIndices: number[] = [];
             const otherIndices: number[] = [];
             artifacts.images.forEach((_, index) => {
-                const source = artifacts.imageFiles[index]?.captureSource || null;
-                if (source === 'ocr-macro') {
-                    ocrIndices.push(index);
-                } else if (source === 'result-macro') {
+                const bucket = classifyArtifactScreenshotBucket(artifacts.images[index], artifacts.imageFiles[index] || null);
+                if (bucket === 'crew_hub') {
+                    crewHubIndices.push(index);
+                } else if (bucket === 'tactical_map') {
+                    tacticalMapIndices.push(index);
+                } else if (bucket === 'result') {
                     resultIndices.push(index);
                 } else {
                     otherIndices.push(index);
                 }
             });
             return [
-                { key: 'ocr', indices: ocrIndices, ...screenshotBucketMeta.ocr },
+                { key: 'crew_hub', indices: crewHubIndices, ...screenshotBucketMeta.crew_hub },
+                { key: 'tactical_map', indices: tacticalMapIndices, ...screenshotBucketMeta.tactical_map },
                 { key: 'result', indices: resultIndices, ...screenshotBucketMeta.result },
                 { key: 'other', indices: otherIndices, ...screenshotBucketMeta.other },
             ].filter((bucket) => bucket.indices.length > 0);

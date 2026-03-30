@@ -7,15 +7,29 @@ const sharp = require('sharp');
 const { __test__, extractResultScreen } = require('./resultScreenExtractor.cjs');
 
 describe('resultScreenExtractor heuristics', () => {
-  it('parses artifact victories from partial OCR text', () => {
+  it('parses artifact victories from extracted status text', () => {
     expect(__test__.parseResultSignals({
       headlineTexts: ['VICTORY'],
-      statusTexts: ['ARTIFACTRECOVERE'],
+      statusTexts: ['ARTIFACTEXTRACTE'],
     })).toEqual({
       result: 'Win',
       winType: 'artifact',
       placement: 1,
       detectionMethod: 'flash',
+      damageTaken: undefined,
+      damageSourcesAvailable: false,
+    });
+  });
+
+  it('parses artifact victories when only EXTRACTED is OCRd under VICTORY', () => {
+    expect(__test__.parseResultSignals({
+      headlineTexts: ['VICTORY'],
+      statusTexts: ['EXTRACTED'],
+    }, { detectionMethod: 'text' })).toEqual({
+      result: 'Win',
+      winType: 'artifact',
+      placement: 1,
+      detectionMethod: 'text',
       damageTaken: undefined,
       damageSourcesAvailable: false,
     });
@@ -77,6 +91,31 @@ describe('resultScreenExtractor heuristics', () => {
   it('treats bare artifact recovered as an artifact loss', () => {
     expect(__test__.parseResultSignals({
       statusTexts: ['ARTIFACTRECOVERED'],
+    }, { detectionMethod: 'text' })).toEqual({
+      result: 'Loss',
+      winType: 'artifact',
+      detectionMethod: 'text',
+      damageTaken: undefined,
+      damageSourcesAvailable: false,
+    });
+  });
+
+  it('treats ARIFACT RECOVERED OCR typos as artifact losses', () => {
+    expect(__test__.parseResultSignals({
+      statusTexts: ['ARIFACT RECOVERED'],
+    }, { detectionMethod: 'text' })).toEqual({
+      result: 'Loss',
+      winType: 'artifact',
+      detectionMethod: 'text',
+      damageTaken: undefined,
+      damageSourcesAvailable: false,
+    });
+  });
+
+  it('prioritizes artifact recovered over a spurious victory headline', () => {
+    expect(__test__.parseResultSignals({
+      headlineTexts: ['VICTORY'],
+      statusTexts: ['ARTIFACT RECOVERED'],
     }, { detectionMethod: 'text' })).toEqual({
       result: 'Loss',
       winType: 'artifact',
@@ -262,6 +301,37 @@ describe('resultScreenExtractor heuristics', () => {
     })).resolves.toEqual({
       result: 'Loss',
       winType: 'artifact',
+      detectionMethod: 'text',
+      damageTaken: undefined,
+      damageSourcesAvailable: false,
+    });
+  });
+
+  it('extracts artifact wins when the headline and extracted label are recognized separately', async () => {
+    const recognizeText = async (buffer) => {
+      const meta = await sharp(buffer).metadata();
+      if (meta.width === 3342 && meta.height === 582) return 'ARTIFACT EXTRACTED';
+      if (meta.width === 2073 && meta.height === 420) return 'VICTORY';
+      return '';
+    };
+
+    const imageBuffer = await sharp({
+      create: {
+        width: 1920,
+        height: 1080,
+        channels: 3,
+        background: { r: 0, g: 0, b: 0 },
+      },
+    }).png().toBuffer();
+
+    await expect(extractResultScreen(imageBuffer, {
+      detectionMethod: 'text',
+      paddleOcrBuffer: async () => [],
+      paddleRecognizeBuffer: recognizeText,
+    })).resolves.toEqual({
+      result: 'Win',
+      winType: 'artifact',
+      placement: 1,
       detectionMethod: 'text',
       damageTaken: undefined,
       damageSourcesAvailable: false,

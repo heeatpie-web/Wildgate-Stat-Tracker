@@ -131,6 +131,63 @@ describe('OcrCorrectionModal', () => {
         expect(screen.getAllByRole('button', { name: /^ignore$/i }).length).toBeGreaterThan(0);
     });
 
+    it('resets embedded review state when rerun metadata changes the OCR seed', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        gameData.sessionTeams = { red: ['PilotOne'] };
+        gameData.sessionShipTypes = { red: 'Hunter (2 Player)' };
+        gameData.pilotRegistry = ['PilotOne'];
+        appStoreState.pendingMatchData = {
+            id: 14,
+            player: 'ActivePilot',
+            ship: 'Hunter (2 Player)',
+            teammates: ['PilotOne'],
+            opponents: [],
+            opponentTeams: [],
+            ocrState: 'reviewing',
+            ocrDebug: {
+                timestamp: 1,
+                rawText: 'PilotOne',
+            },
+        };
+
+        const { rerender } = render(
+            <OcrCorrectionModal
+                isOpen
+                embedded
+                onClose={onClose}
+                onAcceptAll={onAcceptAll}
+            />
+        );
+
+        fireEvent.click(screen.getAllByRole('button', { name: /^ignore$/i })[0]);
+        expect(screen.getByRole('button', { name: /undo ignore/i })).toBeInTheDocument();
+
+        appStoreState.pendingMatchData = {
+            ...appStoreState.pendingMatchData,
+            ocrDebug: {
+                timestamp: 2,
+                rawText: 'PilotOne rerun',
+            },
+        };
+
+        rerender(
+            <OcrCorrectionModal
+                isOpen
+                embedded
+                onClose={onClose}
+                onAcceptAll={onAcceptAll}
+            />
+        );
+
+        await waitFor(() => {
+            expect(screen.getAllByRole('button', { name: /^ignore$/i }).length).toBeGreaterThan(0);
+        });
+        expect(screen.queryByRole('button', { name: /undo ignore/i })).not.toBeInTheDocument();
+    });
+
     it('uses stored OCR name confidence for detected player rows', async () => {
         const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
         const onClose = vi.fn();
@@ -477,12 +534,14 @@ describe('OcrCorrectionModal', () => {
         fireEvent.change(searchInput, { target: { value: 'chrismario' } });
         fireEvent.click(screen.getByRole('button', { name: /external save/i }));
 
-        expect(appStoreState.setPendingMatchData).toHaveBeenCalledWith(expect.objectContaining({
-            teammates: ['chrismario'],
-            opponentTeams: [],
-            ocrState: 'saved',
-        }));
-        expect(onAcceptAll).toHaveBeenCalledTimes(1);
+        await waitFor(() => {
+            expect(appStoreState.setPendingMatchData).toHaveBeenCalledWith(expect.objectContaining({
+                teammates: ['chrismario'],
+                opponentTeams: [],
+                ocrState: 'saved',
+            }));
+            expect(onAcceptAll).toHaveBeenCalledTimes(1);
+        });
     });
 
     it('positions the roster dropdown above the embedded footer when the active input is near the bottom of the viewport', async () => {
@@ -571,7 +630,9 @@ describe('OcrCorrectionModal', () => {
             teammates: ['FreshPilot'],
             ocrState: 'saved',
         }));
-        expect(onAcceptAll).toHaveBeenCalledTimes(1);
+        await waitFor(() => {
+            expect(onAcceptAll).toHaveBeenCalledTimes(1);
+        });
     });
 
     it('shows friendly team chip in assignment board and teammate markers in review rows', async () => {

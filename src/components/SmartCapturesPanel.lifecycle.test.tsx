@@ -80,6 +80,22 @@ const appStoreState = {
   dismissedRosterCandidateKeys: [],
   matches: gameData.matches,
   updateMatch: vi.fn(),
+  pendingMatchData: null as any,
+  setPendingMatchData: vi.fn((next: any) => {
+    appStoreState.pendingMatchData = next;
+  }),
+  currentLoadout: null as any,
+  telemetryDetectedHero: undefined as string | undefined,
+  telemetryDetectedShip: undefined as string | undefined,
+  heroSource: 'manual',
+  shipSource: 'manual',
+  activeHero: '',
+  activeShip: '',
+  resetSelectionSourcesForNewMatch: vi.fn(),
+  setActiveHero: vi.fn(),
+  setActiveShip: vi.fn(),
+  setWizardInitialTab: vi.fn(),
+  setWizardCloseOnOcrApply: vi.fn(),
 };
 
 const previewArtifactRepair = vi.fn();
@@ -224,6 +240,8 @@ describe('SmartCapturesPanel paused lifecycle', () => {
     });
     appStoreState.activeSection = 'tools';
     appStoreState.ocrMode = 'local';
+    appStoreState.pendingMatchData = null;
+    appStoreState.currentLoadout = null;
   });
 
   it('does not auto-run artifact repair on mount or rerender', async () => {
@@ -286,6 +304,75 @@ describe('SmartCapturesPanel paused lifecycle', () => {
         undefined,
         expect.anything(),
       );
+    });
+  });
+
+  it('hydrates the selected match with rerun OCR details after keyboard-triggered re-analysis', async () => {
+    appStoreState.activeSection = 'capture';
+    appStoreState.selectedMatchId = 1;
+    appStoreState.ocrMode = 'cloud';
+    rerunOCRMulti.mockResolvedValue({
+      perFile: [
+        {
+          success: true,
+          imagePath: 'C:\\captures\\match-1.png',
+          data: {
+            captureTimestamp: Date.now(),
+            rawText: 'Friendly Crew Enemy Ace',
+            teammates: [{ name: 'Wingman', confidence: 91, isTeammate: true }],
+            opponentTeams: [{
+              teamName: 'Red Team',
+              shipType: 'Scout',
+              color: 'red',
+              players: [{ name: 'Enemy Ace', confidence: 84, isTeammate: false }],
+            }],
+            reachModifiers: [{ name: 'Ice Storm', confidence: 80, rawText: 'ICE STORM' }],
+            playerShip: { shipType: 'Bastion', teamName: 'Friendly Crew', confidence: 89, rawText: 'BASTION' },
+            playerShipName: 'Stormrider',
+            playerTeamName: 'Friendly Crew',
+            overallConfidence: 88,
+            artifacts: ['C:\\captures\\match-1.png'],
+          },
+        },
+      ],
+      data: {
+        captureTimestamp: Date.now(),
+        rawText: 'Friendly Crew Enemy Ace',
+        teammates: [{ name: 'Wingman', confidence: 91, isTeammate: true }],
+        opponentTeams: [{
+          teamName: 'Red Team',
+          shipType: 'Scout',
+          color: 'red',
+          players: [{ name: 'Enemy Ace', confidence: 84, isTeammate: false }],
+        }],
+        reachModifiers: [{ name: 'Ice Storm', confidence: 80, rawText: 'ICE STORM' }],
+        playerShip: { shipType: 'Bastion', teamName: 'Friendly Crew', confidence: 89, rawText: 'BASTION' },
+        playerShipName: 'Stormrider',
+        playerTeamName: 'Friendly Crew',
+        overallConfidence: 88,
+        artifacts: ['C:\\captures\\match-1.png'],
+      },
+    });
+
+    const { default: SmartCapturesPanel } = await import('./SmartCapturesPanel');
+    render(<SmartCapturesPanel />);
+
+    fireEvent.keyDown(window, { key: 'r' });
+
+    await waitFor(() => {
+      expect(gameData.updateMatch).toHaveBeenCalledWith(expect.objectContaining({
+        id: 1,
+        ship: 'Bastion',
+        teammates: ['Wingman'],
+        opponents: ['Enemy Ace'],
+        reachModifiers: ['Ice Storm'],
+        ocrState: 'reviewing',
+        ocrDebug: expect.objectContaining({
+          rawText: 'Friendly Crew Enemy Ace',
+          playerTeamName: 'Friendly Crew',
+          playerShipName: 'Stormrider',
+        }),
+      }));
     });
   });
 
@@ -475,19 +562,40 @@ describe('SmartCapturesPanel paused lifecycle', () => {
     appStoreState.activeSection = 'capture';
     appStoreState.selectedMatchId = 1;
     getMatchArtifactsStructured.mockResolvedValue({
-      images: ['C:\\captures\\crew-map.png', 'C:\\captures\\result.png'],
+      images: [
+        'C:\\captures\\capture_crew_hub_1.png',
+        'C:\\captures\\capture_map_1.png',
+        'C:\\captures\\capture_result_1.png',
+        'C:\\captures\\random-clip.png',
+      ],
       imageFiles: [
         {
-          artifactId: 'artifact-ocr',
-          filename: 'crew-map.png',
-          path: 'C:\\captures\\crew-map.png',
+          artifactId: 'artifact-crew',
+          filename: 'capture_crew_hub_1.png',
+          path: 'C:\\captures\\capture_crew_hub_1.png',
           captureSource: 'ocr-macro',
+          screenshotType: 'crew_hub',
+        },
+        {
+          artifactId: 'artifact-map',
+          filename: 'capture_map_1.png',
+          path: 'C:\\captures\\capture_map_1.png',
+          captureSource: 'ocr-macro',
+          screenshotType: 'tactical_map',
         },
         {
           artifactId: 'artifact-result',
-          filename: 'result.png',
-          path: 'C:\\captures\\result.png',
+          filename: 'capture_result_1.png',
+          path: 'C:\\captures\\capture_result_1.png',
           captureSource: 'result-macro',
+          screenshotType: 'result',
+        },
+        {
+          artifactId: 'artifact-other',
+          filename: 'random-clip.png',
+          path: 'C:\\captures\\random-clip.png',
+          captureSource: null,
+          screenshotType: null,
         },
       ],
       telemetry: [],
@@ -502,10 +610,14 @@ describe('SmartCapturesPanel paused lifecycle', () => {
       expect(container.querySelectorAll('.sc-screenshots-rail')).toHaveLength(1);
     });
 
-    expect(screen.getByText('Crew/Map Macro (1)')).toBeInTheDocument();
-    expect(screen.getByText('Result Macro (1)')).toBeInTheDocument();
-    expect(screen.getAllByText('Crew/Map')[0]).toBeInTheDocument();
+    expect(screen.getByText('Crew Hub (1)')).toBeInTheDocument();
+    expect(screen.getByText('Map (1)')).toBeInTheDocument();
+    expect(screen.getByText('Result (1)')).toBeInTheDocument();
+    expect(screen.getByText('Other (1)')).toBeInTheDocument();
+    expect(screen.getAllByText('Crew Hub')[0]).toBeInTheDocument();
+    expect(screen.getAllByText('Map')[0]).toBeInTheDocument();
     expect(screen.getAllByText('Result')[0]).toBeInTheDocument();
+    expect(screen.getAllByText('Other')[0]).toBeInTheDocument();
   });
 
   it('switches the queue day to the new local day when midnight passes and a new match arrives', async () => {

@@ -199,7 +199,6 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
                     </div>
                 </div>
             ) : null}
-            {WorkspaceTabBar}
             {workspaceTab === 'intel' && activeTelemetryDraftMatch ? (
                 <div className="min-h-0">
                     <PregameAdvicePanel
@@ -248,7 +247,7 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
                     </div>
                     <div className="min-h-0 flex flex-col gap-4">
                         <div className="min-h-420px">
-                            <RosterPanel />
+                            <RosterPanel workspaceToggle={WorkspaceTabBar} />
                         </div>
                         <div className="min-h-420px">
                             <MissionPanel accordionMode />
@@ -267,7 +266,7 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
                     </div>
 
                     <div className="min-h-0 overflow-hidden">
-                        <RosterPanel />
+                        <RosterPanel workspaceToggle={WorkspaceTabBar} />
                     </div>
 
                     <div className="min-h-0 overflow-hidden pl-1">

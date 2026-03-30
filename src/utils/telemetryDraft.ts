@@ -68,6 +68,7 @@ export const buildAutoCaptureTelemetryDraft = ({
         timelineEvents: [],
         artifacts: [],
         ocrState: 'queued',
+        telemetryDraftState: 'active',
         matchMode,
     };
 };

@@ -8,7 +8,11 @@ import { getShipColor } from '../../types';
 import { normalizeOcrName, similarityScore } from '../../utils/stringUtils';
 import { getMaxTeammatesForShip } from '../../utils/teamLimits';
 
-export const RosterPanel: React.FC = () => {
+interface RosterPanelProps {
+    workspaceToggle?: React.ReactNode;
+}
+
+export const RosterPanel: React.FC<RosterPanelProps> = ({ workspaceToggle }) => {
     const { activeUser, setToast, setActiveView, setPlayerHubFocusName } = useUIState();
     const {
         pilotRegistry,
@@ -251,6 +255,12 @@ export const RosterPanel: React.FC = () => {
                     </button>
                 )}
             </div>
+
+            {workspaceToggle ? (
+                <div className="flex items-center justify-start">
+                    {workspaceToggle}
+                </div>
+            ) : null}
 
             {mergeHistory && mergeHistory.length > 0 && dismissedMergeTimestamp !== mergeHistory[0].timestamp && (() => {
                 const last = mergeHistory[0];
