@@ -1,4 +1,10 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.6.3": [
+    "Screenshot type bucketing for crew hub, tactical map, and result captures",
+    "OCR debug file retention with 30-day pruning",
+    "Artifact backup bundle cleanup to recover disk space",
+    "screenshotTypeHint propagation through capture pipeline"
+  ],
   "v3.6.2": [
     "Pregame Intel: New matches now reset to the mode baseline until fresh lobby OCR arrives, so previous-match percentages do not carry over.",
     "Pregame Intel: The live breakdown now shows squad context, ship matchup, enemy teams, player history, and ship-specific performance swings.",
