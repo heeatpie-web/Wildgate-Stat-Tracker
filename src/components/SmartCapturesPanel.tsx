@@ -680,6 +680,16 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
         return workQueueMatches;
     }, [queueOnly, filteredMatches, workQueueMatches]);
 
+    useEffect(() => {
+        // Recovery: stale persisted queue-only mode can hide every row while
+        // normal filtered matches still exist. Fall back to the full queue.
+        if (!queueOnly) return;
+        if (workQueueMatches.length > 0) return;
+        if (filteredMatches.length > 0) {
+            setQueueOnly(false);
+        }
+    }, [filteredMatches.length, queueOnly, setQueueOnly, workQueueMatches.length]);
+
     const globalOrderedMatchIds = useMemo(
         () => [...matches].sort((a, b) => a.timestamp - b.timestamp).map(m => m.id),
         [matches]
@@ -1563,8 +1573,11 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
                                                 </div>
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-label-xs font-bold text-md-sys-on-surface/50 uppercase tracking-wider">
-                                                        {filteredMatches.length} match{filteredMatches.length !== 1 ? 'es' : ''}
-                                                        {workQueueOpenCount > 0 && <span className="text-warning ml-1">· {workQueueOpenCount} open</span>}
+                                                        {visibleMatches.length} match{visibleMatches.length !== 1 ? 'es' : ''}
+                                                        {queueOnly && filteredMatches.length !== visibleMatches.length && (
+                                                            <span className="ml-1">· {filteredMatches.length} total</span>
+                                                        )}
+                                                        {!queueOnly && workQueueOpenCount > 0 && <span className="text-warning ml-1">· {workQueueOpenCount} open</span>}
                                                     </span>
                                                     <button
                                                         type="button"

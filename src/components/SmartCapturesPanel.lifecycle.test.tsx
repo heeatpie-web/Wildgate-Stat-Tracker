@@ -529,6 +529,61 @@ describe('SmartCapturesPanel paused lifecycle', () => {
     }
   });
 
+  it('falls back out of queue-only mode when persisted queue filters would hide every visible match', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-03-17T12:00:00-06:00'));
+      appStoreState.activeSection = 'capture';
+      appStoreState.queueOnly = true;
+      appStoreState.showResolved = false;
+      appStoreState.setQueueOnly = vi.fn((value: boolean) => {
+        appStoreState.queueOnly = value;
+      });
+      gameData.matches = [
+        {
+          id: 501,
+          timestamp: Date.parse('2026-03-17T09:15:00-06:00'),
+          date: '3/17/2026',
+          mode: 'Artifact Brawl',
+          player: 'Pilot',
+          teammates: ['Wingman'],
+          opponents: ['Enemy'],
+          hero: 'Adrian',
+          ship: 'Hunter',
+          reachModifiers: [],
+          kills: {},
+          artifacts: ['C:\\captures\\match-501.png'],
+          result: 'Win',
+          ocrState: 'ready',
+        },
+      ];
+      appStoreState.matches = gameData.matches;
+
+      const { default: SmartCapturesPanel } = await import('./SmartCapturesPanel');
+      const { rerender } = render(<SmartCapturesPanel />);
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(appStoreState.setQueueOnly).toHaveBeenCalledWith(false);
+
+      await act(async () => {
+        rerender(<SmartCapturesPanel />);
+        await Promise.resolve();
+      });
+
+      expect(screen.getAllByText('1 match').length).toBeGreaterThan(0);
+      expect(
+        screen.getAllByText((_, element) => Boolean(
+          element?.textContent?.includes('Hunter') && element.textContent.includes('Adrian')
+        )).length
+      ).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('portals the screenshot viewer outside the clipped detail pane', async () => {
     appStoreState.activeSection = 'capture';
     appStoreState.selectedMatchId = 1;
