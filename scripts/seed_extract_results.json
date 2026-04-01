@@ -1,0 +1,5155 @@
+{
+  "results": [
+    {
+      "file": "101__capture_2026-02-17T04-31-03-153Z.png",
+      "seed": "15640",
+      "seed_flags": [
+        "LENGTH_5_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Fast Gate",
+        "Cosmic Storm",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Lava Epics",
+        "Lots Of Asteroids",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed15640 | beed:1915B | mase15640 | seed:1915B | ese186) | apseed:1915B6."
+    },
+    {
+      "file": "105__capture_2026-02-17T22-20-22-983Z.png",
+      "seed": "352EA0",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [
+        "eachbums01Xx"
+      ],
+      "seed_raw": "magseed3052EA0 | ed:13052 | mapseed352ea0 | pseed:13052E | es004) | upseed:13052E"
+    },
+    {
+      "file": "107__capture_2026-02-17T23-15-08-496Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Sandstorm",
+        "Easy Loot",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [
+        "RapldWarrior"
+      ],
+      "seed_raw": "magseedD7e01 | maeedD701 | beed:D7I | eeDeo, | apseed:D7E7"
+    },
+    {
+      "file": "108__capture_2026-02-17T23-41-05-781Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Leech Swarms",
+        "Lava Epics",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [
+        "apldWarrior"
+      ],
+      "seed_raw": "magseed:4DF4B00 | seed:4DDF48 | masd:4D40 | pseed:4DDF4BC | asD0 | apseed:4DDF4BC"
+    },
+    {
+      "file": "111__capture_2026-02-18T23-15-14-312Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Fast Gate",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Lava Epics",
+        "Low Altitude Fog",
+        "Cryon Rift",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 9,
+      "unknown_tokens": [
+        "egdbumse)xx"
+      ],
+      "seed_raw": "magseed19320 | oseed:189731 | mapsee87320 | pseed:18973A | es81020 | upseed:18973A:"
+    },
+    {
+      "file": "113__capture_2026-02-20T02-35-22-703Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [],
+      "seed_raw": "magseed:2D42640 | eed:29D42 | mapsed242640 | pseed:29D426. | es0240 | apseed:29D4261"
+    },
+    {
+      "file": "114__capture_2026-02-20T19-21-28-479Z.png",
+      "seed": "467180",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Ancient Vault",
+        "Rogue Turrets",
+        "Epic Loot",
+        "Lots Of Asteroids",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed467180 | ped:46718 | mapsed46180 | seed:46718F | eses | apseed:46718FF"
+    },
+    {
+      "file": "115__capture_2026-02-20T20-00-19-022Z.png",
+      "seed": "48C080",
+      "seed_flags": [
+        "LENGTH_6_NOT_8",
+        "SUBST(48CO80->48C080)"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Epic Loot",
+        "Low Altitude Fog",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [
+        "ricksParts"
+      ],
+      "seed_raw": "mapseed48CO80 | 448C0 | d: | mapsed48C0f80 | upseed:448COFI | ese4eafes | apseed:448COF:"
+    },
+    {
+      "file": "116__capture_2026-02-20T20-33-34-674Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [],
+      "seed_raw": "magpseed3298FC0 | seed:3E2981 | mased3298C0 | seed:3E298F | es9eo | apseed:3E298FC"
+    },
+    {
+      "file": "117__capture_2026-02-20T21-21-36-089Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Ancient Vault",
+        "Rogue Turrets",
+        "Legion Patrols",
+        "Low Altitude Fog",
+        "Few Asteroids",
+        "Gloaming Expanse"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [
+        "FANCYGOOSE",
+        "PRIVATEER",
+        "DUBIOUSREFLECTION",
+        "Hunter"
+      ],
+      "seed_raw": "magpseed70267e00 | seed:7D267 | magsed7270 | seed:7D267E | e20 | apseed:7D267EC"
+    },
+    {
+      "file": "119__capture_2026-02-20T23-03-12-537Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Rogue Turrets",
+        "Epic Loot",
+        "Few Asteroids",
+        "Dead Worlds",
+        "Legion Patrols"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [
+        "VANGUARD",
+        "HUNtER",
+        "ESCAPEVELOCITY",
+        "SOLOOUTLAW"
+      ],
+      "seed_raw": "mapsee:52F0 | ed:532F | mosed5280 | seed:532FBF | e0 | apseed:532FBFC"
+    },
+    {
+      "file": "120__capture_2026-02-22T00-33-42-386Z.png",
+      "seed": "53D180",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Sandstorm",
+        "Legion Patrols",
+        "Lava Epics",
+        "Dead Worlds",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [
+        "oldWarrior"
+      ],
+      "seed_raw": "mapseed:53D180 | seed:5A3FD | mosede3FD180 | seed:5A3FD1 | ee18 | apseed:5A3FD18"
+    },
+    {
+      "file": "121__capture_2026-02-22T01-10-18-742Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Cosmic Storm",
+        "Legion Patrols",
+        "Lava Epics",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 5,
+      "unknown_tokens": [
+        "PROBYMCPROBEFACE",
+        "OUTLAW",
+        "oldWarrior"
+      ],
+      "seed_raw": "magseed1B0320 | oseed:1FBO31 | mapsd10320 | oseed:1FB03E | es0 | apseed:1FB03E:"
+    },
+    {
+      "file": "122__capture_2026-02-22T01-52-36-408Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Ancient Vault",
+        "Rogue Turrets",
+        "Lava Epics",
+        "Low Altitude Fog",
+        "Lots Of Asteroids",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [
+        "ENTVAULT",
+        "LONGHAULER",
+        "STARDOCK",
+        "StueGrifn"
+      ],
+      "seed_raw": "magsee:4818CA80 | seed:481BCA | mase4818CA80 | upseed:481BCAI | C | apseed:481BCAI"
+    },
+    {
+      "file": "123__capture_2026-02-22T02-02-22-038Z.png",
+      "seed": "4C8F100",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Fast Gate",
+        "Rogue Turrets",
+        "Few Asteroids",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed:4C8F100 | ed:4BC8F | mosed:4810 | seed:4BC8F1 | eo, | apseed:4BC8F1C"
+    },
+    {
+      "file": "124__capture_2026-02-25T01-33-26-133Z.png",
+      "seed": "28B02",
+      "seed_flags": [
+        "LENGTH_5_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Fast Gate",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Lots Of Asteroids",
+        "Cryon Rift",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed28B02 | eed:1208 | mased20802 | seed:1208B | mee00) | upseed:1208BC"
+    },
+    {
+      "file": "128__capture_2026-02-25T03-12-15-194Z.png",
+      "seed": "64C08F0",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Rogue Turrets",
+        "Low Altitude Fog",
+        "Few Asteroids",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed64C08F0 | seed:64C081 | mapse600 | oseed:64CO8F | osee0 | apseed:64CO8F"
+    },
+    {
+      "file": "129__capture_2026-02-25T03-45-23-385Z.png",
+      "seed": "4DA9580",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [
+        "YOKXBtard"
+      ],
+      "seed_raw": "mapseed4DA9580 | seed:40DA95 | mapsed40980 | upseed:40DA95 | s0s80 | apseed:40DA951"
+    },
+    {
+      "file": "131__capture_2026-02-25T05-26-45-547Z.png",
+      "seed": "598C200",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Sandstorm",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 5,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed598C200 | seed:59BC2 | mapsd98C20 | pseed:59BC2E | ese80 | apseed:59BC2E"
+    },
+    {
+      "file": "132__capture_2026-02-25T06-02-46-869Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Legion Patrols",
+        "Lava Epics",
+        "Low Altitude Fog",
+        "Cryon Rift",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "magpseed5030900 | )seed:503091 | mased00 | seed:50309F | s0 | apseed:50309F"
+    },
+    {
+      "file": "134__capture_2026-03-01T05-49-39-708Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Fast Gate",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Lava Epics",
+        "Lots Of Asteroids",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 9,
+      "unknown_tokens": [],
+      "seed_raw": "magseed:5CED9400 | SCEDO | Q:: | msed9400 | seed:5CED94 | esd0) | upseed:5CED944"
+    },
+    {
+      "file": "136__capture_2026-03-04T22-45-02-585Z.png",
+      "seed": "5A73080",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Fast Gate",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Lots Of Asteroids",
+        "Cryon Rift",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [
+        "baSteve"
+      ],
+      "seed_raw": "mapseed5A73080 | pseed:5AA73 | mapsedA00 | pseed:5AA730 | ed08 | upseed:5AA730"
+    },
+    {
+      "file": "138__capture_2026-03-05T05-48-05-497Z.png",
+      "seed": "A7200",
+      "seed_flags": [
+        "LENGTH_5_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Fast Gate",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Low Altitude Fog",
+        "Lots Of Asteroids",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 9,
+      "unknown_tokens": [],
+      "seed_raw": "mapseedA7200 | Ped:FAs | magsedA720 | seed:FA72E | eeFe0 | pseed:FA72E"
+    },
+    {
+      "file": "140__capture_2026-03-05T06-41-54-863Z.png",
+      "seed": "385AD8C0",
+      "seed_flags": [],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [
+        "enched22"
+      ],
+      "seed_raw": "mapseed385AD8C0 | seed:385aD | mapsed854D8C0 | ipseed:385AD8 | es0Co | upseed:385AD8("
+    },
+    {
+      "file": "144__capture_2026-03-06T19-33-26-202Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Cosmic Storm",
+        "Legion Patrols",
+        "Low Altitude Fog",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 5,
+      "unknown_tokens": [
+        "codeKraken"
+      ],
+      "seed_raw": "magpsee:520E300 | seed:52BOE: | mased2800 | seed:52BOE3 | 00 | apseed:52BOE3"
+    },
+    {
+      "file": "145__capture_2026-03-06T22-40-43-509Z.png",
+      "seed": "68410",
+      "seed_flags": [
+        "LENGTH_5_NOT_8"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed68410 | seed:684F3 | mapsed6410 | seed:684F31 | s0 | apseed:684F310"
+    },
+    {
+      "file": "146__capture_2026-03-06T22-40-43-509Z__relinked_1.png",
+      "seed": "68410",
+      "seed_flags": [
+        "LENGTH_5_NOT_8"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed68410 | seed:684F3 | mapsed6410 | seed:684F31 | s0 | apseed:684F310"
+    },
+    {
+      "file": "147__capture_2026-03-07T01-22-49-063Z.png",
+      "seed": "34C0F280",
+      "seed_flags": [
+        "SUBST(34COF280->34C0F280)"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Easy Loot",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [
+        "S.S.BADDECISIONS",
+        "BASTION"
+      ],
+      "seed_raw": "mapseed34COF280 | a:340 | mapsede3C020 | pseed:34COF2 | ee028 | upseed:34COF2)"
+    },
+    {
+      "file": "148__capture_2026-03-07T01-52-05-890Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Sandstorm",
+        "Rogue Turrets",
+        "Few Asteroids",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [
+        "COSMICSANS",
+        "SCOUT",
+        "bergockey"
+      ],
+      "seed_raw": "magsed:185CA800 | eed:185C. | mapse85C80 | pseed:185CA8: | ee080 | upseed:185CA81"
+    },
+    {
+      "file": "149__capture_2026-03-07T01-52-05-890Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Sandstorm",
+        "Rogue Turrets",
+        "Few Asteroids",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [
+        "COSMICSANS",
+        "SCOUT",
+        "bergockey"
+      ],
+      "seed_raw": "magsed:185CA800 | eed:185C. | mapse85C80 | pseed:185CA8: | ee080 | upseed:185CA81"
+    },
+    {
+      "file": "152__capture_2026-03-08T05-35-08-583Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Fast Gate",
+        "Rogue Turrets",
+        "Legion Patrols",
+        "Lava Epics",
+        "Lots Of Asteroids",
+        "Dead Worlds",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "magpseed1810 | ped:1141 | mased1810 | oseed:1148B1 | meeh0 | apseed:1148B1K"
+    },
+    {
+      "file": "153__capture_2026-03-08T06-07-45-187Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Sandstorm",
+        "Ancient Vault",
+        "Rogue Turrets",
+        "Low Altitude Fog",
+        "Few Asteroids",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 9,
+      "unknown_tokens": [],
+      "seed_raw": "magseed693c00 | Ped:6093CI | mased60360 | seed:6093CD | esco | upseed:6093CDI"
+    },
+    {
+      "file": "156__capture_2026-03-08T23-10-09-213Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Ancient Vault",
+        "Rogue Turrets",
+        "Lava Epics",
+        "Low Altitude Fog",
+        "Few Asteroids",
+        "Cryon Rift",
+        "Legion Patrols"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [
+        "UNSINKABLEII",
+        "HUNtER",
+        "ICARUS",
+        "SOLOOUTLAW"
+      ],
+      "seed_raw": "MEREMAININOS1psed:545BC80 | TIMEREMAINING59:2954C80 | TIMEREMAINING9:2 | 9:2 | EREMAININ | pseed:5F45B"
+    },
+    {
+      "file": "157__capture_2026-03-08T23-27-19-268Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Haunted Storm",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Lots Of Asteroids",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 9,
+      "unknown_tokens": [],
+      "seed_raw": "mapsed:4B0360 | ed:44BO3 | mapse4060 | pseed:44B036 | me00) | apseed:44B0361"
+    },
+    {
+      "file": "158__capture_2026-03-09T03-03-14-344Z.png",
+      "seed": "3AD09F40",
+      "seed_flags": [],
+      "modifiers": [
+        "Artifact: Healing",
+        "Leech Swarms",
+        "Lots Of Asteroids",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [
+        "kythe45"
+      ],
+      "seed_raw": "mapseed3AD09F40 | oseed:3ad091 | mapsed0940 | pseed:3AD09F | eeD40 | apseed:3AD09F"
+    },
+    {
+      "file": "160__capture_2026-03-09T03-30-32-581Z.png",
+      "seed": "08600",
+      "seed_flags": [
+        "LENGTH_5_NOT_8"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed08600 | eed:50D86 | maseed060 | ipseed:50D86D | s00 | apseed:50D86De"
+    },
+    {
+      "file": "163__capture_2026-03-09T05-06-19-093Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Fast Gate",
+        "Haunted Storm",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Legion Patrols",
+        "Lava Epics",
+        "Few Asteroids",
+        "Gloaming Expanse",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 10,
+      "unknown_tokens": [
+        "uberelocke"
+      ],
+      "seed_raw": "magsed:6D0F500 | ea:6DC | magse600 | pseed:6DOF57 | es0 | upseed:6DOF57"
+    },
+    {
+      "file": "165__capture_2026-03-10T03-26-56-644Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Fast Gate",
+        "Epic Loot",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 5,
+      "unknown_tokens": [
+        "arkoPizza"
+      ],
+      "seed_raw": "mapsee:275D0500 | seed:275DO! | mapse2500 | ipseed:275D05 | esee600 | apseed:275D05"
+    },
+    {
+      "file": "166__capture_2026-03-10T04-04-02-104Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Haunted Storm",
+        "Legion Patrols",
+        "Gloaming Expanse",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 5,
+      "unknown_tokens": [],
+      "seed_raw": "magseed510580 | seed:511051 | mapsd0580 | pseed:51105B | s0 | apseed:51105B:"
+    },
+    {
+      "file": "167__capture_2026-03-10T04-37-50-905Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Haunted Storm",
+        "Ancient Vault",
+        "Rogue Turrets",
+        "Legion Patrols",
+        "Low Altitude Fog",
+        "Lots Of Asteroids",
+        "Gloaming Expanse",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 9,
+      "unknown_tokens": [
+        "tingPupy"
+      ],
+      "seed_raw": "magsee:39ECCe40 | sa:S | magsee30C40 | pseed:39ECCE | eeCeoc | upseed:39ECCE"
+    },
+    {
+      "file": "169__capture_2026-03-10T23-16-42-128Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Fast Gate",
+        "Cosmic Storm",
+        "Rogue Turrets",
+        "Epic Loot",
+        "Lots Of Asteroids",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [
+        "mberelocke"
+      ],
+      "seed_raw": "mapsee:740DB380 | eed:740DB: | magsee708380 | upseed:740DB3 | ee80 | upseed:740DB31"
+    },
+    {
+      "file": "171__capture_2026-03-11T00-08-38-692Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Fast Gate",
+        "Ice Storm",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [
+        "iberelocke"
+      ],
+      "seed_raw": "mapsed:4CF85E00 | seed:4CF851 | mapsee4850 | pseed:4CF85E | ees) | upseed:4CF85E"
+    },
+    {
+      "file": "172__capture_2026-03-11T00-50-35-520Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Haunted Storm",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 5,
+      "unknown_tokens": [],
+      "seed_raw": "magpseed51008 | sea:510 | mased1008 | oseed:51D70 | ee0) | apseed:51D70X"
+    },
+    {
+      "file": "176__capture_2026-03-11T19-48-06-664Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Cosmic Storm",
+        "Rogue Turrets",
+        "Legion Patrols",
+        "Few Asteroids",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [
+        "mberelocke"
+      ],
+      "seed_raw": "magpseed6D51380 | seed:6AD51 | magsed6D130 | seed:6AD513 | 80 | upseed:6AD513"
+    },
+    {
+      "file": "1774159967028__capture_2026-03-22T06-14-56-411Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Fast Gate",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Lava Epics",
+        "Low Altitude Fog",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "magpseed2436400 | seed:24363 | msed436340 | seed:243634 | 0 | upseed:243631"
+    },
+    {
+      "file": "177__capture_2026-03-11T20-12-46-579Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Legion Patrols",
+        "Lava Epics",
+        "Dead Worlds",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 5,
+      "unknown_tokens": [
+        "iberelocke"
+      ],
+      "seed_raw": "magseed:486400 | masd4860 | seed:44986A | es80 | apseed:44986A"
+    },
+    {
+      "file": "178__capture_2026-03-11T20-53-50-978Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Ancient Vault",
+        "Rogue Turrets",
+        "Legion Patrols",
+        "Lava Epics",
+        "Low Altitude Fog",
+        "Few Asteroids",
+        "Gloaming Expanse",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 9,
+      "unknown_tokens": [],
+      "seed_raw": "magpsee:45613800 | seed:456F3 | mased45680 | seed:456F381 | 60 | apseed:456F38C"
+    },
+    {
+      "file": "180__capture_2026-03-11T21-40-05-453Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ice Storm",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Few Asteroids",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [
+        "restOnyx"
+      ],
+      "seed_raw": "magpseed6792380 | eed:6792E | mogsede69230 | seed:6792E3 | e280 | apseed:6792E3"
+    },
+    {
+      "file": "181__capture_2026-03-11T22-08-09-069Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Fast Gate",
+        "Sandstorm",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "magpseed104A00 | oseed:1044af | mased0440 | seed:104AAF | s0 | apseed:104AAF"
+    },
+    {
+      "file": "185__capture_2026-03-11T23-47-37-491Z.png",
+      "seed": "7878CC80",
+      "seed_flags": [],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ancient Vault",
+        "Legion Patrols",
+        "Lava Epics",
+        "Gloaming Expanse",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed7878CC80 | 78780 | d:1 | mapsed78c80 | ipseed:7878CC | ee87es | apseed:7878CCI"
+    },
+    {
+      "file": "186__capture_2026-03-12T00-20-15-745Z.png",
+      "seed": "3CAEC380",
+      "seed_flags": [],
+      "modifiers": [
+        "Artifact: Ice",
+        "Ancient Vault",
+        "Legion Patrols",
+        "Lava Epics",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 5,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed3CAEC380 | seed:3CAEC: | mapsedC30 | pseed:3CAEC3 | esec80 | apseed:3CAEC3"
+    },
+    {
+      "file": "187__capture_2026-03-12T01-11-45-386Z.png",
+      "seed": "CB4400",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Legion Patrols",
+        "Lava Epics",
+        "Low Altitude Fog",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 5,
+      "unknown_tokens": [],
+      "seed_raw": "mapseedCB4400 | oseed:2CB44: | mapsed200 | pseed:2CB443 | es080 | apseed:2CB443"
+    },
+    {
+      "file": "188__capture_2026-03-12T01-36-23-175Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ancient Vault",
+        "Lava Epics",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "magpseed47488 | magsed:47488 | seed:4F74B | masee48 | apseed:4F74B: | cmlowb"
+    },
+    {
+      "file": "189__capture_2026-03-12T02-22-50-339Z.png",
+      "seed": "5270400",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Ice Storm",
+        "Lava Epics",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed5270400 | pseed:52A704 | mapsd270 | ipseed:52A704 | es20 | apseed:52A7044"
+    },
+    {
+      "file": "190__capture_2026-03-12T02-54-36-656Z.png",
+      "seed": "140680",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Sandstorm",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Easy Loot",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed140680 | ed:14806 | mosed480680 | seed:14806B | e) | apseed:14806Bl"
+    },
+    {
+      "file": "191__capture_2026-03-12T03-26-34-412Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Ancient Vault",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 5,
+      "unknown_tokens": [],
+      "seed_raw": "magsed:18C2440 | a: | mapsed8240 | pseed:188C244 | ee1840 | apseed:188C24)"
+    },
+    {
+      "file": "192__capture_2026-03-12T03-54-09-488Z__relinked_1.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Haunted Storm",
+        "Rogue Turrets",
+        "Easy Loot",
+        "Lots Of Asteroids",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "magpsee6832800 | 6B32 | d: | mased6830 | seed:6B3283 | e0 | apseed:6B3283"
+    },
+    {
+      "file": "193__capture_2026-03-12T04-19-01-005Z__relinked_1.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [],
+      "seed_raw": "magpseed18FA520 | oseed:1BFA5A | magsed18A520 | seed:1BFA5A | s8A020 | apseed:1BFA5A | cb"
+    },
+    {
+      "file": "194__capture_2026-03-12T05-10-54-875Z.png",
+      "seed": "1056D20",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Rogue Turrets",
+        "Lava Epics",
+        "Low Altitude Fog",
+        "Lots Of Asteroids",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed1056D20 | seed:1056DI | mosed056e20 | seed:1056DE | ee620 | apseed:1056DE:"
+    },
+    {
+      "file": "195__capture_2026-03-12T05-10-54-875Z.png",
+      "seed": "1056D20",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Rogue Turrets",
+        "Lava Epics",
+        "Low Altitude Fog",
+        "Lots Of Asteroids",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed1056D20 | seed:1056DI | mosed056e20 | seed:1056DE | ee620 | apseed:1056DE:"
+    },
+    {
+      "file": "197__capture_2026-03-13T03-41-37-665Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ice Storm",
+        "Lava Epics",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "mapsee:199810 | ed: | mapsd49910 | seed:419981 | s0 | apseed:419981"
+    },
+    {
+      "file": "200__capture_2026-03-13T04-24-50-061Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Ancient Vault",
+        "Rogue Turrets",
+        "Lava Epics",
+        "Few Asteroids",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [],
+      "seed_raw": "magpseed450410 | seed:45D41C | mased5410 | seed:45D410 | 40 | apseed:45D4100"
+    },
+    {
+      "file": "201__capture_2026-03-13T04-24-50-061Z__relinked_1.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Ancient Vault",
+        "Rogue Turrets",
+        "Lava Epics",
+        "Few Asteroids",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [],
+      "seed_raw": "magpseed450410 | seed:45D41C | mased5410 | seed:45D410 | 40 | apseed:45D4100"
+    },
+    {
+      "file": "204__capture_2026-03-13T05-31-16-903Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Ice Storm",
+        "Rogue Turrets",
+        "Lava Epics",
+        "Few Asteroids",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [
+        "artingPuppy",
+        "shiMcbeef"
+      ],
+      "seed_raw": "mapsee1FCFDA0 | mosed1CDA | seed:17FCFD | egea) | apseed:17FCFDZ"
+    },
+    {
+      "file": "207__capture_2026-03-13T05-53-39-152Z.png",
+      "seed": "6C0DC0",
+      "seed_flags": [
+        "LENGTH_6_NOT_8",
+        "SUBST(6CODC0->6C0DC0)"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ancient Vault",
+        "Lava Epics",
+        "Low Altitude Fog",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed6CoDC0 | Ped:63COD | ms630c0 | pseed:63CODC | \u2022\u2022\u2022 | apseed:63CODC"
+    },
+    {
+      "file": "208__capture_2026-03-13T06-11-31-951Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Rogue Turrets",
+        "Legion Patrols",
+        "Lava Epics",
+        "Lots Of Asteroids",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [
+        "shirMcBeef"
+      ],
+      "seed_raw": "magpseed1D5480 | beed:2IDE5 | mosede21540 | seed:21DE54 | e00 | apseed:21DE548"
+    },
+    {
+      "file": "249__capture_2026-03-15T21-50-15-527Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 0,
+      "unknown_tokens": [],
+      "seed_raw": "magsee:305398C0 | ed:305. | masd038C0 | ipseed:3053981 | apseed:3053981"
+    },
+    {
+      "file": "250__capture_2026-03-15T21-50-15-527Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 0,
+      "unknown_tokens": [],
+      "seed_raw": "magsee:305398C0 | ed:305. | masd038C0 | ipseed:3053981 | apseed:3053981"
+    },
+    {
+      "file": "251__capture_2026-03-15T21-50-15-527Z__relinked_1.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 0,
+      "unknown_tokens": [],
+      "seed_raw": "magsee:305398C0 | ed:305. | masd038C0 | ipseed:3053981 | apseed:3053981"
+    },
+    {
+      "file": "253__capture_2026-03-15T21-50-15-527Z__relinked_1.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 0,
+      "unknown_tokens": [],
+      "seed_raw": "magsee:305398C0 | ed:305. | masd038C0 | ipseed:3053981 | apseed:3053981"
+    },
+    {
+      "file": "254__capture_2026-03-15T21-50-15-527Z__relinked_1__relinked_1.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 0,
+      "unknown_tokens": [],
+      "seed_raw": "magsee:305398C0 | ed:305. | masd038C0 | ipseed:3053981 | apseed:3053981"
+    },
+    {
+      "file": "255__capture_2026-03-16T00-11-34-169Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Fast Gate",
+        "Sandstorm",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Lava Epics",
+        "Lots Of Asteroids",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 10,
+      "unknown_tokens": [
+        "deKraken",
+        "Lase"
+      ],
+      "seed_raw": "mapsee:74DBOE00 | eed:74DBO | magsee7D0 | upseed:74DBOE | mee00 | upseed:74DBOE"
+    },
+    {
+      "file": "256__capture_2026-03-16T00-33-28-732Z.png",
+      "seed": "418680",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Haunted Storm",
+        "Leech Swarms",
+        "Lava Epics",
+        "Lots Of Asteroids",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed418680 | ed:41E8F | mapsd4180 | seed:41E8F6 | ese) | apseed:41E8F61"
+    },
+    {
+      "file": "257__capture_2026-03-16T00-58-24-493Z.png",
+      "seed": "5247680",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed5247680 | seed:5247D | mapsd24680 | pseed:5247D6 | ese68 | apseed:5247D6i"
+    },
+    {
+      "file": "258__capture_2026-03-16T01-21-48-878Z.png",
+      "seed": "D08100",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Legion Patrols",
+        "Lava Epics",
+        "Low Altitude Fog",
+        "Dead Worlds",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed:D08100 | eed:D3C | masedD0100 | seed:D30B1 | eeD0 | apseed:D30BK"
+    },
+    {
+      "file": "259__capture_2026-03-16T01-54-07-447Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Haunted Storm",
+        "Rogue Turrets",
+        "Legion Patrols",
+        "Lava Epics",
+        "Lots Of Asteroids",
+        "Gloaming Expanse",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "mapsee:4839080 | ed:46839 | mase4e0 | pseed:468390 | w | apseed:468390"
+    },
+    {
+      "file": "268__capture_2026-03-16T20-20-12-473Z.png",
+      "seed": "514680",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 0,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed514680 | eed:5A146 | mosedA1630 | seed:5A1463 | apseed:5A1463"
+    },
+    {
+      "file": "271__capture_2026-03-16T20-20-12-473Z.png",
+      "seed": "514680",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 0,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed514680 | eed:5A146 | mosedA1630 | seed:5A1463 | apseed:5A1463"
+    },
+    {
+      "file": "275__capture_2026-03-16T20-20-12-473Z__relinked_1.png",
+      "seed": "514680",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 0,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed514680 | eed:5A146 | mosedA1630 | seed:5A1463 | apseed:5A1463"
+    },
+    {
+      "file": "278__capture_2026-03-16T20-20-12-473Z__relinked_1.png",
+      "seed": "514680",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 0,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed514680 | eed:5A146 | mosedA1630 | seed:5A1463 | apseed:5A1463"
+    },
+    {
+      "file": "280__capture_2026-03-17T03-46-38-497Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Easy Loot",
+        "Low Altitude Fog",
+        "Lots Of Asteroids",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 9,
+      "unknown_tokens": [
+        "Kkakeane"
+      ],
+      "seed_raw": "mapsee:109C020 | ed:10 | mapse0900 | pseed:10D9CO | e00 | apseed:10D9CO:"
+    },
+    {
+      "file": "282__capture_2026-03-17T04-36-30-226Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Fast Gate",
+        "Cosmic Storm",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [
+        "THEMUNGUS",
+        "OUTLAW",
+        "gidk"
+      ],
+      "seed_raw": "magpseed47BC380 | seed:47BCF: | magsed47C30 | seed:47BCF3: | e180 | apseed:47BCF31"
+    },
+    {
+      "file": "283__capture_2026-03-17T05-13-46-713Z.png",
+      "seed": "29350",
+      "seed_flags": [
+        "LENGTH_5_NOT_8"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [
+        "odeKraken"
+      ],
+      "seed_raw": "mapseed29350 | 20: | mased29350 | seed:293335 | e0 | apseed:2933350"
+    },
+    {
+      "file": "284__capture_2026-03-17T05-58-56-012Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Haunted Storm",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Lava Epics",
+        "Few Asteroids",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 9,
+      "unknown_tokens": [
+        "paidsigne"
+      ],
+      "seed_raw": "magseed:6D43400 | eed:6DD43 | mased6440 | seed:6DD434 | es460 | upseed:6DD434"
+    },
+    {
+      "file": "287__capture_2026-03-17T23-16-35-418Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Rogue Turrets",
+        "Easy Loot",
+        "Few Asteroids",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [],
+      "seed_raw": "mgseed19C4E00 | e | ed:719C2 | mapseed940 | pseed:719C4E | s90 | apseed:719C4E"
+    },
+    {
+      "file": "288__capture_2026-03-17T23-41-46-119Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Dead Worlds",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 5,
+      "unknown_tokens": [],
+      "seed_raw": "magpsed:83F00 | eed:183F: | mapse830 | pseed:183F3F | es0) | apseed:183F3FC"
+    },
+    {
+      "file": "290__capture_2026-03-18T01-32-31-502Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Cosmic Storm",
+        "Ancient Vault",
+        "Lava Epics",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "magseedCD8780 | ea: | mapsedD070 | seed:CDEB7 | s8 | apseed:CDEB71"
+    },
+    {
+      "file": "291__capture_2026-03-18T01-42-27-428Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Haunted Storm",
+        "Ancient Vault",
+        "Lava Epics",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [],
+      "seed_raw": "magseed:54C70880 | \u2022\u2022 | mapsed547880 | seed:54C7D8 | es618 | upseed:54C7D81"
+    },
+    {
+      "file": "292__capture_2026-03-18T02-02-30-731Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [],
+      "seed_raw": "magpseedAF2990 | pea:AFS | mapseAF90 | seed:AF32 | es0 | apseed:AF329"
+    },
+    {
+      "file": "293__capture_2026-03-18T02-15-51-649Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Sandstorm",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 5,
+      "unknown_tokens": [],
+      "seed_raw": "magseed1208280 | 0: | mapsee20280 | pseed:120823 | es8 | apseed:1208231"
+    },
+    {
+      "file": "295__capture_2026-03-18T03-09-18-502Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Fast Gate",
+        "Sandstorm",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Dead Worlds",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [],
+      "seed_raw": "magseedB5D580 | Ped:B5D | mapsed580 | pseed:B5D5F | ses | apseed:B5D5F"
+    },
+    {
+      "file": "296__capture_2026-03-18T03-39-49-347Z.png",
+      "seed": "3DD540",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ice Storm",
+        "Ancient Vault",
+        "Rogue Turrets",
+        "Legion Patrols",
+        "Lava Epics",
+        "Few Asteroids",
+        "Cryon Rift",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 9,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed:3DD540 | eed:3D8DD | se | maseedD8D40 | pseed:3D8DD5 | es40 | apseed:3D8DD5"
+    },
+    {
+      "file": "297__capture_2026-03-18T04-07-41-044Z.png",
+      "seed": "2800E80",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Cosmic Storm",
+        "Lava Epics",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 5,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed2800e80 | seed:24800 | mapsed0080 | 0seed:2A800E | eed0080 | apseed:2A800ES"
+    },
+    {
+      "file": "299__capture_2026-03-18T04-58-12-988Z__relinked_1.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ice Storm",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [
+        "DEATH'SDOOR",
+        "PRIVATEER"
+      ],
+      "seed_raw": "magseed79e48680 | eed:79EA81 | mase0880 | upseed:79EA86 | ipseed:79EA86"
+    },
+    {
+      "file": "302__capture_2026-03-18T06-10-27-951Z.png",
+      "seed": "E159020",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Haunted Storm",
+        "Rogue Turrets",
+        "Easy Loot",
+        "Few Asteroids",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [
+        "Alkaline",
+        "SOLOOUTLAW"
+      ],
+      "seed_raw": "mapseede159020 | eed:1F5F | mase1590 | seed:1F5F9C | ese8020 | apseed:1F5F90t"
+    },
+    {
+      "file": "304__capture_2026-03-18T06-55-29-270Z.png",
+      "seed": "3C48B040",
+      "seed_flags": [],
+      "modifiers": [
+        "Artifact: Healing",
+        "Fast Gate",
+        "Haunted Storm",
+        "Leech Swarms",
+        "Lava Epics",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed3C48B040 | 44 | a:: | mosdS40 | pseed:3C44BO | 04 | \u2022 | upseed:3C44B"
+    },
+    {
+      "file": "305__capture_2026-03-18T07-15-11-748Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [],
+      "seed_raw": "magseed:3DF4C0 | ed:3DBDFt | msdDDF4C0 | pseed:3DBDF44 | apseed:3DBDF44"
+    },
+    {
+      "file": "308__capture_2026-03-18T19-38-55-129Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ice Storm",
+        "Rogue Turrets",
+        "Epic Loot",
+        "Lots Of Asteroids",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [
+        "ytballs"
+      ],
+      "seed_raw": "magseed3B18EC0 | ped:3B1E8 | mased8sC0 | seed:3BIE8E | eseBe | apseed:3BIE8EC"
+    },
+    {
+      "file": "309__capture_2026-03-18T20-13-07-209Z.png",
+      "seed": "45400",
+      "seed_flags": [
+        "LENGTH_5_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Leech Swarms",
+        "Epic Loot",
+        "Legion Patrols",
+        "Low Altitude Fog",
+        "Lots Of Asteroids",
+        "Dead Worlds",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed45400 | oseed:42457 | )se | mapsed40 | seed:4245A | s240 | apseed:4245Ac"
+    },
+    {
+      "file": "311__capture_2026-03-18T20-37-44-865Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Sandstorm",
+        "Rogue Turrets",
+        "Epic Loot",
+        "Few Asteroids",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [
+        "ytballs"
+      ],
+      "seed_raw": "magseed124F400 | oseed:1F24FJ | mapsee24fe0 | pseed:1F24FA | s0 | apseed:1F24FA"
+    },
+    {
+      "file": "312__capture_2026-03-18T21-02-26-750Z.png",
+      "seed": "343E300",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Cosmic Storm",
+        "Ancient Vault",
+        "Legion Patrols",
+        "Lava Epics",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [
+        "SECRETHORSE",
+        "OUTLAW"
+      ],
+      "seed_raw": "mapseed343E300 | eed:34A3E | mosed:430 | seed:34A3E3 | e0 | apseed:34A3E3"
+    },
+    {
+      "file": "313__capture_2026-03-18T21-47-55-808Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Fast Gate",
+        "Low Altitude Fog",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "magpseed:687B08 | magsed:68708 | seed:6E87B | eel0) | apseed:6E87BI"
+    },
+    {
+      "file": "314__capture_2026-03-18T22-11-09-549Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Ice Storm",
+        "Leech Swarms",
+        "Lava Epics",
+        "Lots Of Asteroids",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [
+        "ytballs"
+      ],
+      "seed_raw": "magseed:6095680 | ed:6D0951 | mased60680 | seed:6D0956 | es8 | upseed:6D09561"
+    },
+    {
+      "file": "315__capture_2026-03-18T22-39-01-576Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Haunted Storm",
+        "Legion Patrols",
+        "Low Altitude Fog",
+        "Gloaming Expanse",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [
+        "talls"
+      ],
+      "seed_raw": "magseed791480 | eed:79B14 | mased781430 | seed:79B1431 | es980 | apseed:79B1431"
+    },
+    {
+      "file": "321__capture_2026-03-19T04-12-48-281Z.png",
+      "seed": "607C0880",
+      "seed_flags": [],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed607C0880 | seed:607C( | mapse6080 | pseed:607C08: | ee8 | apseed:607C088"
+    },
+    {
+      "file": "322__capture_2026-03-19T04-29-44-852Z.png",
+      "seed": "6EFE80",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Cosmic Storm",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Epic Loot",
+        "Legion Patrols",
+        "Low Altitude Fog",
+        "Lots Of Asteroids",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 10,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed:6EFE80 | eed:6EAF | magsed6AFe80 | seed:6EAFE | oee8 | apseed:6EAFeS | cYanmaowb"
+    },
+    {
+      "file": "323__capture_2026-03-19T04-56-54-344Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Fast Gate",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Low Altitude Fog",
+        "Lots Of Asteroids",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "magpseed7868F0 | mogsed8680 | seed:7B6BE | ege680 | apseed:7B6BEFC"
+    },
+    {
+      "file": "324__capture_2026-03-19T05-22-29-348Z.png",
+      "seed": "25464740",
+      "seed_flags": [],
+      "modifiers": [
+        "Artifact: Healing",
+        "Lava Epics",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 5,
+      "unknown_tokens": [
+        "rtingPuppy"
+      ],
+      "seed_raw": "mapseed25464740 | oseed:25A64 | mapseed2640 | ipseed:25A647 | ese640 | apseed:25A647"
+    },
+    {
+      "file": "327__capture_2026-03-19T06-42-27-897Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Ice Storm",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Lava Epics",
+        "Low Altitude Fog",
+        "Lots Of Asteroids",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 10,
+      "unknown_tokens": [
+        "00Lasagne"
+      ],
+      "seed_raw": "magpsee:726800 | seed:726830 | mased26800 | seed:726830 | 0 | apseed:726830"
+    },
+    {
+      "file": "359__capture_2026-03-20T04-29-59-700Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Ice Storm",
+        "Ancient Vault",
+        "Low Altitude Fog",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [],
+      "seed_raw": "magseed:59510 | eed:5795 | mased59510 | seed:579531 | es50 | apseed:579531"
+    },
+    {
+      "file": "360__capture_2026-03-20T05-16-55-464Z.png",
+      "seed": "390C2940",
+      "seed_flags": [],
+      "modifiers": [
+        "Artifact: Healing",
+        "Haunted Storm",
+        "Ancient Vault",
+        "Legion Patrols",
+        "Gloaming Expanse",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed390C2940 | seed:390C2 | mapse30240 | ipseed:390C29 | ose8040 | pseed:390C291"
+    },
+    {
+      "file": "381__capture_2026-03-20T23-19-09-398Z.png",
+      "seed": "687900",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Fast Gate",
+        "Haunted Storm",
+        "Lava Epics",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [
+        "AVERAGE",
+        "SOLOOUTLAW"
+      ],
+      "seed_raw": "mapseed687900 | seed:6B879 | mapse870 | pseed:6B879A | es080 | apseed:6B879A"
+    },
+    {
+      "file": "385__capture_2026-03-21T03-09-57-291Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [],
+      "seed_raw": "magseed:464FD80 | 18A | mapsd464FD80 | )seed:448AFDi | es488 | apseed:448AFDS"
+    },
+    {
+      "file": "386__capture_2026-03-21T03-43-47-211Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Lava Epics",
+        "Few Asteroids",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [],
+      "seed_raw": "mgseed:CF3C780 | ed:1CF3 | mapseeC370 | pseed:1CF3C7 | sc8 | upseed:1CF3C7"
+    },
+    {
+      "file": "388__capture_2026-03-21T04-28-59-110Z.png",
+      "seed": "7810",
+      "seed_flags": [
+        "LENGTH_4_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Haunted Storm",
+        "Rogue Turrets",
+        "Legion Patrols",
+        "Lava Epics",
+        "Few Asteroids",
+        "Gloaming Expanse",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed7810 | magseee810 | seed:7831B1 | ee10 | apseed:7831B1"
+    },
+    {
+      "file": "389__capture_2026-03-21T04-52-07-481Z.png",
+      "seed": "40ECAF0",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Fast Gate",
+        "Epic Loot",
+        "Legion Patrols",
+        "Cryon Rift",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed40ECAF0 | seed:40ECAI | mopse0e0 | pseed:40ECAF | A | \u2022 | apseed:40ECAF"
+    },
+    {
+      "file": "390__capture_2026-03-21T05-16-19-640Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Cosmic Storm",
+        "Rogue Turrets",
+        "Lava Epics",
+        "Lots Of Asteroids",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [
+        "rkoPizza"
+      ],
+      "seed_raw": "magseed682AC00 | d:6E82A | mapsd682C00 | seed:6E82AC | es8c0) | upseed:6E82AC"
+    },
+    {
+      "file": "403__capture_2026-03-22T04-11-24-998Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Cosmic Storm",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Lots Of Asteroids",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "magseed328300 | ed:327t | mapsede2830 | seed:327B3F | es80) | apseed:327B3FC"
+    },
+    {
+      "file": "404__capture_2026-03-22T04-27-44-256Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [],
+      "seed_raw": "mapsed:539EC600 | 20:59 | magse5960 | pseed:539EC6 | ee560 | upseed:539EC61"
+    },
+    {
+      "file": "405__capture_2026-03-22T04-55-55-208Z.png",
+      "seed": "690C8",
+      "seed_flags": [
+        "LENGTH_5_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Rogue Turrets",
+        "Easy Loot",
+        "Few Asteroids",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [
+        "SPOREBIOME",
+        "fartingPuppy"
+      ],
+      "seed_raw": "mapseed690C8 | eed:66900 | mapsd608 | seed:6690C | \u2022 | apseed:66900"
+    },
+    {
+      "file": "406__capture_2026-03-22T05-18-05-174Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ice Storm",
+        "Ancient Vault",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [
+        "tingPuppy"
+      ],
+      "seed_raw": "magseed7F2480 | masee7240 | pseed:TT7F24 | 48 | apseed:777F244"
+    },
+    {
+      "file": "409__capture_2026-03-22T06-35-20-761Z.png",
+      "seed": "265D1740",
+      "seed_flags": [],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed265D1740 | beed:265D | mogsede2601740 | oseed:265D17 | eg040 | apseed:265D17"
+    },
+    {
+      "file": "410__capture_2026-03-22T06-52-48-089Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [
+        "ideKraken"
+      ],
+      "seed_raw": "magpseed2833480 | \u2022\u2022 | magsed28340 | seed:28334 | 0480 | apseed:28334"
+    },
+    {
+      "file": "411__capture_2026-03-22T07-19-31-634Z.png",
+      "seed": "2C09C80",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Lava Epics",
+        "Low Altitude Fog",
+        "Few Asteroids",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 9,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed2C09C80 | eed:2ACO9C | mpsdAC080 | ipseed:2AC09C | mc | apseed:2AC09C"
+    },
+    {
+      "file": "412__capture_2026-03-22T07-34-56-514Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Epic Loot",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 5,
+      "unknown_tokens": [],
+      "seed_raw": "amapsee60o0 | ed:6B099 | mos6000 | )seed:6B0990 | apseed:6B0990"
+    },
+    {
+      "file": "421__capture_2026-03-22T23-08-02-899Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [
+        "edurricane"
+      ],
+      "seed_raw": "magpseed6217A00 | seed:62D17. | magsed62100 | seed:62D17A | 00 | apseed:62D17A"
+    },
+    {
+      "file": "437__capture_2026-03-23T05-06-51-745Z.png",
+      "seed": "830C10",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ice Storm",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Lots Of Asteroids",
+        "Cryon Rift",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [
+        "00Lasagne"
+      ],
+      "seed_raw": "mapseed:830C10 | eed:8830 | mased8010 | pseed:88300 | ee81s | upseed:8830C"
+    },
+    {
+      "file": "442__capture_2026-03-24T00-35-23-750Z.png",
+      "seed": "5904790",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Ice Storm",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 5,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed:5904790 | seed:59047 | magsd5000 | upseed:590479 | e00 | upseed:5904791"
+    },
+    {
+      "file": "444__capture_2026-03-24T01-44-03-969Z.png",
+      "seed": "2CBDC40",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [
+        "deKraken"
+      ],
+      "seed_raw": "mapseed:2CBDC40 | )seed:2CBDCF | mapseed2BDC40 | upseed:2CBDCF | sC4c | apseed:2CBDCF"
+    },
+    {
+      "file": "445__capture_2026-03-24T02-10-10-328Z.png",
+      "seed": "C79010",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ice Storm",
+        "Ancient Vault",
+        "Easy Loot",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed:C79010 | ea:CJ | mased7,9010 | seed:C7A9( | oe1 | apseed:C7A90"
+    },
+    {
+      "file": "446__capture_2026-03-24T02-29-00-977Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [
+        "odeKraken"
+      ],
+      "seed_raw": "mapsee:542A7300 | seed:542A7: | magsed52470 | upseed:542A73 | e210 | upseed:542A73"
+    },
+    {
+      "file": "447__capture_2026-03-24T02-48-52-518Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Haunted Storm",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Legion Patrols",
+        "Lava Epics",
+        "Lots Of Asteroids",
+        "Gloaming Expanse",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 10,
+      "unknown_tokens": [],
+      "seed_raw": "magpseed10C979a0 | seed:10C97 | mapsed090 | seed:10C979. | s0) | apseed:10C979."
+    },
+    {
+      "file": "448__capture_2026-03-24T03-21-07-088Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ice Storm",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Lava Epics",
+        "Lots Of Asteroids",
+        "Cryon Rift",
+        "Legion Patrols"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [
+        "OFCORPSENOT",
+        "OUTLAW",
+        "GHOULISHGOULASH",
+        "SOLOOUTLAW"
+      ],
+      "seed_raw": "MEREMAIINOT.see:39CC1040 | TIMEREMAINING59:2d3C040 | TIMEREMAINING9:2 | 9:2 | EREMAININ | pseed:39CC1"
+    },
+    {
+      "file": "449__capture_2026-03-24T03-56-04-425Z.png",
+      "seed": "3908C0",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Sandstorm",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed3908C0 | eed:390B8 | mapse3980 | ipseed:390B8C | ese) | apseed:390B8C"
+    },
+    {
+      "file": "450__capture_2026-03-24T04-17-44-983Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [
+        "odeKraken"
+      ],
+      "seed_raw": "magpsee195200 | seed:195B24 | mosed195840 | seed:195B244 | e80) | apseed:195B240"
+    },
+    {
+      "file": "467__capture_2026-03-25T00-59-16-383Z.png",
+      "seed": "C65010",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Ancient Vault",
+        "Rogue Turrets",
+        "Legion Patrols",
+        "Low Altitude Fog",
+        "Lots Of Asteroids",
+        "Gloaming Expanse",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed:C65010 | eed:C605 | mapsed605010 | seed:C605C | osel) | apseed:C6050"
+    },
+    {
+      "file": "468__capture_2026-03-25T01-33-27-478Z.png",
+      "seed": "846700",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Sandstorm",
+        "Rogue Turrets",
+        "Epic Loot",
+        "Few Asteroids",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed846700 | ed:0 | magsed8460 | seed:8E467 | eel60 | apseed:8E467"
+    },
+    {
+      "file": "471__capture_2026-03-25T05-07-09-945Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Rogue Turrets",
+        "Legion Patrols",
+        "Lava Epics",
+        "Few Asteroids",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "magsed:6BFD2300 | ed:6BFD | mase820 | beed:6BFD23 | e00) | upseed:6BFD23"
+    },
+    {
+      "file": "472__capture_2026-03-25T16-37-28-538Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Sandstorm",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 5,
+      "unknown_tokens": [],
+      "seed_raw": "magpseed5CDB8D00 | d:5 | Dt | msedCD8D00 | seed:5CDB8D | eso | upseed:5CDB8DC"
+    },
+    {
+      "file": "473__capture_2026-03-25T17-01-31-736Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Fast Gate",
+        "Haunted Storm",
+        "Easy Loot",
+        "Low Altitude Fog",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "mapsee:438810 | ped:43E8 | mased480 | seed:43E881 | es0 | apseed:43E881K"
+    },
+    {
+      "file": "474__capture_2026-03-25T17-20-16-505Z.png",
+      "seed": "740C5480",
+      "seed_flags": [],
+      "modifiers": [
+        "Artifact: Healing",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Legion Patrols",
+        "Lava Epics",
+        "Lots Of Asteroids",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed740C5480 | seed:740C5 | mapsed40540 | ipseed:740C54 | ese040 | apseed:740C544"
+    },
+    {
+      "file": "475__capture_2026-03-25T17-53-01-944Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ice Storm",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Cryon Rift",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "mgseed:938C610 | eed:93BC | mased9810 | oseed:93BCC | ee961 | upseed:93BC6"
+    },
+    {
+      "file": "476__capture_2026-03-25T18-11-57-982Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Epic Loot",
+        "Few Asteroids",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [
+        "BADTIN",
+        "SOLOOUTLAW",
+        "JUGGERNAUT",
+        "PosbYac"
+      ],
+      "seed_raw": "magsed:270900 | ed:27Cl | se00 | pseed:27CBF9 | 0 | pseed:27CBF"
+    },
+    {
+      "file": "478__capture_2026-03-25T18-40-16-654Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Rogue Turrets",
+        "Lava Epics",
+        "Few Asteroids",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "magpseedCDA5D00 | red:7CDA5C | msed7CD00 | seed:7CDA5D | sD0 | upseed:7CDA5D"
+    },
+    {
+      "file": "479__capture_2026-03-25T19-09-28-145Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Leech Swarms",
+        "Lava Epics",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "magseed7055780 | a: | magsee7570 | pseed:7C955 | ee98 | upseed:7C9557"
+    },
+    {
+      "file": "480__capture_2026-03-25T19-44-42-796Z.png",
+      "seed": "2DA78BC0",
+      "seed_flags": [],
+      "modifiers": [
+        "Artifact: Ice",
+        "Haunted Storm",
+        "Ancient Vault",
+        "Rogue Turrets",
+        "Lava Epics",
+        "Lots Of Asteroids",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 9,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed:2DA78BC0 | oseed:2DA781 | mapsedD78C0 | pseed:2DA78B | esede8Co | apseed:2DA78BC"
+    },
+    {
+      "file": "482__capture_2026-03-25T23-16-03-638Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors",
+        "Ancient Vault"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 2,
+      "unknown_tokens": [
+        "EXPLORER",
+        "Amberelocke",
+        "OBELISK"
+      ],
+      "seed_raw": "mapsed:4808980 | d: | 4560 | mase48080 | pseed:438089 | pseed:43808"
+    },
+    {
+      "file": "484__capture_2026-03-25T23-28-18-486Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [],
+      "seed_raw": "magpsee:539280 | ed:539t | mosed59120 | seed:539E23 | e38 | apseed:539E231"
+    },
+    {
+      "file": "485__capture_2026-03-26T00-05-26-433Z.png",
+      "seed": "5472FD00",
+      "seed_flags": [],
+      "modifiers": [
+        "Artifact: Ice",
+        "Fast Gate",
+        "Sandstorm",
+        "Rogue Turrets",
+        "Epic Loot",
+        "Few Asteroids",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 9,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed5472FD00 | )seed:5A72Fl | mapsd57200 | pseed:5A72FD | e0 | apseed:5A72FD"
+    },
+    {
+      "file": "486__capture_2026-03-26T00-23-22-280Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Fast Gate",
+        "Ice Storm",
+        "Ancient Vault",
+        "Lava Epics",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [
+        "iberelocke"
+      ],
+      "seed_raw": "mapsee:4CBF0380 | ed:4CBFC | mapsee48030 | pseed:4CBFO3 | e) | upseed:4CBFO31"
+    },
+    {
+      "file": "487__capture_2026-03-26T03-21-37-161Z.png",
+      "seed": "49600",
+      "seed_flags": [
+        "LENGTH_5_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Sandstorm",
+        "Rogue Turrets",
+        "Legion Patrols",
+        "Lots Of Asteroids",
+        "Dead Worlds",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed49600 | 42A9 | mapsd42960 | seed:442A96 | mes42860) | upseed:442A96"
+    },
+    {
+      "file": "488__capture_2026-03-26T04-14-53-953Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Fast Gate",
+        "Sandstorm",
+        "Ancient Vault",
+        "Legion Patrols",
+        "Lava Epics",
+        "Dead Worlds",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "magpseed4CDA00 | eed:404CDs | mpsd4D0 | pseed:404CDA | \u2022\u2022 | apseed:404CDA"
+    },
+    {
+      "file": "491__capture_2026-03-26T22-33-58-626Z.png",
+      "seed": "0829D00",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Sandstorm",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Lava Epics",
+        "Low Altitude Fog",
+        "Lots Of Asteroids",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 10,
+      "unknown_tokens": [
+        "YOURRYEMAN",
+        "SOLOOUTLAW",
+        "EXPLPRER",
+        "DarkOPizza"
+      ],
+      "seed_raw": "mapseed0829D00 | d:: | 062 | masd0 | \u2022 | MEREMAINING55:100 | pseed:50829D"
+    },
+    {
+      "file": "492__capture_2026-03-26T22-48-36-656Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ancient Vault",
+        "Rogue Turrets",
+        "Low Altitude Fog",
+        "Few Asteroids",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [],
+      "seed_raw": "magseed726BA780 | a: | magsee726870 | upseed:726BA7 | mee61780 | upseed:726BA7"
+    },
+    {
+      "file": "495__capture_2026-03-27T00-06-35-033Z.png",
+      "seed": "3216E80",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Cosmic Storm",
+        "Ancient Vault",
+        "Legion Patrols",
+        "Lava Epics",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed:3216e80 | oseed:3A2161 | mapseed216e80 | pseed:3A216E | s21680 | upseed:3A216E"
+    },
+    {
+      "file": "496__capture_2026-03-27T00-32-12-183Z.png",
+      "seed": "623940",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Ice Storm",
+        "Leech Swarms",
+        "Lava Epics",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [
+        "TUSTIN",
+        "SOLOOUTLAW"
+      ],
+      "seed_raw": "mapseed623940 | seed:62394 | mapse2340 | ipseed:62394A | e240 | apseed:62394Ac"
+    },
+    {
+      "file": "497__capture_2026-03-27T01-02-19-268Z.png",
+      "seed": "ECBC0",
+      "seed_flags": [
+        "LENGTH_5_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ice Storm",
+        "Rogue Turrets",
+        "Lots Of Asteroids",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed:ECBC0 | sea:EC | masedCBC10 | seed:ECFB | meecCis | pseed:ECFBC"
+    },
+    {
+      "file": "499__capture_2026-03-27T01-51-49-247Z.png",
+      "seed": "169802",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Haunted Storm",
+        "Ancient Vault",
+        "Rogue Turrets",
+        "Low Altitude Fog",
+        "Few Asteroids",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 9,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed169802 | pea:16C | mapsed6902 | seed:16C981 | ose680) | apseed:16C98C"
+    },
+    {
+      "file": "501__capture_2026-03-27T06-32-01-987Z.png",
+      "seed": "232DC4C0",
+      "seed_flags": [],
+      "modifiers": [
+        "Artifact: Healing",
+        "Fast Gate",
+        "Haunted Storm",
+        "Ancient Vault",
+        "Lava Epics",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed232DC4C0 | oseed:232DCL | mapsee2C40 | ipseed:232DC4 | s2cCco | apseed:232DC4C"
+    },
+    {
+      "file": "502__capture_2026-03-27T06-56-10-012Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Cosmic Storm",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Epic Loot",
+        "Low Altitude Fog",
+        "Lots Of Asteroids",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 9,
+      "unknown_tokens": [],
+      "seed_raw": "magseed:485D00 | eed:4A8F50 | mapsd:48500 | seed:4A8F5D | as400 | apseed:4A8F5D"
+    },
+    {
+      "file": "504__capture_2026-03-27T08-42-42-579Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Cosmic Storm",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Lots Of Asteroids",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "magpsee2598680 | )seed:2EE9B | magsed208660 | seed:2EE9B6 | e8680 | apseed:2EE9B61"
+    },
+    {
+      "file": "513__capture_2026-03-28T06-06-02-546Z.png",
+      "seed": "80E80",
+      "seed_flags": [
+        "LENGTH_5_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Sandstorm",
+        "Rogue Turrets",
+        "Few Asteroids",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [],
+      "seed_raw": "magseed148080 | pseed:1EA8OF | mapseed80e80 | pseed:1EA8OF | sses | apseed:1EA8OFI"
+    },
+    {
+      "file": "514__capture_2026-03-28T06-37-45-178Z.png",
+      "seed": "16C8C20",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed16C8C20 | seed:16DC8( | mopse6C20 | pseed:16DC8C | ee600) | apseed:16DC8C:"
+    },
+    {
+      "file": "515__capture_2026-03-28T07-11-19-435Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Fast Gate",
+        "Sandstorm",
+        "Rogue Turrets",
+        "Low Altitude Fog",
+        "Few Asteroids",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 9,
+      "unknown_tokens": [],
+      "seed_raw": "magseed1046480 | eed:104C6 | mapsee146480 | upseed:104C6Ai | mee06a8 | upseed:104C6Ai"
+    },
+    {
+      "file": "516__capture_2026-03-28T07-51-58-453Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Sandstorm",
+        "Ancient Vault",
+        "Easy Loot",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [],
+      "seed_raw": "magsee:3946580 | a: | magsed34680 | pseed:394465 | ee460 | apseed:3944651"
+    },
+    {
+      "file": "518__capture_2026-03-28T19-54-12-751Z.png",
+      "seed": "7300",
+      "seed_flags": [
+        "LENGTH_4_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Lots Of Asteroids",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed:7300 | eea:As | magsede300 | seed:A73E3 | ee0 | upseed:A73E3"
+    },
+    {
+      "file": "519__capture_2026-03-28T20-26-35-408Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Cosmic Storm",
+        "Rogue Turrets",
+        "Low Altitude Fog",
+        "Few Asteroids",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [],
+      "seed_raw": "magseed26D0 | seed:22C6ED | msed26e00 | seed:22C6ED | e200 | apseed:22C6EDC"
+    },
+    {
+      "file": "523__capture_2026-03-28T21-28-28-548Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Lava Epics",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 4,
+      "unknown_tokens": [],
+      "seed_raw": "magseedE7DCB80 | mapsedEDB80 | seed:E7DCB | sD8) | apseed:E7DCBJ"
+    },
+    {
+      "file": "524__capture_2026-03-28T21-51-11-665Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Sandstorm",
+        "Legion Patrols",
+        "Lava Epics",
+        "Dead Worlds",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "mseed200 | ea:12 | maseg1700 | seed:127D7( | 10 | apseed:127D700"
+    },
+    {
+      "file": "526__capture_2026-03-28T22-55-18-571Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Low Altitude Fog",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 5,
+      "unknown_tokens": [
+        "KEPLER'SWISH",
+        "OUTLAW"
+      ],
+      "seed_raw": "magseedC0e120 | eed:1COEI | mapseE20 | pseed:1COEEI | es) | apseed:1COEE1:"
+    },
+    {
+      "file": "530__capture_2026-03-29T01-14-23-682Z.png",
+      "seed": "61480",
+      "seed_flags": [
+        "LENGTH_5_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Haunted Storm",
+        "Ancient Vault",
+        "Lava Epics",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed61480 | ed:614F1 | mapsed140 | seed:614F43 | s8 | apseed:614F431"
+    },
+    {
+      "file": "531__capture_2026-03-29T01-48-32-137Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Rogue Turrets",
+        "Legion Patrols",
+        "Few Asteroids",
+        "Dead Worlds",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "maseed27C60 | d:: | mase200 | pseed:27ECC6 | ese60 | apseed:27ECC61"
+    },
+    {
+      "file": "536__capture_2026-03-29T03-58-06-851Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Rogue Turrets",
+        "Easy Loot",
+        "Legion Patrols",
+        "Lots Of Asteroids",
+        "Cryon Rift",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [
+        "berelocke"
+      ],
+      "seed_raw": "magseed71070 | mapse70 | seed:71C70 | 0 | apseed:711C70X"
+    },
+    {
+      "file": "537__capture_2026-03-29T04-22-06-871Z.png",
+      "seed": "168140",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Leech Swarms",
+        "Lots Of Asteroids",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed168140 | magsed316140 | seed:31F6B1 | mee6104 | apseed:31F6B1"
+    },
+    {
+      "file": "538__capture_2026-03-29T04-54-17-245Z.png",
+      "seed": "354800",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [
+        "mberelocke"
+      ],
+      "seed_raw": "mapseed354800 | ed:3F548 | mosed8540 | seed:3F5483 | ee60 | apseed:3F5483"
+    },
+    {
+      "file": "539__capture_2026-03-29T05-19-45-277Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Haunted Storm",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Few Asteroids",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "magpseed92AC10 | eed:B92A | mosd92AC10 | pseed:B92AC | oe | apseed:B92A"
+    },
+    {
+      "file": "541__capture_2026-03-29T05-54-21-198Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Sandstorm",
+        "Ancient Vault",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [
+        "DRILLSTATION"
+      ],
+      "seed_raw": "magseed3203380 | Ped:3E20 | masede32030 | pseed:3E2033 | cYanmaGlowb | apseed:3E2033"
+    },
+    {
+      "file": "544__capture_2026-03-29T21-04-53-651Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Leech Swarms",
+        "Lava Epics",
+        "Lots Of Asteroids",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [
+        "iberelocke"
+      ],
+      "seed_raw": "magpseed1096420 | oseed:1A0964 | mased06420 | seed:1A0964 | s0420 | apseed:1A0964:"
+    },
+    {
+      "file": "546__capture_2026-03-29T22-03-33-779Z.png",
+      "seed": "704E480",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Haunted Storm",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 5,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed704E480 | pseed:704AEA | mapsed7480 | pseed:704AEAj | mese048 | apseed:704AEAi"
+    },
+    {
+      "file": "549__capture_2026-03-29T23-31-16-007Z.png",
+      "seed": "3D36C40",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ice Storm",
+        "Ancient Vault",
+        "Epic Loot",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [
+        "peixepimentel"
+      ],
+      "seed_raw": "mapseed3D36C40 | ed:3DB3 | magsed83640 | pseed:3DB36C | mese64) | apseed:3DB36C"
+    },
+    {
+      "file": "551__capture_2026-03-30T02-59-18-803Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [],
+      "seed_raw": "magseed:5C00280 | mapsed80020 | seed:5BC003 | ese28 | upseed:5BC002)"
+    },
+    {
+      "file": "553__capture_2026-03-30T03-41-22-891Z.png",
+      "seed": "450D00",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Cosmic Storm",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 4,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed450D00 | ed:4A5AOI | mapsed4000 | pseed:4A5AOD | s400 | upseed:4A5A0De"
+    },
+    {
+      "file": "70__capture_2026-02-11T06-09-33-082Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ice Storm",
+        "Ancient Vault",
+        "Easy Loot",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 7,
+      "unknown_tokens": [
+        "1egPuppy"
+      ],
+      "seed_raw": "magpseed68410 | seed:6C841 | mased6840 | seed:6C8441 | 0 | apseed:6C8441"
+    },
+    {
+      "file": "72__capture_2026-02-13T06-15-14-344Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Haunted Storm",
+        "Ancient Vault",
+        "Rogue Turrets",
+        "Easy Loot",
+        "Legion Patrols",
+        "Low Altitude Fog",
+        "Lots Of Asteroids",
+        "Gloaming Expanse",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 10,
+      "unknown_tokens": [],
+      "seed_raw": "magsee:626980 | eed:682F6 | mase860 | upseed:682F69 | e8 | upseed:682F691"
+    },
+    {
+      "file": "74__capture_2026-02-14T21-27-17-836Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ancient Vault",
+        "Lava Epics",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [
+        "blinatty",
+        "mare84"
+      ],
+      "seed_raw": "magseed518780 | seed:51B | magseed180 | ipseed:5mB7 | e8 | apseed:5mB71"
+    },
+    {
+      "file": "77__capture_2026-02-14T23-04-50-618Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [],
+      "seed_raw": "magseed2878C04 | pea:: | magse27804 | ipseed:2B7BC | s04) | apseed:2B7BC"
+    },
+    {
+      "file": "85__capture_2026-02-16T04-35-08-493Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Cosmic Storm",
+        "Easy Loot",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 5,
+      "unknown_tokens": [
+        "artinguppy"
+      ],
+      "seed_raw": "magpseed5768 | e4 | mapsee5768 | pseed:5276B | egse8 | apseed:5276Bi"
+    },
+    {
+      "file": "86__capture_2026-02-16T05-01-22-170Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Haunted Storm",
+        "Leech Swarms",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "magseed13837420 | seed:13837 | magsed137420 | ipseed:138374 | es8320 | apseed:138374:"
+    },
+    {
+      "file": "89__capture_2026-02-16T06-35-01-454Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Fast Gate",
+        "Ice Storm",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Lots Of Asteroids",
+        "Cryon Rift",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "magseed7C8E0880 | eed:7C8E0 | magseed708080 | upseed:7C8EOB | e) | apseed:7C8EOB:"
+    },
+    {
+      "file": "91__capture_2026-02-16T17-31-45-812Z.png",
+      "seed": "64AD00",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [],
+      "seed_raw": "mapseed64AD00 | )seed:6F4AAC | mapse64400 | pseed:6F4AAD | sADY | apseed:6F4AAD"
+    },
+    {
+      "file": "93__capture_2026-02-16T18-24-10-525Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": false,
+      "modifier_count": 1,
+      "unknown_tokens": [
+        "leWhiteFo639"
+      ],
+      "seed_raw": "magseed71700 | 901 | mase9100 | pseed:791730 | s0 | apseed:791730"
+    },
+    {
+      "file": "95__capture_2026-02-16T22-50-26-720Z.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Sandstorm",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Lava Epics",
+        "Few Asteroids",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": false,
+      "modifier_count": 9,
+      "unknown_tokens": [
+        "BricksParts"
+      ],
+      "seed_raw": "magpseed6BAFIC80 | seed:6BAFIC | masede6BFiC0 | seed:6BAFIC | sAe | apseed:6BAFICI | cw"
+    },
+    {
+      "file": "wg10.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Cosmic Storm",
+        "Ancient Vault",
+        "Rogue Turrets",
+        "Legion Patrols",
+        "Lava Epics",
+        "Low Altitude Fog",
+        "Few Asteroids"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 8,
+      "unknown_tokens": [
+        "MiShRa"
+      ],
+      "seed_raw": "EREMANNG45:2643 | TMEREMANN45:26 | 32 | Meremain | TMEREMANG45:26 | ieeemu | 32 | ieremaii"
+    },
+    {
+      "file": "wg101.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Legion Patrols",
+        "Low Altitude Fog",
+        "Cryon Rift"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 4,
+      "unknown_tokens": [
+        "Dogepus",
+        "ARTIEACT"
+      ],
+      "seed_raw": "IMEREMAINING7: | TIMEREMAINING57:55 | TIMEREMAINING57:55 | 7:5 | REMAIN"
+    },
+    {
+      "file": "wg104.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Sandstorm",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Few Asteroids",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "MEREMANNOmapsed:4655800 | 7\u2022\u2022 | TMEREMAINING59:506500 | TIMEREMAINING59:5 | 9:5 | EREMAININ | seed:46535"
+    },
+    {
+      "file": "wg105.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Lava Epics",
+        "Low Altitude Fog",
+        "Cryon Rift",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "INENEMANOmpsee288 | TMEREMAINING57:1572878 | TIMEREMAINING57:18 | 7:1 | EMAIN"
+    },
+    {
+      "file": "wg106.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": true,
+      "modifier_count": 1,
+      "unknown_tokens": [],
+      "seed_raw": "MEREMANOmapsee66280 | 7\u2022\u2022 | TMEREMAINING57:06620 | TIMEREMAINING5:0 | 7:0 | EREMAININ | cYatYeo | seed:66b6r"
+    },
+    {
+      "file": "wg109.JPG",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": true,
+      "modifier_count": 1,
+      "unknown_tokens": [],
+      "seed_raw": "MAININ: | TIMEREMANING9:51 | s | oseed:5761D | MREMANNG9:5 | DGA | pseed:5761D0"
+    },
+    {
+      "file": "wg111.JPG",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Haunted Storm",
+        "Rogue Turrets",
+        "Lava Epics",
+        "Few Asteroids",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "MEMAINNG:1 | TIMEREMANING9:51 | RKa | REMA | pseed:397EF | TIMEREMANNG9:5 | DGA | apseed:397EFC"
+    },
+    {
+      "file": "wg12.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": true,
+      "modifier_count": 1,
+      "unknown_tokens": [],
+      "seed_raw": "ekemmpseed304 | 7\u2022\u2022 | TIMEREMANING59:30 | TIMEREANIN: | Meremaining59 | 9:3 | Red:"
+    },
+    {
+      "file": "wg14.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Fast Gate",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Epic Loot",
+        "Lots Of Asteroids",
+        "Dead Worlds",
+        "Legion Patrols"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 8,
+      "unknown_tokens": [
+        "MiShRa"
+      ],
+      "seed_raw": "ErEMaIiNiNG59:49 | TiMEREMANNG59:49 | Meremain | \u2022.0 | TIMEEMANNGEOU59:49 | DGa1 | ESOURCI | 8 | rema"
+    },
+    {
+      "file": "wg16.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Ancient Vault",
+        "Legion Patrols",
+        "Dead Worlds"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 4,
+      "unknown_tokens": [
+        "Old[SUS]ManJenkin"
+      ],
+      "seed_raw": "MEKEMANNOmapsee:768BCB80 | TIMEREMAINING59:046BCB80 | TIMEREMAINING59:0 | 9:0 | EREMAINI | seec:so"
+    },
+    {
+      "file": "wg17.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": true,
+      "modifier_count": 1,
+      "unknown_tokens": [
+        "ToukaKirishima"
+      ],
+      "seed_raw": "MEREMAnOmagee0 | \u2022\u2022\u2022 | TMEREMAINING58:031021840 | TIMEREMAINING58:02 | 8:0 | EREMAININ | 0seed:1D218"
+    },
+    {
+      "file": "wg18.png",
+      "seed": "2346A0C0",
+      "seed_flags": [
+        "SUBST(2346A0CO->2346A0C0)"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Fast Gate",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Cryon Rift",
+        "Legion Patrols"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 6,
+      "unknown_tokens": [
+        "Old[SUS]ManJenkin"
+      ],
+      "seed_raw": "LREMAiNiNGmapseed2346A0Co | TIMEMAINING59:46AC0 | EREMAINI | 9:4 | e | TIMEREMAINING59:43C | 9:4 | apseed:2346A0"
+    },
+    {
+      "file": "wg19.png",
+      "seed": "5536C00",
+      "seed_flags": [
+        "LENGTH_7_NOT_8",
+        "SUBST(5536CO0->5536C00)"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Lava Epics",
+        "Low Altitude Fog",
+        "Lots Of Asteroids",
+        "Gloaming Expanse"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 7,
+      "unknown_tokens": [
+        "Harue"
+      ],
+      "seed_raw": "REMAiNiNGmapseed5536CO0 | TIEMAINING9:2036C0 | 9:2 | REMAIN | owb | seed:55: | TIEEMAINING59:20 | 9:2 | pseed:55316"
+    },
+    {
+      "file": "wg2.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Sandstorm",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Low Altitude Fog",
+        "Few Asteroids",
+        "Legion Patrols"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 8,
+      "unknown_tokens": [
+        "AlGeneratedCheetah"
+      ],
+      "seed_raw": "mopseed8763840 | TMEREMANING55:5276340 | TIMREMAINING55:520 | 3 | Meremainio | pseed28763"
+    },
+    {
+      "file": "wg20.png",
+      "seed": "531958",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Sandstorm",
+        "Rogue Turrets",
+        "Lava Epics",
+        "Low Altitude Fog",
+        "Lots Of Asteroids",
+        "Dead Worlds",
+        "Legion Patrols"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 8,
+      "unknown_tokens": [
+        "ChineseShipDefende"
+      ],
+      "seed_raw": "REMAINiNGmapseed531958 | TIMEEMAINING59:5331958 | 9:5 | seed:53 | TiMERMAINING5953 | 9:5 | ipseed:5319"
+    },
+    {
+      "file": "wg22.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": true,
+      "modifier_count": 1,
+      "unknown_tokens": [
+        "Zayano"
+      ],
+      "seed_raw": "MEREMANOmagsed:39DCO | 7\u2022\u2022 | TMEREMAINING59:36859DCO | TIMEREMAINING59:3 | 9:3 | EREMAININ | seed:3B591"
+    },
+    {
+      "file": "wg23.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Rogue Turrets",
+        "Epic Loot",
+        "Few Asteroids",
+        "Cryon Rift",
+        "Legion Patrols"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 6,
+      "unknown_tokens": [
+        "alxndr008",
+        "SPECI\u00c1LLOOT"
+      ],
+      "seed_raw": "\u2014sed991 | moseed2900 | seed:729D | ReANmngs2010 | \u2022:3 | seed:729D91"
+    },
+    {
+      "file": "wg25.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Ice Storm",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Lava Epics",
+        "Lots Of Asteroids",
+        "Cryon Rift"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 7,
+      "unknown_tokens": [
+        "alxndr008"
+      ],
+      "seed_raw": "d4 | mopseed75000 | eed:7F74 | eRMANmogs740 | seed:7F74D5"
+    },
+    {
+      "file": "wg27.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Sandstorm",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Low Altitude Fog",
+        "Dead Worlds"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 6,
+      "unknown_tokens": [
+        "OjuanBird",
+        "SPECI\u00c1LLOOT"
+      ],
+      "seed_raw": "s656 | mopseed508 | oseed:563CI | Rmogs08 | seed:563CBa"
+    },
+    {
+      "file": "wg29.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Cosmic Storm",
+        "Easy Loot",
+        "Low Altitude Fog",
+        "Legion Patrols"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 5,
+      "unknown_tokens": [
+        "jangomango123",
+        "ARTIEACT"
+      ],
+      "seed_raw": "VLRLMANINGmaseedICDIACO | TMEREMAINING59:51CDACO | TIMEREMAINN59:51 | 9:5 | seed:3F"
+    },
+    {
+      "file": "wg31.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": true,
+      "modifier_count": 1,
+      "unknown_tokens": [
+        "jangomango123"
+      ],
+      "seed_raw": "IMEREMAINING5S:Sd23EC | \u2022\u2022\u2022 | TIMEREMAINING53:3 | TIMEREMAINING5: | 3:3 | EREMAINING | cYnaGYe | apseed:2:"
+    },
+    {
+      "file": "wg33.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Cosmic Storm",
+        "Ancient Vault",
+        "Lava Epics",
+        "Legion Patrols"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 5,
+      "unknown_tokens": [
+        "jangomango123",
+        "ARTIEACT"
+      ],
+      "seed_raw": "VLRLMAlNIiNmasee:B670 | TMEEMAINING9:5.42670 | TIMEREMAINNG59:51 | 9:5 | 0seed:42"
+    },
+    {
+      "file": "wg36.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": true,
+      "modifier_count": 1,
+      "unknown_tokens": [
+        "ChineseShipDefende",
+        "TR\u00c9SORSP\u00c9CIAL",
+        "ARTEFACT"
+      ],
+      "seed_raw": "seeddecrte:73ECA50 | eddecarte:73ECA5 | seddoat:3C50 | eddecarte:73ECA5 | d. | eddecarte:73ECA5"
+    },
+    {
+      "file": "wg37.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": true,
+      "modifier_count": 1,
+      "unknown_tokens": [],
+      "seed_raw": "WLDGaTEClipRESOCF1 | DGATEOU"
+    },
+    {
+      "file": "wg38.jpg",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Sandstorm"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 2,
+      "unknown_tokens": [
+        "lanceiwami",
+        "TOURELLESPIRATES",
+        "CHAMPSDELAVE",
+        "NOMBREUXAST\u00c9ROIDES",
+        "TERRESMORTES"
+      ],
+      "seed_raw": "ndcor:S2A1Y0 | cYanmamMntYo | eddecarke:324759: | amY | eddecarke:32a759"
+    },
+    {
+      "file": "wg40.JPG",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Haunted Storm",
+        "Ancient Vault",
+        "Legion Patrols",
+        "Lava Epics",
+        "Gloaming Expanse"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 6,
+      "unknown_tokens": [
+        "frothymug"
+      ],
+      "seed_raw": "RLMAlNiNGmapsee:538A680 | seed:53BA6 | TIMEREMAINING59:523A680 | MEREMAININ | C | pseed:53BA6 | TIMEREMAINING59:52 | 9:5 | EREMAININ | apseed:53BA66"
+    },
+    {
+      "file": "wg41.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Ice Storm",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Epic Loot",
+        "Low Altitude Fog",
+        "Cryon Rift",
+        "Legion Patrols"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 9,
+      "unknown_tokens": [
+        "DokmyWok"
+      ],
+      "seed_raw": "ceaiNiNmseedD100 | TMAIN59:2A10 | 982 | TIEREMAINING59:25 | 982"
+    },
+    {
+      "file": "wg43.png",
+      "seed": "3CB804",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": true,
+      "modifier_count": 1,
+      "unknown_tokens": [
+        "Blu3_L3af"
+      ],
+      "seed_raw": "MEREMANOmapseed:3CB804 | \u2022\u2022\u2022 | TMEREMAINING50:30:3ICB04 | TIMEREMANING50:3 | O:3 | EREMAININ | \u2022\u2022"
+    },
+    {
+      "file": "wg45.png",
+      "seed": "1F00420",
+      "seed_flags": [
+        "LENGTH_7_NOT_8",
+        "SUBST(1FO0420->1F00420)"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Sandstorm",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Lava Epics",
+        "Dead Worlds",
+        "Legion Patrols"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 7,
+      "unknown_tokens": [
+        "TheF16"
+      ],
+      "seed_raw": "REMAiNINGmapseed:1FO0420 | TMAINING59:510.40 | 9:5 | ow | seed: | TIEEMAINING59:512 | 9:5 | 0seed:18F("
+    },
+    {
+      "file": "wg50.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Fast Gate",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Lava Epics",
+        "Low Altitude Fog",
+        "Lots Of Asteroids",
+        "Gloaming Expanse",
+        "Legion Patrols"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 9,
+      "unknown_tokens": [
+        "frothymug"
+      ],
+      "seed_raw": "REMAININ59:29 | )\u2022 | TIMREMAINI: | 9:2 | TIMEREMANINGRESOURG59:29 | DGA | SOURCI | 9:2"
+    },
+    {
+      "file": "wg52.JPG",
+      "seed": "6C48700",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ice Storm",
+        "Leech Swarms",
+        "Epic Loot",
+        "Legion Patrols",
+        "Cryon Rift"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 6,
+      "unknown_tokens": [
+        "River.Banks"
+      ],
+      "seed_raw": "RLMAlNiNmapseed:6C48700 | seed:6C4877 | TIMEREMAINING59:24770 | MEREMAININ | pseed:6C4877 | TIMEREMAINING59:24 | 9\u00b72 | EREMAININ | apseed:6C4877"
+    },
+    {
+      "file": "wg54.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Legion Patrols",
+        "Low Altitude Fog",
+        "Dead Worlds",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 5,
+      "unknown_tokens": [],
+      "seed_raw": "MEREMANNO4magpsed:16080 | TMEREMAINING4O:5761600 | TIMEREMAINING40: | 0:5 | EREMAININ | seed:61"
+    },
+    {
+      "file": "wg56.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ice Storm",
+        "Leech Swarms",
+        "Lots Of Asteroids",
+        "Cryon Rift",
+        "Legion Patrols"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 6,
+      "unknown_tokens": [
+        "G4Zy"
+      ],
+      "seed_raw": "LRLMAnNiNmasee60200 | TIN:4400 | EREMAINI | : | TIMEREMAINING59:44 | \u2022 | )\u2022 | :L | seec:6"
+    },
+    {
+      "file": "wg59.png",
+      "seed": "510380",
+      "seed_flags": [
+        "LENGTH_6_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ice Storm",
+        "Cryon Rift",
+        "Legion Patrols"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 4,
+      "unknown_tokens": [
+        "soZedante"
+      ],
+      "seed_raw": "MEREMANINOmapseed:510380 | \u2014\u2022\u2022 | TIMEREMAINING59:421030 | 7\u2022 | TIMEREMAINING59:42 | 9:4 | EREMAINI | seed:5F1"
+    },
+    {
+      "file": "wg6.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Legion Patrols",
+        "Lava Epics",
+        "Low Altitude Fog"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 4,
+      "unknown_tokens": [
+        "itamare84"
+      ],
+      "seed_raw": "IMEREMAINING56:5 | TIMEREMAINING56:59 | 6: | TMEREMAINING56:9 | 6:5 | REMAININ"
+    },
+    {
+      "file": "wg62.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Sandstorm",
+        "Ancient Vault"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 3,
+      "unknown_tokens": [
+        "PATROUILLESDELAL\u00c9GION",
+        "CHAMPSDELAVE",
+        "TERRESMORTES",
+        "QUELQUESVAISSEAUX",
+        "TR\u00c9SORSP\u00c9CIAL"
+      ],
+      "seed_raw": "EMTOREOTANseeddecare:5298C680 | J\u2022 | Idecarte:5 | TEMPSRES1AN159:4629C680 | eddecarte:52 | TEMPSRESTANT59:4 | :)\u2022 | $2 | eddecarte:5298C8"
+    },
+    {
+      "file": "wg64.JPG",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Ancient Vault",
+        "Rogue Turrets",
+        "Easy Loot",
+        "Legion Patrols",
+        "Low Altitude Fog",
+        "Few Asteroids",
+        "Gloaming Expanse",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "MEREMAmapsed:E0C5480 | \u2022 | seed:6EOC | MEREMAINING59:520C5480 | ipseed:6EOC54 | TIMEREMAINING9:2 | 9:5 | REMAININ | apseed:6EOC54"
+    },
+    {
+      "file": "wg65.JPG",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Rogue Turrets",
+        "Few Asteroids",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "MEREMAnOmapsed:5017400 | Z\u2022T | : | pseed:501741 | 1MEREMAINING59:4501400 | pseed:501741 | TIMEREMAINING9:4 | 9:4 | REMAININ | apseed:50174E"
+    },
+    {
+      "file": "wg66.png",
+      "seed": "259C780",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Ice Storm",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Legion Patrols",
+        "Few Asteroids",
+        "Cryon Rift",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "MEREMANNOmapseed259C780 | 7\u2022\u2022 | TMEREMAINING59:357259C780 | TIMEREMAINING59:3 | 9:3 | EREMAININ | seee:sp"
+    },
+    {
+      "file": "wg69.png",
+      "seed": "42CE180",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Cosmic Storm",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Lava Epics",
+        "Low Altitude Fog",
+        "Lots Of Asteroids",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "MEREMANNNOmapseed:42CE180 | 7\u2022\u2022 | TMEREMAINING59:53426CE180 | TIMEREMAINING59:5 | 9:5 | EREMAININ | 0seed:426CE"
+    },
+    {
+      "file": "wg71.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Ice Storm",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Lava Epics",
+        "Lots Of Asteroids",
+        "Cryon Rift",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "TIMEREMAINING59:36 | TIMEREMAINING59:3 | TIMEREMAINING59:36 | 9:3 | REMAININ"
+    },
+    {
+      "file": "wg73.JPG",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Low Altitude Fog",
+        "Lots Of Asteroids",
+        "Legion Patrols"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 7,
+      "unknown_tokens": [],
+      "seed_raw": "MEREMAOmapsed:28236C0 | Z\u2022 | \u2014s | seed:283 | 1MEREMAINING59:5:28236C0 | pseed:28323 | TIMEREMAINING9:1 | 9:1 | REMAININ | apseed:283236"
+    },
+    {
+      "file": "wg75.JPG",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Ice Storm",
+        "Leech Swarms",
+        "Easy Loot",
+        "Lots Of Asteroids",
+        "Cryon Rift",
+        "Legion Patrols"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 7,
+      "unknown_tokens": [],
+      "seed_raw": "MEREMAnmapsed:96E390 | \u2022\u2022 | \u2014 | eed:91 | MEREMAINING59:5:96390 | seed:96E3 | TIMEREMAINING9:5 | 9:5 | REMAININ | pseed:96E3E"
+    },
+    {
+      "file": "wg77.JPG",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Cosmic Storm",
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Lava Epics",
+        "Legion Patrols"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "MEREmAnmapsee:29Eb49C0 | \u2022\u2022 | seed:29EB4 | MEREMAINING59:5:9B49C0 | pseed:29EB4s | TIMEREMAINING59:5 | 9:5 | REMAININ | apseed:29EB49"
+    },
+    {
+      "file": "wg79.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Fast Gate",
+        "Haunted Storm",
+        "Rogue Turrets",
+        "Few Asteroids",
+        "Gloaming Expanse",
+        "Legion Patrols"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 7,
+      "unknown_tokens": [
+        "\"nDoa.",
+        "TonLo"
+      ],
+      "seed_raw": "MEREMANNOmapsed:B840 | 7\u2022\u2022 | TMEREMAINING59:538400 | eed: | TIMEREMAINING59:5 | 9:5 | EREMaININ | 0seed:7B8C4"
+    },
+    {
+      "file": "wg8.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": true,
+      "modifier_count": 1,
+      "unknown_tokens": [
+        "MishRa"
+      ],
+      "seed_raw": "cYanmlowb"
+    },
+    {
+      "file": "wg81.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Cosmic Storm",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Lava Epics",
+        "Legion Patrols"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "MEREMANNOmapsee789CEBOO | TMEREMAINING57:3478CB0 | TIMEREMAINING57:3 | 73 | EREMAININ | seed:78"
+    },
+    {
+      "file": "wg83.png",
+      "seed": "4498480",
+      "seed_flags": [
+        "LENGTH_7_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Rogue Turrets",
+        "Lava Epics",
+        "Lots Of Asteroids",
+        "Cryon Rift",
+        "Legion Patrols"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "MEREMAn0mapseed4498480 | TMEREMAINING59:484980 | TIMEREMANING59:48 | 9:4 | EREMAININ | seed:4a498"
+    },
+    {
+      "file": "wg86.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Ancient Vault",
+        "Rogue Turrets",
+        "Legion Patrols",
+        "Low Altitude Fog",
+        "Few Asteroids",
+        "Gloaming Expanse"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 7,
+      "unknown_tokens": [
+        "ARTIEACT"
+      ],
+      "seed_raw": "VLRLMANmaseed | TIMEREMAINING59:147026700 | TIMEREMAINING59:14 | 9:1 | )seed:sD"
+    },
+    {
+      "file": "wg87.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Dead Sensors"
+      ],
+      "has_dead_sensors": true,
+      "is_fullmap": true,
+      "modifier_count": 1,
+      "unknown_tokens": [],
+      "seed_raw": "MEREMANNOmagseed:60188BO0 | 7\u2022\u2022 | TMEREMAINING59:5360180 | TIMEREMAINING59:5 | 9:5 | EREMAININ | seed:60"
+    },
+    {
+      "file": "wg88.JPG",
+      "seed": "10500",
+      "seed_flags": [
+        "LENGTH_5_NOT_8"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Haunted Storm",
+        "Easy Loot",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "MEREMAomapseed10500 | \u2022\u2022 | \u2014 | ed:6410 | 1MEReMAINING59:5:41000 | apseed:641053 | TIMEREMAINING59:5 | 9:5 | REMAININ | pseed:641053"
+    },
+    {
+      "file": "wg90.JPG",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Sandstorm",
+        "Leech Swarms",
+        "Epic Loot",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 7,
+      "unknown_tokens": [],
+      "seed_raw": "MEREMAOmapsed:B5E0190 | \u2022 | \u2014 | ed:B5 | 1MEREMAINING59:5BE0190 | pseed:B5E | TIMEREMAINING9: | 9:5 | REMAININ | pseed:B5EO"
+    },
+    {
+      "file": "wg91.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Leech Swarms",
+        "Epic Loot",
+        "Lots Of Asteroids",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "MEREMAINNO4Tapseed7086480 | TMEREMAINING44:297086480 | TIMEREMANING4:2 | REMaINII | \u2022 | 9"
+    },
+    {
+      "file": "wg92.png",
+      "seed": "50940",
+      "seed_flags": [
+        "LENGTH_5_NOT_8"
+      ],
+      "modifiers": [
+        "Ancient Vault",
+        "Rogue Turrets",
+        "Easy Loot",
+        "Low Altitude Fog",
+        "Lots Of Asteroids",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "MEREMANNOmapseed50940 | S\u2022\u2022 | TMEREMAINING37:30570940 | TIMEREMAINING37: | 7:3 | EREMAININ | : | seed:57OF"
+    },
+    {
+      "file": "wg94.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ancient Vault",
+        "Epic Loot",
+        "Gloaming Expanse",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "MEREMANNOmapseeC40 | 7\u2022 | TMEREMAINING59:5032C540 | TIMEREMAINING59:5 | 9:5 | EREMAININ | seed:32"
+    },
+    {
+      "file": "wg95.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Ancient Vault",
+        "Leech Swarms",
+        "Easy Loot",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 6,
+      "unknown_tokens": [],
+      "seed_raw": "TIMEEMAINING59:3 | cYma\u2014b | TIMEREMAINING59:3 | M | TIMEREMAINING59:33 | 9:3 | REMAININ"
+    },
+    {
+      "file": "wg97.JPG",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Sandstorm",
+        "Rogue Turrets",
+        "Few Asteroids",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 7,
+      "unknown_tokens": [],
+      "seed_raw": "MEREMAnOmapsed:185C800 | \u2014 | \u2014\u2022 | eed:185CA | 1MEREMAINING59:3:185CA800 | apseed:185CA80 | TIMEREMAINING9:30 | 9:3 | REMAININ | apseed:185CA81"
+    },
+    {
+      "file": "wg99.png",
+      "seed": "",
+      "seed_flags": [
+        "NO_SEED_FOUND"
+      ],
+      "modifiers": [
+        "Leech Swarms",
+        "Rogue Turrets",
+        "Lava Epics",
+        "Low Altitude Fog",
+        "Lots Of Asteroids",
+        "Dead Worlds",
+        "Legion Patrols",
+        "Few Ships"
+      ],
+      "has_dead_sensors": false,
+      "is_fullmap": true,
+      "modifier_count": 8,
+      "unknown_tokens": [],
+      "seed_raw": "TIMEREMAINING59:3 | TIMEREMAINING59:39 | ma | TIMEREMAINING59:39 | 9:3 | REMAININ | cYtYe | cYanmalow"
+    }
+  ],
+  "errors": []
+}

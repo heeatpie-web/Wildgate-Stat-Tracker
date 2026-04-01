@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.6.4": [
+    "Internal: add seed and map-layout research tooling for reach modifier analysis",
+    "Maintenance: keep legacy backup artifact-bundle cleanup active on startup",
+    "Analytics: preserve the latest environment research updates in this build"
+  ],
   "v3.6.3": [
     "Screenshot type bucketing for crew hub, tactical map, and result captures",
     "OCR debug file retention with 30-day pruning",

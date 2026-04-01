@@ -1,0 +1,546 @@
+[
+  {
+    "file": "124__capture_2026-02-25T01-33-26-133Z.png",
+    "seed_raw": [
+      "map seed: 1208B02"
+    ],
+    "hazards_raw": [
+      "KNOWN HAZARDS & FEATURES",
+      "HEALING ARTIFACT",
+      "FAST GATE",
+      "C5",
+      "C6",
+      "LEECH SWARMS",
+      "LEGION PATROLS",
+      "LOTS OF ASTEROIDS",
+      "CRYON RIFT",
+      "FEW SHIPS",
+      "tar4k",
+      "D5",
+      "D6",
+      "ARTIFACT",
+      "SPECIAL LOOT",
+      "WILDGATE",
+      "RESOURCES",
+      "E5",
+      "E6"
+    ]
+  },
+  {
+    "file": "158__capture_2026-03-09T03-03-14-344Z.png",
+    "seed_raw": [
+      "map seed: 3ADODFLO"
+    ],
+    "hazards_raw": [
+      "KNOWN HAZARDS & FEATURES",
+      "HEALING ARTIFACT",
+      "LEECH SWARMS",
+      "C5",
+      "C6",
+      "LOTS OF ASTEROIDS",
+      "CRYON RIFT",
+      "LEGION PATROLS",
+      "FEW SHIPS",
+      "Scythe45",
+      "D5",
+      "D6",
+      "ARTIFACT",
+      "SPECIAL LOOT",
+      "WILDGATE",
+      "RESOURCES",
+      "E5",
+      "E6"
+    ]
+  },
+  {
+    "file": "160__capture_2026-03-09T03-30-32-581Z.png",
+    "seed_raw": [
+      "map seed: 5OD86DOO"
+    ],
+    "hazards_raw": [
+      "ARTIFACT",
+      "SPECIAL LOOT",
+      "WILDGATE",
+      "RESOURCES",
+      "C5",
+      "C6",
+      "D5",
+      "D6",
+      "E5",
+      "E6"
+    ]
+  },
+  {
+    "file": "185__capture_2026-03-11T23-47-37-491Z.png",
+    "seed_raw": [
+      "map seed: 7878CC80"
+    ],
+    "hazards_raw": [
+      "KNOWN HAZARDS & FEATURES",
+      "WEAPON ARTIFACT",
+      "ANCIENT VAULT",
+      "C5",
+      "C6",
+      "LEGION PATROLS",
+      "LAVA EPICS",
+      "GLOAMING EXPANSE",
+      "FEW SHIPS",
+      "thimble",
+      "D5",
+      "D6",
+      "ARTIFACT",
+      "SPECIAL LOOT",
+      "WILDGATE",
+      "RESOURCES",
+      "E5",
+      "E6"
+    ]
+  },
+  {
+    "file": "192__capture_2026-03-12T03-54-09-488Z__relinked_1.png",
+    "seed_raw": [
+      "map seed: 6B328300"
+    ],
+    "hazards_raw": [
+      "KNOWN HAZARDS & FEATURES",
+      "HEALING ARTIFACT",
+      "HAUNTED STORM",
+      "C5",
+      "C6",
+      "ROGUE TURRETS",
+      "EASY LOOT",
+      "LOTS OF ASTEROIDS",
+      "GLOAMING EXPANSE",
+      "LEGION PATROLS",
+      "isilep",
+      "FEW SHIPS",
+      "D5",
+      "D6",
+      "ARTIFACT",
+      "SPECIAL LOOT",
+      "WILDGATE",
+      "RESOURCES",
+      "E5",
+      "E6"
+    ]
+  },
+  {
+    "file": "201__capture_2026-03-13T04-24-50-061Z__relinked_1.png",
+    "seed_raw": [
+      "map seed: 45041OOO"
+    ],
+    "hazards_raw": [
+      "KNOWN HAZARDS & FEATURES",
+      "HEALING ARTIFACT",
+      "ANCIENT VAULT",
+      "C5",
+      "C6",
+      "ROGUE TURRETS",
+      "LAVA EPICS",
+      "FEW ASTEROIDS",
+      "LEGION PATROLS",
+      "FEW SHIPS",
+      "D5",
+      "D6",
+      "ARTIFACT",
+      "SPECIAL LOOT",
+      "WILDGATE",
+      "RESOURCES",
+      "E5",
+      "E6"
+    ]
+  },
+  {
+    "file": "257__capture_2026-03-16T00-58-24-493Z.png",
+    "seed_raw": [
+      "map seed: 52470680"
+    ],
+    "hazards_raw": [
+      "ARTIFACT",
+      "SPECIAL LOOT",
+      "WILDGATE",
+      "RESOURCES",
+      "C5",
+      "C6",
+      "Jeogane",
+      "D5",
+      "D6",
+      "E5",
+      "E6"
+    ]
+  },
+  {
+    "file": "259__capture_2026-03-16T01-54-07-447Z.png",
+    "seed_raw": [
+      "map seed: 46839080"
+    ],
+    "hazards_raw": [
+      "KNOWN HAZARDS & FEATURES",
+      "WEAPON ARTIFACT",
+      "HAUNTED STORM",
+      "C5",
+      "C6",
+      "ROGUE TURRETS",
+      "LEGION PATROLS",
+      "LAVA EPICS",
+      "LOTS OF ASTEROIDS",
+      "GLOAMING EXPANSE",
+      "FEW SHIPS",
+      "D5",
+      "D6",
+      "ARTIFACT",
+      "SPECIAL LOOT",
+      "WILDGATE",
+      "RESOURCES",
+      "E5",
+      "E6"
+    ]
+  },
+  {
+    "file": "293__capture_2026-03-18T02-15-51-649Z.png",
+    "seed_raw": [
+      "map seed: 12082380"
+    ],
+    "hazards_raw": [
+      "KNOWN HAZARDS & FEATURES",
+      "WEAPON ARTIFACT",
+      "SAND STORM",
+      "C5",
+      "C6",
+      "DEAD WORLDS",
+      "LEGION PATROLS",
+      "FEW SHIPS",
+      "ARTIFACT",
+      "SPECIAL LOOT",
+      "D5",
+      "D6",
+      "WILDGATE",
+      "RESOURCES",
+      "E5",
+      "E6"
+    ]
+  },
+  {
+    "file": "359__capture_2026-03-20T04-29-59-700Z.png",
+    "seed_raw": [
+      "map seed: 57953100"
+    ],
+    "hazards_raw": [
+      "KNOWN HAZARDS & FEATURES",
+      "ICE ARTIFACT",
+      "ICE STORM",
+      "C5",
+      "C6",
+      "ANCIENT VAULT",
+      "LOW ALTITUDE FOG",
+      "CRYON RIFT",
+      "LEGION PATROLS",
+      "FEW SHIPS",
+      "shigraleef",
+      "D5",
+      "D6",
+      "ARTIFACT",
+      "SPECIAL LOOT",
+      "WILDGATE",
+      "RESOURCES",
+      "E5",
+      "E6"
+    ]
+  },
+  {
+    "file": "389__capture_2026-03-21T04-52-07-481Z.png",
+    "seed_raw": [
+      "map seed: 4OECAFOO"
+    ],
+    "hazards_raw": [
+      "KNOWN HAZARDS & FEATURES",
+      "HEALING ARTIFACT",
+      "FAST GATE",
+      "C5",
+      "C6",
+      "EPIC LOOT",
+      "LEGION PATROLS",
+      "CRYON RIFT",
+      "FEW SHIPS",
+      "D5",
+      "D6",
+      "ARTIFACT",
+      "SPECIAL LOOT",
+      "WILDGATE",
+      "RESOURCES",
+      "E5",
+      "E6"
+    ]
+  },
+  {
+    "file": "405__capture_2026-03-22T04-55-55-208Z.png",
+    "seed_raw": [
+      "map seed: 6690C88"
+    ],
+    "hazards_raw": [
+      "KNOWN HAZARDS & FEATURES",
+      "ICE ARTIFACT",
+      "ROGUE TURRETS",
+      "C5",
+      "C6",
+      "EASY LOOT",
+      "FEW ASTEROIDS",
+      "CRYON RIFT",
+      "LEGION PATROLS",
+      "FEW SHIPS",
+      "SPORE BIOME",
+      "DS",
+      "D6",
+      "(fartingPuppy",
+      "ARTIFACT",
+      "SPECIAL LOOT",
+      "WILDGATE",
+      "RESOURCES",
+      "E5",
+      "E6"
+    ]
+  },
+  {
+    "file": "406__capture_2026-03-22T05-18-05-174Z.png",
+    "seed_raw": [
+      "map seed: TT7F2480"
+    ],
+    "hazards_raw": [
+      "KNOWN HAZARDS & FEATURES",
+      "WEAPON ARTIFACT",
+      "ICE STORM",
+      "C5",
+      "C6",
+      "ANCIENT VAULT",
+      "CRYON RIFT",
+      "LEGION PATROLS",
+      "FEW SHIPS",
+      "rtingPuppy",
+      "D5",
+      "D6",
+      "ARTIFACT",
+      "SPECIAL LOOT",
+      "WILDGATE",
+      "RESOURCES",
+      "E5",
+      "E6"
+    ]
+  },
+  {
+    "file": "519__capture_2026-03-28T20-26-35-408Z.png",
+    "seed_raw": [
+      "map seed: 22C6EDOO"
+    ],
+    "hazards_raw": [
+      "",
+      "KNOWN HAZARDS & FEATURES",
+      "V",
+      "ICE ARTIFACT",
+      "COSMIC STORM",
+      "",
+      "C5",
+      "C6",
+      "ROGUE TURRETS",
+      "LOW ALTITUDE FOG",
+      "FEW ASTEROIDS",
+      "LEGION PATROLS",
+      "FEW SHIPS",
+      "D5",
+      "D6",
+      "ARTIFACT",
+      "SPECIAL LOOT",
+      "WILDGATE",
+      "RESOURCES",
+      "E5",
+      "E6"
+    ]
+  },
+  {
+    "file": "546__capture_2026-03-29T22-03-33-779Z.png",
+    "seed_raw": [
+      "map seed: 704AEABO"
+    ],
+    "hazards_raw": [
+      "KNOWN HAZARDS & FEATURES",
+      "Hus",
+      "ICE ARTIFACT",
+      "HAUNTED STORM",
+      "C5",
+      "C6",
+      "GLOAMING EXPANSE",
+      "LEGION PATROLS",
+      "FEW SHIPS",
+      "ARTIFACT",
+      "SPECIAL LOOT",
+      "D5",
+      "D6",
+      "WILDGATE",
+      "RESOURCES",
+      "E5",
+      "E6"
+    ]
+  },
+  {
+    "file": "93__capture_2026-02-16T18-24-10-525Z.png",
+    "seed_raw": [
+      "map seed: 79173000"
+    ],
+    "hazards_raw": [
+      "ARTIFACT",
+      "SPECIAL LOOT",
+      "WILDGATE",
+      "RESOURCES",
+      "C5",
+      "C6",
+      "leWhiteFob3q",
+      "D5",
+      "D6",
+      "E5",
+      "E6"
+    ]
+  },
+  {
+    "file": "wg31.png",
+    "seed_raw": [
+      "IME",
+      "KEMAIIii)",
+      "00 , 0/",
+      "map seed: 23EFCC"
+    ],
+    "hazards_raw": [
+      "COM STATION",
+      "Medu",
+      "STATION",
+      "WorCrest",
+      "SKULL ROCK",
+      "L",
+      "C5",
+      "C6",
+      "WINTERGREEN",
+      "HUNTER",
+      "Grim REACHER",
+      "I00",
+      "Thatguyujustmet",
+      "olake",
+      "L",
+      "D5",
+      "D6",
+      "TheF16",
+      "JUGGERNAUT",
+      "OjuanBird",
+      "NOLITH ENTRANCE",
+      "COM STATION",
+      "jangomangol23",
+      "MONOLITH ENTRANCE",
+      "E6",
+      "MONOLITH",
+      "100"
+    ]
+  },
+  {
+    "file": "wg45.png",
+    "seed_raw": [
+      "UMC",
+      "KCMaiIMii9",
+      "0T.01",
+      "map seed: I8FOA42O"
+    ],
+    "hazards_raw": [
+      "Caziban",
+      "LONG HAULER",
+      "OBELISK ENTRANCE",
+      "G4zzy",
+      "COM STATION",
+      "C5",
+      "C6",
+      "S.S. BAD DECISIONS",
+      "OBELISK ENTRANCE",
+      "HUNTER",
+      "STAR DOCK",
+      "FANCY Go05E",
+      "100",
+      "I00",
+      "OjuanBird",
+      "oblinaTTV",
+      "D5",
+      "D6",
+      "River Banks",
+      "LONG HAULER",
+      "'AULT",
+      "jangomango123",
+      "SS.BAD DECISIONS",
+      "TheFI6",
+      "E5",
+      "E6",
+      "KNOWN HAZARDS & FEATURES"
+    ]
+  },
+  {
+    "file": "wg56.png",
+    "seed_raw": [
+      "Clno",
+      "Uciai ii ?",
+      "Ovo Ol",
+      "map seed: 160820A0"
+    ],
+    "hazards_raw": [
+      "OObELIaK",
+      "itamare84",
+      "poultrydestroyer",
+      "IAMBER",
+      "ASTRAL TREE",
+      "C5",
+      "JUGGERNAUT 0",
+      "VANGUARD",
+      "HUNTER",
+      "INCE",
+      "Dobge THE BULLET",
+      "100",
+      "I00",
+      "SHARD CAVERN",
+      "Caziban",
+      "4",
+      "oblinaTTV",
+      "D5",
+      "D6",
+      "chrismario",
+      "DRILL STATION",
+      "sozedante",
+      "DRILL",
+      "Ghzzy",
+      "FANCY GOOsE",
+      "E5",
+      "E6",
+      "KNOWN HAZARDS & FEATURES"
+    ]
+  },
+  {
+    "file": "wg92.png",
+    "seed_raw": [
+      "S",
+      "map seed: 570F9480"
+    ],
+    "hazards_raw": [
+      "G4zZy",
+      "Caziban",
+      "C5",
+      "ANCIENT VAULT",
+      "100%",
+      "JUGGERNAUT",
+      "oblinaTTV",
+      "LEGION SHIP ",
+      "D5",
+      "Do",
+      "KNOWN HAZARDS & FEATURES",
+      "WEAPON ARTIFACT",
+      "ANCIENT VAULT",
+      "ROGUE TURRETS",
+      "EASY LOOT",
+      "E5",
+      "E6",
+      "EXCAVATOR",
+      "CPpF Ricme",
+      "LOW ALTITUDE FOG"
+    ]
+  }
+]

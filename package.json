@@ -2,7 +2,7 @@
   "name": "wildgate-stat-tracker",
   "productName": "Wildgate Stat Tracker",
   "private": true,
-  "version": "3.6.3",
+  "version": "3.6.4",
   "type": "module",
   "main": "electron/main.cjs",
   "author": {
@@ -44,7 +44,12 @@
     "check:stream-ownership:contract": "node scripts/check-stream-ownership.cjs --stream contract",
     "test": "vitest run",
     "test:watch": "vitest",
-    "release": "node scripts/release.cjs"
+    "release": "node scripts/release.cjs",
+    "research:seed-hazards": "python scripts/seed_hazard_research.py",
+    "research:seed-layout": "python scripts/seed_layout_research.py",
+    "research:seed-positions": "python scripts/seed_position_research.py",
+    "research:build-poi-review": "python scripts/build_manual_poi_review.py",
+    "research:seed-estimator": "python scripts/seed_topology_hazard_estimator.py"
   },
   "dependencies": {
     "@nut-tree-fork/nut-js": "^4.2.6",
