@@ -105,10 +105,14 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
 }) => {
   const qs = getQueueStatus(match);
   const statusMeta = getStatusMeta(qs.key);
+  const hasPersistedResultCapture = Array.isArray(match.artifacts)
+    && match.artifacts.some((artifactPath) => /capture_result/i.test(String(artifactPath || '')));
   const awaitingResultLabel = match.subType === 'Telemetry Draft'
     && match.telemetryDraftState === 'ready'
     && match.result === 'Ongoing'
-    ? (compact ? 'Awaiting' : 'Awaiting Result')
+    ? (hasPersistedResultCapture
+      ? (compact ? 'Captured' : 'Result Captured')
+      : (compact ? 'Awaiting' : 'Awaiting Result'))
     : undefined;
   const when = new Date(match.timestamp);
   const timestampLabel = formatQueueTimestamp(when);

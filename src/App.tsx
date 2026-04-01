@@ -3532,6 +3532,16 @@ const App: React.FC = () => {
                         const savedPath = String(persistedCapture?.data?.filePath || '').trim();
                         if (savedPath) {
                             persistedPrimaryArtifactPath = savedPath;
+                            syncAutoCaptureArtifactToMatch(normalizedDraftMatchId, savedPath);
+                            try {
+                                await StorageService.flush();
+                            } catch (error) {
+                                Logger.warn('ResultMonitor', 'Failed to flush persisted raw result capture linkage', {
+                                    matchId: normalizedDraftMatchId,
+                                    filePath: savedPath,
+                                    error: error instanceof Error ? error.message : String(error),
+                                });
+                            }
                         } else {
                             console.warn('[FullAuto] Failed to persist raw result capture', {
                                 matchId: normalizedDraftMatchId,
@@ -3653,6 +3663,7 @@ const App: React.FC = () => {
         setFullAutoDetectionLocked,
         setTelemetryAutomationStatus,
         setToast,
+        syncAutoCaptureArtifactToMatch,
     ]);
 
     useEffect(() => {

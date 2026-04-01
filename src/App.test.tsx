@@ -1554,6 +1554,90 @@ describe('App', () => {
     }
   });
 
+  it('links persisted raw result captures onto the telemetry draft before finalize resolves', async () => {
+    vi.useFakeTimers();
+    appStoreState.fullAutoEnabled = true;
+    uiState.telemetryLifecycleStage = 'live';
+    const draft = {
+      id: 4330,
+      timestamp: Date.now(),
+      date: '3/20/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Venture',
+      ship: 'Hunter (4 Player)',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      artifacts: ['C:\\match_artifacts\\4330\\capture_map.png'],
+    };
+    gameDataState.matches = [draft];
+    appStoreState.matches = [draft];
+    appStoreState.updateMatch.mockImplementation((nextMatch: any) => {
+      appStoreState.matches = appStoreState.matches.map((entry: any) => (
+        entry.id === nextMatch.id ? nextMatch : entry
+      ));
+    });
+    autoFinalizeResultScreenCaptureMock.mockRejectedValue(new Error('auto finalize exploded'));
+
+    const api = {
+      invoke: vi.fn((channel: string) => {
+        if (channel === 'capture-screen') {
+          return Promise.resolve('image-base64');
+        }
+        if (channel === 'save-screenshot') {
+          return Promise.resolve({
+            success: true,
+            data: { filePath: 'C:\\match_artifacts\\4330\\capture_result.png' },
+          });
+        }
+        if (channel === 'scan-result-screen') {
+          return Promise.resolve({ data: { result: 'Win' } });
+        }
+        if (channel === 'telemetry-retention-status') {
+          return Promise.resolve(null);
+        }
+        return Promise.resolve(null);
+      }),
+      send: vi.fn(),
+      on: vi.fn(() => () => {}),
+      removeAllListeners: vi.fn(),
+    };
+    getElectronAPIMock.mockReturnValue(api);
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    try {
+      const { default: App } = await import('./App');
+      render(<App />);
+      appStoreState.updateMatch.mockClear();
+
+      const flashOptions = useResultFlashMonitorMock.mock.calls.at(-1)?.[0] as {
+        onFlashDetected?: () => Promise<void>;
+      };
+      expect(flashOptions?.onFlashDetected).toBeTypeOf('function');
+
+      await act(async () => {
+        await flashOptions.onFlashDetected?.();
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+
+      expect(appStoreState.updateMatch).toHaveBeenCalledWith(expect.objectContaining({
+        id: 4330,
+        artifacts: [
+          'C:\\match_artifacts\\4330\\capture_map.png',
+          'C:\\match_artifacts\\4330\\capture_result.png',
+        ],
+      }));
+    } finally {
+      consoleErrorSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
   it('preserves no-result flash captures as artifacts and retries without saving duplicate debug copies', async () => {
     vi.useFakeTimers();
     appStoreState.fullAutoEnabled = true;

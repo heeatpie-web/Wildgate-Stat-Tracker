@@ -142,6 +142,31 @@ describe('QueueItemRichPreview', () => {
     expect(screen.queryByText(/^Ongoing$/)).toBeNull();
   });
 
+  it('shows result captured when a telemetry draft already has a saved result screenshot', () => {
+    const telemetryReadyMatch: Match = {
+      ...baseMatch,
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'ready',
+      artifacts: ['C:\\captures\\capture_result_1.png'],
+      ocrDebug: undefined,
+      ocrState: 'reviewing',
+    };
+
+    render(
+      <QueueItemRichPreview
+        match={telemetryReadyMatch}
+        displayNumber={25}
+        rawMatchId={telemetryReadyMatch.id}
+        isSelected={false}
+        onClick={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Result Captured')).toBeInTheDocument();
+    expect(screen.queryByText('Awaiting Result')).toBeNull();
+  });
+
   it('shows a practice range indicator when the match came from training', () => {
     render(
       <QueueItemRichPreview

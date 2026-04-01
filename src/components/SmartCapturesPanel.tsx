@@ -119,6 +119,20 @@ const errorMessage = (error: unknown): string =>
 const toArtifactKey = (value: string): string =>
     value.replace(/[\\/]+/g, '\\').toLowerCase();
 
+const mergeArtifactRefs = (existing: string[] = [], incoming: string[] = []): string[] => {
+    const merged: string[] = [];
+    const seen = new Set<string>();
+    [...existing, ...incoming].forEach((artifactPath) => {
+        const normalized = String(artifactPath || '').trim();
+        if (!normalized) return;
+        const key = toArtifactKey(normalized);
+        if (seen.has(key)) return;
+        seen.add(key);
+        merged.push(normalized);
+    });
+    return merged;
+};
+
 export const resolveSmartCaptureOpenFolderTarget = (
     artifacts: Pick<MatchArtifactsStructured, 'images' | 'imageFiles'>
 ): string => {
@@ -2532,6 +2546,80 @@ export const buildOcrReviewPendingMatch = (
     return nextPending;
 };
 
+type ResultScreenScanData = {
+    result: Match['result'] | null;
+    winType?: string | null;
+    placement?: number | null;
+    detectionMethod?: 'flash' | 'text';
+    damageTaken?: number | null;
+    damageSourcesAvailable?: boolean;
+};
+
+const hasResolvedResultScan = (
+    value: ResultScreenScanData | null | undefined
+): value is ResultScreenScanData & { result: 'Win' | 'Loss' | 'Draw' } => (
+    value?.result === 'Win' || value?.result === 'Loss' || value?.result === 'Draw'
+);
+
+const normalizeScannedResultSubType = (
+    result: Match['result'] | null | undefined,
+    winType: string | null | undefined,
+    placement?: number | null,
+): Match['subType'] | undefined => {
+    if (result === 'Draw') return 'Combat';
+    const normalized = String(winType || '').trim().toLowerCase();
+    if (normalized === 'artifact') return 'Artifact';
+    if (normalized === 'combat') return 'Combat';
+    if (Number.isInteger(Number(placement)) && Number(placement) >= 2 && Number(placement) <= 5) return 'Combat';
+    return undefined;
+};
+
+const buildResultScanPatch = (
+    baseMatch: Match,
+    existingPending: Partial<Match> | null | undefined,
+    resultData: ResultScreenScanData | null | undefined,
+): Partial<Match> => {
+    if (!hasResolvedResultScan(resultData)) return {};
+
+    const normalizedPlacement = Number.isInteger(Number(resultData.placement))
+        ? Math.min(5, Math.max(2, Number(resultData.placement)))
+        : null;
+    const normalizedSubType = normalizeScannedResultSubType(
+        resultData.result,
+        resultData.winType,
+        normalizedPlacement,
+    );
+    const finalPlacement = resultData.result === 'Win'
+        ? 1
+        : resultData.result === 'Draw'
+            ? undefined
+            : normalizedSubType === 'Combat'
+                ? (normalizedPlacement ?? existingPending?.placement ?? baseMatch.placement)
+                : undefined;
+
+    const nextPatch: Partial<Match> = {
+        result: resultData.result,
+    };
+
+    if (normalizedSubType) {
+        nextPatch.subType = normalizedSubType;
+    }
+    if (finalPlacement !== undefined) {
+        nextPatch.placement = finalPlacement;
+    }
+    if (Number.isFinite(Number(resultData.damageTaken))) {
+        nextPatch.damageTaken = Math.max(0, Number(resultData.damageTaken));
+    }
+    if (resultData.detectionMethod) {
+        nextPatch.resultDetectionMethod = resultData.detectionMethod;
+    }
+    if (typeof resultData.damageSourcesAvailable === 'boolean') {
+        nextPatch.damageSourcesAvailable = resultData.damageSourcesAvailable;
+    }
+
+    return nextPatch;
+};
+
 export const getRosterCandidateSuggestions = (
     rawName: string,
     pilotRegistry: string[]
@@ -3041,25 +3129,72 @@ const SmartMatchDetail: React.FC<{
 
         const applyReviewDataToSession = useCallback((
             readyReviewData?: OCRExtractedData | null,
-            options?: { initialTab?: 'result' | 'ocr' }
+            options?: { initialTab?: 'result' | 'ocr'; resultScan?: ResultScreenScanData | null }
         ) => {
             const dataToApply = readyReviewData || reviewData;
-            if (!dataToApply) {
+            const initialTab = options?.initialTab || 'result';
+            ensureNonCurrentWizardSnapshot(useAppStore.getState());
+            const latestMatch = getLatestMatchSnapshot();
+            const currentPending = (useAppStore.getState().pendingMatchData || null) as Partial<Match> | null;
+            const basePendingDraft = dataToApply
+                ? buildOcrReviewPendingMatch(latestMatch, dataToApply, {
+                    activeUser,
+                    existingPending: currentPending,
+                    nameSources: ocrNameSources,
+                    normalizeModifierName,
+                })
+                : {
+                    ...(currentPending || {}),
+                    id: latestMatch.id,
+                    timestamp: latestMatch.timestamp,
+                    mode: latestMatch.mode,
+                    player: latestMatch.player,
+                    hero: latestMatch.hero,
+                    ship: String(currentPending?.ship || latestMatch.ship || '').trim(),
+                    teammates: Array.isArray(currentPending?.teammates) ? [...currentPending.teammates] : [...(latestMatch.teammates || [])],
+                    opponents: Array.isArray(currentPending?.opponents) ? [...currentPending.opponents] : [...(latestMatch.opponents || [])],
+                    loadout: cloneLoadout((currentPending?.loadout as Loadout | null | undefined) ?? latestMatch.loadout) || undefined,
+                    weapons: currentPending?.weapons || latestMatch.weapons || {},
+                    reachModifiers: Array.isArray(currentPending?.reachModifiers) ? [...currentPending.reachModifiers] : [...(latestMatch.reachModifiers || [])],
+                    artifactSource: String(currentPending?.artifactSource || latestMatch.artifactSource || ''),
+                    kills: currentPending?.kills
+                        ? { ...(latestMatch.kills || {}), ...(currentPending.kills as Record<string, number>) }
+                        : { ...(latestMatch.kills || {}) },
+                    time: String(currentPending?.time || latestMatch.time || ''),
+                    poiEasy: Number(currentPending?.poiEasy ?? latestMatch.poiEasy ?? 0),
+                    poiMedium: Number(currentPending?.poiMedium ?? latestMatch.poiMedium ?? 0),
+                    poiEpic: Number(currentPending?.poiEpic ?? latestMatch.poiEpic ?? 0),
+                    damageTaken: Number(currentPending?.damageTaken ?? latestMatch.damageTaken ?? 0),
+                    notes: String(currentPending?.notes || latestMatch.notes || ''),
+                    matchCategory: String(currentPending?.matchCategory || latestMatch.matchCategory || '').trim() || undefined,
+                    artifacts: Array.isArray(currentPending?.artifacts)
+                        ? [...currentPending.artifacts]
+                        : [...(latestMatch.artifacts || [])],
+                    opponentTeams: Array.isArray(currentPending?.opponentTeams)
+                        ? currentPending.opponentTeams
+                        : latestMatch.opponentTeams,
+                    ocrState: 'reviewing',
+                    ocrDebug: currentPending?.ocrDebug || latestMatch.ocrDebug || undefined,
+                    eliminatedByTeam: String(currentPending?.eliminatedByTeam || latestMatch.eliminatedByTeam || '') || undefined,
+                    result: currentPending?.result || latestMatch.result,
+                    subType: currentPending?.subType || latestMatch.subType || undefined,
+                    placement: currentPending?.placement ?? latestMatch.placement,
+                    resultDetectionMethod: currentPending?.resultDetectionMethod || latestMatch.resultDetectionMethod,
+                    damageSourcesAvailable: currentPending?.damageSourcesAvailable ?? latestMatch.damageSourcesAvailable,
+                } as Partial<Match>;
+            const resultPatch = buildResultScanPatch(latestMatch, basePendingDraft, options?.resultScan);
+            const hasResultPatch = Object.keys(resultPatch).length > 0;
+
+            if (!dataToApply && !hasResultPatch) {
                 setToast({ message: 'No OCR analysis is ready yet. Run Re-analyze first.', type: 'warning' });
                 return;
             }
-            const initialTab = options?.initialTab || 'result';
-            ensureNonCurrentWizardSnapshot(useAppStore.getState());
 
             if (!onApplyToSession) {
-                const storeState = useAppStore.getState();
-                const latestMatch = getLatestMatchSnapshot();
-                const pendingDraft = buildOcrReviewPendingMatch(latestMatch, dataToApply, {
-                    activeUser,
-                    existingPending: storeState.pendingMatchData || null,
-                    nameSources: ocrNameSources,
-                    normalizeModifierName,
-                });
+                const pendingDraft = {
+                    ...basePendingDraft,
+                    ...resultPatch,
+                };
                 const hydratedMatch = { ...latestMatch, ...pendingDraft } as Match;
                 // Ensure the wizard can access screenshot file paths for its Re-run OCR button.
                 const artifactPaths = (latestMatch.artifacts || match.artifacts || [])
@@ -3088,7 +3223,8 @@ const SmartMatchDetail: React.FC<{
                 return;
             }
 
-            const appliedMatch = onApplyToSession(dataToApply);
+            const appliedBaseMatch = dataToApply ? onApplyToSession(dataToApply) : latestMatch;
+            const appliedMatch = { ...(appliedBaseMatch || latestMatch), ...resultPatch } as Match;
             // Ensure the wizard can access screenshot file paths for its Re-run OCR button
             const artifactPaths = (match.artifacts || [])
                 .map((p) => String(p || '').trim())
@@ -3167,7 +3303,10 @@ const SmartMatchDetail: React.FC<{
                 .then((nextArtifacts) => {
                     if (cancelled) return;
                     setArtifacts(nextArtifacts);
-                    if (!nextArtifacts.resolvedFromDisk || nextArtifacts.missingImages.length === 0) return;
+                    const existingArtifacts = Array.isArray(match.artifacts) ? match.artifacts : [];
+                    if (!nextArtifacts.resolvedFromDisk) return;
+
+                    const mergedArtifacts = mergeArtifactRefs(existingArtifacts, nextArtifacts.images);
                     const missingKeys = new Set(
                         nextArtifacts.missingImages
                             .map((imagePath) => toArtifactKey(imagePath))
@@ -3178,21 +3317,26 @@ const SmartMatchDetail: React.FC<{
                             .map((imagePath) => String(imagePath || '').trim().split(/[\\/]/).pop()?.toLowerCase() || '')
                             .filter(Boolean)
                     );
-                    const existingArtifacts = Array.isArray(match.artifacts) ? match.artifacts : [];
-                    const prunedArtifacts = existingArtifacts.filter((artifactPath) => {
+                    const syncedArtifacts = mergedArtifacts.filter((artifactPath) => {
                         const normalizedPath = String(artifactPath || '').trim();
                         if (!IMAGE_EXTS.some((ext) => normalizedPath.toLowerCase().endsWith(ext))) return true;
                         if (!missingKeys.has(toArtifactKey(normalizedPath))) return true;
                         const filenameKey = normalizedPath.split(/[\\/]/).pop()?.toLowerCase() || '';
                         return !!filenameKey && retainedFilenameKeys.has(filenameKey);
                     });
-                    if (prunedArtifacts.length === existingArtifacts.length) return;
-                    onUpdate({ ...match, artifacts: prunedArtifacts });
-                    const removedCount = existingArtifacts.length - prunedArtifacts.length;
-                    setToast({
-                        message: `Removed ${removedCount} missing screenshot reference${removedCount === 1 ? '' : 's'} from this match.`,
-                        type: 'info',
-                    });
+                    const artifactsChanged = syncedArtifacts.length !== existingArtifacts.length
+                        || syncedArtifacts.some((artifactPath, index) => artifactPath !== existingArtifacts[index]);
+                    if (!artifactsChanged) return;
+
+                    onUpdate({ ...match, artifacts: syncedArtifacts });
+
+                    const removedCount = Math.max(0, mergedArtifacts.length - syncedArtifacts.length);
+                    if (removedCount > 0) {
+                        setToast({
+                            message: `Removed ${removedCount} missing screenshot reference${removedCount === 1 ? '' : 's'} from this match.`,
+                            type: 'info',
+                        });
+                    }
                 })
                 .catch((error: unknown) => {
                     if (cancelled) return;
@@ -3740,6 +3884,30 @@ const SmartMatchDetail: React.FC<{
                 onUpdate({ ...match, artifacts: reordered });
             }
         };
+        const scanResultArtifacts = useCallback(async (imagePaths: string[]): Promise<ResultScreenScanData | null> => {
+            if (!Array.isArray(imagePaths) || imagePaths.length === 0) return null;
+            const api = getElectronAPI();
+            if (!api) return null;
+
+            for (const imagePath of [...imagePaths].reverse()) {
+                const normalizedPath = String(imagePath || '').trim();
+                if (!normalizedPath) continue;
+                try {
+                    const imageBase64 = String(await api.invoke('read-file-base64', normalizedPath) || '').trim();
+                    if (!imageBase64) continue;
+                    const scanResult = await api.invoke('scan-result-screen', { imageBase64 });
+                    if (scanResult?.success === false) continue;
+                    const data = (scanResult?.data || null) as ResultScreenScanData | null;
+                    if (hasResolvedResultScan(data)) {
+                        return data;
+                    }
+                } catch (error) {
+                    Logger.warn('SmartCapturesPanel', `Result screen scan failed for ${normalizedPath}`, error);
+                }
+            }
+
+            return null;
+        }, []);
         const handleRerunAnalysis = useCallback(async () => {
             const classifySource = (pathValue: string, index: number): ArtifactScreenshotBucket => (
                 classifyArtifactScreenshotBucket(pathValue, artifacts.imageFiles[index] || null)
@@ -3835,6 +4003,8 @@ const SmartMatchDetail: React.FC<{
                             || '';
                     }
                 }
+                const resultBucketPaths = buckets.find((bucket) => bucket.id === 'result')?.paths || [];
+                const detectedResultData = await scanResultArtifacts(resultBucketPaths);
                 const successfulCount = perFileRaw.filter(f => f.success).length;
                 const results: RerunResultWithMeta[] = perFileRaw.map((entry) => ({
                     success: entry.success,
@@ -3851,8 +4021,47 @@ const SmartMatchDetail: React.FC<{
                 const latestFileStatus = latestSummary
                     ? (latestSummary.success ? 'Succeeded' : `Failed: ${latestSummary.error || 'OCR failed'}`)
                     : '';
+                const latestMatchSnapshot = getLatestMatchSnapshot();
+                const resultPatch = buildResultScanPatch(
+                    latestMatchSnapshot,
+                    (useAppStore.getState().pendingMatchData || null) as Partial<Match> | null,
+                    detectedResultData,
+                );
+                const hasResultPatch = Object.keys(resultPatch).length > 0;
 
                 if (!mergedData || successfulCount === 0) {
+                    if (hasResultPatch) {
+                        const resultOnlyMatch = {
+                            ...latestMatchSnapshot,
+                            ...resultPatch,
+                            ocrState: 'reviewing',
+                        } as Match;
+                        onUpdate(resultOnlyMatch);
+                        setRerunProgress({
+                            phase: 'ready',
+                            current: totalImageCount,
+                            total: totalImageCount,
+                            status: `Done - outcome detected from ${resultBucketPaths.length} result screenshot${resultBucketPaths.length === 1 ? '' : 's'}`,
+                            cloudStatus: '',
+                            latestFile: latestSummary?.filename || '',
+                            latestFileStatus: latestFileStatus || 'Result screen detected',
+                        });
+                        applyReviewDataToSession(undefined, {
+                            initialTab: 'result',
+                            resultScan: detectedResultData,
+                        });
+                        if (!onApplyToSession) {
+                            pushNotification({
+                                message: `Result screen detected for Match ${displayNumber}.`,
+                                type: 'success',
+                                source: 'smart-capture',
+                                durationMs: 12000,
+                                deepLink: { type: 'openSmartCaptureOcrReview', matchId: match.id },
+                            });
+                        }
+                        return;
+                    }
+
                     setRerunProgress({
                         phase: 'error',
                         current: totalImageCount,
@@ -3890,14 +4099,17 @@ const SmartMatchDetail: React.FC<{
                     nameSources: nextNameSources,
                     normalizeModifierName,
                 });
+                const reviewingResultPatch = buildResultScanPatch(reviewingBaseMatch, reviewingPending, detectedResultData);
                 onUpdate({
                     ...reviewingBaseMatch,
                     ...reviewingPending,
+                    ...reviewingResultPatch,
                     ocrState: 'reviewing',
                 } as Match);
                 persistNameSourceHintsToPendingDraft(nextNameSources);
                 applyReviewDataToSession(mergedData, {
                     initialTab: getSmartCaptureWizardInitialTab('reanalyze-complete'),
+                    resultScan: detectedResultData,
                 });
                 if (!onApplyToSession) {
                     pushNotification({
@@ -3942,6 +4154,7 @@ const SmartMatchDetail: React.FC<{
             persistNameSourceHintsToPendingDraft,
             pushNotification,
             rerunRuntimeOptions,
+            scanResultArtifacts,
             setOcrNameSources,
             setRerunProgress,
             setRerunResults,

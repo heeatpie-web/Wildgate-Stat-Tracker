@@ -102,6 +102,12 @@ const previewArtifactRepair = vi.fn();
 const applyArtifactRepair = vi.fn();
 const rerunOCRMulti = vi.fn();
 const getMatchArtifactsStructured = vi.fn();
+const electronInvoke = vi.fn(async () => 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WnY4nQAAAAASUVORK5CYII=');
+const electronSend = vi.fn();
+const getElectronAPIMock = vi.fn(() => ({
+  send: electronSend,
+  invoke: electronInvoke,
+}));
 
 vi.mock('../providers/GameDataProvider', () => ({
   useGameData: () => gameData,
@@ -133,10 +139,7 @@ vi.mock('../utils/artifactService', () => ({
 }));
 
 vi.mock('../utils/electronAPI', () => ({
-  getElectronAPI: vi.fn(() => ({
-    send: vi.fn(),
-    invoke: vi.fn(async () => 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WnY4nQAAAAASUVORK5CYII='),
-  })),
+  getElectronAPI: getElectronAPIMock,
 }));
 
 vi.mock('./smart-captures/SmartCapturesShell', () => ({
@@ -222,6 +225,10 @@ describe('SmartCapturesPanel paused lifecycle', () => {
       missingImages: [],
       resolvedFromDisk: false,
     });
+    electronInvoke.mockReset();
+    electronInvoke.mockResolvedValue('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WnY4nQAAAAASUVORK5CYII=');
+    electronSend.mockReset();
+    getElectronAPIMock.mockClear();
     uiState.smartCapturesFocusMatchId = null;
     uiState.setSmartCapturesFocusMatchId = vi.fn((id: number | null) => {
       uiState.smartCapturesFocusMatchId = id;
@@ -372,6 +379,124 @@ describe('SmartCapturesPanel paused lifecycle', () => {
           playerTeamName: 'Friendly Crew',
           playerShipName: 'Stormrider',
         }),
+      }));
+    });
+  });
+
+  it('applies result-screen extraction during re-analysis when a saved result screenshot exists', async () => {
+    appStoreState.activeSection = 'capture';
+    appStoreState.selectedMatchId = 1;
+    gameData.matches = [
+      {
+        id: 1,
+        timestamp: 1_700_000_000_000,
+        mode: 'Artifact Brawl',
+        player: 'Pilot',
+        teammates: ['Wingman'],
+        opponents: ['Enemy'],
+        hero: 'Adrian',
+        ship: 'Hunter',
+        reachModifiers: [],
+        kills: {},
+        artifacts: [
+          'C:\\captures\\capture_map_1.png',
+          'C:\\captures\\capture_result_1.png',
+        ],
+        result: 'Ongoing',
+        subType: 'Telemetry Draft',
+        telemetryDraftState: 'ready',
+        ocrState: 'reviewing',
+      },
+    ];
+    appStoreState.matches = gameData.matches;
+    getMatchArtifactsStructured.mockResolvedValue({
+      images: [
+        'C:\\captures\\capture_map_1.png',
+        'C:\\captures\\capture_result_1.png',
+      ],
+      imageFiles: [
+        {
+          artifactId: 'artifact-map',
+          filename: 'capture_map_1.png',
+          path: 'C:\\captures\\capture_map_1.png',
+          captureSource: 'ocr-macro',
+          screenshotType: 'tactical_map',
+        },
+        {
+          artifactId: 'artifact-result',
+          filename: 'capture_result_1.png',
+          path: 'C:\\captures\\capture_result_1.png',
+          captureSource: 'result-macro',
+          screenshotType: 'result',
+        },
+      ],
+      telemetry: [],
+      missingImages: [],
+      resolvedFromDisk: false,
+    });
+    rerunOCRMulti.mockResolvedValue({
+      perFile: [
+        {
+          success: true,
+          imagePath: 'C:\\captures\\capture_map_1.png',
+          data: {
+            captureTimestamp: Date.now(),
+            teammates: [{ name: 'Wingman', confidence: 91, isTeammate: true }],
+            opponentTeams: [],
+            reachModifiers: [],
+            playerShip: { shipType: 'Bastion', teamName: 'Friendly Crew', confidence: 89 },
+            overallConfidence: 88,
+            artifacts: ['C:\\captures\\capture_map_1.png'],
+          },
+        },
+      ],
+      data: {
+        captureTimestamp: Date.now(),
+        teammates: [{ name: 'Wingman', confidence: 91, isTeammate: true }],
+        opponentTeams: [],
+        reachModifiers: [],
+        playerShip: { shipType: 'Bastion', teamName: 'Friendly Crew', confidence: 89 },
+        overallConfidence: 88,
+        artifacts: ['C:\\captures\\capture_map_1.png'],
+      },
+    });
+    electronInvoke.mockImplementation(async (channel: string, payload?: unknown) => {
+      if (channel === 'read-file-base64') {
+        expect(payload).toBe('C:\\captures\\capture_result_1.png');
+        return 'result-image-base64';
+      }
+      if (channel === 'scan-result-screen') {
+        expect(payload).toEqual({ imageBase64: 'result-image-base64' });
+        return {
+          success: true,
+          data: {
+            result: 'Loss',
+            winType: 'Combat',
+            placement: 3,
+            damageTaken: 47,
+            damageSourcesAvailable: true,
+            detectionMethod: 'text',
+          },
+        };
+      }
+      return 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WnY4nQAAAAASUVORK5CYII=';
+    });
+
+    const { default: SmartCapturesPanel } = await import('./SmartCapturesPanel');
+    render(<SmartCapturesPanel />);
+
+    fireEvent.keyDown(window, { key: 'r' });
+
+    await waitFor(() => {
+      expect(gameData.updateMatch).toHaveBeenCalledWith(expect.objectContaining({
+        id: 1,
+        result: 'Loss',
+        subType: 'Combat',
+        placement: 3,
+        damageTaken: 47,
+        resultDetectionMethod: 'text',
+        damageSourcesAvailable: true,
+        ocrState: 'reviewing',
       }));
     });
   });
@@ -611,6 +736,69 @@ describe('SmartCapturesPanel paused lifecycle', () => {
 
     const detailPane = container.querySelector('.sc-detail-pane');
     expect(detailPane?.contains(dialog)).toBe(false);
+  });
+
+  it('relinks disk-found screenshots back onto the match when artifact storage is ahead of the DB', async () => {
+    appStoreState.activeSection = 'capture';
+    appStoreState.selectedMatchId = 1;
+    gameData.matches = [
+      {
+        id: 1,
+        timestamp: 1_700_000_000_000,
+        mode: 'Artifact Brawl',
+        player: 'Pilot',
+        teammates: ['Wingman'],
+        opponents: ['Enemy'],
+        hero: 'Adrian',
+        ship: 'Hunter',
+        reachModifiers: [],
+        kills: {},
+        artifacts: ['C:\\captures\\capture_map_1.png'],
+        result: 'Ongoing',
+        subType: 'Telemetry Draft',
+        telemetryDraftState: 'ready',
+        ocrState: 'reviewing',
+      },
+    ];
+    appStoreState.matches = gameData.matches;
+    getMatchArtifactsStructured.mockResolvedValue({
+      images: [
+        'C:\\captures\\capture_map_1.png',
+        'C:\\captures\\capture_result_1.png',
+      ],
+      imageFiles: [
+        {
+          artifactId: 'artifact-map',
+          filename: 'capture_map_1.png',
+          path: 'C:\\captures\\capture_map_1.png',
+          captureSource: 'ocr-macro',
+          screenshotType: 'tactical_map',
+        },
+        {
+          artifactId: 'artifact-result',
+          filename: 'capture_result_1.png',
+          path: 'C:\\captures\\capture_result_1.png',
+          captureSource: 'result-macro',
+          screenshotType: 'result',
+        },
+      ],
+      telemetry: [],
+      missingImages: [],
+      resolvedFromDisk: true,
+    });
+
+    const { default: SmartCapturesPanel } = await import('./SmartCapturesPanel');
+    render(<SmartCapturesPanel />);
+
+    await waitFor(() => {
+      expect(gameData.updateMatch).toHaveBeenCalledWith(expect.objectContaining({
+        id: 1,
+        artifacts: [
+          'C:\\captures\\capture_map_1.png',
+          'C:\\captures\\capture_result_1.png',
+        ],
+      }));
+    });
   });
 
   it('keeps bucketed screenshots in a single rail while preserving bucket labels', async () => {

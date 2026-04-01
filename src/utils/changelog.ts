@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.6.5": [
+    "Smart Captures: Re-analyze now scans saved result screenshots and carries win/loss, placement, and damage info into review.",
+    "Reliability: Raw auto-result captures now attach to telemetry drafts immediately so saved result screenshots cannot be orphaned on disk.",
+    "Workflow: Smart Captures now relinks disk-found screenshot references back into stale matches and labels drafts with saved result images as Result Captured."
+  ],
   "v3.6.4": [
     "Internal: add seed and map-layout research tooling for reach modifier analysis",
     "Maintenance: keep legacy backup artifact-bundle cleanup active on startup",
