@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.6.6": [
+    "Fix result screen artifact loss detection",
+    "Reanalyze saved result screenshots",
+    "Improve signal parsing for eliminated vs combat win"
+  ],
   "v3.6.5": [
     "Smart Captures: Re-analyze now scans saved result screenshots and carries win/loss, placement, and damage info into review.",
     "Reliability: Raw auto-result captures now attach to telemetry drafts immediately so saved result screenshots cannot be orphaned on disk.",
