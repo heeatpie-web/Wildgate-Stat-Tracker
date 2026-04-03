@@ -49,6 +49,21 @@ describe('resultScreenExtractor heuristics', () => {
     });
   });
 
+  it('keeps combat wins from being downgraded by stray placement OCR digits', () => {
+    expect(__test__.parseResultSignals({
+      headlineTexts: ['VICTORY'],
+      statusTexts: ['RIVALSELIMINATED'],
+      placementTexts: ['4'],
+    }, { detectionMethod: 'text' })).toEqual({
+      result: 'Win',
+      winType: 'combat',
+      placement: 1,
+      detectionMethod: 'text',
+      damageTaken: undefined,
+      damageSourcesAvailable: false,
+    });
+  });
+
   it('parses REACH WINS as a draw result', () => {
     expect(__test__.parseResultSignals({
       headlineTexts: ['REACHWINS'],
@@ -88,6 +103,18 @@ describe('resultScreenExtractor heuristics', () => {
     });
   });
 
+  it('treats a bare defeat sublabel as an artifact loss when no combat cues are present', () => {
+    expect(__test__.parseResultSignals({
+      statusTexts: ['DEFEAT'],
+    }, { detectionMethod: 'text' })).toEqual({
+      result: 'Loss',
+      winType: 'artifact',
+      detectionMethod: 'text',
+      damageTaken: undefined,
+      damageSourcesAvailable: false,
+    });
+  });
+
   it('treats bare artifact recovered as an artifact loss', () => {
     expect(__test__.parseResultSignals({
       statusTexts: ['ARTIFACTRECOVERED'],
@@ -112,13 +139,15 @@ describe('resultScreenExtractor heuristics', () => {
     });
   });
 
-  it('prioritizes artifact recovered over a spurious victory headline', () => {
+  it('treats victory plus artifact recovered as an artifact win', () => {
     expect(__test__.parseResultSignals({
       headlineTexts: ['VICTORY'],
-      statusTexts: ['ARTIFACT RECOVERED'],
+      statusTexts: ['ARTFACTRECOVERED'],
+      placementTexts: ['2ND PLACE'],
     }, { detectionMethod: 'text' })).toEqual({
-      result: 'Loss',
+      result: 'Win',
       winType: 'artifact',
+      placement: 1,
       detectionMethod: 'text',
       damageTaken: undefined,
       damageSourcesAvailable: false,

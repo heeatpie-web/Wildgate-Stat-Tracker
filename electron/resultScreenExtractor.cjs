@@ -345,8 +345,11 @@ function parseResultSignals({
     'RTIFACTRECOVERE',
   ]) || (hasArtifactKeyword && hasRecoveredKeyword) || hasRecoveredKeyword;
   const hasArtifactSignal = hasArtifactKeyword || hasArtifactExtracted || hasArtifactRecovered;
+  const hasArtifactVictorySignal = hasArtifactExtracted || (hasVictory && hasArtifactSignal);
+  const hasArtifactLossSignal = hasArtifactRecovered && !hasArtifactVictorySignal;
   const hasCombatWin = joined.includes('RIVALSELIMINATED') || joined.includes('IVALSELIMINAT');
   const hasEliminated = joined.includes('ELIMINATED') || joined.includes('LIMINATED');
+  const hasLossEliminated = hasEliminated && !hasCombatWin;
   const hasVanguardWins = joined.includes('VANGUARDWINS') || joined.includes('ANGUARDWINS');
   const hasFinalMoments = joined.includes('FINALMOMENTSRECAP') || joined.includes('NALMOMENTSRECA');
   const hasDefeat = joined.includes('DEFEAT');
@@ -356,7 +359,7 @@ function parseResultSignals({
   const hasExplicitResultSignal = hasVictory
     || hasArtifactSignal
     || hasCombatWin
-    || hasEliminated
+    || hasLossEliminated
     || hasVanguardWins
     || hasFinalMoments
     || hasDefeat
@@ -364,7 +367,7 @@ function parseResultSignals({
     || hasReachWins;
   const hasRejectedOverlaySignal = hasOverlayOrMenuSignal(joined) && !hasExplicitResultSignal;
   const hasDamageSourcesSignal = damageTaken != null
-    || hasEliminated
+    || hasLossEliminated
     || hasVanguardWins
     || hasFinalMoments
     || hasDamagePanel;
@@ -385,7 +388,7 @@ function parseResultSignals({
   // Placement-based losses should take precedence over spurious OCR that
   // might include victory-like tokens. Example: "3RD PLACE" + "ELIMINATED"
   // being misread as "VICTORY".
-  if (!hasArtifactSignal && placement && placement >= 2 && placement <= 5 && (hasDefeat || hasEliminated || hasFinalMoments || hasShipWins)) {
+  if (!hasArtifactSignal && placement && placement >= 2 && placement <= 5 && (hasDefeat || hasLossEliminated || hasFinalMoments || hasShipWins)) {
     return {
       result: 'Loss',
       winType: 'combat',
@@ -396,7 +399,7 @@ function parseResultSignals({
     };
   }
 
-  if (hasArtifactRecovered || (hasDefeat && hasArtifactSignal)) {
+  if (hasArtifactLossSignal || (hasDefeat && hasArtifactSignal)) {
     return {
       result: 'Loss',
       winType: 'artifact',
@@ -406,18 +409,7 @@ function parseResultSignals({
     };
   }
 
-  if (hasArtifactExtracted && !hasCombatWin) {
-    return {
-      result: 'Win',
-      winType: 'artifact',
-      placement: 1,
-      detectionMethod,
-      damageTaken: resolvedDamageTaken,
-      damageSourcesAvailable: resolvedDamageSourcesAvailable,
-    };
-  }
-
-  if (hasVictory && hasArtifactSignal && !hasCombatWin) {
+  if (hasArtifactVictorySignal && !hasCombatWin) {
     return {
       result: 'Win',
       winType: 'artifact',
@@ -449,11 +441,35 @@ function parseResultSignals({
     };
   }
 
-  if ((hasEliminated || hasVanguardWins || hasFinalMoments) && !hasVictory) {
+  if ((hasLossEliminated || hasVanguardWins || hasFinalMoments) && !hasVictory) {
     return {
       result: 'Loss',
       winType: 'combat',
       placement,
+      detectionMethod,
+      damageTaken: resolvedDamageTaken,
+      damageSourcesAvailable: resolvedDamageSourcesAvailable,
+    };
+  }
+
+  // Artifact-loss screens can OCR only the small centered "DEFEAT" sublabel
+  // when the larger "ARTIFACT RECOVERED" banner fails to read cleanly. Keep
+  // treating that result-only shape as an artifact loss so the draft finalizes.
+  if (
+    hasDefeat
+    && !hasArtifactSignal
+    && !hasCombatWin
+    && !hasEliminated
+    && !hasVanguardWins
+    && !hasFinalMoments
+    && !hasShipWins
+    && !hasReachWins
+    && !placement
+    && !resolvedDamageSourcesAvailable
+  ) {
+    return {
+      result: 'Loss',
+      winType: 'artifact',
       detectionMethod,
       damageTaken: resolvedDamageTaken,
       damageSourcesAvailable: resolvedDamageSourcesAvailable,
