@@ -103,12 +103,12 @@ describe('resultScreenExtractor heuristics', () => {
     });
   });
 
-  it('treats a bare defeat sublabel as an artifact loss when no combat cues are present', () => {
+  it('treats a bare defeat sublabel as a combat loss until stronger artifact OCR appears', () => {
     expect(__test__.parseResultSignals({
       statusTexts: ['DEFEAT'],
     }, { detectionMethod: 'text' })).toEqual({
       result: 'Loss',
-      winType: 'artifact',
+      winType: 'combat',
       detectionMethod: 'text',
       damageTaken: undefined,
       damageSourcesAvailable: false,

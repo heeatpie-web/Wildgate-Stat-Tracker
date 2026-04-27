@@ -452,30 +452,6 @@ function parseResultSignals({
     };
   }
 
-  // Artifact-loss screens can OCR only the small centered "DEFEAT" sublabel
-  // when the larger "ARTIFACT RECOVERED" banner fails to read cleanly. Keep
-  // treating that result-only shape as an artifact loss so the draft finalizes.
-  if (
-    hasDefeat
-    && !hasArtifactSignal
-    && !hasCombatWin
-    && !hasEliminated
-    && !hasVanguardWins
-    && !hasFinalMoments
-    && !hasShipWins
-    && !hasReachWins
-    && !placement
-    && !resolvedDamageSourcesAvailable
-  ) {
-    return {
-      result: 'Loss',
-      winType: 'artifact',
-      detectionMethod,
-      damageTaken: resolvedDamageTaken,
-      damageSourcesAvailable: resolvedDamageSourcesAvailable,
-    };
-  }
-
   if (hasDefeat) {
     return {
       result: 'Loss',
