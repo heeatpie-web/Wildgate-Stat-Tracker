@@ -795,6 +795,7 @@ function maybeLogResultFlashSample({
 }
 
 async function beginAutoCaptureWindowSession() {
+  clearGameWindowCache();
   const mainWindow = win;
   const shouldHideWindow = Boolean(
     mainWindow

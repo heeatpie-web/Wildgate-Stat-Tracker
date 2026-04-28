@@ -455,6 +455,7 @@ function parseResultSignals({
   if (hasDefeat) {
     return {
       result: 'Loss',
+      winType: 'combat',
       detectionMethod,
       damageTaken: resolvedDamageTaken,
       damageSourcesAvailable: resolvedDamageSourcesAvailable,

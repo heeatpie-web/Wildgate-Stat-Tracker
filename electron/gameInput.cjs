@@ -897,6 +897,23 @@ async function getActiveWindowInfo(nut) {
 }
 
 async function focusGameWindow(nut, candidate, focusDelayMs) {
+  // Fast path: if the game is already the foreground window, skip all focus operations.
+  const initialActive = await getActiveWindowInfo(nut);
+  if (initialActive.foregroundWindowHandle === candidate.windowHandle) {
+    return buildWindowResult(candidate, {
+      activated: false,
+      restored: false,
+      focused: false,
+      powerShellFocused: false,
+      powerShellSetForeground: false,
+      powerShellAppActivated: false,
+      powerShellAltSent: false,
+      focusConfirmed: true,
+      foregroundWindowHandle: initialActive.foregroundWindowHandle,
+      foregroundWindowTitle: initialActive.foregroundWindowTitle,
+    });
+  }
+
   const targetWindow = new nut.Window(nut.providerRegistry, candidate.windowHandle);
   let restored = false;
   let focused = false;
@@ -1032,7 +1049,7 @@ async function sendGameKeySequence({
 
     focusResult = await focusGameWindow(nut, candidate, safeFocusDelayMs);
 
-    if (!focusResult.focusConfirmed) {
+    if (!focusResult.focusConfirmed && !focusResult.powerShellAppActivated) {
       return {
         success: false,
         action,
@@ -1116,7 +1133,7 @@ async function holdGameKeySequence({
 
     focusResult = await focusGameWindow(nut, candidate, safeFocusDelayMs);
 
-    if (!focusResult.focusConfirmed) {
+    if (!focusResult.focusConfirmed && !focusResult.powerShellAppActivated) {
       return {
         success: false,
         action,

@@ -19,6 +19,7 @@ const playAutomationStartMock = vi.fn();
 const playAutomationCompleteMock = vi.fn();
 const playAutoResultAppliedMock = vi.fn();
 const playAutomationFailedMock = vi.fn();
+const playResultDetectedMock = vi.fn();
 
 const buildRestoreSessionSnapshot = () => JSON.stringify({
   version: 1,
@@ -222,6 +223,7 @@ vi.mock('./hooks/useSoundEffects', () => ({
     playAutomationComplete: playAutomationCompleteMock,
     playAutoResultApplied: playAutoResultAppliedMock,
     playAutomationFailed: playAutomationFailedMock,
+    playResultDetected: playResultDetectedMock,
   }),
 }));
 
@@ -344,6 +346,7 @@ describe('App', () => {
     playAutomationCompleteMock.mockReset();
     playAutoResultAppliedMock.mockReset();
     playAutomationFailedMock.mockReset();
+    playResultDetectedMock.mockReset();
     uiState.activeUser = 'Pilot';
     uiState.activeView = 'recording';
     uiState.isOverlayMode = false;
