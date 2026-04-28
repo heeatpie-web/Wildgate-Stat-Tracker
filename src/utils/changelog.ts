@@ -1,4 +1,8 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.6.8": [
+    "Add customlobby as a distinct telemetry match mode — detected from artifactsandgates_customlobby matchPool value",
+    "shows a Lock icon badge in Smart Captures queue list alongside the existing Practice Range crosshair indicator"
+  ],
   "v3.6.7": [
     "Add All Dates filter to Smart Captures day picker with per-day open counts",
     "auto-expand to all dates when notifications span multiple days",
