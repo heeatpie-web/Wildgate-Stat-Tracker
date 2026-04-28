@@ -1,4 +1,7 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.6.9": [
+    "Change custom lobby queue icon from Lock to Swords"
+  ],
   "v3.6.8": [
     "Add customlobby as a distinct telemetry match mode — detected from artifactsandgates_customlobby matchPool value",
     "shows a Lock icon badge in Smart Captures queue list alongside the existing Practice Range crosshair indicator"
