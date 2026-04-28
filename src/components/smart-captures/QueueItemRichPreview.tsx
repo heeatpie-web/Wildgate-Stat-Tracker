@@ -6,8 +6,8 @@ import {
   CheckCircle2,
   Clock3,
   Crosshair,
-  Lock,
   ShieldAlert,
+  Swords,
   Skull,
   Trophy,
 } from 'lucide-react';
@@ -144,7 +144,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
       title="Custom Lobby"
       className="inline-flex items-center justify-center rounded-full border border-md-sys-tertiary/25 bg-md-sys-tertiary/10 text-md-sys-tertiary/80"
     >
-      <Lock size={10} />
+      <Swords size={10} />
     </span>
   ) : null;
   const collapsedIcon = (() => {
