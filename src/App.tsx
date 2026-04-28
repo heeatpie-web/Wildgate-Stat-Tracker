@@ -1047,6 +1047,7 @@ const App: React.FC = () => {
         playAutomationComplete,
         playAutoResultApplied,
         playAutomationFailed,
+        playResultDetected,
     } = useSoundEffects();
     const [fullAutoResultLatched, setFullAutoResultLatched] = useState(false);
     const [fullAutoDetectionLocked, setFullAutoDetectionLockedState] = useState(false);
@@ -3357,6 +3358,7 @@ const App: React.FC = () => {
             : null;
         suppressLosingResultDetector(detectionMethod);
         setFullAutoDetectionLocked(true);
+        playResultDetected();
         setTelemetryAutomationStatus(createTelemetryAutomationStatus({
             phase: 'result-flash-detected',
             message,
@@ -3369,6 +3371,7 @@ const App: React.FC = () => {
         fullAutoResultLatched,
         normalizedActiveTelemetryDraftMatchId,
         cancelPendingTextDetection,
+        playResultDetected,
         setFullAutoDetectionLocked,
         setTelemetryAutomationStatus,
         suppressLosingResultDetector,

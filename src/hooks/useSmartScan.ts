@@ -17,6 +17,7 @@ import {
     shouldQueueCanonicalRosterCandidate,
 } from '../utils/pendingReviewUtils';
 import { isReachModifierUiPlayerNoise } from '../utils/reachModifierUiNoise';
+import { useSoundEffects } from './useSoundEffects';
 
 const OCR_THRESHOLDS = {
     REJECT: 55,
@@ -69,6 +70,7 @@ export const useSmartScan = () => {
 
     const { setToast, setHiddenForScan, activeUser, visionStatus, setVisionStatus } = useUIState();
     const { soundEnabled } = useUserPreferences();
+    const { playClick } = useSoundEffects();
     const ocrMode = useAppStore(state => state.ocrMode);
     const ocrCalibration = useAppStore(state => state.ocrCalibration);
     const ocrRegions = useAppStore(state => state.ocrRegions);
@@ -174,6 +176,7 @@ export const useSmartScan = () => {
         const isActiveRequest = () => activeScanRequestRef.current === requestId;
 
         setVisionStatus('scanning');
+        playClick();
         setScanProgress({ status: 'Capturing screen...', pct: 0 });
         setScanLogs(['Initializing scan...']);
         Logger.info('SmartScan', 'Starting smart scan');

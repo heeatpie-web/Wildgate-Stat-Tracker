@@ -48,6 +48,7 @@ import {
     type ModeFilter,
     IMAGE_EXTS,
     countImages,
+    countOpenSmartCaptureWorkQueueMatches,
     formatDualConfidence,
     getComparableTeammateCount,
     getQueueDisplayNumber,
@@ -108,6 +109,7 @@ import {
 } from '../utils/pendingReviewUtils';
 import { ROSTER_MERGE_REVIEW_MIN_SCORE } from '../utils/rosterMergeSuggestions';
 import { cloneLoadout, sanitizeLoadout } from '../utils/loadout';
+import { useSoundEffects } from '../hooks/useSoundEffects';
 
 export { backfillOpponentTeamShipTypes } from '../utils/ocr/opponentTeamShipTypes';
 
@@ -443,6 +445,7 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
     const ocrMode = useAppStore(s => s.ocrMode);
     const ocrRegions = useAppStore(s => s.ocrRegions);
     const setOcrRegions = useAppStore(s => s.setOcrRegions);
+    const { playSuccess: playSoundSuccess } = useSoundEffects();
     const activeSection = useAppStore(s => s.activeSection) as any;
     const setActiveSection = useAppStore(s => s.setActiveSection);
     const selectedMatchId = useAppStore(s => s.selectedMatchId);
@@ -624,8 +627,21 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
         return counts;
     }, [matches]);
 
+    const queueDayOpenCount = useMemo(() => {
+        const counts = new Map<string, number>();
+        matches.forEach((match) => {
+            if (!isMatchInSmartCaptureWorkQueue(match) || match.ocrReviewedAt) return;
+            const key = toLocalDateKey(match.timestamp);
+            if (!key) return;
+            counts.set(key, (counts.get(key) || 0) + 1);
+        });
+        return counts;
+    }, [matches]);
+
     useEffect(() => {
         if (availableQueueDayKeys.length === 0) return;
+        // '' means "all dates" — never auto-override an explicit all-dates selection
+        if (queueDayFilter === '') return;
         const todayAvailable = availableQueueDayKeys.includes(todayQueueDayKey);
         const selectedMatchDay = selectedMatchId
             ? toLocalDateKey(matches.find((match) => match.id === selectedMatchId)?.timestamp)
@@ -652,6 +668,19 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
             setQueueDayFilter(fallbackDay);
         }
     }, [availableQueueDayKeys, matches, queueDayFilter, selectedMatchId, todayQueueDayKey]);
+
+    // When queue-only mode is on and the current day has no open items but other days do,
+    // automatically expand to all dates so the badge items are visible.
+    useEffect(() => {
+        if (!queueOnly) return;
+        if (queueDayFilter === '') return;
+        const globalOpenCount = countOpenSmartCaptureWorkQueueMatches(matches);
+        if (globalOpenCount === 0) return;
+        const currentDayOpen = queueDayOpenCount.get(queueDayFilter) ?? 0;
+        if (currentDayOpen === 0) {
+            setQueueDayFilter('');
+        }
+    }, [queueOnly, queueDayFilter, queueDayOpenCount, matches]);
 
     const filteredMatches = useMemo(() => {
         let result = [...matches].sort((a, b) => b.timestamp - a.timestamp);
@@ -1573,14 +1602,17 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
                                                         }}
                                                         className="h-9 px-2 md3-surface rounded-control text-label-sm font-semibold outline-none"
                                                     >
+                                                        <option value="">
+                                                            All dates ({matches.length}{countOpenSmartCaptureWorkQueueMatches(matches) > 0 ? ` · ${countOpenSmartCaptureWorkQueueMatches(matches)} open` : ''})
+                                                        </option>
                                                         <option value={todayQueueDayKey}>
-                                                            Today ({queueDayMatchCount.get(todayQueueDayKey) || 0})
+                                                            Today ({queueDayMatchCount.get(todayQueueDayKey) || 0}{(queueDayOpenCount.get(todayQueueDayKey) || 0) > 0 ? ` · ${queueDayOpenCount.get(todayQueueDayKey)} open` : ''})
                                                         </option>
                                                         {availableQueueDayKeys
                                                             .filter((dayKey) => dayKey !== todayQueueDayKey)
                                                             .map((dayKey) => (
                                                                 <option key={dayKey} value={dayKey}>
-                                                                    {formatQueueDayLabel(dayKey, todayQueueDayKey)} ({queueDayMatchCount.get(dayKey) || 0})
+                                                                    {formatQueueDayLabel(dayKey, todayQueueDayKey)} ({queueDayMatchCount.get(dayKey) || 0}{(queueDayOpenCount.get(dayKey) || 0) > 0 ? ` · ${queueDayOpenCount.get(dayKey)} open` : ''})
                                                                 </option>
                                                             ))}
                                                     </select>
@@ -1727,6 +1759,7 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
                                             if (!selectedMatch) return;
                                             const latest = useAppStore.getState().matches.find(m => m.id === selectedMatch.id) || selectedMatch;
                                             updateMatch({ ...latest, ocrReviewedAt: Date.now(), ocrState: 'saved' });
+                                            playSoundSuccess();
                                             if (queueOnly) {
                                                 setTimeout(() => goNextQueue(), 0);
                                             }
@@ -2764,6 +2797,7 @@ const SmartMatchDetail: React.FC<{
             kills: false,
             details: false,
             rerun: false,
+            pregameIntel: true,
         });
         const {
             setToast,

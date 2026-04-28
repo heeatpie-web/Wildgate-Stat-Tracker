@@ -132,6 +132,11 @@ export const useSoundEffects = () => {
         playTone(440, 'triangle', 0.5, 0.3);
     }, [playTone]);
 
+    // Subtle ping played the moment a result screen is detected, before automation begins.
+    const playResultDetected = useCallback(() => {
+        playTone(660, 'sine', 0.04);
+    }, [playTone]);
+
     return {
         prepareAudio,
         playCapture,
@@ -146,5 +151,6 @@ export const useSoundEffects = () => {
         playAutoResultApplied,
         playAutomationFailed,
         playEnd,
+        playResultDetected,
     };
 };
