@@ -2957,9 +2957,7 @@ function createWindow() {
     },
     ...(iconPath ? { icon: iconPath } : {}),
     autoHideMenuBar: true,
-    transparent: true,
-    frame: false,
-    backgroundColor: '#00000000',
+    titleBarStyle: 'hidden',
     show: false, // Prevent white flash by waiting for content
   });
 
@@ -2989,8 +2987,9 @@ function createWindow() {
 
   win.on('show', () => win.webContents.send('window-visibility-change', true));
   win.on('hide', () => win.webContents.send('window-visibility-change', false));
-  win.on('restore', () => win.webContents.send('window-restored'));
-  win.on('maximize', () => win.webContents.send('window-restored'));
+  win.on('restore', () => { win.webContents.send('window-restored'); win.webContents.send('window-maximized-changed', false); });
+  win.on('maximize', () => { win.webContents.send('window-restored'); win.webContents.send('window-maximized-changed', true); });
+  win.on('unmaximize', () => win.webContents.send('window-maximized-changed', false));
 
   if (isDev) startDevRendererWithRetry(win, DEV_SERVER_URL);
   else win.loadFile(path.join(__dirname, '../dist/index.html'));
