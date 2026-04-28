@@ -1,4 +1,8 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.6.10": [
+    "Enable Windows Aero Snap and snap layouts by switching from frameless transparent window to titleBarStyle hidden — keeps custom title bar intact",
+    "fix maximize/restore icon not toggling back after unmaximize"
+  ],
   "v3.6.9": [
     "Change custom lobby queue icon from Lock to Swords"
   ],
