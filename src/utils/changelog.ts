@@ -1,4 +1,12 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.6.7": [
+    "Add All Dates filter to Smart Captures day picker with per-day open counts",
+    "auto-expand to all dates when notifications span multiple days",
+    "collapse Pregame Intel section by default",
+    "add result-screen-detected sound cue",
+    "add scan-start click to SmartScan",
+    "wire resolve tone to Smart Captures resolve action"
+  ],
   "v3.6.6": [
     "Fix result screen artifact loss detection",
     "Reanalyze saved result screenshots",
