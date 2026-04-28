@@ -20,7 +20,7 @@ export * from './utils/constants';
 /** Supported UI languages. Translations live in utils/translations.ts. */
 export type Language = 'en' | 'es' | 'mx' | 'pt' | 'br' | 'zh';
 /** Telemetry-derived lifecycle match mode used for auto-routing and persistence. */
-export type TelemetryMatchMode = 'custom' | 'artifactsandgates' | 'practice range';
+export type TelemetryMatchMode = 'custom' | 'artifactsandgates' | 'practice range' | 'customlobby';
 
 /**
  * Explicit OCR pipeline state for a match's artifacts.

@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Clock3,
   Crosshair,
+  Lock,
   ShieldAlert,
   Skull,
   Trophy,
@@ -137,6 +138,15 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
       <Crosshair size={11} />
     </span>
   ) : null;
+  const customLobbyIndicator = match.matchMode === 'customlobby' ? (
+    <span
+      aria-label="Custom Lobby"
+      title="Custom Lobby"
+      className="inline-flex items-center justify-center rounded-full border border-md-sys-tertiary/25 bg-md-sys-tertiary/10 text-md-sys-tertiary/80"
+    >
+      <Lock size={10} />
+    </span>
+  ) : null;
   const collapsedIcon = (() => {
     if (collapsedGlyph === 'win') return <Trophy size={14} />;
     if (collapsedGlyph === 'loss') return <Skull size={14} />;
@@ -172,6 +182,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
             {getCompactStatusLabel(statusMeta.label)}
           </span>
           {practiceRangeIndicator ? <span className="h-4 w-4">{practiceRangeIndicator}</span> : null}
+          {customLobbyIndicator ? <span className="h-4 w-4">{customLobbyIndicator}</span> : null}
         </div>
         {match.matchCategory ? categoryBadge : null}
       </button>
@@ -225,6 +236,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
               {statusMeta.label}
             </span>
             {practiceRangeIndicator ? <span className="h-5 w-5">{practiceRangeIndicator}</span> : null}
+            {customLobbyIndicator ? <span className="h-5 w-5">{customLobbyIndicator}</span> : null}
             {match.matchCategory ? categoryBadge : null}
           </div>
         </div>

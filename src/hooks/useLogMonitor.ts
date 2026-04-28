@@ -364,6 +364,8 @@ const normalizeTelemetryMatchModeValue = (value: unknown): TelemetryMatchMode | 
     const normalized = String(value || '').trim().toLowerCase();
     if (!normalized) return null;
     if (/(firingrange|practice|training|range)/.test(normalized)) return 'practice range';
+    // Check customlobby before generic 'custom' — "artifactsandgates_customlobby" contains both
+    if (normalized.includes('customlobby') || normalized.includes('custom_lobby')) return 'customlobby';
     if (normalized.includes('custom')) return 'custom';
     if (normalized.includes('artifactsandgates')) return 'artifactsandgates';
     return null;
@@ -372,6 +374,7 @@ const normalizeTelemetryMatchModeValue = (value: unknown): TelemetryMatchMode | 
 const TELEMETRY_MATCH_MODE_RANK: Record<TelemetryMatchMode, number> = {
     custom: 0,
     artifactsandgates: 1,
+    customlobby: 1,
     'practice range': 2,
 };
 
@@ -433,6 +436,7 @@ const inferTelemetryMatchMode = ({
         }
         const raw = String(candidate || '').trim().toLowerCase();
         if (!raw) continue;
+        if (raw.includes('customlobby') || raw.includes('custom_lobby')) return 'customlobby';
         if (raw.includes('artifactsandgates')) return 'artifactsandgates';
         if (raw.includes('custom')) return 'custom';
     }
