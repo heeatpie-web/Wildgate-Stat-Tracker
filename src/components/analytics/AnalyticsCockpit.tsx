@@ -199,7 +199,7 @@ const ExplorerSection: React.FC<{
                 {!dense ? <div className="text-label-sm text-md-sys-on-surface/58">{subtitle}</div> : null}
             </div>
         </div>
-        <div className={`${dense ? 'mt-2 space-y-2' : 'mt-4 space-y-3'}`}>
+        <div className={`${dense ? 'mt-2 space-y-2' : 'mt-3 space-y-2'}`}>
             {children}
         </div>
     </section>
@@ -386,8 +386,8 @@ export const AnalyticsCockpit: React.FC<AnalyticsCockpitProps> = ({
     const suggestedDrillName = bestHazard?.name || cockpitModel.entities.ships[0]?.name || strongestLoadoutSignal?.name || 'Capture more matches';
 
     return (
-        <div className={`flex flex-col pb-6 ${dense ? 'gap-2' : 'gap-4'}`}>
-            <section className={`at-hero-panel ${dense ? 'p-3' : 'p-4 md:p-5'}`}>
+        <div className={`flex flex-col pb-4 ${dense ? 'gap-2' : 'gap-3'}`}>
+            <section className={`at-hero-panel ${dense ? 'p-3' : 'p-3 md:p-4'}`}>
                 {dense ? (
                     <div className="flex flex-col gap-2">
                         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -418,39 +418,33 @@ export const AnalyticsCockpit: React.FC<AnalyticsCockpitProps> = ({
                         </div>
                     </div>
                 ) : (
-                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="min-w-0">
                             <div className="text-label-xs font-mono font-bold uppercase tracking-widest text-md-sys-on-surface/42">
                                 Analytics cockpit
                             </div>
-                            <h2 className="at-display mt-1 text-heading font-extrabold tracking-tight text-md-sys-on-surface">
-                                See what is actually moving the needle
+                            <h2 className="at-display mt-0.5 text-base font-extrabold tracking-tight text-md-sys-on-surface">
+                                See what is moving the needle
                             </h2>
-                            <div className="mt-2 text-body text-md-sys-on-surface/62 max-w-3xl">
-                                Start from a ship, person, weapon, or hazard, then drill into why it matters without losing your current filter scope.
-                            </div>
                         </div>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                             {contextTags.map((tag) => (
-                                <span
-                                    key={tag}
-                                    className="at-context-tag px-3 py-1 text-label-sm"
-                                >
+                                <span key={tag} className="at-context-tag px-2.5 py-0.5 text-label-xs">
                                     {tag}
                                 </span>
                             ))}
                             <button
                                 type="button"
                                 onClick={() => onNavigate('social')}
-                                className="rounded-pill border border-md-sys-outline/18 px-3 py-1 text-label-sm font-bold text-md-sys-on-surface/72 hover:bg-md-sys-surface-container-high"
+                                className="rounded-pill border border-md-sys-outline/18 px-2.5 py-0.5 text-label-xs font-bold text-md-sys-on-surface/72 hover:bg-md-sys-surface-container-high"
                             >
-                                Open team views
+                                Team views
                             </button>
                         </div>
                     </div>
                 )}
 
-                <div className={`grid md:grid-cols-2 xl:grid-cols-6 ${dense ? 'mt-2 gap-2' : 'mt-4 gap-3'}`}>
+                <div className={`grid md:grid-cols-2 xl:grid-cols-6 ${dense ? 'mt-2 gap-2' : 'mt-3 gap-2'}`}>
                     <SummaryTile
                         compact={dense}
                         label="Win rate"
@@ -568,14 +562,14 @@ export const AnalyticsCockpit: React.FC<AnalyticsCockpitProps> = ({
             </ExplorerSection>
             )}
 
-            <section className={`grid xl:grid-cols-2 ${dense ? 'gap-2' : 'gap-4'}`}>
+            <section className={`grid xl:grid-cols-2 ${dense ? 'gap-2' : 'gap-3'}`}>
                 <ExplorerSection
                     dense={dense}
                     title="Ships and heroes"
                     subtitle="Jump from your main picks into deeper context."
                     icon={<Rocket size={18} />}
                 >
-                    <div className={dense ? 'space-y-3' : 'grid grid-cols-1 gap-4 md:grid-cols-2'}>
+                    <div className={dense ? 'space-y-3' : 'grid grid-cols-1 gap-3 md:grid-cols-2'}>
                         <SectionBlock dense={dense} title="Ships" emptyLabel="No ship rows yet.">
                             <>
                                 {shipRows.map((row) => (
@@ -617,7 +611,7 @@ export const AnalyticsCockpit: React.FC<AnalyticsCockpitProps> = ({
                     subtitle="See who raises your floor and who drags the win rate down."
                     icon={<Handshake size={18} />}
                 >
-                    <div className={dense ? 'space-y-3' : 'grid grid-cols-1 gap-4 md:grid-cols-2'}>
+                    <div className={dense ? 'space-y-3' : 'grid grid-cols-1 gap-3 md:grid-cols-2'}>
                         <SectionBlock dense={dense} title="Wingmen" emptyLabel="No teammate trends yet.">
                             <>
                                 {teammateRows.map((row) => (
@@ -659,8 +653,8 @@ export const AnalyticsCockpit: React.FC<AnalyticsCockpitProps> = ({
                     subtitle="Open a weapon or hazard to see the surrounding people and loadouts."
                     icon={<Target size={18} />}
                 >
-                    <div className={dense ? 'space-y-3' : 'flex flex-col gap-4'}>
-                        <div className={dense ? 'space-y-3' : 'grid grid-cols-1 gap-4 lg:grid-cols-3'}>
+                    <div className={dense ? 'space-y-3' : 'flex flex-col gap-3'}>
+                        <div className={dense ? 'space-y-3' : 'grid grid-cols-1 gap-3 lg:grid-cols-3'}>
                             <SectionBlock dense={dense} tileColumns={1} title="Prospector weapons" emptyLabel="No prospector weapon trends yet.">
                                 <>
                                     {weaponRows.map((row) => (
@@ -737,8 +731,8 @@ export const AnalyticsCockpit: React.FC<AnalyticsCockpitProps> = ({
                     subtitle="Equipment and perks are split for quicker scanning; combos show frequent pairings."
                     icon={<Package2 size={18} />}
                 >
-                    <div className={dense ? 'space-y-3' : 'flex flex-col gap-4'}>
-                        <div className={dense ? 'space-y-3' : 'grid grid-cols-1 gap-4 md:grid-cols-2'}>
+                    <div className={dense ? 'space-y-3' : 'flex flex-col gap-3'}>
+                        <div className={dense ? 'space-y-3' : 'grid grid-cols-1 gap-3 md:grid-cols-2'}>
                             <SectionBlock dense={dense} title="Equipment" emptyLabel="No equipment rows yet.">
                                 <>
                                     {equipmentRows.map((row) => (

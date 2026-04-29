@@ -4348,7 +4348,8 @@ const App: React.FC = () => {
         const pendingWizardResult = nextPendingMatchData?.result === 'Win' || nextPendingMatchData?.result === 'Loss' || nextPendingMatchData?.result === 'Draw'
             ? nextPendingMatchData.result
             : null;
-        const targetResult: WizardResult = gateResult || selectedWizardResult || pendingWizardResult || 'Match Result';
+        const wizardGateResult = gateResult === 'Win' || gateResult === 'Loss' || gateResult === 'Draw' ? gateResult : null;
+        const targetResult: WizardResult = wizardGateResult || selectedWizardResult || pendingWizardResult || 'Match Result';
         if (showWizard !== targetResult) {
             setShowWizard(targetResult);
         }

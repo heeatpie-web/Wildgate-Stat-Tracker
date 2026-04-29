@@ -5,7 +5,7 @@
  * impact, damage efficiency, time-of-day patterns, and more.
  * Requires >= 5 valid matches to produce results.
  */
-import { Match, CHARACTERS, SHIPS, Insight, UI_REACH_MODIFIERS, TimePatternData, StreakData, StreakPoint, SessionSummaryData, DaySummary, PeriodComparisonData, PeriodStats, KillEfficiencyData, PlacementData, MomentumData } from '../types';
+import { Match, CHARACTERS, SHIPS, SHIP_CAPACITY, Insight, UI_REACH_MODIFIERS, TimePatternData, StreakData, StreakPoint, SessionSummaryData, DaySummary, PeriodComparisonData, PeriodStats, KillEfficiencyData, PlacementData, MomentumData, MetaAnalyticsData, ShipPopularityStat, DurationBucket } from '../types';
 import { getMatchEquipment, getMatchPerks, getMatchProspectorWeapons, getMatchShipWeapons } from '../components/patch/patchEntityCatalog';
 
 const isCompletedMatch = (match: Match): boolean => match.result !== 'Ongoing';
@@ -882,4 +882,158 @@ export const calculatePerformanceMomentum = (matches: Match[], windowSize = 10):
     }
 
     return { timeline, currentMomentum, peakMomentum, trend };
+};
+
+function parseMatchDurationSec(time: string | undefined): number {
+    if (!time) return 0;
+    const parts = time.split(':');
+    if (parts.length === 2) return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+    return 0;
+}
+
+export const calculateMetaAnalytics = (matches: Match[]): MetaAnalyticsData => {
+    const completed = matches.filter(m => m.result !== 'Ongoing' && m.result !== 'Saved');
+    const total = completed.length;
+
+    if (total === 0) {
+        return {
+            totalMatches: 0,
+            avgShipsPerMatch: 0,
+            shipPopularity: [],
+            yourShipUsage: [],
+            killsByEnemyShip: [],
+            durationBuckets: [],
+            avgMatchDurationSec: 0,
+            modeSplit: [],
+        };
+    }
+
+    // Enemy ship sightings (from kill map keys — ships you encountered)
+    const enemyEncounters: Record<string, { count: number; wins: number }> = {};
+    // Kills per enemy ship type
+    const killsByShip: Record<string, number> = {};
+    let totalEnemyShipsSeen = 0;
+
+    for (const m of completed) {
+        const killMap = m.kills || {};
+        const shipsSeen = new Set<string>();
+        for (const [ship, count] of Object.entries(killMap)) {
+            if (!ship || count === 0) continue;
+            shipsSeen.add(ship);
+            killsByShip[ship] = (killsByShip[ship] || 0) + count;
+        }
+        for (const ship of shipsSeen) {
+            if (!enemyEncounters[ship]) enemyEncounters[ship] = { count: 0, wins: 0 };
+            enemyEncounters[ship].count += 1;
+            if (m.result === 'Win') enemyEncounters[ship].wins += 1;
+        }
+        totalEnemyShipsSeen += shipsSeen.size;
+    }
+
+    const avgShipsPerMatch = total > 0 ? Math.round((totalEnemyShipsSeen / total) * 10) / 10 : 0;
+
+    const buildPopularity = (
+        data: Record<string, { count: number; wins: number }>,
+        totalMatches: number
+    ): ShipPopularityStat[] =>
+        Object.entries(data)
+            .map(([ship, s]) => ({
+                ship,
+                count: s.count,
+                pct: Math.round((s.count / totalMatches) * 100),
+                wins: s.wins,
+                winRate: s.count > 0 ? Math.round((s.wins / s.count) * 100) : 0,
+                capacity: SHIP_CAPACITY[ship] ?? 0,
+            }))
+            .sort((a, b) => b.count - a.count);
+
+    const shipPopularity = buildPopularity(enemyEncounters, total);
+
+    // Kills leaderboard
+    const killsByEnemyShip: ShipPopularityStat[] = Object.entries(killsByShip)
+        .map(([ship, count]) => ({
+            ship,
+            count,
+            pct: 0,
+            wins: 0,
+            winRate: 0,
+            capacity: 0,
+        }))
+        .sort((a, b) => b.count - a.count);
+
+    // Your ship usage
+    const yourShipData: Record<string, { count: number; wins: number }> = {};
+    for (const m of completed) {
+        const ship = m.ship || 'Unknown';
+        if (!yourShipData[ship]) yourShipData[ship] = { count: 0, wins: 0 };
+        yourShipData[ship].count += 1;
+        if (m.result === 'Win') yourShipData[ship].wins += 1;
+    }
+    const yourShipUsage = buildPopularity(yourShipData, total);
+
+    // Match duration buckets
+    const DURATION_BUCKETS: { label: string; minSec: number; maxSec: number }[] = [
+        { label: '< 5 min', minSec: 0, maxSec: 299 },
+        { label: '5–8 min', minSec: 300, maxSec: 479 },
+        { label: '8–12 min', minSec: 480, maxSec: 719 },
+        { label: '12–16 min', minSec: 720, maxSec: 959 },
+        { label: '> 16 min', minSec: 960, maxSec: Infinity },
+    ];
+
+    const bucketData: Record<string, { count: number; wins: number }> = {};
+    for (const b of DURATION_BUCKETS) bucketData[b.label] = { count: 0, wins: 0 };
+
+    let totalDurationSec = 0;
+    let durationCount = 0;
+
+    for (const m of completed) {
+        const sec = parseMatchDurationSec(m.time);
+        if (sec > 0) {
+            totalDurationSec += sec;
+            durationCount += 1;
+            const bucket = DURATION_BUCKETS.find(b => sec >= b.minSec && sec <= b.maxSec);
+            if (bucket) {
+                bucketData[bucket.label].count += 1;
+                if (m.result === 'Win') bucketData[bucket.label].wins += 1;
+            }
+        }
+    }
+
+    const durationBuckets: DurationBucket[] = DURATION_BUCKETS.map(b => ({
+        ...b,
+        count: bucketData[b.label].count,
+        winRate: bucketData[b.label].count > 0
+            ? Math.round((bucketData[b.label].wins / bucketData[b.label].count) * 100)
+            : 0,
+    }));
+
+    const avgMatchDurationSec = durationCount > 0 ? Math.round(totalDurationSec / durationCount) : 0;
+
+    // Mode split
+    const modeData: Record<string, { count: number; wins: number }> = {};
+    for (const m of completed) {
+        const mode = m.mode || 'Unknown';
+        if (!modeData[mode]) modeData[mode] = { count: 0, wins: 0 };
+        modeData[mode].count += 1;
+        if (m.result === 'Win') modeData[mode].wins += 1;
+    }
+    const modeSplit = Object.entries(modeData)
+        .map(([mode, s]) => ({
+            mode,
+            count: s.count,
+            pct: Math.round((s.count / total) * 100),
+            winRate: s.count > 0 ? Math.round((s.wins / s.count) * 100) : 0,
+        }))
+        .sort((a, b) => b.count - a.count);
+
+    return {
+        totalMatches: total,
+        avgShipsPerMatch,
+        shipPopularity,
+        yourShipUsage,
+        killsByEnemyShip,
+        durationBuckets,
+        avgMatchDurationSec,
+        modeSplit,
+    };
 };

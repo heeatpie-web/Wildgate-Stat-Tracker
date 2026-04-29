@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Match, Language, DrillDownTarget } from '../types';
 import { TRANSLATIONS } from '../utils/translations';
-import { Trash2, Edit2, Pin, Clock, Image as ImageIcon, Download, ArrowUpDown, Swords, X, FileText, Save, Ghost, Trophy, TrendingUp, Flame, Search, ChevronLeft, ChevronRight, Zap, ScanEye, AlertTriangle, RefreshCw, Filter, ChevronDown, Check, Crosshair } from 'lucide-react';
+import { Trash2, Edit2, Pin, Clock, Image as ImageIcon, Download, ArrowUpDown, Swords, X, FileText, Save, Ghost, Trophy, TrendingUp, Flame, Search, ChevronLeft, ChevronRight, Zap, ScanEye, AlertTriangle, RefreshCw, Filter, ChevronDown, Check, Crosshair, LogIn } from 'lucide-react';
 import { EditMatchModal } from './EditMatchModal';
 import { exportMatchesAsImage } from './history/historyExport';
 import { timeAgo, formatDayHeader, getRowBg } from './history/historyUtils';
@@ -760,6 +760,15 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                                                                             className="inline-flex items-center justify-center rounded-full border border-info/25 bg-info/10 p-1 text-info/80"
                                                                         >
                                                                             <Crosshair size={10} />
+                                                                        </span>
+                                                                    ) : null}
+                                                                    {m.isBackfill === true ? (
+                                                                        <span
+                                                                            aria-label="Backfill — joined mid-match"
+                                                                            title="Backfill — joined mid-match, pregame skipped"
+                                                                            className="inline-flex items-center justify-center rounded-full border border-warning/25 bg-warning/10 p-1 text-warning/80"
+                                                                        >
+                                                                            <LogIn size={10} />
                                                                         </span>
                                                                     ) : null}
                                                                 </div>

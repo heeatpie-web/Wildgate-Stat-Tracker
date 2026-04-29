@@ -120,11 +120,8 @@ const GAME_UI_ACTION_KEYS = Object.freeze({
 const VALID_GAME_UI_ACTIONS = new Set(Object.keys(GAME_UI_ACTION_KEYS));
 const VALID_GAME_SCREEN_TYPES = new Set(['tactical_map', 'crew_hub']);
 const DEFAULT_GAME_WINDOW_PROCESS_NAMES = Object.freeze([
-  'NebulaClient-Win64-Shipping',
-  'NebulaClient',
-  'Nebula',
-  'Wildgate-Win64-Shipping',
-  'WildgateClient-Win64-Shipping',
+  'NebulaClientEGS-Win64-Shipping',
+  'NebulaClientSteam-Win64-Shipping',
 ]);
 const GAME_WINDOW_PROCESS_NAMES = Object.freeze(
   String(process.env.WILDGATE_GAME_PROCESS_NAMES || DEFAULT_GAME_WINDOW_PROCESS_NAMES.join(','))

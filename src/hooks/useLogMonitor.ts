@@ -648,6 +648,7 @@ export const useLogMonitor = (activeUser?: string) => {
     const telemetryLifecycleActiveRef = useRef(isMatchInProgress);
     const telemetryLifecycleStageRef = useRef<TelemetryLifecycleStage>(isMatchInProgress ? 'live' : 'idle');
     const telemetryLifecycleIsPracticeRangeRef = useRef(false);
+    const telemetryLifecycleIsBackfillRef = useRef(false);
     const telemetryPracticeRangeSessionIdsRef = useRef<Set<string>>(new Set());
     const telemetryLifecycleStartedAtRef = useRef<number | null>(matchStartTime);
     const telemetryLiveStartedAtRef = useRef<number | null>(matchStartTime);
@@ -772,6 +773,7 @@ export const useLogMonitor = (activeUser?: string) => {
         ocrState: 'queued',
         telemetryDraftState: 'active',
         isPracticeRange: telemetryLifecycleIsPracticeRangeRef.current === true,
+        isBackfill: telemetryLifecycleIsBackfillRef.current === true || undefined,
         friendlyPlayerIds: getFriendlyTelemetryPlayerIds(currentSquadIds.current),
         telemetryConsistency: {
             durationToleranceSeconds: DEFAULT_DURATION_TOLERANCE_SECONDS,
@@ -878,6 +880,13 @@ export const useLogMonitor = (activeUser?: string) => {
                     ...nextExistingDraft,
                     timestamp: nextTimestamp,
                     isPracticeRange: true,
+                };
+            }
+            if (telemetryLifecycleIsBackfillRef.current === true && nextExistingDraft.isBackfill !== true) {
+                nextExistingDraft = {
+                    ...nextExistingDraft,
+                    timestamp: nextTimestamp,
+                    isBackfill: true,
                 };
             }
             if (nextExistingDraft.matchMode !== telemetryDraftMatchModeRef.current) {
@@ -1083,6 +1092,7 @@ export const useLogMonitor = (activeUser?: string) => {
                 setMatchStartTime(null);
                 Logger.warn('LogMonitor', 'Cleared stale active-match flag on next mission start.');
             }
+            telemetryLifecycleIsBackfillRef.current = false;
             resetSelectionDefaultsForNewMatch();
             latestNebLoadoutSavedTimestampRef.current = 0;
             latestNebLoadoutSavedSignatureRef.current = '';
@@ -1106,6 +1116,11 @@ export const useLogMonitor = (activeUser?: string) => {
         }
 
         if (nextStage === 'live') {
+            const isBackfill = currentStage === 'idle' || currentStage === 'menu';
+            if (isBackfill) {
+                telemetryLifecycleIsBackfillRef.current = true;
+                Logger.info('LogMonitor', '[LIFECYCLE] Backfill detected — jumped directly to live without pregame.');
+            }
             telemetryLifecycleActiveRef.current = true;
             telemetryLifecycleStartedAtRef.current = telemetryLifecycleStartedAtRef.current || gameTime;
             telemetryLiveStartedAtRef.current = telemetryLiveStartedAtRef.current || gameTime;
@@ -1282,6 +1297,7 @@ export const useLogMonitor = (activeUser?: string) => {
                 telemetryLifecycleActiveRef.current = false;
                 telemetryLifecycleStageRef.current = 'idle';
                 telemetryLifecycleIsPracticeRangeRef.current = false;
+                telemetryLifecycleIsBackfillRef.current = false;
                 telemetryPracticeRangeSessionIdsRef.current.clear();
                 telemetryDraftMatchModeRef.current = 'custom';
                 telemetryLifecycleStartedAtRef.current = null;

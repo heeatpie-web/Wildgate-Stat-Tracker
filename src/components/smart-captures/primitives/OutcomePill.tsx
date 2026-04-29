@@ -21,6 +21,9 @@ const STYLE_BY_RESULT: Record<MatchResult, React.CSSProperties> = {
   Ongoing: {
     color: 'var(--md-sys-color-info)',
   },
+  Saved: {
+    color: 'var(--md-sys-color-on-surface-variant)',
+  },
 };
 
 export const OutcomePill: React.FC<OutcomePillProps> = ({

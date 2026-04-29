@@ -97,6 +97,7 @@ export const EditMatchModal: React.FC<EditMatchModalProps> = ({ match, onSave, o
                 <option value="Win">Victory</option>
                 <option value="Loss">Defeat</option>
                 <option value="Draw">Draw</option>
+                <option value="Saved">Saved</option>
               </select>
             </div>
 

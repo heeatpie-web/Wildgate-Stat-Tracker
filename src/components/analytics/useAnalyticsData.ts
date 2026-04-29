@@ -14,6 +14,7 @@ import {
     EntityComparison,
     EntityDimensionKey,
     EntityMetricRow,
+    MetaAnalyticsData,
 } from '../../types';
 import {
     calculateInsights,
@@ -27,6 +28,7 @@ import {
     calculateKillEfficiency,
     calculatePlacementDistribution,
     calculatePerformanceMomentum,
+    calculateMetaAnalytics,
 } from '../../utils/analytics';
 import { buildAnalyticsIdentityResolver } from '../../utils/analyticsIdentity';
 import { useGameData } from '../../providers/GameDataProvider';
@@ -346,7 +348,7 @@ export const useAnalyticsData = (
         [analyticsIdentity, matches, activeMode]
     );
     const completedModeMatches = useMemo(
-        () => modeMatches.filter((m) => m.result !== 'Ongoing'),
+        () => modeMatches.filter((m) => m.result !== 'Ongoing' && m.result !== 'Saved'),
         [modeMatches]
     );
     const stableCompletedModeMatches = useMemo(() => {
@@ -360,6 +362,8 @@ export const useAnalyticsData = (
         let result: typeof stableCompletedModeMatches;
         if (timeRange === 'lastN') {
             result = stableCompletedModeMatches.slice(-lastN);
+        } else if (timeRange === 'ttk') {
+            result = stableCompletedModeMatches.filter(m => m.timestamp >= new Date('2026-04-28').getTime());
         } else if (timeRange === 'today' || timeRange === 'week' || timeRange === 'month') {
             result = stableCompletedModeMatches.filter(m => m.timestamp >= rangeStart);
         } else if (timeRange === 'custom' && customDateRange) {
@@ -389,6 +393,7 @@ export const useAnalyticsData = (
     const wantSocial = wantFullSuite || view === 'social';
     const wantSynergy = wantFullSuite || view === 'synergy';
     const wantEntities = wantFullSuite || view === 'pro';
+    const wantMeta = wantFullSuite || view === 'meta';
 
     const winRate = useMemo(() => {
         if (filteredMatches.length === 0) return 0;
@@ -509,6 +514,11 @@ export const useAnalyticsData = (
         return analytics;
     }, [wantEntities, filteredMatches, rangeFilteredMatches, entityFilters]);
 
+    const metaAnalytics = useMemo(
+        () => (wantMeta ? calculateMetaAnalytics(filteredMatches) : null),
+        [wantMeta, filteredMatches]
+    );
+
     return {
         rangeFilteredMatches,
         filteredMatches,
@@ -528,5 +538,6 @@ export const useAnalyticsData = (
         avgSortiesPerDay,
         playerProfiles: canonicalPlayerProfiles,
         entityAnalytics,
+        metaAnalytics,
     };
 };

@@ -21,6 +21,7 @@ import { KillEfficiencyView } from './KillEfficiencyView';
 import { PlacementDistView } from './PlacementDistView';
 import { MomentumView } from './MomentumView';
 import { VisualEssayView } from './VisualEssayView';
+import { MetaView } from './MetaView';
 import { AnalyticsNavigation, AnalyticsCategory } from './AnalyticsNavigation';
 import { StatExportModal } from './StatExportModal';
 import { EntityAnalyticsView } from './EntityAnalyticsView';
@@ -43,6 +44,7 @@ const VIEW_LABELS: Record<AnalyticsView, string> = {
     synergy: 'Synergy Matrix',
     essay: 'Visual Essay',
     reactor: 'Reactor',
+    meta: 'Meta Stats',
 };
 
 // Maps AnalyticsView names to their tile catalog ID (only views that have a corresponding tile)
@@ -61,6 +63,7 @@ const TIME_RANGE_OPTIONS: { value: AnalyticsTimeRange; label: string }[] = [
     { value: 'week', label: 'Week' },
     { value: 'month', label: 'Month' },
     { value: 'all', label: 'All Time' },
+    { value: 'ttk', label: '1.5 Update – TTK' },
     { value: 'custom', label: 'Custom' },
 ];
 
@@ -70,6 +73,7 @@ const CATEGORY_SUBVIEWS: Record<AnalyticsCategory, AnalyticsView[]> = {
     team: ['social', 'insights', 'synergy'],
     environment: ['environment'],
     entities: ['pro'],
+    meta: ['meta'],
 };
 
 type ProCategory = 'all' | 'core' | 'timeline' | 'team' | 'environment' | 'detailed';
@@ -322,6 +326,7 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
             case 'environment': return <EnvironmentView matches={data.filteredMatches} visualMode={visualMode} onDrillDown={onDrillDown} />;
             case 'synergy': return <SynergyView synergyMatrix={data.synergyMatrix} visualMode={visualMode} />;
             case 'essay': return <VisualEssayView matches={data.filteredMatches} winRate={data.winRate} currentStreak={data.currentStreak} momentum={data.momentum} sessionSummary={data.sessionSummary} periodComparison={data.periodComparison} timePatterns={data.timePatterns} killEfficiency={data.killEfficiency} socialData={data.socialData} synergyMatrix={data.synergyMatrix} visualMode={visualMode} />;
+            case 'meta': return data.metaAnalytics ? <MetaView data={data.metaAnalytics} visualMode={visualMode} /> : null;
             default: return null;
         }
     };
@@ -721,19 +726,19 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
                         </div>
                     )}
 
-                    {/* Sub-view nav — outside scroll, same tier as category nav */}
+                    {/* Sub-view nav */}
                     {data.filteredMatches.length > 0 && currentView !== 'overview' && (
                         <div className="flex-shrink-0">
-                            <div className="at-subnav p-1 flex items-center gap-1 overflow-x-auto no-scrollbar">
+                            <div className="at-subnav flex items-center gap-0 overflow-x-auto no-scrollbar">
                                 {CATEGORY_SUBVIEWS[activeCategory]?.map((view) => (
                                     <button
                                         key={view}
                                         type="button"
                                         onClick={() => navigateTo(view)}
-                                        className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-control text-label-sm font-bold uppercase tracking-wide whitespace-nowrap transition-all border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary ${
+                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-label-sm font-bold uppercase tracking-wide whitespace-nowrap transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary border-b-2 -mb-px ${
                                             currentView === view
-                                                ? 'bg-md-sys-surfaceContainerHighest text-md-sys-on-surface shadow-sm border-md-sys-outline/15'
-                                                : 'text-md-sys-on-surface/60 border-transparent hover:bg-md-sys-surfaceContainerHigh hover:text-md-sys-on-surface'
+                                                ? 'text-md-sys-on-surface border-b-md-sys-primary'
+                                                : 'text-md-sys-on-surface/50 border-b-transparent hover:text-md-sys-on-surface/80 hover:border-b-md-sys-outline/40'
                                         }`}
                                     >
                                         {VIEW_LABELS[view]}
@@ -743,10 +748,10 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
                                     <button
                                         type="button"
                                         onClick={() => togglePin(VIEW_TO_TILE_ID[currentView] ?? currentView)}
-                                        className={`ml-auto flex items-center gap-1.5 px-3 py-2 rounded-control text-label-sm font-bold uppercase tracking-wide whitespace-nowrap transition-all border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary ${
+                                        className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 text-label-sm font-bold uppercase tracking-wide whitespace-nowrap transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary border-b-2 -mb-px ${
                                             pinnedTiles.has(VIEW_TO_TILE_ID[currentView] ?? currentView)
-                                                ? 'bg-md-sys-primary/12 text-md-sys-primary border-md-sys-primary/25'
-                                                : 'text-md-sys-on-surface/40 border-transparent hover:text-md-sys-on-surface/70'
+                                                ? 'text-md-sys-primary border-b-md-sys-primary/40'
+                                                : 'text-md-sys-on-surface/40 border-b-transparent hover:text-md-sys-on-surface/70'
                                         }`}
                                         aria-label={pinnedTiles.has(VIEW_TO_TILE_ID[currentView] ?? currentView) ? 'Unpin this view' : 'Pin this view for export'}
                                     >

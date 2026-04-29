@@ -9,7 +9,7 @@ import type { PregameAdviceSnapshot } from './utils/pregameAdvice/types';
 /** The two competitive game modes available in Wildgate. */
 export type GameMode = 'Artifact Brawl' | 'Fleet Battle';
 /** Possible outcomes for a match. */
-export type MatchResult = 'Win' | 'Loss' | 'Draw' | 'Ongoing';
+export type MatchResult = 'Win' | 'Loss' | 'Draw' | 'Ongoing' | 'Saved';
 /** Wizard result selection state (includes neutral, unselected step). */
 export type WizardResult = 'Win' | 'Loss' | 'Draw' | 'Match Result';
 /** Supported colorblind filter modes, applied via SVG filters in index.html. */
@@ -242,6 +242,8 @@ export interface Match {
   telemetryDraftState?: TelemetryDraftState;
   /** Marks telemetry matches that originated from practice/training range sessions. */
   isPracticeRange?: boolean;
+  /** Marks matches where the player backfilled into an already-running game, skipping pregame lobby. */
+  isBackfill?: boolean;
   /** Telemetry-derived match mode captured from lifecycle evidence. */
   matchMode?: TelemetryMatchMode;
   /** Whether the result was first confirmed by flash or by visible result text. */
@@ -361,10 +363,41 @@ export type AnalyticsView =
   | 'environment'
   | 'synergy'
   | 'essay'
-  | 'reactor';
+  | 'reactor'
+  | 'meta';
 
 /** Time range filter options for analytics. */
-export type AnalyticsTimeRange = 'all' | 'month' | 'week' | 'today' | 'lastN' | 'custom';
+export type AnalyticsTimeRange = 'all' | 'month' | 'week' | 'today' | 'lastN' | 'custom' | 'ttk';
+
+// --- Meta Analytics Data Types ---
+
+export interface ShipPopularityStat {
+  ship: string;
+  count: number;
+  pct: number;
+  winRate: number;
+  wins: number;
+  capacity: number;
+}
+
+export interface DurationBucket {
+  label: string;
+  minSec: number;
+  maxSec: number;
+  count: number;
+  winRate: number;
+}
+
+export interface MetaAnalyticsData {
+  totalMatches: number;
+  avgShipsPerMatch: number;
+  shipPopularity: ShipPopularityStat[];   // ships seen in enemy kills
+  yourShipUsage: ShipPopularityStat[];    // ships you piloted
+  killsByEnemyShip: ShipPopularityStat[]; // kills per enemy ship type
+  durationBuckets: DurationBucket[];
+  avgMatchDurationSec: number;
+  modeSplit: { mode: string; count: number; pct: number; winRate: number }[];
+}
 
 // --- Analytics V2 Data Types ---
 

@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Clock3,
   Crosshair,
+  LogIn,
   ShieldAlert,
   Swords,
   Skull,
@@ -49,6 +50,7 @@ const ROW_TONE_BY_RESULT: Record<Match['result'], string> = {
   Loss: 'border-b-md-sys-outline/8',
   Draw: 'border-b-md-sys-outline/8',
   Ongoing: 'border-b-md-sys-outline/8',
+  Saved: 'border-b-md-sys-outline/8',
 };
 
 const SELECTED_ROW_TONE_BY_RESULT: Record<Match['result'], string> = {
@@ -56,6 +58,7 @@ const SELECTED_ROW_TONE_BY_RESULT: Record<Match['result'], string> = {
   Loss: 'bg-md-sys-primary/10 border-b-md-sys-outline/10',
   Draw: 'bg-md-sys-primary/10 border-b-md-sys-outline/10',
   Ongoing: 'bg-md-sys-primary/10 border-b-md-sys-outline/10',
+  Saved: 'bg-md-sys-primary/10 border-b-md-sys-outline/10',
 };
 
 const getDayOrdinal = (day: number): string => {
@@ -138,6 +141,15 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
       <Crosshair size={11} />
     </span>
   ) : null;
+  const backfillIndicator = match.isBackfill === true ? (
+    <span
+      aria-label="Backfill — joined mid-match, pregame skipped"
+      title="Backfill — joined mid-match, pregame skipped"
+      className="inline-flex items-center justify-center rounded-full border border-warning/25 bg-warning/10 text-warning/80"
+    >
+      <LogIn size={11} />
+    </span>
+  ) : null;
   const customLobbyIndicator = match.matchMode === 'customlobby' ? (
     <span
       aria-label="Custom Lobby"
@@ -183,6 +195,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
           </span>
           {practiceRangeIndicator ? <span className="h-4 w-4">{practiceRangeIndicator}</span> : null}
           {customLobbyIndicator ? <span className="h-4 w-4">{customLobbyIndicator}</span> : null}
+          {backfillIndicator ? <span className="h-4 w-4">{backfillIndicator}</span> : null}
         </div>
         {match.matchCategory ? categoryBadge : null}
       </button>
@@ -237,6 +250,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
             </span>
             {practiceRangeIndicator ? <span className="h-5 w-5">{practiceRangeIndicator}</span> : null}
             {customLobbyIndicator ? <span className="h-5 w-5">{customLobbyIndicator}</span> : null}
+            {backfillIndicator ? <span className="h-5 w-5">{backfillIndicator}</span> : null}
             {match.matchCategory ? categoryBadge : null}
           </div>
         </div>
