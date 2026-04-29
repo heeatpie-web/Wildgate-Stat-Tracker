@@ -1,4 +1,13 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.6.12": [
+    "Synchronize visible version number with app release",
+    "Release build 3.6.12"
+  ],
+  "v3.6.11": [
+    "Optimize game window focus and refine telemetry matching",
+    "Add combat-win signal detection",
+    "Improve telemetry match mode normalization"
+  ],
   "v3.6.10": [
     "Enable Windows Aero Snap and snap layouts by switching from frameless transparent window to titleBarStyle hidden — keeps custom title bar intact",
     "fix maximize/restore icon not toggling back after unmaximize"

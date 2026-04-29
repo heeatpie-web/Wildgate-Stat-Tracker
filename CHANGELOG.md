@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.6.12] - 2026-04-29
+
+### Changed
+- Synchronize visible version number with app release
+
+## [3.6.11] - 2026-04-29
+
+### Changed
+- Optimize game window focus and refine telemetry matching
+- Add combat-win signal detection
+- Improve telemetry match mode normalization
+
 ## [3.3.3] - 2026-03-17
 
 ### Changed
