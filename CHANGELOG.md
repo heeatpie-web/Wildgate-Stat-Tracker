@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.7.0] - 2026-06-14
+
+### Changed
+- Synced app, installer, and bundled release metadata to version `3.7.0`
+- Added a `1.5` analytics update era for matches recorded on or after `2026-06-14`
+
 ## [3.6.12] - 2026-04-29
 
 ### Changed

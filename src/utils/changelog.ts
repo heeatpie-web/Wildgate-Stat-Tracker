@@ -1,4 +1,12 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.7.0": [
+    "Sync app, installer, and bundled release metadata to version 3.7.0",
+    "Add a 1.5 analytics update era for matches recorded on or after June 14, 2026"
+  ],
+  "v3.6.13": [
+    "Add virtual gamepad mode for auto-capture menu navigation",
+    "Use ViGEmBus driver to send controller inputs when keyboard nav is unavailable"
+  ],
   "v3.6.12": [
     "Synchronize visible version number with app release",
     "Release build 3.6.12"

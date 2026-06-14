@@ -11,6 +11,12 @@ export interface GamePatch {
 
 export const UPDATE_DEFINITIONS: UpdateDefinition[] = [
     {
+        key: '1-5-update-2026-06-14',
+        label: '1.5 - 6/14/2026',
+        startDate: '2026-06-14',
+        description: 'Matches played on or after June 14, 2026 until a newer update is added.',
+    },
+    {
         key: 'drill-charge-ram-bastion-2026-03-12',
         label: 'Drill Charge / Ram Bastion - 3/12/2026',
         startDate: '2026-03-12',
@@ -44,6 +50,13 @@ export const getUpdateForTimestamp = (timestamp: number): UpdateDefinition | nul
 };
 
 export const GAME_PATCHES: GamePatch[] = [
+    {
+        version: '1.5',
+        date: '2026-06-14',
+        updateKey: '1-5-update-2026-06-14',
+        title: 'Update 1.5',
+        description: 'Current live update bucket for matches recorded on or after June 14, 2026.',
+    },
     {
         version: '2026-03-12',
         date: '2026-03-12',

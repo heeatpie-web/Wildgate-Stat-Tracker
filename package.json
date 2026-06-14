@@ -2,7 +2,7 @@
   "name": "wildgate-stat-tracker",
   "productName": "Wildgate Stat Tracker",
   "private": true,
-  "version": "3.6.12",
+  "version": "3.7.0",
   "type": "module",
   "main": "electron/main.cjs",
   "author": {
@@ -144,6 +144,14 @@
       {
         "from": "electron/assets/icon.png",
         "to": "icon.png"
+      },
+      {
+        "from": "vendor/Nefarius.ViGEm.Client.dll",
+        "to": "vendor/Nefarius.ViGEm.Client.dll"
+      },
+      {
+        "from": "vendor/ViGEmBus_1.22.0_x64_x86_arm64.exe",
+        "to": "vendor/ViGEmBus_1.22.0_x64_x86_arm64.exe"
       }
     ],
     "win": {
