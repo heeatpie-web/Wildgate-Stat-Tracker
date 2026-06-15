@@ -10,6 +10,7 @@ const {
   isGamepadConnected,
   sendGamepadSequence,
   sendVirtualGamepadState,
+  sendVirtualGamepadStateSequence,
   setPSRunner,
   setDllDir,
   buildButtonSequenceScript,
@@ -182,6 +183,33 @@ describe('gamepadInput', () => {
       const result = await sendVirtualGamepadState({ durationMs: 200 });
       expect(result.success).toBe(false);
       expect(result.error).toContain('No controller inputs');
+    });
+
+    it('repeats virtual controller state sends without reconnecting between repeats', async () => {
+      mockPSRunner
+        .mockResolvedValueOnce({ code: 0, stdout: JSON.stringify({ success: true }), stderr: '' })
+        .mockResolvedValue({
+          code: 0,
+          stdout: JSON.stringify({ success: true, buttons: 1, axes: 0, sliders: 0, durationMs: 140 }),
+          stderr: '',
+        });
+
+      const result = await sendVirtualGamepadStateSequence({
+        buttons: ['DPAD_UP'],
+        axes: {},
+        sliders: {},
+        durationMs: 140,
+      }, {
+        repeatCount: 3,
+        gapMs: 0,
+      });
+
+      expect(result).toEqual(expect.objectContaining({
+        success: true,
+        repeatCount: 3,
+        gapMs: 0,
+      }));
+      expect(mockPSRunner).toHaveBeenCalledTimes(4);
     });
   });
 

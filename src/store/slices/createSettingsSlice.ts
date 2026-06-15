@@ -29,6 +29,110 @@ export type DashboardPreloadView = 'analytics' | 'history' | 'smart-captures' | 
 export const OCR_NAME_REROUTE_THRESHOLD_MIN = 50;
 export const OCR_NAME_REROUTE_THRESHOLD_MAX = 95;
 export const OCR_NAME_REROUTE_THRESHOLD_DEFAULT = 78;
+export type VirtualGamepadButton = 'DPAD_UP' | 'DPAD_DOWN' | 'DPAD_LEFT' | 'DPAD_RIGHT' | 'A' | 'B' | 'X' | 'Y' | 'LEFT_SHOULDER' | 'RIGHT_SHOULDER' | 'START' | 'BACK' | 'LEFT_THUMB' | 'RIGHT_THUMB';
+export type VirtualGamepadTrigger = 'LEFT_TRIGGER' | 'RIGHT_TRIGGER';
+export type VirtualGamepadMovementId = 'UP_LEFT' | 'UP' | 'UP_RIGHT' | 'LEFT' | 'NONE' | 'RIGHT' | 'DOWN_LEFT' | 'DOWN' | 'DOWN_RIGHT';
+
+const VIRTUAL_GAMEPAD_BUTTON_SET = new Set<VirtualGamepadButton>([
+  'DPAD_UP', 'DPAD_DOWN', 'DPAD_LEFT', 'DPAD_RIGHT',
+  'A', 'B', 'X', 'Y',
+  'LEFT_SHOULDER', 'RIGHT_SHOULDER',
+  'START', 'BACK',
+  'LEFT_THUMB', 'RIGHT_THUMB',
+]);
+
+const VIRTUAL_GAMEPAD_TRIGGER_SET = new Set<VirtualGamepadTrigger>([
+  'LEFT_TRIGGER',
+  'RIGHT_TRIGGER',
+]);
+
+export const sanitizeVirtualGamepadMovement = (movement: unknown): VirtualGamepadMovementId => (
+  movement === 'UP_LEFT'
+  || movement === 'UP'
+  || movement === 'UP_RIGHT'
+  || movement === 'LEFT'
+  || movement === 'NONE'
+  || movement === 'RIGHT'
+  || movement === 'DOWN_LEFT'
+  || movement === 'DOWN'
+  || movement === 'DOWN_RIGHT'
+    ? movement
+    : 'NONE'
+);
+
+const clampVirtualGamepadPercent = (value: unknown): number => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 100;
+  return Math.max(25, Math.min(100, Math.round(numeric)));
+};
+
+const clampVirtualGamepadHoldDurationMs = (value: unknown): number => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 180;
+  return Math.max(60, Math.min(800, Math.round(numeric)));
+};
+
+const clampVirtualGamepadRepeatCount = (value: unknown): number => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 1;
+  return Math.max(1, Math.min(10, Math.round(numeric)));
+};
+
+export const sanitizeVirtualGamepadButtons = (buttons: unknown): VirtualGamepadButton[] => {
+  if (!Array.isArray(buttons)) return [];
+  return Array.from(new Set(buttons.filter((button): button is VirtualGamepadButton => (
+    typeof button === 'string' && VIRTUAL_GAMEPAD_BUTTON_SET.has(button as VirtualGamepadButton)
+  ))));
+};
+
+export const sanitizeVirtualGamepadTriggers = (triggers: unknown): VirtualGamepadTrigger[] => {
+  if (!Array.isArray(triggers)) return [];
+  return Array.from(new Set(triggers.filter((trigger): trigger is VirtualGamepadTrigger => (
+    typeof trigger === 'string' && VIRTUAL_GAMEPAD_TRIGGER_SET.has(trigger as VirtualGamepadTrigger)
+  ))));
+};
+
+export const buildVirtualGamepadAxes = (
+  movement: VirtualGamepadMovementId,
+  intensityPercent: number,
+): Partial<Record<'LEFT_STICK_X' | 'LEFT_STICK_Y', number>> => {
+  const clampedIntensity = clampVirtualGamepadPercent(intensityPercent);
+  if (movement === 'NONE' || clampedIntensity <= 0) return {};
+  const full = Math.max(1, Math.round((32767 * clampedIntensity) / 100));
+  const diagonal = Math.max(1, Math.round(full * 0.78));
+  switch (movement) {
+    case 'UP_LEFT':
+      return { LEFT_STICK_X: -diagonal, LEFT_STICK_Y: diagonal };
+    case 'UP':
+      return { LEFT_STICK_Y: full };
+    case 'UP_RIGHT':
+      return { LEFT_STICK_X: diagonal, LEFT_STICK_Y: diagonal };
+    case 'LEFT':
+      return { LEFT_STICK_X: -full };
+    case 'RIGHT':
+      return { LEFT_STICK_X: full };
+    case 'DOWN_LEFT':
+      return { LEFT_STICK_X: -diagonal, LEFT_STICK_Y: -diagonal };
+    case 'DOWN':
+      return { LEFT_STICK_Y: -full };
+    case 'DOWN_RIGHT':
+      return { LEFT_STICK_X: diagonal, LEFT_STICK_Y: -diagonal };
+    default:
+      return {};
+  }
+};
+
+export const buildVirtualGamepadSliders = (
+  selectedTriggers: VirtualGamepadTrigger[],
+  triggerIntensityPercent: number,
+): Partial<Record<VirtualGamepadTrigger, number>> => {
+  const clampedIntensity = clampVirtualGamepadPercent(triggerIntensityPercent);
+  const triggerValue = Math.round((255 * clampedIntensity) / 100);
+  return sanitizeVirtualGamepadTriggers(selectedTriggers).reduce<Partial<Record<VirtualGamepadTrigger, number>>>((acc, trigger) => {
+    acc[trigger] = triggerValue;
+    return acc;
+  }, {});
+};
 
 export interface OcrBestGuessThresholds {
   merged: { player: number; mod: number; ship: number };
@@ -153,6 +257,14 @@ export interface SettingsSlice {
   tacticalMapKeybind: string;
   holdTacticalMapKey: boolean;
   gamepadModeEnabled: boolean;
+  virtualGamepadHotkeyEnabled: boolean;
+  virtualGamepadMovement: VirtualGamepadMovementId;
+  virtualGamepadButtons: VirtualGamepadButton[];
+  virtualGamepadTriggers: VirtualGamepadTrigger[];
+  virtualGamepadStickIntensityPercent: number;
+  virtualGamepadTriggerIntensityPercent: number;
+  virtualGamepadHoldDurationMs: number;
+  virtualGamepadRepeatCount: number;
   autoPopulateRosterOnSave: boolean;
   lockOcrTeams: boolean;
   ocrEnhancedNameRecoveryEnabled: boolean;
@@ -211,6 +323,14 @@ export interface SettingsSlice {
   setTacticalMapKeybind: (keybind: string) => void;
   setHoldTacticalMapKey: (hold: boolean) => void;
   setGamepadModeEnabled: (enabled: boolean) => void;
+  setVirtualGamepadHotkeyEnabled: (enabled: boolean) => void;
+  setVirtualGamepadMovement: (movement: VirtualGamepadMovementId) => void;
+  setVirtualGamepadButtons: (buttons: VirtualGamepadButton[]) => void;
+  setVirtualGamepadTriggers: (triggers: VirtualGamepadTrigger[]) => void;
+  setVirtualGamepadStickIntensityPercent: (intensity: number) => void;
+  setVirtualGamepadTriggerIntensityPercent: (intensity: number) => void;
+  setVirtualGamepadHoldDurationMs: (durationMs: number) => void;
+  setVirtualGamepadRepeatCount: (count: number) => void;
   setAutoPopulateRosterOnSave: (enabled: boolean) => void;
   setLockOcrTeams: (enabled: boolean) => void;
   setOcrEnhancedNameRecoveryEnabled: (enabled: boolean) => void;
@@ -291,6 +411,14 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   tacticalMapKeybind: '',
   holdTacticalMapKey: false,
   gamepadModeEnabled: false,
+  virtualGamepadHotkeyEnabled: true,
+  virtualGamepadMovement: 'NONE',
+  virtualGamepadButtons: [],
+  virtualGamepadTriggers: [],
+  virtualGamepadStickIntensityPercent: 100,
+  virtualGamepadTriggerIntensityPercent: 100,
+  virtualGamepadHoldDurationMs: 180,
+  virtualGamepadRepeatCount: 1,
   autoPopulateRosterOnSave: true,
   lockOcrTeams: false,
   ocrEnhancedNameRecoveryEnabled: true,
@@ -371,6 +499,14 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   },
   setHoldTacticalMapKey: (hold) => set({ holdTacticalMapKey: Boolean(hold) }),
   setGamepadModeEnabled: (enabled) => set({ gamepadModeEnabled: Boolean(enabled) }),
+  setVirtualGamepadHotkeyEnabled: (enabled) => set({ virtualGamepadHotkeyEnabled: Boolean(enabled) }),
+  setVirtualGamepadMovement: (movement) => set({ virtualGamepadMovement: sanitizeVirtualGamepadMovement(movement) }),
+  setVirtualGamepadButtons: (buttons) => set({ virtualGamepadButtons: sanitizeVirtualGamepadButtons(buttons) }),
+  setVirtualGamepadTriggers: (triggers) => set({ virtualGamepadTriggers: sanitizeVirtualGamepadTriggers(triggers) }),
+  setVirtualGamepadStickIntensityPercent: (intensity) => set({ virtualGamepadStickIntensityPercent: clampVirtualGamepadPercent(intensity) }),
+  setVirtualGamepadTriggerIntensityPercent: (intensity) => set({ virtualGamepadTriggerIntensityPercent: clampVirtualGamepadPercent(intensity) }),
+  setVirtualGamepadHoldDurationMs: (durationMs) => set({ virtualGamepadHoldDurationMs: clampVirtualGamepadHoldDurationMs(durationMs) }),
+  setVirtualGamepadRepeatCount: (count) => set({ virtualGamepadRepeatCount: clampVirtualGamepadRepeatCount(count) }),
   setAutoPopulateRosterOnSave: (enabled) => set({ autoPopulateRosterOnSave: enabled }),
   setLockOcrTeams: (enabled) => set({ lockOcrTeams: enabled }),
   setOcrEnhancedNameRecoveryEnabled: (enabled) => set({ ocrEnhancedNameRecoveryEnabled: enabled }),

@@ -2818,7 +2818,8 @@ describe('App', () => {
     });
 
     expect(api.send.mock.calls.length).toBeGreaterThan(initialSendCount);
-    expect(api.send).toHaveBeenLastCalledWith('sync-auto-capture-hotkey-state', expect.any(Object));
+    const autoCaptureCalls = api.send.mock.calls.filter(call => call[0] === 'sync-auto-capture-hotkey-state');
+    expect(autoCaptureCalls.length).toBeGreaterThan(1);
   });
 
   it('clears auto-capture hotkey state on unmount', async () => {

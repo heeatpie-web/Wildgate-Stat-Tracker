@@ -14,6 +14,9 @@ import {
   createDefaultOcrRegions,
   createSettingsSlice,
   normalizeOcrNameRerouteThreshold,
+  sanitizeVirtualGamepadButtons,
+  sanitizeVirtualGamepadMovement,
+  sanitizeVirtualGamepadTriggers,
 } from './slices/createSettingsSlice';
 import { UISlice, createUISlice } from './slices/createUISlice';
 import { FormSlice, createFormSlice } from './slices/createFormSlice';
@@ -295,6 +298,14 @@ const buildStorageDataFromState = (state: AppState) => ({
     tacticalMapKeybind: state.tacticalMapKeybind,
     holdTacticalMapKey: state.holdTacticalMapKey,
     gamepadModeEnabled: state.gamepadModeEnabled,
+    virtualGamepadHotkeyEnabled: state.virtualGamepadHotkeyEnabled,
+    virtualGamepadMovement: state.virtualGamepadMovement,
+    virtualGamepadButtons: state.virtualGamepadButtons,
+    virtualGamepadTriggers: state.virtualGamepadTriggers,
+    virtualGamepadStickIntensityPercent: state.virtualGamepadStickIntensityPercent,
+    virtualGamepadTriggerIntensityPercent: state.virtualGamepadTriggerIntensityPercent,
+    virtualGamepadHoldDurationMs: state.virtualGamepadHoldDurationMs,
+    virtualGamepadRepeatCount: state.virtualGamepadRepeatCount,
     autoPopulateRosterOnSave: state.autoPopulateRosterOnSave,
     fullAutoEnabled: state.fullAutoEnabled,
     lockOcrTeams: state.lockOcrTeams,
@@ -468,6 +479,22 @@ const customStorage: PersistStorage<AppState> = {
           tacticalMapKeybind: resolvePersistedTacticalMapKeybind(settings),
           holdTacticalMapKey: settings.holdTacticalMapKey === true,
           gamepadModeEnabled: settings.gamepadModeEnabled === true,
+          virtualGamepadHotkeyEnabled: settings.virtualGamepadHotkeyEnabled !== false,
+          virtualGamepadMovement: sanitizeVirtualGamepadMovement(settings.virtualGamepadMovement),
+          virtualGamepadButtons: sanitizeVirtualGamepadButtons(settings.virtualGamepadButtons),
+          virtualGamepadTriggers: sanitizeVirtualGamepadTriggers(settings.virtualGamepadTriggers),
+          virtualGamepadStickIntensityPercent: Number.isFinite(settings.virtualGamepadStickIntensityPercent)
+            ? Math.max(25, Math.min(100, Math.round(Number(settings.virtualGamepadStickIntensityPercent))))
+            : 100,
+          virtualGamepadTriggerIntensityPercent: Number.isFinite(settings.virtualGamepadTriggerIntensityPercent)
+            ? Math.max(25, Math.min(100, Math.round(Number(settings.virtualGamepadTriggerIntensityPercent))))
+            : 100,
+          virtualGamepadHoldDurationMs: Number.isFinite(settings.virtualGamepadHoldDurationMs)
+            ? Math.max(60, Math.min(800, Math.round(Number(settings.virtualGamepadHoldDurationMs))))
+            : 180,
+          virtualGamepadRepeatCount: Number.isFinite(settings.virtualGamepadRepeatCount)
+            ? Math.max(1, Math.min(10, Math.round(Number(settings.virtualGamepadRepeatCount))))
+            : 1,
           autoPopulateRosterOnSave: settings.autoPopulateRosterOnSave ?? true,
           fullAutoEnabled: settings.fullAutoEnabled === false ? false : true,
           lockOcrTeams: settings.lockOcrTeams || false,
@@ -636,6 +663,14 @@ export const useAppStore = create<AppState>()(
         tacticalMapKeybind: state.tacticalMapKeybind,
         holdTacticalMapKey: state.holdTacticalMapKey,
         gamepadModeEnabled: state.gamepadModeEnabled,
+        virtualGamepadHotkeyEnabled: state.virtualGamepadHotkeyEnabled,
+        virtualGamepadMovement: state.virtualGamepadMovement,
+        virtualGamepadButtons: state.virtualGamepadButtons,
+        virtualGamepadTriggers: state.virtualGamepadTriggers,
+        virtualGamepadStickIntensityPercent: state.virtualGamepadStickIntensityPercent,
+        virtualGamepadTriggerIntensityPercent: state.virtualGamepadTriggerIntensityPercent,
+        virtualGamepadHoldDurationMs: state.virtualGamepadHoldDurationMs,
+        virtualGamepadRepeatCount: state.virtualGamepadRepeatCount,
         autoPopulateRosterOnSave: state.autoPopulateRosterOnSave,
         fullAutoEnabled: state.fullAutoEnabled,
         lockOcrTeams: state.lockOcrTeams,

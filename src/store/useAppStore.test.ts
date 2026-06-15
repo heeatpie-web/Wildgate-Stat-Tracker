@@ -131,6 +131,28 @@ describe('useAppStore OCR preference hydration', () => {
     expect(defaultStore.getState().gamepadModeEnabled).toBe(false);
   });
 
+  it('hydrates persisted virtual gamepad tester settings', async () => {
+    const { store } = await loadStore({
+      virtualGamepadHotkeyEnabled: true,
+      virtualGamepadMovement: 'UP_RIGHT',
+      virtualGamepadButtons: ['A', 'RIGHT_SHOULDER'],
+      virtualGamepadTriggers: ['LEFT_TRIGGER'],
+      virtualGamepadStickIntensityPercent: 85,
+      virtualGamepadTriggerIntensityPercent: 70,
+      virtualGamepadHoldDurationMs: 320,
+      virtualGamepadRepeatCount: 3,
+    });
+
+    expect(store.getState().virtualGamepadHotkeyEnabled).toBe(true);
+    expect(store.getState().virtualGamepadMovement).toBe('UP_RIGHT');
+    expect(store.getState().virtualGamepadButtons).toEqual(['A', 'RIGHT_SHOULDER']);
+    expect(store.getState().virtualGamepadTriggers).toEqual(['LEFT_TRIGGER']);
+    expect(store.getState().virtualGamepadStickIntensityPercent).toBe(85);
+    expect(store.getState().virtualGamepadTriggerIntensityPercent).toBe(70);
+    expect(store.getState().virtualGamepadHoldDurationMs).toBe(320);
+    expect(store.getState().virtualGamepadRepeatCount).toBe(3);
+  });
+
   it('persists full auto settings through storage', async () => {
     const { store, saveMock } = await loadStore({});
 
@@ -173,6 +195,41 @@ describe('useAppStore OCR preference hydration', () => {
       : savedPayloadFactory;
     expect(savedPayload.settings).toEqual(expect.objectContaining({
       gamepadModeEnabled: true,
+    }));
+  });
+
+  it('persists virtual gamepad tester settings through storage', async () => {
+    const { store, saveMock } = await loadStore({});
+
+    store.setState({
+      virtualGamepadHotkeyEnabled: false,
+      virtualGamepadMovement: 'DOWN_LEFT',
+      virtualGamepadButtons: ['DPAD_UP', 'A'],
+      virtualGamepadTriggers: ['RIGHT_TRIGGER'],
+      virtualGamepadStickIntensityPercent: 90,
+      virtualGamepadTriggerIntensityPercent: 65,
+      virtualGamepadHoldDurationMs: 260,
+      virtualGamepadRepeatCount: 4,
+    });
+
+    await waitFor(() => {
+      expect(saveMock).toHaveBeenCalled();
+    });
+
+    const latestCall = saveMock.mock.calls[saveMock.mock.calls.length - 1];
+    const savedPayloadFactory = latestCall?.[0];
+    const savedPayload = typeof savedPayloadFactory === 'function'
+      ? savedPayloadFactory()
+      : savedPayloadFactory;
+    expect(savedPayload.settings).toEqual(expect.objectContaining({
+      virtualGamepadHotkeyEnabled: false,
+      virtualGamepadMovement: 'DOWN_LEFT',
+      virtualGamepadButtons: ['DPAD_UP', 'A'],
+      virtualGamepadTriggers: ['RIGHT_TRIGGER'],
+      virtualGamepadStickIntensityPercent: 90,
+      virtualGamepadTriggerIntensityPercent: 65,
+      virtualGamepadHoldDurationMs: 260,
+      virtualGamepadRepeatCount: 4,
     }));
   });
 

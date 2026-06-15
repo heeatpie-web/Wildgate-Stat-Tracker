@@ -35,6 +35,7 @@ const INVOKE_CHANNELS = [
   'connect-virtual-gamepad',
   'disconnect-virtual-gamepad',
   'send-virtual-gamepad-state',
+  'send-virtual-gamepad-state-sequence',
   'test-gamepad-input',
 ];
 
@@ -46,6 +47,7 @@ const SEND_CHANNELS = [
   'set-ignore-mouse-events',
   'toggle-overlay', 'set-overlay-style', 'set-window-bounds',
   'sync-auto-capture-hotkey-state',
+  'sync-virtual-gamepad-hotkey-state',
   'result-monitor-start', 'result-monitor-stop',
   'result-flash-start', 'result-flash-stop',
   'result-text-start', 'result-text-stop',
@@ -58,6 +60,7 @@ const RECEIVE_CHANNELS = [
   'update_available', 'update_downloaded', 'update_not_available', 'update_error',
   'hotkey-toggle-overlay',
   'auto-capture-status',
+  'virtual-gamepad-hotkey-status',
   'telemetry-prune-needed',
   'result-flash-detected', 'result-flash-resolved', 'result-flash-debug',
   'result-text-detected', 'result-text-debug',

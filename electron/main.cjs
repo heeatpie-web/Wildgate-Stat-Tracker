@@ -1350,8 +1350,20 @@ const AUTO_CAPTURE_HOTKEY_STATE_MAX_AGE_MS = 10000;
 const AUTO_CAPTURE_HOTKEY_REPEAT_DEBOUNCE_MS = 350;
 let lastAutoCaptureHotkeyAcceptedAt = 0;
 let autoCaptureHotkeyStartInFlight = false;
+let latestVirtualGamepadHotkeyState = null;
+let latestVirtualGamepadHotkeyStateAt = 0;
+const VIRTUAL_GAMEPAD_HOTKEY_ACCELERATOR = 'F11';
+const VIRTUAL_GAMEPAD_HOTKEY_STATE_MAX_AGE_MS = 15000;
+const VIRTUAL_GAMEPAD_HOTKEY_REPEAT_DEBOUNCE_MS = 250;
+const VIRTUAL_GAMEPAD_HOTKEY_GAP_MS = 120;
+let lastVirtualGamepadHotkeyAcceptedAt = 0;
+let virtualGamepadHotkeyInFlight = false;
 
 function isAutoCaptureHotkeySnapshotStale(snapshotAgeMs, maxAgeMs = AUTO_CAPTURE_HOTKEY_STATE_MAX_AGE_MS) {
+  return Number.isFinite(snapshotAgeMs) && snapshotAgeMs > maxAgeMs;
+}
+
+function isVirtualGamepadHotkeySnapshotStale(snapshotAgeMs, maxAgeMs = VIRTUAL_GAMEPAD_HOTKEY_STATE_MAX_AGE_MS) {
   return Number.isFinite(snapshotAgeMs) && snapshotAgeMs > maxAgeMs;
 }
 
@@ -1489,6 +1501,15 @@ function sendAutoCaptureFailureStatus(message, detail = null) {
   });
 }
 
+function sendVirtualGamepadHotkeyStatus(phase, message, detail = null) {
+  if (!win || win.isDestroyed()) return;
+  win.webContents.send('virtual-gamepad-hotkey-status', {
+    phase,
+    message,
+    detail,
+  });
+}
+
 async function startAutoCaptureFromHotkey(snapshot, { source = 'hotkey', queuedMs = null, snapshotAgeMs = null } = {}) {
   const liveWindow = ensureMainWindow();
   if (isAutoCaptureHotkeySnapshotStale(snapshotAgeMs)) {
@@ -1530,8 +1551,75 @@ async function startAutoCaptureFromHotkey(snapshot, { source = 'hotkey', queuedM
   }
 }
 
+async function startVirtualGamepadFromHotkey(snapshot, { source = 'hotkey', snapshotAgeMs = null } = {}) {
+  if (isVirtualGamepadHotkeySnapshotStale(snapshotAgeMs)) {
+    const ageLabel = Number.isFinite(snapshotAgeMs) ? `${snapshotAgeMs}ms` : 'unknown';
+    const message = `Virtual controller hotkey state is stale (${ageLabel}). Wait for the app to resync and try again.`;
+    console.warn(`[Hotkey] Rejecting stale virtual controller snapshot source=${source} ageMs=${ageLabel}`);
+    sendVirtualGamepadHotkeyStatus('failed', 'Virtual controller hotkey state is stale. Wait for the app to resync and try again.', ageLabel);
+    return {
+      success: false,
+      reason: 'stale-snapshot',
+      error: message,
+    };
+  }
+
+  const request = snapshot && typeof snapshot === 'object' ? snapshot : {};
+  if (request.gamepadModeEnabled !== true) {
+    const message = 'Gamepad mode is disabled. Enable it in Settings first.';
+    sendVirtualGamepadHotkeyStatus('failed', message);
+    return { success: false, reason: 'gamepad-disabled', error: message };
+  }
+  if (request.hotkeyEnabled !== true) {
+    const message = 'Virtual controller hotkey is disabled in Settings.';
+    sendVirtualGamepadHotkeyStatus('failed', message);
+    return { success: false, reason: 'hotkey-disabled', error: message };
+  }
+
+  const state = request.state && typeof request.state === 'object' ? request.state : null;
+  const repeatCount = Math.max(1, Math.min(10, Number(request.repeatCount) || 1));
+  const hasInput = Boolean(
+    state
+    && (Array.isArray(state.buttons) && state.buttons.length > 0
+      || (state.axes && Object.keys(state.axes).length > 0)
+      || (state.sliders && Object.keys(state.sliders).length > 0))
+  );
+
+  if (!hasInput) {
+    const message = 'No virtual controller combo is selected.';
+    sendVirtualGamepadHotkeyStatus('failed', message);
+    return { success: false, reason: 'no-input', error: message };
+  }
+
+  try {
+    console.log(
+      `[Hotkey] ${VIRTUAL_GAMEPAD_HOTKEY_ACCELERATOR} fired — sending virtual controller combo source=${source} `
+      + `repeatCount=${repeatCount}`
+    );
+    const result = await gamepadInput.sendVirtualGamepadStateSequence(state, {
+      repeatCount,
+      gapMs: VIRTUAL_GAMEPAD_HOTKEY_GAP_MS,
+    });
+    if (result?.success) {
+      const message = repeatCount > 1
+        ? `Sent selected virtual controller combo x${repeatCount}.`
+        : 'Sent selected virtual controller combo.';
+      sendVirtualGamepadHotkeyStatus('completed', message);
+      return { success: true, repeatCount };
+    }
+    const message = result?.error || 'Virtual controller hotkey send failed.';
+    sendVirtualGamepadHotkeyStatus('failed', message);
+    return { success: false, reason: 'send-failed', error: message };
+  } catch (error) {
+    const message = error?.message || String(error);
+    console.error(`[Hotkey] ${VIRTUAL_GAMEPAD_HOTKEY_ACCELERATOR} virtual controller send crashed:`, message);
+    sendVirtualGamepadHotkeyStatus('failed', 'Virtual controller hotkey failed.', message);
+    return { success: false, reason: 'error', error: message };
+  }
+}
+
 function registerGlobalHotkeys() {
-  const shortcuts = ['F9', 'F10'];
+  const shortcuts = ['F9', 'F10', VIRTUAL_GAMEPAD_HOTKEY_ACCELERATOR];
 
   shortcuts.forEach((accelerator) => {
     if (globalShortcut.isRegistered(accelerator)) {
@@ -1612,7 +1700,41 @@ function registerGlobalHotkeys() {
     console.warn('[Hotkey] Failed to register F10 auto-capture shortcut.');
   }
 
-  return { f9Registered, f10Registered };
+  console.log(
+    `[Hotkey] Attempting to register ${VIRTUAL_GAMEPAD_HOTKEY_ACCELERATOR} virtual controller shortcut. `
+    + `alreadyRegistered=${globalShortcut.isRegistered(VIRTUAL_GAMEPAD_HOTKEY_ACCELERATOR)}`
+  );
+  const virtualGamepadRegistered = globalShortcut.register(VIRTUAL_GAMEPAD_HOTKEY_ACCELERATOR, () => {
+    const invokedAt = Date.now();
+    if ((invokedAt - lastVirtualGamepadHotkeyAcceptedAt) < VIRTUAL_GAMEPAD_HOTKEY_REPEAT_DEBOUNCE_MS) {
+      console.log(`[Hotkey] ${VIRTUAL_GAMEPAD_HOTKEY_ACCELERATOR} ignored by repeat debounce.`);
+      return;
+    }
+    if (virtualGamepadHotkeyInFlight) {
+      console.log(`[Hotkey] ${VIRTUAL_GAMEPAD_HOTKEY_ACCELERATOR} ignored because a virtual controller request is already in flight.`);
+      return;
+    }
+    if (!latestVirtualGamepadHotkeyState) {
+      console.warn(`[Hotkey] ${VIRTUAL_GAMEPAD_HOTKEY_ACCELERATOR} invoked before the renderer synced a virtual controller state.`);
+      sendVirtualGamepadHotkeyStatus('failed', 'Virtual controller hotkey is still loading. Open Settings once and try again.');
+      return;
+    }
+    const stateAgeMs = latestVirtualGamepadHotkeyStateAt > 0 ? (Date.now() - latestVirtualGamepadHotkeyStateAt) : null;
+    lastVirtualGamepadHotkeyAcceptedAt = invokedAt;
+    virtualGamepadHotkeyInFlight = true;
+    void startVirtualGamepadFromHotkey(latestVirtualGamepadHotkeyState, { snapshotAgeMs: stateAgeMs }).finally(() => {
+      virtualGamepadHotkeyInFlight = false;
+    });
+  });
+  console.log(
+    `[Hotkey] ${VIRTUAL_GAMEPAD_HOTKEY_ACCELERATOR} registration success=${virtualGamepadRegistered} `
+    + `isRegistered=${globalShortcut.isRegistered(VIRTUAL_GAMEPAD_HOTKEY_ACCELERATOR)}`
+  );
+  if (!virtualGamepadRegistered) {
+    console.warn(`[Hotkey] Failed to register ${VIRTUAL_GAMEPAD_HOTKEY_ACCELERATOR} virtual controller shortcut.`);
+  }
+
+  return { f9Registered, f10Registered, virtualGamepadRegistered };
 }
 
 function getOverlayBoundsForStyle(style, workAreaSize) {
@@ -2471,6 +2593,16 @@ ipcMain.on('sync-auto-capture-hotkey-state', (_event, snapshot = null) => {
   latestAutoCaptureHotkeyState = null;
   latestAutoCaptureHotkeyStateAt = 0;
   clearPendingAutoCaptureHotkey();
+});
+
+ipcMain.on('sync-virtual-gamepad-hotkey-state', (_event, snapshot = null) => {
+  if (snapshot && typeof snapshot === 'object') {
+    latestVirtualGamepadHotkeyState = snapshot;
+    latestVirtualGamepadHotkeyStateAt = Date.now();
+    return;
+  }
+  latestVirtualGamepadHotkeyState = null;
+  latestVirtualGamepadHotkeyStateAt = 0;
 });
 
 // Log Monitoring Logic
@@ -4039,6 +4171,10 @@ ipcMain.handle('disconnect-virtual-gamepad', async () => {
 
 ipcMain.handle('send-virtual-gamepad-state', async (_event, state) => {
   return gamepadInput.sendVirtualGamepadState(state);
+});
+
+ipcMain.handle('send-virtual-gamepad-state-sequence', async (_event, state, options) => {
+  return gamepadInput.sendVirtualGamepadStateSequence(state, options);
 });
 
 ipcMain.handle('test-gamepad-input', async () => {

@@ -163,6 +163,10 @@ import type {
     TelemetryAutomationStatusState,
     TelemetryLifecycleStage,
 } from './store/slices/createUISlice';
+import {
+    buildVirtualGamepadAxes,
+    buildVirtualGamepadSliders,
+} from './store/slices/createSettingsSlice';
 
 interface TelemetryRetentionStatus {
     exceedsLimits: boolean;
@@ -237,10 +241,26 @@ const WELCOME_MESSAGE_SHOWN_THIS_LAUNCH_KEY = 'wg_welcome_message_shown_this_lau
 const TACTICAL_MAP_KEY_PROMPT_SEEN_STORAGE_KEY = 'wg_tactical_map_key_prompt_seen_v1';
 const FULL_AUTO_AUTO_ENABLED_AFTER_SETUP_STORAGE_KEY = 'wg_full_auto_auto_enabled_after_setup_v1';
 const AUTO_CAPTURE_HOTKEY_HEARTBEAT_MS = 3000;
+const VIRTUAL_GAMEPAD_HOTKEY_HEARTBEAT_MS = 3000;
 type SessionExitState = 'clean' | 'running';
 const getOnboardingUserScope = (user: string | null | undefined): string => {
     const normalized = String(user || '').trim().toLowerCase();
     return normalized || '__global__';
+};
+
+const buildVirtualGamepadHotkeySnapshot = () => {
+    const state = useAppStore.getState();
+    return {
+        gamepadModeEnabled: state.gamepadModeEnabled === true,
+        hotkeyEnabled: state.virtualGamepadHotkeyEnabled === true,
+        repeatCount: state.virtualGamepadRepeatCount,
+        state: {
+            buttons: state.virtualGamepadButtons,
+            axes: buildVirtualGamepadAxes(state.virtualGamepadMovement, state.virtualGamepadStickIntensityPercent),
+            sliders: buildVirtualGamepadSliders(state.virtualGamepadTriggers, state.virtualGamepadTriggerIntensityPercent),
+            durationMs: state.virtualGamepadHoldDurationMs,
+        },
+    };
 };
 
 interface WindowWithIdleCallbacks {
@@ -1032,6 +1052,34 @@ const App: React.FC = () => {
             unsubscribe();
             window.clearInterval(heartbeatId);
             api.send('sync-auto-capture-hotkey-state', null);
+        };
+    }, []);
+
+    useEffect(() => {
+        const api = getElectronAPI();
+        if (!api) return;
+
+        let lastSerializedSnapshot = '';
+        const syncHotkeyState = (force = false) => {
+            const snapshot = buildVirtualGamepadHotkeySnapshot();
+            const serializedSnapshot = JSON.stringify(snapshot);
+            if (!force && serializedSnapshot === lastSerializedSnapshot) return;
+            lastSerializedSnapshot = serializedSnapshot;
+            api.send('sync-virtual-gamepad-hotkey-state', snapshot);
+        };
+
+        syncHotkeyState();
+        const unsubscribe = useAppStore.subscribe(() => {
+            syncHotkeyState();
+        });
+        const heartbeatId = window.setInterval(() => {
+            syncHotkeyState(true);
+        }, VIRTUAL_GAMEPAD_HOTKEY_HEARTBEAT_MS);
+
+        return () => {
+            unsubscribe();
+            window.clearInterval(heartbeatId);
+            api.send('sync-virtual-gamepad-hotkey-state', null);
         };
     }, []);
 
@@ -2265,7 +2313,7 @@ const App: React.FC = () => {
         const api = getElectronAPI();
         if (!api) return;
         Logger.info('Hotkeys', 'Registering renderer hotkey listeners', {
-            channels: ['hotkey-toggle-overlay', 'auto-capture-status'],
+            channels: ['hotkey-toggle-overlay', 'auto-capture-status', 'virtual-gamepad-hotkey-status'],
         });
         const unsubAvailable = api.on('update_available', () => setUpdateStatus('available'));
         const unsubDownloaded = api.on('update_downloaded', () => setUpdateStatus('downloaded'));
@@ -2401,6 +2449,38 @@ const App: React.FC = () => {
                 setToast({ message, type: 'error' });
             }
         });
+        const unsubVirtualGamepadHotkeyStatus = api.on('virtual-gamepad-hotkey-status', (payload?: Record<string, unknown>) => {
+            const phase = String(payload?.phase || '').trim().toLowerCase();
+            const baseMessage = typeof payload?.message === 'string' && payload.message.trim()
+                ? payload.message.trim()
+                : 'Virtual controller hotkey update.';
+            const detail = typeof payload?.detail === 'string' ? payload.detail.trim() : '';
+            const message = detail && !baseMessage.includes(detail)
+                ? `${baseMessage} ${detail}`
+                : baseMessage;
+
+            if (phase === 'completed') {
+                Logger.info('Hotkeys', 'Received virtual controller hotkey completion status', {
+                    message: baseMessage,
+                    detail: detail || null,
+                    payload,
+                });
+                setToast({ message, type: 'success' });
+                return;
+            }
+
+            if (phase === 'failed') {
+                Logger.warn('Hotkeys', 'Received virtual controller hotkey failure status', {
+                    message: baseMessage,
+                    detail: detail || null,
+                    payload,
+                });
+                setToast({ message, type: 'error' });
+                return;
+            }
+
+            setToast({ message, type: 'info' });
+        });
 
         return () => {
             unsubAvailable();
@@ -2409,6 +2489,7 @@ const App: React.FC = () => {
             unsubError();
             unsubHotkey();
             unsubAutoCaptureStatus();
+            unsubVirtualGamepadHotkeyStatus();
         };
     }, [
         playAutomationComplete,

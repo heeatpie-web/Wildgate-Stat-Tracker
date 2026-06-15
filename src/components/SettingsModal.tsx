@@ -15,8 +15,13 @@ import {
     type OcrLearningReviewMode,
     type OcrRegionBounds,
     type OcrRegionSettings,
+    type VirtualGamepadButton,
+    type VirtualGamepadTrigger,
+    type VirtualGamepadMovementId,
     OCR_NAME_REROUTE_THRESHOLD_MAX,
     OCR_NAME_REROUTE_THRESHOLD_MIN,
+    buildVirtualGamepadAxes,
+    buildVirtualGamepadSliders,
 } from '../store/slices/createSettingsSlice';
 import { normalizeOcrName, similarityScore } from '../utils/stringUtils';
 import { DEFAULT_OCR_BEST_GUESS_THRESHOLDS, getPreset, detectSensitivityLevel } from './settings/ocrThresholdPresets';
@@ -126,9 +131,9 @@ const consumeSettingsFocusSectionRequest = (): SettingsFocusSectionRequest | nul
 type ViGEmStatus = 'unknown' | 'checking' | 'installed' | 'not-installed' | 'installing' | 'install-failed';
 type GamepadConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'failed';
 
-type VirtualPadButton = 'DPAD_UP' | 'DPAD_DOWN' | 'DPAD_LEFT' | 'DPAD_RIGHT' | 'A' | 'B' | 'X' | 'Y' | 'LEFT_SHOULDER' | 'RIGHT_SHOULDER' | 'START' | 'BACK' | 'LEFT_THUMB' | 'RIGHT_THUMB';
-type VirtualPadTrigger = 'LEFT_TRIGGER' | 'RIGHT_TRIGGER';
-type VirtualPadMovementId = 'UP_LEFT' | 'UP' | 'UP_RIGHT' | 'LEFT' | 'NONE' | 'RIGHT' | 'DOWN_LEFT' | 'DOWN' | 'DOWN_RIGHT';
+type VirtualPadButton = VirtualGamepadButton;
+type VirtualPadTrigger = VirtualGamepadTrigger;
+type VirtualPadMovementId = VirtualGamepadMovementId;
 type VirtualPadStatePayload = {
     buttons: VirtualPadButton[];
     axes: Partial<Record<'LEFT_STICK_X' | 'LEFT_STICK_Y', number>>;
@@ -182,42 +187,6 @@ const toggleSelection = <T extends string,>(values: T[], value: T): T[] => (
         : [...values, value]
 );
 
-const buildVirtualPadAxes = (movement: VirtualPadMovementId, intensityPercent: number): VirtualPadStatePayload['axes'] => {
-    const clampedIntensity = Math.max(0, Math.min(100, Number(intensityPercent) || 0));
-    if (movement === 'NONE' || clampedIntensity <= 0) return {};
-    const full = Math.max(1, Math.round((32767 * clampedIntensity) / 100));
-    const diagonal = Math.max(1, Math.round(full * 0.78));
-    switch (movement) {
-        case 'UP_LEFT':
-            return { LEFT_STICK_X: -diagonal, LEFT_STICK_Y: diagonal };
-        case 'UP':
-            return { LEFT_STICK_Y: full };
-        case 'UP_RIGHT':
-            return { LEFT_STICK_X: diagonal, LEFT_STICK_Y: diagonal };
-        case 'LEFT':
-            return { LEFT_STICK_X: -full };
-        case 'RIGHT':
-            return { LEFT_STICK_X: full };
-        case 'DOWN_LEFT':
-            return { LEFT_STICK_X: -diagonal, LEFT_STICK_Y: -diagonal };
-        case 'DOWN':
-            return { LEFT_STICK_Y: -full };
-        case 'DOWN_RIGHT':
-            return { LEFT_STICK_X: diagonal, LEFT_STICK_Y: -diagonal };
-        default:
-            return {};
-    }
-};
-
-const buildVirtualPadSliders = (selectedTriggers: VirtualPadTrigger[], triggerIntensityPercent: number): VirtualPadStatePayload['sliders'] => {
-    const clampedIntensity = Math.max(0, Math.min(100, Number(triggerIntensityPercent) || 0));
-    const triggerValue = Math.round((255 * clampedIntensity) / 100);
-    return selectedTriggers.reduce<VirtualPadStatePayload['sliders']>((acc, trigger) => {
-        acc[trigger] = triggerValue;
-        return acc;
-    }, {});
-};
-
 const getVirtualPadButtonLabel = (button: VirtualPadButton): string => (
     VIRTUAL_PAD_BUTTON_OPTIONS.find(option => option.key === button)?.label || button
 );
@@ -253,12 +222,22 @@ const GamepadModeSection: React.FC<{
     const [connectionStatus, setConnectionStatus] = useState<GamepadConnectionStatus>('disconnected');
     const [testResult, setTestResult] = useState<string | null>(null);
     const [installError, setInstallError] = useState<string | null>(null);
-    const [selectedMovement, setSelectedMovement] = useState<VirtualPadMovementId>('NONE');
-    const [selectedButtons, setSelectedButtons] = useState<VirtualPadButton[]>([]);
-    const [selectedTriggers, setSelectedTriggers] = useState<VirtualPadTrigger[]>([]);
-    const [stickIntensityPercent, setStickIntensityPercent] = useState(100);
-    const [triggerIntensityPercent, setTriggerIntensityPercent] = useState(100);
-    const [holdDurationMs, setHoldDurationMs] = useState(180);
+    const hotkeyEnabled = useAppStore(s => s.virtualGamepadHotkeyEnabled);
+    const setHotkeyEnabled = useAppStore(s => s.setVirtualGamepadHotkeyEnabled);
+    const selectedMovement = useAppStore(s => s.virtualGamepadMovement);
+    const setSelectedMovement = useAppStore(s => s.setVirtualGamepadMovement);
+    const selectedButtons = useAppStore(s => s.virtualGamepadButtons);
+    const setSelectedButtons = useAppStore(s => s.setVirtualGamepadButtons);
+    const selectedTriggers = useAppStore(s => s.virtualGamepadTriggers);
+    const setSelectedTriggers = useAppStore(s => s.setVirtualGamepadTriggers);
+    const stickIntensityPercent = useAppStore(s => s.virtualGamepadStickIntensityPercent);
+    const setStickIntensityPercent = useAppStore(s => s.setVirtualGamepadStickIntensityPercent);
+    const triggerIntensityPercent = useAppStore(s => s.virtualGamepadTriggerIntensityPercent);
+    const setTriggerIntensityPercent = useAppStore(s => s.setVirtualGamepadTriggerIntensityPercent);
+    const holdDurationMs = useAppStore(s => s.virtualGamepadHoldDurationMs);
+    const setHoldDurationMs = useAppStore(s => s.setVirtualGamepadHoldDurationMs);
+    const repeatCount = useAppStore(s => s.virtualGamepadRepeatCount);
+    const setRepeatCount = useAppStore(s => s.setVirtualGamepadRepeatCount);
     const api = getElectronAPI();
 
     const checkDriver = useCallback(async () => {
@@ -337,7 +316,7 @@ const GamepadModeSection: React.FC<{
         }
     }, [api, ensureConnected]);
 
-    const sendVirtualPadState = useCallback(async (payload: VirtualPadStatePayload) => {
+    const sendVirtualPadState = useCallback(async (payload: VirtualPadStatePayload, requestedRepeatCount = 1) => {
         if (!api) return;
         const hasInput = payload.buttons.length > 0 || Object.keys(payload.axes).length > 0 || Object.keys(payload.sliders).length > 0;
         if (!hasInput) {
@@ -350,10 +329,16 @@ const GamepadModeSection: React.FC<{
             return;
         }
         try {
-            const result = await api.invoke('send-virtual-gamepad-state', payload);
+            const normalizedRepeatCount = Math.max(1, Math.min(10, Number(requestedRepeatCount) || 1));
+            const result = await api.invoke('send-virtual-gamepad-state-sequence', payload, {
+                repeatCount: normalizedRepeatCount,
+                gapMs: 120,
+            });
             if (result?.success) {
                 const summary = describeVirtualPadSelection(selectedMovement, selectedButtons, selectedTriggers);
-                setTestResult(summary ? `Sent ${summary}.` : 'Sent virtual controller state.');
+                setTestResult(summary
+                    ? `Sent ${summary}${normalizedRepeatCount > 1 ? ` x${normalizedRepeatCount}` : ''}.`
+                    : `Sent virtual controller state${normalizedRepeatCount > 1 ? ` x${normalizedRepeatCount}` : ''}.`);
             } else {
                 setConnectionStatus('failed');
                 setTestResult(result?.error || 'Virtual controller test failed.');
@@ -367,18 +352,18 @@ const GamepadModeSection: React.FC<{
     const handleSendSelectedCombo = useCallback(async () => {
         await sendVirtualPadState({
             buttons: selectedButtons,
-            axes: buildVirtualPadAxes(selectedMovement, stickIntensityPercent),
-            sliders: buildVirtualPadSliders(selectedTriggers, triggerIntensityPercent),
+            axes: buildVirtualGamepadAxes(selectedMovement, stickIntensityPercent),
+            sliders: buildVirtualGamepadSliders(selectedTriggers, triggerIntensityPercent),
             durationMs: holdDurationMs,
-        });
-    }, [holdDurationMs, selectedButtons, selectedMovement, selectedTriggers, sendVirtualPadState, stickIntensityPercent, triggerIntensityPercent]);
+        }, repeatCount);
+    }, [holdDurationMs, repeatCount, selectedButtons, selectedMovement, selectedTriggers, sendVirtualPadState, stickIntensityPercent, triggerIntensityPercent]);
 
     const handleClearSelection = useCallback(() => {
         setSelectedMovement('NONE');
         setSelectedButtons([]);
         setSelectedTriggers([]);
         setTestResult(null);
-    }, []);
+    }, [setSelectedButtons, setSelectedMovement, setSelectedTriggers]);
 
     const selectionSummary = describeVirtualPadSelection(selectedMovement, selectedButtons, selectedTriggers);
     const toggleButtonClass = (selected: boolean) => (
@@ -534,6 +519,37 @@ const GamepadModeSection: React.FC<{
                                                 className="mt-2 h-2 w-full accent-md-sys-primary"
                                             />
                                         </div>
+
+                                        <div>
+                                            <div className="flex items-center justify-between text-label-xs font-semibold uppercase tracking-wide text-md-sys-on-surface/45">
+                                                <span>Repeat Count</span>
+                                                <span>{repeatCount}x</span>
+                                            </div>
+                                            <input
+                                                type="range"
+                                                min={1}
+                                                max={10}
+                                                step={1}
+                                                value={repeatCount}
+                                                onChange={e => setRepeatCount(Number(e.target.value))}
+                                                className="mt-2 h-2 w-full accent-md-sys-primary"
+                                            />
+                                        </div>
+
+                                        <label className="flex items-start gap-2 rounded-md border border-md-sys-outline/10 bg-md-sys-surface-container px-3 py-3">
+                                            <input
+                                                type="checkbox"
+                                                checked={hotkeyEnabled}
+                                                onChange={e => setHotkeyEnabled(e.target.checked)}
+                                                className="mt-0.5 h-4 w-4 accent-md-sys-primary"
+                                            />
+                                            <div>
+                                                <div className="text-label-sm font-semibold text-md-sys-on-surface/80">Enable `F11` combo hotkey</div>
+                                                <div className="mt-1 text-label-sm text-md-sys-on-surface/60">
+                                                    Keep the game focused, then press `F11` to send the selected combo using the current repeat count.
+                                                </div>
+                                            </div>
+                                        </label>
                                     </div>
 
                                     <div className="space-y-3">
@@ -543,7 +559,7 @@ const GamepadModeSection: React.FC<{
                                                 {VIRTUAL_PAD_BUTTON_OPTIONS.map(option => (
                                                     <button
                                                         key={option.key}
-                                                        onClick={() => setSelectedButtons(current => toggleSelection(current, option.key))}
+                                                        onClick={() => setSelectedButtons(toggleSelection(selectedButtons, option.key))}
                                                         className={toggleButtonClass(selectedButtons.includes(option.key))}
                                                     >
                                                         {option.label}
@@ -558,7 +574,7 @@ const GamepadModeSection: React.FC<{
                                                 {VIRTUAL_PAD_TRIGGER_OPTIONS.map(option => (
                                                     <button
                                                         key={option.key}
-                                                        onClick={() => setSelectedTriggers(current => toggleSelection(current, option.key))}
+                                                        onClick={() => setSelectedTriggers(toggleSelection(selectedTriggers, option.key))}
                                                         className={toggleButtonClass(selectedTriggers.includes(option.key))}
                                                     >
                                                         {option.label}
@@ -572,12 +588,15 @@ const GamepadModeSection: React.FC<{
                                             <div className="mt-1 text-label-sm text-md-sys-on-surface/65">
                                                 {selectionSummary || 'No controller inputs selected yet.'}
                                             </div>
+                                            <div className="mt-1 text-label-sm text-md-sys-on-surface/50">
+                                                {hotkeyEnabled ? `F11 will send this combo x${repeatCount}.` : 'F11 hotkey is disabled.'}
+                                            </div>
                                             <div className="mt-3 flex flex-wrap gap-2">
                                                 <button
                                                     onClick={handleSendSelectedCombo}
                                                     className="rounded-md bg-md-sys-primary px-3 py-1.5 text-label-sm font-semibold text-md-sys-on-primary transition-opacity hover:opacity-90"
                                                 >
-                                                    Send Selected Combo
+                                                    {repeatCount > 1 ? `Send Selected Combo x${repeatCount}` : 'Send Selected Combo'}
                                                 </button>
                                                 <button
                                                     onClick={handleClearSelection}

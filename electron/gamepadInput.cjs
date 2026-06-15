@@ -427,6 +427,29 @@ async function sendVirtualGamepadState(state) {
   return { success: false, error };
 }
 
+async function sendVirtualGamepadStateSequence(state, options = {}) {
+  const rawRepeatCount = options.repeatCount !== undefined && options.repeatCount !== null ? Number(options.repeatCount) : 1;
+  const repeatCount = Math.max(1, Math.min(10, Number.isFinite(rawRepeatCount) ? rawRepeatCount : 1));
+  const rawGapMs = options.gapMs !== undefined && options.gapMs !== null ? Number(options.gapMs) : 120;
+  const gapMs = Math.max(0, Math.min(2000, Number.isFinite(rawGapMs) ? rawGapMs : 120));
+
+  for (let index = 0; index < repeatCount; index += 1) {
+    const result = await sendVirtualGamepadState(state);
+    if (!result?.success) {
+      return {
+        success: false,
+        error: result?.error || 'Virtual controller state send failed',
+        completedRepeats: index,
+      };
+    }
+    if (index < repeatCount - 1 && gapMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, gapMs));
+    }
+  }
+
+  return { success: true, repeatCount, gapMs };
+}
+
 async function sendTestGamepadInput() {
   const { XUSB_BUTTON: buttons } = require('./gamepadSequences.cjs');
   return sendGamepadSequence([
@@ -442,6 +465,7 @@ module.exports = {
   isGamepadConnected,
   sendGamepadSequence,
   sendVirtualGamepadState,
+  sendVirtualGamepadStateSequence,
   sendTestGamepadInput,
   setDllDir,
   setPSRunner,
