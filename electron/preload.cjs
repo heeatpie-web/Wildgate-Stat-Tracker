@@ -30,6 +30,11 @@ const INVOKE_CHANNELS = [
   'result-flash-sample',
   'scan-result-screen',
   'capture-result-screen-region',
+  'check-vigem-installed',
+  'install-vigem-driver',
+  'connect-virtual-gamepad',
+  'disconnect-virtual-gamepad',
+  'test-gamepad-input',
 ];
 
 const SEND_CHANNELS = [

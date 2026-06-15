@@ -102,6 +102,7 @@ describe('autoCaptureHotkeyState', () => {
       autoCaptureSendKeypresses: true,
       autoCaptureWaitMultiplier: 0.8,
       autoCaptureTacticalMapKey: 'KeyM',
+      gamepadModeEnabled: false,
       holdTacticalMapKey: true,
       ocrMode: 'local',
       ocrRegions: { mapScreen: { yourShip: { xMin: 0.1, xMax: 0.2 } } },

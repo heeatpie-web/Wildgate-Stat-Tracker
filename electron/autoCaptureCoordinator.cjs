@@ -226,6 +226,7 @@ function createAutoCaptureCoordinator({
   runWithHeldKeySequence = null,
   sendKeySequence,
   sendMenuKeySequence = null,
+  sendGamepadSequence = null,
   captureAndProcess,
   lookupMapKeybind = lookupTacticalMapKeybind,
   delayFn = delay,
@@ -240,6 +241,7 @@ function createAutoCaptureCoordinator({
     matchId,
     activeUser = null,
     sendKeypresses = true,
+    gamepadModeEnabled = false,
     waitMultiplier = 0.5,
     ocrMode = 'local',
     ocrRegions = null,
@@ -247,13 +249,25 @@ function createAutoCaptureCoordinator({
     tacticalMapKeybind,
     holdTacticalMapKey = false,
   }) => {
+    const useGamepad = gamepadModeEnabled && typeof sendGamepadSequence === 'function';
     console.log(
       `[AutoCapture] Sequence starting matchId=${matchId} tacticalMapKeybind=${tacticalMapKeybind?.raw || 'unknown'} `
-      + `sendKeys=${tacticalMapKeybind?.sendKeys || 'unknown'} sendKeypresses=${sendKeypresses} waitMultiplier=${waitMultiplier}`
+      + `sendKeys=${tacticalMapKeybind?.sendKeys || 'unknown'} sendKeypresses=${sendKeypresses} gamepad=${useGamepad} waitMultiplier=${waitMultiplier}`
     );
 
     const sendStepKeys = async (step, sequence, { useMenuSender = false } = {}) => {
       if (!sendKeypresses) return;
+
+      if (useGamepad && useMenuSender) {
+        logAutoCaptureStep(step, '(gamepad)');
+        const result = await sendGamepadSequence(step, sequence);
+        if (!result?.success) {
+          const reason = result?.error || 'gamepad input failed';
+          throw new Error(`${step.label}: ${reason}`);
+        }
+        return;
+      }
+
       logAutoCaptureStep(step, '(keypress)');
       const sender = useMenuSender && typeof sendMenuKeySequence === 'function'
         ? sendMenuKeySequence
@@ -471,6 +485,7 @@ function createAutoCaptureCoordinator({
           ? request.activeUser.trim()
           : null,
         sendKeypresses,
+        gamepadModeEnabled: sendKeypresses && request.gamepadModeEnabled === true,
         waitMultiplier: clampWaitMultiplier(request.autoCaptureWaitMultiplier),
         ocrMode: typeof request.ocrMode === 'string' && request.ocrMode.trim()
           ? request.ocrMode.trim()

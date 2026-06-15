@@ -18,6 +18,7 @@ export interface AutoCaptureStateSnapshot {
     autoCaptureWaitMultiplier: number | undefined;
     tacticalMapKeybind: string;
     holdTacticalMapKey: boolean;
+    gamepadModeEnabled: boolean;
     ocrRegions: unknown;
     ocrEnhancedNameRecoveryEnabled: boolean;
     ocrNameRerouteThreshold: number | undefined;
@@ -87,6 +88,10 @@ export const buildAutoCaptureStateSnapshot = (
         holdTacticalMapKey: overrides.holdTacticalMapKey === true || (
             !Object.prototype.hasOwnProperty.call(overrides, 'holdTacticalMapKey')
             && state.holdTacticalMapKey === true
+        ),
+        gamepadModeEnabled: overrides.gamepadModeEnabled === true || (
+            !Object.prototype.hasOwnProperty.call(overrides, 'gamepadModeEnabled')
+            && state.gamepadModeEnabled === true
         ),
         ocrRegions: Object.prototype.hasOwnProperty.call(overrides, 'ocrRegions')
             ? (overrides.ocrRegions ?? null)

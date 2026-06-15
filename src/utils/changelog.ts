@@ -1,4 +1,8 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.7.1": [
+    "Keep the shared PowerShell controller alive when gamepad and game-input helpers return early",
+    "Add regression coverage for persistent PowerShell-compatible helper scripts"
+  ],
   "v3.7.0": [
     "Sync app, installer, and bundled release metadata to version 3.7.0",
     "Add a 1.5 analytics update era for matches recorded on or after June 14, 2026"

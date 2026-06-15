@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.7.1] - 2026-06-14
+
+### Changed
+- Kept the shared PowerShell controller alive when gamepad and game-input helpers return early
+- Added regression coverage for persistent PowerShell-compatible helper scripts
+
 ## [3.7.0] - 2026-06-14
 
 ### Changed

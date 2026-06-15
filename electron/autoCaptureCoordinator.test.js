@@ -447,6 +447,100 @@ describe('autoCaptureCoordinator sequencing', () => {
     });
   });
 
+  it('routes menu steps through sendGamepadSequence when gamepad mode is enabled', async () => {
+    const notify = vi.fn();
+    const sendKeySequence = vi.fn().mockResolvedValue({ success: true });
+    const sendMenuKeySequence = vi.fn().mockResolvedValue({ success: true });
+    const sendGamepadSequence = vi.fn().mockResolvedValue({ success: true });
+    const captureAndProcess = vi.fn()
+      .mockResolvedValueOnce({ success: true, filePath: 'map.png', filename: 'map.png', ocrData: { screenshotType: 'tactical_map' } })
+      .mockResolvedValueOnce({ success: true, filePath: 'crew-a.png', filename: 'crew-a.png', ocrData: { screenshotType: 'crew_hub' } })
+      .mockResolvedValueOnce({ success: true, filePath: 'crew-b.png', filename: 'crew-b.png', ocrData: { screenshotType: 'crew_hub' } });
+
+    const coordinator = createAutoCaptureCoordinator({
+      notify,
+      sendKeySequence,
+      sendMenuKeySequence,
+      sendGamepadSequence,
+      captureAndProcess,
+      lookupMapKeybind: vi.fn().mockResolvedValue({ raw: 'Tab', sendKeys: '{TAB}' }),
+      delayFn: vi.fn(() => Promise.resolve()),
+    });
+
+    const result = await coordinator.start({
+      lifecycleActive: true,
+      matchId: 44,
+      activeUser: 'Pilot',
+      autoCaptureTacticalMapKey: 'Tab',
+      gamepadModeEnabled: true,
+    });
+
+    expect(result).toEqual({
+      started: true,
+      matchId: 44,
+      tacticalMapKeybind: 'Tab',
+    });
+
+    await vi.waitFor(() => {
+      expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+        phase: 'completed',
+        matchId: 44,
+        totalCaptures: 3,
+      }));
+    });
+
+    // Tactical map steps still use keyboard (not menu navigation)
+    expect(sendKeySequence).toHaveBeenCalledWith('{TAB}', 'Open Tactical Map');
+    expect(sendKeySequence).toHaveBeenCalledWith('{TAB}', 'Close Tactical Map');
+
+    // Menu steps use gamepad instead of keyboard
+    expect(sendGamepadSequence).toHaveBeenCalledTimes(5);
+    expect(sendGamepadSequence).toHaveBeenNthCalledWith(1, expect.objectContaining({ label: 'Navigate to Crew Hub' }), '{ESC}');
+    expect(sendGamepadSequence).toHaveBeenNthCalledWith(2, expect.objectContaining({ label: 'Navigate to Crew Hub' }), '{UP}{UP}{UP}{UP}{SPACE}');
+    expect(sendGamepadSequence).toHaveBeenNthCalledWith(3, expect.objectContaining({ label: 'Navigate to Crew Hub Panel (Right)' }), '{RIGHT}{RIGHT}{RIGHT}{RIGHT}');
+    expect(sendGamepadSequence).toHaveBeenNthCalledWith(4, expect.objectContaining({ label: 'Navigate to Crew Hub Panel End' }), '{END}');
+    expect(sendGamepadSequence).toHaveBeenNthCalledWith(5, expect.objectContaining({ label: 'Exit' }), '{ESC}');
+
+    // sendMenuKeySequence should NOT be called — gamepad replaces it
+    expect(sendMenuKeySequence).not.toHaveBeenCalled();
+    expect(captureAndProcess).toHaveBeenCalledTimes(3);
+  });
+
+  it('uses keyboard for menu steps when gamepad mode is disabled even if sendGamepadSequence is provided', async () => {
+    const notify = vi.fn();
+    const sendKeySequence = vi.fn().mockResolvedValue({ success: true });
+    const sendMenuKeySequence = vi.fn().mockResolvedValue({ success: true });
+    const sendGamepadSequence = vi.fn().mockResolvedValue({ success: true });
+    const captureAndProcess = vi.fn()
+      .mockResolvedValueOnce({ success: true, filePath: 'map.png', filename: 'map.png', ocrData: { screenshotType: 'tactical_map' } })
+      .mockResolvedValueOnce({ success: true, filePath: 'crew-a.png', filename: 'crew-a.png', ocrData: { screenshotType: 'crew_hub' } })
+      .mockResolvedValueOnce({ success: true, filePath: 'crew-b.png', filename: 'crew-b.png', ocrData: { screenshotType: 'crew_hub' } });
+
+    const coordinator = createAutoCaptureCoordinator({
+      notify,
+      sendKeySequence,
+      sendMenuKeySequence,
+      sendGamepadSequence,
+      captureAndProcess,
+      lookupMapKeybind: vi.fn().mockResolvedValue({ raw: 'Tab', sendKeys: '{TAB}' }),
+      delayFn: vi.fn(() => Promise.resolve()),
+    });
+
+    await coordinator.start({
+      lifecycleActive: true,
+      matchId: 44,
+      autoCaptureTacticalMapKey: 'Tab',
+      gamepadModeEnabled: false,
+    });
+
+    await vi.waitFor(() => {
+      expect(notify).toHaveBeenCalledWith(expect.objectContaining({ phase: 'completed' }));
+    });
+
+    expect(sendGamepadSequence).not.toHaveBeenCalled();
+    expect(sendMenuKeySequence).toHaveBeenCalledTimes(5);
+  });
+
   it('fails before starting when the tactical map key is missing from settings', async () => {
     const notify = vi.fn();
     const coordinator = createAutoCaptureCoordinator({

@@ -374,7 +374,7 @@ if (-not $target) {
     error = ('No matching game window found. Candidates: ' + (($processNames -join ', ') -replace '\\s+', ' '))
     candidateSummary = $candidateSummary
   } | ConvertTo-Json -Compress
-  exit 0
+  return
 }
 
 [pscustomobject]@{
@@ -402,7 +402,7 @@ if (-not $clientRect) {
     success = $false
     error = 'Game window geometry unavailable'
   } | ConvertTo-Json -Compress
-  exit 0
+  return
 }
 
 [pscustomobject]@{
@@ -439,7 +439,7 @@ if ($windowHandleValue -le 0) {
     success = $false
     error = 'Missing target window handle.'
   } | ConvertTo-Json -Compress
-  exit 0
+  return
 }
 
 $shell = $null
@@ -1198,7 +1198,7 @@ try {
   $shell = New-Object -ComObject WScript.Shell
 } catch {
   [pscustomobject]@{ success = $false; error = 'WScript.Shell not available' } | ConvertTo-Json -Compress
-  exit 0
+  return
 }
 if ($processId -gt 0) {
   try { $shell.AppActivate($processId) | Out-Null } catch {}
@@ -1239,4 +1239,8 @@ module.exports = {
   tokenizeSendKeysSequence,
   translateSendKeysSequenceToNutKeys,
   validateGameInputRuntime,
+  buildGameWindowLookupPowerShellScript,
+  buildGameWindowGeometryPowerShellScript,
+  buildGameWindowFocusPowerShellScript,
+  buildSendKeysPowerShellScript,
 };

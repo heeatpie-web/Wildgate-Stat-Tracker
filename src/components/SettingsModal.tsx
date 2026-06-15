@@ -123,6 +123,173 @@ const consumeSettingsFocusSectionRequest = (): SettingsFocusSectionRequest | nul
     }
 };
 
+type ViGEmStatus = 'unknown' | 'checking' | 'installed' | 'not-installed' | 'installing' | 'install-failed';
+type GamepadConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'failed';
+
+const GamepadModeSection: React.FC<{
+    enabled: boolean;
+    onToggle: (enabled: boolean) => void;
+    visible: boolean;
+}> = ({ enabled, onToggle, visible }) => {
+    const [driverStatus, setDriverStatus] = useState<ViGEmStatus>('unknown');
+    const [connectionStatus, setConnectionStatus] = useState<GamepadConnectionStatus>('disconnected');
+    const [testResult, setTestResult] = useState<string | null>(null);
+    const [installError, setInstallError] = useState<string | null>(null);
+    const api = getElectronAPI();
+
+    const checkDriver = useCallback(async () => {
+        if (!api) return;
+        setDriverStatus('checking');
+        try {
+            const result = await api.invoke('check-vigem-installed');
+            setDriverStatus(result?.installed ? 'installed' : 'not-installed');
+        } catch {
+            setDriverStatus('not-installed');
+        }
+    }, [api]);
+
+    useEffect(() => {
+        if (enabled && driverStatus === 'unknown') {
+            checkDriver();
+        }
+    }, [enabled, driverStatus, checkDriver]);
+
+    const handleToggle = useCallback(async (value: boolean) => {
+        onToggle(value);
+        if (value && driverStatus === 'unknown') {
+            await checkDriver();
+        }
+    }, [onToggle, driverStatus, checkDriver]);
+
+    const handleInstallDriver = useCallback(async () => {
+        if (!api) return;
+        setDriverStatus('installing');
+        setInstallError(null);
+        try {
+            const result = await api.invoke('install-vigem-driver');
+            if (result?.success) {
+                setDriverStatus('installed');
+            } else {
+                setDriverStatus('install-failed');
+                setInstallError(result?.error || 'Installation failed.');
+            }
+        } catch (err: any) {
+            setDriverStatus('install-failed');
+            setInstallError(err?.message || 'Installation failed.');
+        }
+    }, [api]);
+
+    const handleConnect = useCallback(async () => {
+        if (!api) return;
+        setConnectionStatus('connecting');
+        try {
+            const result = await api.invoke('connect-virtual-gamepad');
+            setConnectionStatus(result?.success ? 'connected' : 'failed');
+        } catch {
+            setConnectionStatus('failed');
+        }
+    }, [api]);
+
+    const handleTest = useCallback(async () => {
+        if (!api) return;
+        setTestResult(null);
+        if (connectionStatus !== 'connected') {
+            await handleConnect();
+        }
+        try {
+            const result = await api.invoke('test-gamepad-input');
+            setTestResult(result?.success ? 'D-pad Up sent — check if the game menu responded.' : (result?.error || 'Test failed.'));
+        } catch (err: any) {
+            setTestResult(err?.message || 'Test failed.');
+        }
+    }, [api, connectionStatus, handleConnect]);
+
+    if (!visible) return null;
+
+    return (
+        <div className="mt-3 rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-4 py-4">
+            <div className="flex items-start justify-between gap-3">
+                <div>
+                    <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">Controller Input Mode</div>
+                    <div className="mt-1 text-label-sm text-md-sys-on-surface/60">
+                        Use a virtual Xbox controller for menu navigation instead of keyboard. Useful when a game update breaks keyboard nav in menus.
+                    </div>
+                </div>
+                <label className="flex shrink-0 cursor-pointer items-center gap-2 mt-0.5">
+                    <input
+                        type="checkbox"
+                        checked={enabled}
+                        onChange={e => handleToggle(e.target.checked)}
+                        className="h-4 w-4 accent-md-sys-primary"
+                    />
+                    <span className="text-label-sm text-md-sys-on-surface/70">Gamepad</span>
+                </label>
+            </div>
+
+            {enabled && (
+                <div className="mt-3 space-y-3">
+                    {(driverStatus === 'not-installed' || driverStatus === 'install-failed') && (
+                        <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-3">
+                            <div className="text-label-sm font-semibold text-amber-400">ViGEmBus Driver Required</div>
+                            <div className="mt-1 text-label-sm text-md-sys-on-surface/60">
+                                ViGEmBus is an open-source virtual gamepad driver that creates a virtual Xbox controller your game can see.
+                                It is widely used by controller emulation tools (DS4Windows, Steam Input) and is completely safe to install.
+                                A one-time admin prompt (UAC) will appear during installation.
+                            </div>
+                            {installError && (
+                                <div className="mt-2 text-label-sm text-red-400">{installError}</div>
+                            )}
+                            <button
+                                onClick={handleInstallDriver}
+                                disabled={driverStatus === 'installing'}
+                                className="mt-2 rounded-md bg-md-sys-primary px-3 py-1.5 text-label-sm font-semibold text-md-sys-on-primary transition-opacity hover:opacity-90 disabled:opacity-50"
+                            >
+                                {driverStatus === 'installing' ? 'Installing...' : 'Install ViGEmBus Driver'}
+                            </button>
+                        </div>
+                    )}
+
+                    {driverStatus === 'checking' && (
+                        <div className="text-label-sm text-md-sys-on-surface/50">Checking for ViGEmBus driver...</div>
+                    )}
+
+                    {driverStatus === 'installed' && (
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <div className={`h-2 w-2 rounded-full ${connectionStatus === 'connected' ? 'bg-green-400' : connectionStatus === 'connecting' ? 'bg-amber-400 animate-pulse' : 'bg-md-sys-on-surface/30'}`} />
+                                <span className="text-label-sm text-md-sys-on-surface/60">
+                                    {connectionStatus === 'connected' ? 'Virtual controller connected' : connectionStatus === 'connecting' ? 'Connecting...' : connectionStatus === 'failed' ? 'Connection failed — is ViGEmBus running?' : 'Virtual controller idle'}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {connectionStatus !== 'connected' && (
+                                    <button
+                                        onClick={handleConnect}
+                                        disabled={connectionStatus === 'connecting'}
+                                        className="rounded-md border border-md-sys-outline/15 px-2.5 py-1 text-label-sm text-md-sys-on-surface/70 transition-colors hover:bg-md-sys-surface-container disabled:opacity-50"
+                                    >
+                                        Connect
+                                    </button>
+                                )}
+                                <button
+                                    onClick={handleTest}
+                                    className="rounded-md border border-md-sys-outline/15 px-2.5 py-1 text-label-sm text-md-sys-on-surface/70 transition-colors hover:bg-md-sys-surface-container"
+                                >
+                                    Test Input
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {testResult && (
+                        <div className="text-label-sm text-md-sys-on-surface/50">{testResult}</div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
 const SettingsModalContent: React.FC = () => {
     const {
         appearanceMode, setAppearanceMode,
@@ -168,6 +335,8 @@ const SettingsModalContent: React.FC = () => {
     const setTacticalMapKeybind = useAppStore(s => s.setTacticalMapKeybind);
     const holdTacticalMapKey = useAppStore(s => s.holdTacticalMapKey);
     const setHoldTacticalMapKey = useAppStore(s => s.setHoldTacticalMapKey);
+    const gamepadModeEnabled = useAppStore(s => s.gamepadModeEnabled);
+    const setGamepadModeEnabled = useAppStore(s => s.setGamepadModeEnabled);
     const autoPopulateRosterOnSave = useAppStore(s => s.autoPopulateRosterOnSave);
     const setAutoPopulateRosterOnSave = useAppStore(s => s.setAutoPopulateRosterOnSave);
     const showSmartCaptureInHeader = useAppStore(s => s.showSmartCaptureInHeader);
@@ -401,6 +570,7 @@ const SettingsModalContent: React.FC = () => {
                 autoCaptureWaitMultiplier: (state as any).autoCaptureWaitMultiplier,
                 tacticalMapKeybind: (state as any).tacticalMapKeybind,
                 holdTacticalMapKey: (state as any).holdTacticalMapKey,
+                gamepadModeEnabled: (state as any).gamepadModeEnabled,
                 autoPopulateRosterOnSave: (state as any).autoPopulateRosterOnSave,
                 fullAutoEnabled: (state as any).fullAutoEnabled,
                 lockOcrTeams: state.lockOcrTeams,
@@ -1220,6 +1390,11 @@ const SettingsModalContent: React.FC = () => {
                                     onChange={(id) => setAutoCaptureSendKeypresses(id === 'keypresses')}
                                 />
                             </SettingRow>
+                            <GamepadModeSection
+                                enabled={gamepadModeEnabled}
+                                onToggle={setGamepadModeEnabled}
+                                visible={autoCaptureSendKeypresses}
+                            />
                             <SettingRow
                                 label="OCR Learning"
                                 value={ocrLearningEnabled ? 'enabled' : 'disabled'}

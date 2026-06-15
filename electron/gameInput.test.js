@@ -10,6 +10,10 @@ const {
   setPersistentPSRunner,
   tokenizeSendKeysSequence,
   translateSendKeysSequenceToNutKeys,
+  buildGameWindowLookupPowerShellScript,
+  buildGameWindowGeometryPowerShellScript,
+  buildGameWindowFocusPowerShellScript,
+  buildSendKeysPowerShellScript,
 } = require('./gameInput.cjs');
 
 describe('gameInput send-keys translation', () => {
@@ -232,5 +236,23 @@ describe('gameInput window candidate cache', () => {
       success: false,
       error: 'Game window geometry unavailable',
     });
+  });
+
+  it('keeps shared PowerShell-compatible early returns in generated helper scripts', () => {
+    const scripts = [
+      buildGameWindowLookupPowerShellScript(),
+      buildGameWindowGeometryPowerShellScript(),
+      buildGameWindowFocusPowerShellScript(),
+      buildSendKeysPowerShellScript(),
+    ];
+
+    scripts.forEach((script) => {
+      expect(script).not.toContain('exit 0');
+    });
+
+    expect(buildGameWindowLookupPowerShellScript()).toContain('return');
+    expect(buildGameWindowGeometryPowerShellScript()).toContain('return');
+    expect(buildGameWindowFocusPowerShellScript()).toContain('return');
+    expect(buildSendKeysPowerShellScript()).toContain('return');
   });
 });

@@ -28,9 +28,13 @@ const { cropImageBuffer, decodeImageBase64 } = require('./resultCaptureHelper.cj
 const { startResultMonitor, stopResultMonitor } = require('./resultCombinedMonitor.cjs');
 const { buildAutoCaptureRequestFromStateSnapshot } = require('./autoCaptureHotkeyState.cjs');
 const { clearGameWindowCache, holdGameKeySequence, lookupGameWindowCandidate, lookupGameWindowGeometry, sendGameKeySequence, setPersistentPSRunner, validateGameInputRuntime } = require('./gameInput.cjs');
+const gamepadInput = require('./gamepadInput.cjs');
+const { getGamepadActionsForStep } = require('./gamepadSequences.cjs');
 const { runPSWithEnv, startPersistentPS, killPersistentPS } = require('./persistentPowerShell.cjs');
 if (process.platform === 'win32') {
   setPersistentPSRunner(runPSWithEnv);
+  gamepadInput.setPSRunner(runPSWithEnv);
+  gamepadInput.setDllDir(path.join(process.resourcesPath || path.join(__dirname, '..'), 'vendor'));
   startPersistentPS();
 }
 const {
@@ -1035,6 +1039,13 @@ const autoCaptureCoordinator = createAutoCaptureCoordinator({
   runWithHeldKeySequence: (sendKeys, action, runWhileHeld) => runHeldGameKeySequenceInternal(sendKeys, action, runWhileHeld),
   sendKeySequence: (sendKeys, action) => sendGameKeySequenceInternal(sendKeys, action),
   sendMenuKeySequence: (sendKeys, action) => sendMenuKeySequenceInternal(sendKeys, action),
+  sendGamepadSequence: async (step, keySequence) => {
+    const actions = getGamepadActionsForStep(step, keySequence);
+    if (!actions || actions.length === 0) {
+      return { success: false, error: `No gamepad mapping for step: ${step?.label || 'unknown'}` };
+    }
+    return gamepadInput.sendGamepadSequence(actions);
+  },
   beforeSequence: async () => beginAutoCaptureWindowSession(),
   afterSequence: async () => endAutoCaptureWindowSession(),
   captureAndProcess: async ({
@@ -4009,9 +4020,32 @@ ipcMain.handle('start-auto-capture', async (_event, request = {}) => {
 });
 
 
-app.on('will-quit', () => {
+ipcMain.handle('check-vigem-installed', async () => {
+  return gamepadInput.checkViGEmBusInstalled();
+});
+
+ipcMain.handle('install-vigem-driver', async () => {
+  const msiPath = path.join(process.resourcesPath || path.join(__dirname, '..'), 'vendor', 'ViGEmBus_Setup_x64.msi');
+  return gamepadInput.installViGEmBus(msiPath);
+});
+
+ipcMain.handle('connect-virtual-gamepad', async () => {
+  return gamepadInput.connectVirtualGamepad();
+});
+
+ipcMain.handle('disconnect-virtual-gamepad', async () => {
+  await gamepadInput.disconnectVirtualGamepad();
+  return { success: true };
+});
+
+ipcMain.handle('test-gamepad-input', async () => {
+  return gamepadInput.sendTestGamepadInput();
+});
+
+app.on('will-quit', async () => {
   console.log('[Hotkey] will-quit -> unregisterAll global shortcuts');
   globalShortcut.unregisterAll();
+  try { await gamepadInput.disconnectVirtualGamepad(); } catch {}
   killPersistentPS();
 });
 app.on('activate', () => {

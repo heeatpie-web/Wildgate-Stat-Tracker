@@ -147,6 +147,7 @@ function buildAutoCaptureRequestFromStateSnapshot(snapshot = {}, { now = Date.no
       ? snapshot.autoCaptureTacticalMapKey
       : (typeof snapshot.tacticalMapKeybind === 'string' ? snapshot.tacticalMapKeybind : ''),
     holdTacticalMapKey: snapshot.holdTacticalMapKey === true,
+    gamepadModeEnabled: snapshot.gamepadModeEnabled === true,
     ocrMode: typeof snapshot.ocrMode === 'string' && snapshot.ocrMode.trim()
       ? snapshot.ocrMode.trim()
       : 'local',
