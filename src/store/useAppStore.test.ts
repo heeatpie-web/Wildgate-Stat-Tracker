@@ -121,6 +121,16 @@ describe('useAppStore OCR preference hydration', () => {
     expect(defaultStore.getState().fullAutoEnabled).toBe(true);
   });
 
+  it('hydrates persisted gamepad mode preference', async () => {
+    const { store: enabledStore } = await loadStore({
+      gamepadModeEnabled: true,
+    });
+    expect(enabledStore.getState().gamepadModeEnabled).toBe(true);
+
+    const { store: defaultStore } = await loadStore({});
+    expect(defaultStore.getState().gamepadModeEnabled).toBe(false);
+  });
+
   it('persists full auto settings through storage', async () => {
     const { store, saveMock } = await loadStore({});
 
@@ -132,7 +142,7 @@ describe('useAppStore OCR preference hydration', () => {
       expect(saveMock).toHaveBeenCalled();
     });
 
-    const latestCall = saveMock.mock.calls.at(-1);
+    const latestCall = saveMock.mock.calls[saveMock.mock.calls.length - 1];
     const savedPayloadFactory = latestCall?.[0];
     const savedPayload = typeof savedPayloadFactory === 'function'
       ? savedPayloadFactory()
@@ -142,6 +152,27 @@ describe('useAppStore OCR preference hydration', () => {
     }));
     expect(latestCall?.[1]).toEqual(expect.objectContaining({
       debounceMs: 300,
+    }));
+  });
+
+  it('persists gamepad mode through storage', async () => {
+    const { store, saveMock } = await loadStore({});
+
+    store.setState({
+      gamepadModeEnabled: true,
+    });
+
+    await waitFor(() => {
+      expect(saveMock).toHaveBeenCalled();
+    });
+
+    const latestCall = saveMock.mock.calls[saveMock.mock.calls.length - 1];
+    const savedPayloadFactory = latestCall?.[0];
+    const savedPayload = typeof savedPayloadFactory === 'function'
+      ? savedPayloadFactory()
+      : savedPayloadFactory;
+    expect(savedPayload.settings).toEqual(expect.objectContaining({
+      gamepadModeEnabled: true,
     }));
   });
 

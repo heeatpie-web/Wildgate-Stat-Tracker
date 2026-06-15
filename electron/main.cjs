@@ -4025,8 +4025,7 @@ ipcMain.handle('check-vigem-installed', async () => {
 });
 
 ipcMain.handle('install-vigem-driver', async () => {
-  const msiPath = path.join(process.resourcesPath || path.join(__dirname, '..'), 'vendor', 'ViGEmBus_Setup_x64.msi');
-  return gamepadInput.installViGEmBus(msiPath);
+  return gamepadInput.installViGEmBus();
 });
 
 ipcMain.handle('connect-virtual-gamepad', async () => {

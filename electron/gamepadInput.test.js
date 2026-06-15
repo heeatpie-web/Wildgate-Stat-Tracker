@@ -6,6 +6,7 @@ const {
   checkViGEmBusInstalled,
   connectVirtualGamepad,
   disconnectVirtualGamepad,
+  installViGEmBus,
   isGamepadConnected,
   sendGamepadSequence,
   setPSRunner,
@@ -55,6 +56,35 @@ describe('gamepadInput', () => {
       });
       const result = await checkViGEmBusInstalled();
       expect(result.installed).toBe(false);
+    });
+  });
+
+  describe('installViGEmBus', () => {
+    it('discovers the bundled ViGEmBus exe from the vendor directory when no setup path is provided', async () => {
+      const fs = require('node:fs');
+      const os = require('node:os');
+      const path = require('node:path');
+      const vendorDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vigem-vendor-'));
+      const setupPath = path.join(vendorDir, 'ViGEmBus_1.22.0_x64_x86_arm64.exe');
+      fs.writeFileSync(setupPath, 'stub');
+
+      setDllDir(vendorDir);
+      mockPSRunner.mockResolvedValue({
+        code: 0,
+        stdout: JSON.stringify({ success: true }),
+        stderr: '',
+      });
+
+      const result = await installViGEmBus();
+
+      expect(result.success).toBe(true);
+      expect(mockPSRunner).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ WILDGATE_VIGEM_SETUP_PATH: setupPath }),
+        expect.objectContaining({ timeoutMs: 120000 }),
+      );
+
+      fs.rmSync(vendorDir, { recursive: true, force: true });
     });
   });
 
