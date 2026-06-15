@@ -9,11 +9,13 @@ const {
   installViGEmBus,
   isGamepadConnected,
   sendGamepadSequence,
+  sendVirtualGamepadState,
   setPSRunner,
   setDllDir,
   buildButtonSequenceScript,
   buildCheckDriverScript,
   buildConnectScript,
+  buildControllerStateScript,
   buildInstallDriverScript,
 } = require('./gamepadInput.cjs');
 
@@ -150,6 +152,39 @@ describe('gamepadInput', () => {
     });
   });
 
+  describe('sendVirtualGamepadState', () => {
+    it('auto-connects and sends button, stick, and trigger state', async () => {
+      mockPSRunner
+        .mockResolvedValueOnce({ code: 0, stdout: JSON.stringify({ success: true }), stderr: '' })
+        .mockResolvedValueOnce({
+          code: 0,
+          stdout: JSON.stringify({ success: true, buttons: 1, axes: 1, sliders: 1, durationMs: 180 }),
+          stderr: '',
+        });
+
+      const result = await sendVirtualGamepadState({
+        buttons: ['A'],
+        axes: { LEFT_STICK_Y: 32767 },
+        sliders: { RIGHT_TRIGGER: 255 },
+        durationMs: 180,
+      });
+
+      expect(result).toEqual(expect.objectContaining({
+        success: true,
+        buttons: 1,
+        axes: 1,
+        sliders: 1,
+        durationMs: 180,
+      }));
+    });
+
+    it('returns error when no controller state inputs are provided', async () => {
+      const result = await sendVirtualGamepadState({ durationMs: 200 });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('No controller inputs');
+    });
+  });
+
   describe('buildButtonSequenceScript', () => {
     it('generates PS script using managed SetButtonState API', () => {
       const script = buildButtonSequenceScript([
@@ -188,6 +223,26 @@ describe('gamepadInput', () => {
     });
   });
 
+  describe('buildControllerStateScript', () => {
+    it('generates PS script for buttons, axes, sliders, and reset-to-neutral behavior', () => {
+      const script = buildControllerStateScript({
+        buttons: ['A', 'RIGHT_SHOULDER'],
+        axes: { LEFT_STICK_X: -32768, LEFT_STICK_Y: 32767 },
+        sliders: { LEFT_TRIGGER: 128 },
+        durationMs: 200,
+      });
+
+      expect(script).toContain("SetAxisValue($global:vigemAxes['LeftThumbX'], [Int16]-32768)");
+      expect(script).toContain("SetAxisValue($global:vigemAxes['LeftThumbY'], [Int16]32767)");
+      expect(script).toContain("SetSliderValue($global:vigemSliders['LeftTrigger'], [Byte]128)");
+      expect(script).toContain("SetButtonState($global:vigemButtons['A'], $true)");
+      expect(script).toContain("SetButtonState($global:vigemButtons['RightShoulder'], $true)");
+      expect(script).toContain('Start-Sleep -Milliseconds 200');
+      expect(script).toContain("SetAxisValue($global:vigemAxes['LeftThumbX'], [Int16]0)");
+      expect(script).toContain("SetSliderValue($global:vigemSliders['LeftTrigger'], [Byte]0)");
+    });
+  });
+
   describe('buildCheckDriverScript', () => {
     it('generates a PS script that checks for the ViGEmBus service', () => {
       const script = buildCheckDriverScript();
@@ -221,6 +276,10 @@ describe('gamepadInput', () => {
       expect(script).toContain("'A'");
       expect(script).toContain("'B'");
       expect(script).toContain("'RightShoulder'");
+      expect(script).toContain('Xbox360Axis');
+      expect(script).toContain('Xbox360Slider');
+      expect(script).toContain("'LeftThumbX'");
+      expect(script).toContain("'RightTrigger'");
     });
 
     it('returns early without exiting the persistent PowerShell host', () => {
@@ -239,6 +298,12 @@ describe('gamepadInput', () => {
 
     it('uses return instead of exit in the button sequence helper script', () => {
       const script = buildButtonSequenceScript([{ button: 'A', flag: 0x1000, durationMs: 80, gapMs: 40 }]);
+      expect(script).toContain('  return');
+      expect(script).not.toContain('exit 0');
+    });
+
+    it('uses return instead of exit in the controller state helper script', () => {
+      const script = buildControllerStateScript({ axes: { LEFT_STICK_Y: 32767 }, durationMs: 120 });
       expect(script).toContain('  return');
       expect(script).not.toContain('exit 0');
     });

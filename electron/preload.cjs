@@ -34,6 +34,7 @@ const INVOKE_CHANNELS = [
   'install-vigem-driver',
   'connect-virtual-gamepad',
   'disconnect-virtual-gamepad',
+  'send-virtual-gamepad-state',
   'test-gamepad-input',
 ];
 

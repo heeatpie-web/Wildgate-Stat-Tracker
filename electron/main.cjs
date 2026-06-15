@@ -4037,6 +4037,10 @@ ipcMain.handle('disconnect-virtual-gamepad', async () => {
   return { success: true };
 });
 
+ipcMain.handle('send-virtual-gamepad-state', async (_event, state) => {
+  return gamepadInput.sendVirtualGamepadState(state);
+});
+
 ipcMain.handle('test-gamepad-input', async () => {
   return gamepadInput.sendTestGamepadInput();
 });

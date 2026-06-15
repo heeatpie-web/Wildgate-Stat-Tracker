@@ -126,6 +126,124 @@ const consumeSettingsFocusSectionRequest = (): SettingsFocusSectionRequest | nul
 type ViGEmStatus = 'unknown' | 'checking' | 'installed' | 'not-installed' | 'installing' | 'install-failed';
 type GamepadConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'failed';
 
+type VirtualPadButton = 'DPAD_UP' | 'DPAD_DOWN' | 'DPAD_LEFT' | 'DPAD_RIGHT' | 'A' | 'B' | 'X' | 'Y' | 'LEFT_SHOULDER' | 'RIGHT_SHOULDER' | 'START' | 'BACK' | 'LEFT_THUMB' | 'RIGHT_THUMB';
+type VirtualPadTrigger = 'LEFT_TRIGGER' | 'RIGHT_TRIGGER';
+type VirtualPadMovementId = 'UP_LEFT' | 'UP' | 'UP_RIGHT' | 'LEFT' | 'NONE' | 'RIGHT' | 'DOWN_LEFT' | 'DOWN' | 'DOWN_RIGHT';
+type VirtualPadStatePayload = {
+    buttons: VirtualPadButton[];
+    axes: Partial<Record<'LEFT_STICK_X' | 'LEFT_STICK_Y', number>>;
+    sliders: Partial<Record<VirtualPadTrigger, number>>;
+    durationMs: number;
+};
+
+const VIRTUAL_PAD_BUTTON_OPTIONS: Array<{ key: VirtualPadButton; label: string }> = [
+    { key: 'DPAD_UP', label: 'D-Pad Up' },
+    { key: 'DPAD_DOWN', label: 'D-Pad Down' },
+    { key: 'DPAD_LEFT', label: 'D-Pad Left' },
+    { key: 'DPAD_RIGHT', label: 'D-Pad Right' },
+    { key: 'A', label: 'A' },
+    { key: 'B', label: 'B' },
+    { key: 'X', label: 'X' },
+    { key: 'Y', label: 'Y' },
+    { key: 'LEFT_SHOULDER', label: 'LB' },
+    { key: 'RIGHT_SHOULDER', label: 'RB' },
+    { key: 'START', label: 'Start' },
+    { key: 'BACK', label: 'Back' },
+    { key: 'LEFT_THUMB', label: 'L3' },
+    { key: 'RIGHT_THUMB', label: 'R3' },
+];
+
+const VIRTUAL_PAD_TRIGGER_OPTIONS: Array<{ key: VirtualPadTrigger; label: string }> = [
+    { key: 'LEFT_TRIGGER', label: 'LT' },
+    { key: 'RIGHT_TRIGGER', label: 'RT' },
+];
+
+const VIRTUAL_PAD_MOVEMENT_GRID: VirtualPadMovementId[][] = [
+    ['UP_LEFT', 'UP', 'UP_RIGHT'],
+    ['LEFT', 'NONE', 'RIGHT'],
+    ['DOWN_LEFT', 'DOWN', 'DOWN_RIGHT'],
+];
+
+const VIRTUAL_PAD_MOVEMENT_META: Record<VirtualPadMovementId, { label: string; compactLabel: string }> = {
+    UP_LEFT: { label: 'Left Stick Up Left', compactLabel: 'Up Left' },
+    UP: { label: 'Left Stick Up', compactLabel: 'Up' },
+    UP_RIGHT: { label: 'Left Stick Up Right', compactLabel: 'Up Right' },
+    LEFT: { label: 'Left Stick Left', compactLabel: 'Left' },
+    NONE: { label: 'Neutral', compactLabel: 'Neutral' },
+    RIGHT: { label: 'Left Stick Right', compactLabel: 'Right' },
+    DOWN_LEFT: { label: 'Left Stick Down Left', compactLabel: 'Down Left' },
+    DOWN: { label: 'Left Stick Down', compactLabel: 'Down' },
+    DOWN_RIGHT: { label: 'Left Stick Down Right', compactLabel: 'Down Right' },
+};
+
+const toggleSelection = <T extends string,>(values: T[], value: T): T[] => (
+    values.includes(value)
+        ? values.filter(item => item !== value)
+        : [...values, value]
+);
+
+const buildVirtualPadAxes = (movement: VirtualPadMovementId, intensityPercent: number): VirtualPadStatePayload['axes'] => {
+    const clampedIntensity = Math.max(0, Math.min(100, Number(intensityPercent) || 0));
+    if (movement === 'NONE' || clampedIntensity <= 0) return {};
+    const full = Math.max(1, Math.round((32767 * clampedIntensity) / 100));
+    const diagonal = Math.max(1, Math.round(full * 0.78));
+    switch (movement) {
+        case 'UP_LEFT':
+            return { LEFT_STICK_X: -diagonal, LEFT_STICK_Y: diagonal };
+        case 'UP':
+            return { LEFT_STICK_Y: full };
+        case 'UP_RIGHT':
+            return { LEFT_STICK_X: diagonal, LEFT_STICK_Y: diagonal };
+        case 'LEFT':
+            return { LEFT_STICK_X: -full };
+        case 'RIGHT':
+            return { LEFT_STICK_X: full };
+        case 'DOWN_LEFT':
+            return { LEFT_STICK_X: -diagonal, LEFT_STICK_Y: -diagonal };
+        case 'DOWN':
+            return { LEFT_STICK_Y: -full };
+        case 'DOWN_RIGHT':
+            return { LEFT_STICK_X: diagonal, LEFT_STICK_Y: -diagonal };
+        default:
+            return {};
+    }
+};
+
+const buildVirtualPadSliders = (selectedTriggers: VirtualPadTrigger[], triggerIntensityPercent: number): VirtualPadStatePayload['sliders'] => {
+    const clampedIntensity = Math.max(0, Math.min(100, Number(triggerIntensityPercent) || 0));
+    const triggerValue = Math.round((255 * clampedIntensity) / 100);
+    return selectedTriggers.reduce<VirtualPadStatePayload['sliders']>((acc, trigger) => {
+        acc[trigger] = triggerValue;
+        return acc;
+    }, {});
+};
+
+const getVirtualPadButtonLabel = (button: VirtualPadButton): string => (
+    VIRTUAL_PAD_BUTTON_OPTIONS.find(option => option.key === button)?.label || button
+);
+
+const getVirtualPadTriggerLabel = (trigger: VirtualPadTrigger): string => (
+    VIRTUAL_PAD_TRIGGER_OPTIONS.find(option => option.key === trigger)?.label || trigger
+);
+
+const describeVirtualPadSelection = (
+    movement: VirtualPadMovementId,
+    buttons: VirtualPadButton[],
+    triggers: VirtualPadTrigger[],
+): string => {
+    const segments: string[] = [];
+    if (movement !== 'NONE') {
+        segments.push(VIRTUAL_PAD_MOVEMENT_META[movement].label);
+    }
+    if (buttons.length > 0) {
+        segments.push(buttons.map(getVirtualPadButtonLabel).join(' + '));
+    }
+    if (triggers.length > 0) {
+        segments.push(triggers.map(getVirtualPadTriggerLabel).join(' + '));
+    }
+    return segments.join(' + ');
+};
+
 const GamepadModeSection: React.FC<{
     enabled: boolean;
     onToggle: (enabled: boolean) => void;
@@ -135,6 +253,12 @@ const GamepadModeSection: React.FC<{
     const [connectionStatus, setConnectionStatus] = useState<GamepadConnectionStatus>('disconnected');
     const [testResult, setTestResult] = useState<string | null>(null);
     const [installError, setInstallError] = useState<string | null>(null);
+    const [selectedMovement, setSelectedMovement] = useState<VirtualPadMovementId>('NONE');
+    const [selectedButtons, setSelectedButtons] = useState<VirtualPadButton[]>([]);
+    const [selectedTriggers, setSelectedTriggers] = useState<VirtualPadTrigger[]>([]);
+    const [stickIntensityPercent, setStickIntensityPercent] = useState(100);
+    const [triggerIntensityPercent, setTriggerIntensityPercent] = useState(100);
+    const [holdDurationMs, setHoldDurationMs] = useState(180);
     const api = getElectronAPI();
 
     const checkDriver = useCallback(async () => {
@@ -180,21 +304,30 @@ const GamepadModeSection: React.FC<{
     }, [api]);
 
     const handleConnect = useCallback(async () => {
-        if (!api) return;
+        if (!api) return false;
         setConnectionStatus('connecting');
         try {
             const result = await api.invoke('connect-virtual-gamepad');
-            setConnectionStatus(result?.success ? 'connected' : 'failed');
+            const connected = result?.success === true;
+            setConnectionStatus(connected ? 'connected' : 'failed');
+            return connected;
         } catch {
             setConnectionStatus('failed');
+            return false;
         }
     }, [api]);
+
+    const ensureConnected = useCallback(async () => {
+        if (connectionStatus === 'connected') return true;
+        return handleConnect();
+    }, [connectionStatus, handleConnect]);
 
     const handleTest = useCallback(async () => {
         if (!api) return;
         setTestResult(null);
-        if (connectionStatus !== 'connected') {
-            await handleConnect();
+        if (!(await ensureConnected())) {
+            setTestResult('Could not connect the virtual controller.');
+            return;
         }
         try {
             const result = await api.invoke('test-gamepad-input');
@@ -202,7 +335,58 @@ const GamepadModeSection: React.FC<{
         } catch (err: any) {
             setTestResult(err?.message || 'Test failed.');
         }
-    }, [api, connectionStatus, handleConnect]);
+    }, [api, ensureConnected]);
+
+    const sendVirtualPadState = useCallback(async (payload: VirtualPadStatePayload) => {
+        if (!api) return;
+        const hasInput = payload.buttons.length > 0 || Object.keys(payload.axes).length > 0 || Object.keys(payload.sliders).length > 0;
+        if (!hasInput) {
+            setTestResult('Select at least one movement, button, or trigger to test.');
+            return;
+        }
+        setTestResult(null);
+        if (!(await ensureConnected())) {
+            setTestResult('Could not connect the virtual controller.');
+            return;
+        }
+        try {
+            const result = await api.invoke('send-virtual-gamepad-state', payload);
+            if (result?.success) {
+                const summary = describeVirtualPadSelection(selectedMovement, selectedButtons, selectedTriggers);
+                setTestResult(summary ? `Sent ${summary}.` : 'Sent virtual controller state.');
+            } else {
+                setConnectionStatus('failed');
+                setTestResult(result?.error || 'Virtual controller test failed.');
+            }
+        } catch (err: any) {
+            setConnectionStatus('failed');
+            setTestResult(err?.message || 'Virtual controller test failed.');
+        }
+    }, [api, ensureConnected, selectedButtons, selectedMovement, selectedTriggers]);
+
+    const handleSendSelectedCombo = useCallback(async () => {
+        await sendVirtualPadState({
+            buttons: selectedButtons,
+            axes: buildVirtualPadAxes(selectedMovement, stickIntensityPercent),
+            sliders: buildVirtualPadSliders(selectedTriggers, triggerIntensityPercent),
+            durationMs: holdDurationMs,
+        });
+    }, [holdDurationMs, selectedButtons, selectedMovement, selectedTriggers, sendVirtualPadState, stickIntensityPercent, triggerIntensityPercent]);
+
+    const handleClearSelection = useCallback(() => {
+        setSelectedMovement('NONE');
+        setSelectedButtons([]);
+        setSelectedTriggers([]);
+        setTestResult(null);
+    }, []);
+
+    const selectionSummary = describeVirtualPadSelection(selectedMovement, selectedButtons, selectedTriggers);
+    const toggleButtonClass = (selected: boolean) => (
+        `rounded-md border px-2.5 py-2 text-label-sm transition-colors ${selected
+            ? 'border-md-sys-primary/40 bg-md-sys-primary/15 text-md-sys-on-surface'
+            : 'border-md-sys-outline/15 bg-md-sys-surface text-md-sys-on-surface/70 hover:bg-md-sys-surface-container'
+        }`
+    );
 
     if (!visible) return null;
 
@@ -241,10 +425,9 @@ const GamepadModeSection: React.FC<{
                             )}
                             <button
                                 onClick={handleInstallDriver}
-                                disabled={driverStatus === 'installing'}
                                 className="mt-2 rounded-md bg-md-sys-primary px-3 py-1.5 text-label-sm font-semibold text-md-sys-on-primary transition-opacity hover:opacity-90 disabled:opacity-50"
                             >
-                                {driverStatus === 'installing' ? 'Installing...' : 'Install ViGEmBus Driver'}
+                                Install ViGEmBus Driver
                             </button>
                         </div>
                     )}
@@ -254,29 +437,158 @@ const GamepadModeSection: React.FC<{
                     )}
 
                     {driverStatus === 'installed' && (
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <div className={`h-2 w-2 rounded-full ${connectionStatus === 'connected' ? 'bg-green-400' : connectionStatus === 'connecting' ? 'bg-amber-400 animate-pulse' : 'bg-md-sys-on-surface/30'}`} />
-                                <span className="text-label-sm text-md-sys-on-surface/60">
-                                    {connectionStatus === 'connected' ? 'Virtual controller connected' : connectionStatus === 'connecting' ? 'Connecting...' : connectionStatus === 'failed' ? 'Connection failed — is ViGEmBus running?' : 'Virtual controller idle'}
-                                </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                {connectionStatus !== 'connected' && (
+                        <div className="space-y-3">
+                            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                <div className="flex items-center gap-2">
+                                    <div className={`h-2 w-2 rounded-full ${connectionStatus === 'connected' ? 'bg-green-400' : connectionStatus === 'connecting' ? 'bg-amber-400 animate-pulse' : 'bg-md-sys-on-surface/30'}`} />
+                                    <span className="text-label-sm text-md-sys-on-surface/60">
+                                        {connectionStatus === 'connected' ? 'Virtual controller connected' : connectionStatus === 'connecting' ? 'Connecting...' : connectionStatus === 'failed' ? 'Connection failed — is ViGEmBus running?' : 'Virtual controller idle'}
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {connectionStatus !== 'connected' && (
+                                        <button
+                                            onClick={handleConnect}
+                                            disabled={connectionStatus === 'connecting'}
+                                            className="rounded-md border border-md-sys-outline/15 px-2.5 py-1 text-label-sm text-md-sys-on-surface/70 transition-colors hover:bg-md-sys-surface-container disabled:opacity-50"
+                                        >
+                                            Connect
+                                        </button>
+                                    )}
                                     <button
-                                        onClick={handleConnect}
-                                        disabled={connectionStatus === 'connecting'}
-                                        className="rounded-md border border-md-sys-outline/15 px-2.5 py-1 text-label-sm text-md-sys-on-surface/70 transition-colors hover:bg-md-sys-surface-container disabled:opacity-50"
+                                        onClick={handleTest}
+                                        className="rounded-md border border-md-sys-outline/15 px-2.5 py-1 text-label-sm text-md-sys-on-surface/70 transition-colors hover:bg-md-sys-surface-container"
                                     >
-                                        Connect
+                                        Test Menu D-Pad Up
                                     </button>
-                                )}
-                                <button
-                                    onClick={handleTest}
-                                    className="rounded-md border border-md-sys-outline/15 px-2.5 py-1 text-label-sm text-md-sys-on-surface/70 transition-colors hover:bg-md-sys-surface-container"
-                                >
-                                    Test Input
-                                </button>
+                                </div>
+                            </div>
+
+                            <div className="rounded-lg border border-md-sys-outline/10 bg-md-sys-surface px-3 py-3">
+                                <div className="text-label-sm font-semibold text-md-sys-on-surface/80">Virtual Controller Tester</div>
+                                <div className="mt-1 text-label-sm text-md-sys-on-surface/60">
+                                    Pick a left-stick direction, optional buttons, and optional triggers, then send the combo to compare menu navigation against in-game movement input.
+                                </div>
+
+                                <div className="mt-3 grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]">
+                                    <div className="space-y-3">
+                                        <div>
+                                            <div className="text-label-xs font-semibold uppercase tracking-wide text-md-sys-on-surface/45">Left Stick</div>
+                                            <div className="mt-2 grid grid-cols-3 gap-2">
+                                                {VIRTUAL_PAD_MOVEMENT_GRID.flat().map((movementId) => (
+                                                    <button
+                                                        key={movementId}
+                                                        onClick={() => setSelectedMovement(movementId)}
+                                                        className={`${toggleButtonClass(selectedMovement === movementId)} min-h-[56px] text-center`}
+                                                    >
+                                                        <div className="font-semibold">{VIRTUAL_PAD_MOVEMENT_META[movementId].compactLabel}</div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <div className="flex items-center justify-between text-label-xs font-semibold uppercase tracking-wide text-md-sys-on-surface/45">
+                                                <span>Stick Intensity</span>
+                                                <span>{stickIntensityPercent}%</span>
+                                            </div>
+                                            <input
+                                                type="range"
+                                                min={25}
+                                                max={100}
+                                                step={5}
+                                                value={stickIntensityPercent}
+                                                onChange={e => setStickIntensityPercent(Number(e.target.value))}
+                                                className="mt-2 h-2 w-full accent-md-sys-primary"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <div className="flex items-center justify-between text-label-xs font-semibold uppercase tracking-wide text-md-sys-on-surface/45">
+                                                <span>Trigger Intensity</span>
+                                                <span>{triggerIntensityPercent}%</span>
+                                            </div>
+                                            <input
+                                                type="range"
+                                                min={25}
+                                                max={100}
+                                                step={5}
+                                                value={triggerIntensityPercent}
+                                                onChange={e => setTriggerIntensityPercent(Number(e.target.value))}
+                                                className="mt-2 h-2 w-full accent-md-sys-primary"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <div className="flex items-center justify-between text-label-xs font-semibold uppercase tracking-wide text-md-sys-on-surface/45">
+                                                <span>Hold Time</span>
+                                                <span>{holdDurationMs} ms</span>
+                                            </div>
+                                            <input
+                                                type="range"
+                                                min={60}
+                                                max={800}
+                                                step={20}
+                                                value={holdDurationMs}
+                                                onChange={e => setHoldDurationMs(Number(e.target.value))}
+                                                className="mt-2 h-2 w-full accent-md-sys-primary"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        <div>
+                                            <div className="text-label-xs font-semibold uppercase tracking-wide text-md-sys-on-surface/45">Buttons</div>
+                                            <div className="mt-2 flex flex-wrap gap-2">
+                                                {VIRTUAL_PAD_BUTTON_OPTIONS.map(option => (
+                                                    <button
+                                                        key={option.key}
+                                                        onClick={() => setSelectedButtons(current => toggleSelection(current, option.key))}
+                                                        className={toggleButtonClass(selectedButtons.includes(option.key))}
+                                                    >
+                                                        {option.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <div className="text-label-xs font-semibold uppercase tracking-wide text-md-sys-on-surface/45">Triggers</div>
+                                            <div className="mt-2 flex flex-wrap gap-2">
+                                                {VIRTUAL_PAD_TRIGGER_OPTIONS.map(option => (
+                                                    <button
+                                                        key={option.key}
+                                                        onClick={() => setSelectedTriggers(current => toggleSelection(current, option.key))}
+                                                        className={toggleButtonClass(selectedTriggers.includes(option.key))}
+                                                    >
+                                                        {option.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="rounded-md border border-md-sys-outline/10 bg-md-sys-surface-container px-3 py-3">
+                                            <div className="text-label-xs font-semibold uppercase tracking-wide text-md-sys-on-surface/45">Selected Test</div>
+                                            <div className="mt-1 text-label-sm text-md-sys-on-surface/65">
+                                                {selectionSummary || 'No controller inputs selected yet.'}
+                                            </div>
+                                            <div className="mt-3 flex flex-wrap gap-2">
+                                                <button
+                                                    onClick={handleSendSelectedCombo}
+                                                    className="rounded-md bg-md-sys-primary px-3 py-1.5 text-label-sm font-semibold text-md-sys-on-primary transition-opacity hover:opacity-90"
+                                                >
+                                                    Send Selected Combo
+                                                </button>
+                                                <button
+                                                    onClick={handleClearSelection}
+                                                    className="rounded-md border border-md-sys-outline/15 px-3 py-1.5 text-label-sm text-md-sys-on-surface/70 transition-colors hover:bg-md-sys-surface-container-high"
+                                                >
+                                                    Clear Selection
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}

@@ -20,6 +20,18 @@ const BUTTON_NAME_MAP = Object.freeze({
   Y: 'Y',
 });
 
+const AXIS_NAME_MAP = Object.freeze({
+  LEFT_STICK_X: 'LeftThumbX',
+  LEFT_STICK_Y: 'LeftThumbY',
+  RIGHT_STICK_X: 'RightThumbX',
+  RIGHT_STICK_Y: 'RightThumbY',
+});
+
+const SLIDER_NAME_MAP = Object.freeze({
+  LEFT_TRIGGER: 'LeftTrigger',
+  RIGHT_TRIGGER: 'RightTrigger',
+});
+
 let _psRunner = null;
 let _connected = false;
 let _dllDir = null;
@@ -45,6 +57,42 @@ function runPS(script, env, opts) {
 
 function parseJsonSafely(value) {
   try { return JSON.parse(value); } catch { return null; }
+}
+
+function clampAxisValue(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(-32768, Math.min(32767, Math.round(numeric)));
+}
+
+function clampSliderValue(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(0, Math.min(255, Math.round(numeric)));
+}
+
+function normalizeControllerState(state) {
+  const candidate = state && typeof state === 'object' ? state : {};
+  const buttons = Array.isArray(candidate.buttons)
+    ? Array.from(new Set(candidate.buttons.filter((button) => typeof button === 'string' && BUTTON_NAME_MAP[button])))
+    : [];
+
+  const axes = {};
+  const rawAxes = candidate.axes && typeof candidate.axes === 'object' ? candidate.axes : {};
+  for (const key of Object.keys(AXIS_NAME_MAP)) {
+    if (rawAxes[key] == null) continue;
+    axes[key] = clampAxisValue(rawAxes[key]);
+  }
+
+  const sliders = {};
+  const rawSliders = candidate.sliders && typeof candidate.sliders === 'object' ? candidate.sliders : {};
+  for (const key of Object.keys(SLIDER_NAME_MAP)) {
+    if (rawSliders[key] == null) continue;
+    sliders[key] = clampSliderValue(rawSliders[key]);
+  }
+
+  const durationMs = Math.max(20, Math.min(2000, Number(candidate.durationMs) || 160));
+  return { buttons, axes, sliders, durationMs };
 }
 
 function buildCheckDriverScript() {
@@ -114,9 +162,19 @@ try {
   $global:vigemController.Connect()
 
   $btnType = $asm.GetType('Nefarius.ViGEm.Client.Targets.Xbox360.Xbox360Button')
+  $axisType = $asm.GetType('Nefarius.ViGEm.Client.Targets.Xbox360.Xbox360Axis')
+  $sliderType = $asm.GetType('Nefarius.ViGEm.Client.Targets.Xbox360.Xbox360Slider')
   $global:vigemButtons = @{}
   foreach ($name in @('Up','Down','Left','Right','Start','Back','A','B','X','Y','LeftShoulder','RightShoulder','LeftThumb','RightThumb')) {
     $global:vigemButtons[$name] = $btnType.GetField($name).GetValue($null)
+  }
+  $global:vigemAxes = @{}
+  foreach ($name in @('LeftThumbX','LeftThumbY','RightThumbX','RightThumbY')) {
+    $global:vigemAxes[$name] = $axisType.GetField($name).GetValue($null)
+  }
+  $global:vigemSliders = @{}
+  foreach ($name in @('LeftTrigger','RightTrigger')) {
+    $global:vigemSliders[$name] = $sliderType.GetField($name).GetValue($null)
   }
 
   [pscustomobject]@{ success = $true } | ConvertTo-Json -Compress
@@ -124,6 +182,8 @@ try {
   $global:vigemController = $null
   $global:vigemClient = $null
   $global:vigemButtons = $null
+  $global:vigemAxes = $null
+  $global:vigemSliders = $null
   $msg = $_.Exception.InnerException.Message
   if (-not $msg) { $msg = $_.Exception.Message }
   [pscustomobject]@{ success = $false; error = $msg } | ConvertTo-Json -Compress
@@ -143,6 +203,8 @@ if ($global:vigemClient) {
 $global:vigemController = $null
 $global:vigemClient = $null
 $global:vigemButtons = $null
+$global:vigemAxes = $null
+$global:vigemSliders = $null
 'disconnected'
 `;
 }
@@ -169,6 +231,51 @@ function buildButtonSequenceScript(actions) {
   }
 
   lines.push('[pscustomobject]@{ success = $true; count = ' + actions.length + ' } | ConvertTo-Json -Compress');
+  return lines.join('\n');
+}
+
+function buildControllerStateScript(state) {
+  const normalized = normalizeControllerState(state);
+  const buttonNames = normalized.buttons
+    .map((button) => BUTTON_NAME_MAP[button])
+    .filter(Boolean);
+  const axisEntries = Object.entries(normalized.axes)
+    .map(([key, value]) => [AXIS_NAME_MAP[key], value])
+    .filter(([key]) => Boolean(key));
+  const sliderEntries = Object.entries(normalized.sliders)
+    .map(([key, value]) => [SLIDER_NAME_MAP[key], value])
+    .filter(([key]) => Boolean(key));
+
+  const lines = [];
+  lines.push('$ErrorActionPreference = "Stop"');
+  lines.push('if (-not $global:vigemController -or -not $global:vigemButtons -or -not $global:vigemAxes -or -not $global:vigemSliders) {');
+  lines.push('  [pscustomobject]@{ success = $false; error = "Virtual gamepad not connected" } | ConvertTo-Json -Compress');
+  lines.push('  return');
+  lines.push('}');
+
+  for (const [managedName, value] of axisEntries) {
+    lines.push(`$global:vigemController.SetAxisValue($global:vigemAxes['${managedName}'], [Int16]${value})`);
+  }
+  for (const [managedName, value] of sliderEntries) {
+    lines.push(`$global:vigemController.SetSliderValue($global:vigemSliders['${managedName}'], [Byte]${value})`);
+  }
+  for (const managedName of buttonNames) {
+    lines.push(`$global:vigemController.SetButtonState($global:vigemButtons['${managedName}'], $true)`);
+  }
+
+  lines.push(`Start-Sleep -Milliseconds ${normalized.durationMs}`);
+
+  for (const managedName of buttonNames) {
+    lines.push(`$global:vigemController.SetButtonState($global:vigemButtons['${managedName}'], $false)`);
+  }
+  for (const [managedName] of axisEntries) {
+    lines.push(`$global:vigemController.SetAxisValue($global:vigemAxes['${managedName}'], [Int16]0)`);
+  }
+  for (const [managedName] of sliderEntries) {
+    lines.push(`$global:vigemController.SetSliderValue($global:vigemSliders['${managedName}'], [Byte]0)`);
+  }
+
+  lines.push(`[pscustomobject]@{ success = $true; buttons = ${buttonNames.length}; axes = ${axisEntries.length}; sliders = ${sliderEntries.length}; durationMs = ${normalized.durationMs} } | ConvertTo-Json -Compress`);
   return lines.join('\n');
 }
 
@@ -281,6 +388,45 @@ async function sendGamepadSequence(actions) {
   return { success: false, error };
 }
 
+async function sendVirtualGamepadState(state) {
+  const normalized = normalizeControllerState(state);
+  const hasInput = normalized.buttons.length > 0
+    || Object.keys(normalized.axes).length > 0
+    || Object.keys(normalized.sliders).length > 0;
+
+  if (!hasInput) {
+    return { success: false, error: 'No controller inputs provided' };
+  }
+
+  if (!_connected) {
+    const connectResult = await connectVirtualGamepad();
+    if (!connectResult.success) {
+      return { success: false, error: connectResult.error || 'Virtual gamepad not connected' };
+    }
+  }
+
+  const result = await runPS(buildControllerStateScript(normalized), {}, {
+    timeoutMs: Math.max(5000, normalized.durationMs + 4000),
+  });
+  const parsed = parseJsonSafely(String(result?.stdout || '').trim());
+
+  if (parsed?.success) {
+    return {
+      success: true,
+      buttons: parsed.buttons,
+      axes: parsed.axes,
+      sliders: parsed.sliders,
+      durationMs: parsed.durationMs,
+    };
+  }
+
+  const error = parsed?.error || result?.stderr || 'Virtual controller state send failed';
+  if (error.includes('not connected')) {
+    _connected = false;
+  }
+  return { success: false, error };
+}
+
 async function sendTestGamepadInput() {
   const { XUSB_BUTTON: buttons } = require('./gamepadSequences.cjs');
   return sendGamepadSequence([
@@ -295,6 +441,7 @@ module.exports = {
   installViGEmBus,
   isGamepadConnected,
   sendGamepadSequence,
+  sendVirtualGamepadState,
   sendTestGamepadInput,
   setDllDir,
   setPSRunner,
@@ -303,6 +450,7 @@ module.exports = {
   buildButtonSequenceScript,
   buildCheckDriverScript,
   buildConnectScript,
+  buildControllerStateScript,
   buildDisconnectScript,
   buildInstallDriverScript,
 };
