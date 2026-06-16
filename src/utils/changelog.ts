@@ -1,4 +1,12 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.7.2": [
+    "Optimize gamepad macro to use Right x2 / Down x1 navigation",
+    "Add Baseline - Launch era to analytics filters",
+    "Optimize CPU usage in store subscriptions",
+    "Fix character perk detection mappings",
+    "Persist gamepad mode and resolve ViGEm installer issues",
+    "Add virtual controller tester"
+  ],
   "v3.7.1": [
     "Keep the shared PowerShell controller alive when gamepad and game-input helpers return early",
     "Add regression coverage for persistent PowerShell-compatible helper scripts"
