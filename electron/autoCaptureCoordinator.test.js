@@ -495,11 +495,11 @@ describe('autoCaptureCoordinator sequencing', () => {
 
     // Menu steps use gamepad instead of keyboard
     expect(sendGamepadSequence).toHaveBeenCalledTimes(5);
-    expect(sendGamepadSequence).toHaveBeenNthCalledWith(1, expect.objectContaining({ label: 'Navigate to Crew Hub' }), '{ESC}');
-    expect(sendGamepadSequence).toHaveBeenNthCalledWith(2, expect.objectContaining({ label: 'Navigate to Crew Hub' }), '{UP}{UP}{UP}{SPACE}');
-    expect(sendGamepadSequence).toHaveBeenNthCalledWith(3, expect.objectContaining({ label: 'Navigate to Crew Hub Panel (Right)' }), '{RIGHT}{RIGHT}');
-    expect(sendGamepadSequence).toHaveBeenNthCalledWith(4, expect.objectContaining({ label: 'Navigate to Crew Hub Panel End' }), '{DOWN}');
-    expect(sendGamepadSequence).toHaveBeenNthCalledWith(5, expect.objectContaining({ label: 'Exit' }), '{ESC}');
+    expect(sendGamepadSequence).toHaveBeenNthCalledWith(1, expect.objectContaining({ label: 'Navigate to Crew Hub' }), '{ESC}', null);
+    expect(sendGamepadSequence).toHaveBeenNthCalledWith(2, expect.objectContaining({ label: 'Navigate to Crew Hub' }), '{UP}{UP}{UP}{SPACE}', null);
+    expect(sendGamepadSequence).toHaveBeenNthCalledWith(3, expect.objectContaining({ label: 'Navigate to Crew Hub Panel (Right)' }), '{RIGHT}{RIGHT}', null);
+    expect(sendGamepadSequence).toHaveBeenNthCalledWith(4, expect.objectContaining({ label: 'Navigate to Crew Hub Panel End' }), '{DOWN}', null);
+    expect(sendGamepadSequence).toHaveBeenNthCalledWith(5, expect.objectContaining({ label: 'Exit' }), '{ESC}', null);
 
     // sendMenuKeySequence should NOT be called — gamepad replaces it
     expect(sendMenuKeySequence).not.toHaveBeenCalled();

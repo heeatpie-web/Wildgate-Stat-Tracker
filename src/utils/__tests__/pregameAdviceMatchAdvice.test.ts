@@ -90,7 +90,7 @@ describe('pregame advice match helpers', () => {
       updatedAt: 200,
     };
 
-    expect(isPregameAdviceSnapshotEqual(left, right)).toBe(true);
+    expect(isPregameAdviceSnapshotEqual(left as any, right as any)).toBe(true);
   });
 
   it('detects when a match has fresh lobby intel to score against', () => {

@@ -26,13 +26,13 @@ const baseMatches: Match[] = [
 ];
 
 const gameDataState = {
-    pilotRegistry: ['PilotOne', 'Pilot0ne'],
-    rosterEntryMeta: {},
-    favorites: [],
-    pilotNotes: {},
+    pilotRegistry: ['PilotOne', 'Pilot0ne'] as string[],
+    rosterEntryMeta: {} as Record<string, any>,
+    favorites: [] as string[],
+    pilotNotes: {} as Record<string, any>,
     pilotAliases: {
         PilotOne: ['Pilot One Old'],
-    },
+    } as Record<string, string[]>,
     toggleFavorite: vi.fn(),
     updatePilotNote: vi.fn(),
     removeFromRegistry: vi.fn(),
@@ -40,12 +40,12 @@ const gameDataState = {
     mergePilots: vi.fn(),
     mergePilotsBatch: vi.fn(),
     undoLastMerge: vi.fn(),
-    mergeHistory: [],
-    activeMergeNotificationId: null,
+    mergeHistory: [] as any[],
+    activeMergeNotificationId: null as string | null,
     dismissActiveMergeNotification: vi.fn(),
-    pendingReviews: [],
-    dismissedRosterMergePairKeys: [],
-    dismissedRosterCandidateKeys: [],
+    pendingReviews: [] as any[],
+    dismissedRosterMergePairKeys: [] as string[],
+    dismissedRosterCandidateKeys: [] as string[],
     dismissRosterMergeSuggestionPairs: vi.fn(),
     dismissRosterCandidateKeys: vi.fn(),
     addToRegistry: vi.fn(),
@@ -54,7 +54,7 @@ const gameDataState = {
     removePilotAlias: vi.fn(),
     removePendingReviews: vi.fn(),
     removePendingReview: vi.fn(),
-    matches: [...baseMatches],
+    matches: [...baseMatches] as any[],
     playerProfiles: {
         PilotOne: {
             id: 'PilotOne',
@@ -82,7 +82,7 @@ const gameDataState = {
             manualSightings: 1,
             lastOcrConfidence: null,
         },
-    },
+    } as Record<string, any>,
     setDrillDownTarget: vi.fn(),
 };
 
@@ -119,7 +119,7 @@ const appStoreState = {
                 confidenceWeight: 0.8,
                 contexts: { unknown: 3 },
             }],
-        },
+        } as Record<string, any[]>,
         blocklist: {},
         stats: { totalEntries: 1, lastCompactedAt: Date.now() },
     },

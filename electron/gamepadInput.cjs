@@ -371,6 +371,9 @@ async function sendGamepadSequence(actions) {
     if (!connectResult.success) {
       return { success: false, error: connectResult.error || 'Virtual gamepad not connected' };
     }
+    if (!connectResult.alreadyConnected) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
   }
 
   const script = buildButtonSequenceScript(actions);

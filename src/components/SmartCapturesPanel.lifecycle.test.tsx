@@ -20,7 +20,7 @@ const gameData = {
       result: 'Win',
       ocrState: 'queued',
     },
-  ],
+  ] as any[],
   updateMatch: vi.fn(),
   deleteMatch: vi.fn(),
   pilotRegistry: ['Pilot', 'Wingman'],
@@ -44,7 +44,7 @@ const uiState = {
   devMode: false,
   setToast: vi.fn(),
   setShowSettings: vi.fn(),
-  smartCapturesFocusMatchId: null,
+  smartCapturesFocusMatchId: null as any,
   setSmartCapturesFocusMatchId: vi.fn(),
   setActiveView: vi.fn(),
   showWizard: null,
@@ -58,7 +58,7 @@ const appStoreState = {
   setOcrRegions: vi.fn(),
   activeSection: 'tools',
   setActiveSection: vi.fn(),
-  selectedMatchId: null,
+  selectedMatchId: null as any,
   setSelectedMatchId: vi.fn(),
   searchQuery: '',
   setSearchQuery: vi.fn(),
@@ -102,7 +102,7 @@ const previewArtifactRepair = vi.fn();
 const applyArtifactRepair = vi.fn();
 const rerunOCRMulti = vi.fn();
 const getMatchArtifactsStructured = vi.fn();
-const electronInvoke = vi.fn(async () => 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WnY4nQAAAAASUVORK5CYII=');
+const electronInvoke = vi.fn(async (..._args: any[]): Promise<any> => 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WnY4nQAAAAASUVORK5CYII=');
 const electronSend = vi.fn();
 const getElectronAPIMock = vi.fn(() => ({
   send: electronSend,

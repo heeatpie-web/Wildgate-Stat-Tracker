@@ -11,7 +11,7 @@ const fakeUserData = path.join(os.tmpdir(), 'wg-ocr-vitest');
 fs.mkdirSync(fakeUserData, { recursive: true });
 
 const mockId = '__wg_electron_mock_vitest__';
-require.cache[mockId] = {
+(require.cache as any)[mockId] = {
   id: mockId,
   filename: mockId,
   loaded: true,

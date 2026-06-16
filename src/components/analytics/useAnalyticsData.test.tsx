@@ -144,11 +144,11 @@ describe('useAnalyticsData', () => {
       {
         initialProps: {
           filters: {
-            ship: ['Hunter'],
-            prospectorWeapon: [],
-            equipment: [],
-            perk: [],
-            update: [],
+            ship: ['Hunter'] as string[],
+            prospectorWeapon: [] as string[],
+            equipment: [] as string[],
+            perk: [] as string[],
+            update: [] as string[],
           },
         },
       }

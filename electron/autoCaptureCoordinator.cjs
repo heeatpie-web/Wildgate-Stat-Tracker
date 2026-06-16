@@ -242,6 +242,7 @@ function createAutoCaptureCoordinator({
     activeUser = null,
     sendKeypresses = true,
     gamepadModeEnabled = false,
+    macroSequenceConfig = null,
     waitMultiplier = 0.5,
     ocrMode = 'local',
     ocrRegions = null,
@@ -260,7 +261,7 @@ function createAutoCaptureCoordinator({
 
       if (useGamepad && useMenuSender) {
         logAutoCaptureStep(step, '(gamepad)');
-        const result = await sendGamepadSequence(step, sequence);
+        const result = await sendGamepadSequence(step, sequence, macroSequenceConfig);
         if (!result?.success) {
           const reason = result?.error || 'gamepad input failed';
           throw new Error(`${step.label}: ${reason}`);
@@ -498,6 +499,9 @@ function createAutoCaptureCoordinator({
           : {},
         tacticalMapKeybind,
         holdTacticalMapKey,
+        macroSequenceConfig: request.macroSequenceConfig && typeof request.macroSequenceConfig === 'object'
+          ? request.macroSequenceConfig
+          : null,
       };
 
       inProgress = true;

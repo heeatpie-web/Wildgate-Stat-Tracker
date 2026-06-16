@@ -1,6 +1,7 @@
 import type { Match } from '../types';
 import { useAppStore } from '../store/useAppStore';
 import type { TelemetryLifecycleStage } from '../store/slices/createUISlice';
+import type { MacroSequenceConfig } from '../store/slices/createSettingsSlice';
 
 export const AUTO_CAPTURE_DRAFT_LOOKBACK_MS = 6 * 60 * 60 * 1000;
 export const AUTO_CAPTURE_DRAFT_SESSION_BUFFER_MS = 60_000;
@@ -19,6 +20,7 @@ export interface AutoCaptureStateSnapshot {
     tacticalMapKeybind: string;
     holdTacticalMapKey: boolean;
     gamepadModeEnabled: boolean;
+    macroSequenceConfig: MacroSequenceConfig | null;
     ocrRegions: unknown;
     ocrEnhancedNameRecoveryEnabled: boolean;
     ocrNameRerouteThreshold: number | undefined;
@@ -93,6 +95,9 @@ export const buildAutoCaptureStateSnapshot = (
             !Object.prototype.hasOwnProperty.call(overrides, 'gamepadModeEnabled')
             && state.gamepadModeEnabled === true
         ),
+        macroSequenceConfig: Object.prototype.hasOwnProperty.call(overrides, 'macroSequenceConfig')
+            ? (overrides.macroSequenceConfig ?? null)
+            : (state.macroSequenceConfig || null),
         ocrRegions: Object.prototype.hasOwnProperty.call(overrides, 'ocrRegions')
             ? (overrides.ocrRegions ?? null)
             : (state.ocrRegions || null),

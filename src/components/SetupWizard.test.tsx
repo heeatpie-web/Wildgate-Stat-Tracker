@@ -27,7 +27,7 @@ const userPrefs = {
   setSoundEnabled: vi.fn(),
 };
 
-const getElectronAPIMock = vi.fn(() => null);
+const getElectronAPIMock = vi.fn((): any => null);
 
 vi.mock('../providers/UIStateProvider', () => ({
     useUIState: () => uiState,

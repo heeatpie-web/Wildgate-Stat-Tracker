@@ -223,7 +223,7 @@ describe('useMatchSubmission', () => {
     vi.mocked(applyArtifactRepair).mockReset();
     vi.mocked(applyArtifactRepair).mockResolvedValue({ summary: { mode: 'apply', matches: 0, candidatesScanned: 0, candidatesEligible: 0, plannedLinks: 0, appliedLinks: 0, updatedMatches: 0 }, candidates: [], applied: [] });
     vi.mocked(getMatchArtifactsStructured).mockReset();
-    vi.mocked(getMatchArtifactsStructured).mockResolvedValue({ images: [], imageFiles: [], telemetry: [] });
+    vi.mocked(getMatchArtifactsStructured).mockResolvedValue({ images: [], imageFiles: [], telemetry: [] } as any);
     vi.mocked(removeAllMatchArtifacts).mockReset();
     vi.mocked(removeAllMatchArtifacts).mockResolvedValue({ removedPaths: [], failedPaths: [] });
     vi.mocked(rerunOCRMulti).mockReset();
@@ -875,7 +875,7 @@ describe('useMatchSubmission', () => {
       images: [diskArtifact],
       imageFiles: [],
       telemetry: [],
-    });
+    } as any);
 
     const { result } = renderHook(() => useMatchSubmission());
 
@@ -1466,7 +1466,7 @@ describe('useMatchSubmission', () => {
       images: ['existing_capture.png', 'C:\\match_artifacts\\8080\\capture_result.png'],
       imageFiles: [],
       telemetry: [],
-    });
+    } as any);
     electronInvokeMock.mockResolvedValue({
       success: true,
       data: { filePath: 'C:\\match_artifacts\\8080\\capture_result.png' },
@@ -1544,7 +1544,7 @@ describe('useMatchSubmission', () => {
       images: ['existing_capture.png', 'C:\\match_artifacts\\9090\\capture_result.png'],
       imageFiles: [],
       telemetry: [],
-    });
+    } as any);
     electronInvokeMock.mockResolvedValue({
       success: true,
       data: { filePath: 'C:\\match_artifacts\\9090\\capture_result.png' },
@@ -1635,7 +1635,7 @@ describe('useMatchSubmission', () => {
       images: ['existing_capture.png', 'C:\\match_artifacts\\8083\\capture_result.png'],
       imageFiles: [],
       telemetry: [],
-    });
+    } as any);
     electronInvokeMock.mockResolvedValue({
       success: true,
       data: { filePath: 'C:\\match_artifacts\\8083\\capture_result.png' },
@@ -1708,7 +1708,7 @@ describe('useMatchSubmission', () => {
       images: ['existing_capture.png', 'C:\\match_artifacts\\9191\\capture_result.png'],
       imageFiles: [],
       telemetry: [],
-    });
+    } as any);
     electronInvokeMock.mockResolvedValue({
       success: true,
       data: { filePath: 'C:\\match_artifacts\\9191\\capture_result.png' },
@@ -1793,7 +1793,7 @@ describe('useMatchSubmission', () => {
       images: ['existing_capture.png', 'C:\\match_artifacts\\9292\\capture_result.png'],
       imageFiles: [],
       telemetry: [],
-    });
+    } as any);
 
     const { result } = renderHook(() => useMatchSubmission());
 
@@ -1877,7 +1877,7 @@ describe('useMatchSubmission', () => {
       ],
       imageFiles: [],
       telemetry: [],
-    });
+    } as any);
     electronInvokeMock.mockImplementation((channel: string, payload?: any) => {
       if (channel === 'save-screenshot') {
         if (payload?.imageBase64 === 'ZmFrZQ==') {
@@ -2009,7 +2009,7 @@ describe('useMatchSubmission', () => {
       ],
       imageFiles: [],
       telemetry: [],
-    });
+    } as any);
     electronInvokeMock.mockResolvedValue({
       success: true,
       data: { filePath: 'C:\\match_artifacts\\8181\\capture_result.png' },
@@ -2052,7 +2052,7 @@ describe('useMatchSubmission', () => {
       },
     });
     updateMatch.mockImplementation((nextMatch) => {
-      mockStoreState.matches = (mockStoreState.matches || []).map((entry) => (
+      mockStoreState.matches = (mockStoreState.matches || []).map((entry: any) => (
         Number(entry.id || 0) === Number(nextMatch.id || 0) ? nextMatch : entry
       ));
     });
@@ -2143,7 +2143,7 @@ describe('useMatchSubmission', () => {
       telemetry: [],
       missingImages: [],
       resolvedFromDisk: true,
-    });
+    } as any);
     vi.mocked(removeAllMatchArtifacts).mockResolvedValue({
       removedPaths: ['C:\\match_artifacts\\4242\\capture_a.png', 'C:\\match_artifacts\\4242\\capture_b.png'],
       failedPaths: [],

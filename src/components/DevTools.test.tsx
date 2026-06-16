@@ -25,7 +25,7 @@ const gameDataState = {
     player: 'Pilot',
     subType: 'Telemetry Draft',
     telemetryDraftState: 'active',
-  }],
+  }] as any[],
   pilotRegistry: [],
   sessionStartTime: Date.now(),
 };
@@ -41,7 +41,7 @@ const appStoreState = {
   gameResolution: null as { resX: number; resY: number } | null,
 };
 
-const getElectronAPIMock = vi.fn(() => null);
+const getElectronAPIMock = vi.fn((): any => null);
 const WINDOW_REGION_META = {
   source: 'window-region',
   absoluteRegion: { x: 364, y: 1193, width: 107, height: 21 },

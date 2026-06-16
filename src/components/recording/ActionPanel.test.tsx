@@ -5,7 +5,7 @@ import '@testing-library/jest-dom/vitest';
 
 const gameData = {
   sessionStartTime: Date.now() - 1000,
-  matches: [],
+  matches: [] as any[],
   lastActivity: Date.now(),
   setLastActivity: vi.fn(),
   matchStartTime: null as number | null,
@@ -21,7 +21,7 @@ const gameData = {
   heroSource: 'manual',
   telemetryDetectedHero: undefined as string | undefined,
   currentLoadout: null as { hero?: string | null; ship?: string | null; weapons?: string[]; equipment?: string[] } | null,
-  pendingReviews: [],
+  pendingReviews: [] as any[],
   detectedUnknowns: {},
 };
 

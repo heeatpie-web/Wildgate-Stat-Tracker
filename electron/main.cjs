@@ -1039,8 +1039,8 @@ const autoCaptureCoordinator = createAutoCaptureCoordinator({
   runWithHeldKeySequence: (sendKeys, action, runWhileHeld) => runHeldGameKeySequenceInternal(sendKeys, action, runWhileHeld),
   sendKeySequence: (sendKeys, action) => sendGameKeySequenceInternal(sendKeys, action),
   sendMenuKeySequence: (sendKeys, action) => sendMenuKeySequenceInternal(sendKeys, action),
-  sendGamepadSequence: async (step, keySequence) => {
-    const actions = getGamepadActionsForStep(step, keySequence);
+  sendGamepadSequence: async (step, keySequence, macroSequenceConfig) => {
+    const actions = getGamepadActionsForStep(step, keySequence, macroSequenceConfig);
     if (!actions || actions.length === 0) {
       return { success: false, error: `No gamepad mapping for step: ${step?.label || 'unknown'}` };
     }
@@ -1358,6 +1358,8 @@ const VIRTUAL_GAMEPAD_HOTKEY_REPEAT_DEBOUNCE_MS = 250;
 const VIRTUAL_GAMEPAD_HOTKEY_GAP_MS = 120;
 let lastVirtualGamepadHotkeyAcceptedAt = 0;
 let virtualGamepadHotkeyInFlight = false;
+const F9_TOGGLE_COOLDOWN_MS = 400;
+let lastF9ToggleAt = 0;
 
 function isAutoCaptureHotkeySnapshotStale(snapshotAgeMs, maxAgeMs = AUTO_CAPTURE_HOTKEY_STATE_MAX_AGE_MS) {
   return Number.isFinite(snapshotAgeMs) && snapshotAgeMs > maxAgeMs;
@@ -1449,7 +1451,14 @@ function showWindowSmooth({ focus = true, forceDashboard = false } = {}) {
     win.webContents.send('hotkey-toggle-overlay', false);
   }
   win.setAlwaysOnTop(true, 'screen-saver');
-  if (focus) win.focus();
+  if (focus) {
+    win.moveTop();
+    win.focus();
+    setTimeout(() => {
+      if (!win || win.isDestroyed()) return;
+      win.focus();
+    }, 80);
+  }
   animateWindowOpacity(1);
 }
 
@@ -1629,6 +1638,12 @@ function registerGlobalHotkeys() {
   });
 
   const f9Registered = globalShortcut.register('F9', () => {
+    const now = Date.now();
+    if ((now - lastF9ToggleAt) < F9_TOGGLE_COOLDOWN_MS) {
+      console.log('[Hotkey] F9 ignored by cooldown.');
+      return;
+    }
+    lastF9ToggleAt = now;
     const liveWindow = ensureMainWindow();
     const hasWindow = Boolean(liveWindow && !liveWindow.isDestroyed());
     console.log(`[Hotkey] F9 invoked. hasLiveWindow=${hasWindow}`);

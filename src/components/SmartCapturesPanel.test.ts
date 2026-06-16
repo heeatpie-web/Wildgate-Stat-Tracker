@@ -226,7 +226,7 @@ describe('commitPendingMatchDataForWizard', () => {
     );
 
     expect(committed).toBe(true);
-    expect(current?.id).toBe(77);
+    expect((current as any)?.id).toBe(77);
   });
 
   it('returns false when committed pending id does not match expected id', () => {
@@ -326,10 +326,10 @@ describe('resolveOpenWizardSeed', () => {
     });
 
     expect(resolved.shouldReusePendingDraft).toBe(true);
-    expect(resolved.preferredLoadout).toMatchObject(pendingDraft.loadout as Record<string, unknown>);
+    expect(resolved.preferredLoadout).toMatchObject(pendingDraft.loadout as unknown as Record<string, unknown>);
     expect(resolved.latestMatch.hero).toBe('Ion');
     expect(resolved.latestMatch.ship).toBe('Scout');
-    expect(resolved.latestMatch.loadout).toMatchObject(pendingDraft.loadout as Record<string, unknown>);
+    expect(resolved.latestMatch.loadout).toMatchObject(pendingDraft.loadout as unknown as Record<string, unknown>);
   });
 
   it('falls back to the cached telemetry loadout when reopening a telemetry draft without a pending loadout', () => {

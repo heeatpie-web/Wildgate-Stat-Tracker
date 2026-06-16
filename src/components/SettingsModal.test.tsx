@@ -316,7 +316,7 @@ describe('SettingsModal', () => {
     const grid = screen.getByTestId('settings-quick-setup-grid');
     // autoSequenceOnCapture defaults to false (Single Capture); clicking Next option cycles to sequence
     const smartCaptureRow = within(grid).getByText('Smart Capture Button').closest('div.py-3')!;
-    fireEvent.click(within(smartCaptureRow).getByRole('button', { name: /next option/i }));
+    fireEvent.click(within(smartCaptureRow as HTMLElement).getByRole('button', { name: /next option/i }));
 
     expect(storeState.setAutoSequenceOnCapture).toHaveBeenCalledWith(true);
   });
@@ -330,7 +330,7 @@ describe('SettingsModal', () => {
     const grid = screen.getByTestId('settings-quick-setup-grid');
     // autoCaptureSendKeypresses defaults to true (keypresses); clicking Previous option cycles to manual
     const autocaptureRow = within(grid).getByText('Auto-capture Input').closest('div.py-3')!;
-    fireEvent.click(within(autocaptureRow).getByRole('button', { name: /previous option/i }));
+    fireEvent.click(within(autocaptureRow as HTMLElement).getByRole('button', { name: /previous option/i }));
     fireEvent.change(screen.getByLabelText(/capture speed/i), {
       target: { value: '2.4' },
     });

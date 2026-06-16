@@ -63,7 +63,7 @@ describe('StorageService', () => {
 
     const writeCalls = invoke.mock.calls.filter(([channel]) => channel === 'db-write');
     expect(writeCalls).toHaveLength(1);
-    expect(writeCalls[0]?.[1]).toMatchObject({ lastActivity: 200 });
+    expect((writeCalls[0] as any)?.[1]).toMatchObject({ lastActivity: 200 });
   });
 
   it('flush persists pending staged data immediately', async () => {
@@ -207,14 +207,14 @@ describe('StorageService', () => {
 
     const loaded = await StorageService.init();
 
-    expect(loaded?.uidMappings.players.C0C3960248AD43D20AA6DDA8AEB81424).toBe('Captain Sal');
-    expect(loaded?.uidMappings.players.E7539B7C4483C338E55B15B102E2F006).toBe('Adrian');
-    expect(loaded?.uidMappings.ships['0BFFF89B44027290DC6348B95A6B0F11']).toBe('Hunter');
-    expect(loaded?.uidMappings.weapons.F350FD964B4A0E59F068AE88D6D9650C).toBe('The Doctor');
-    expect(loaded?.uidMappings.equipment.F2B54FEC47BBDBEA641EB9AD846A0A8D).toBe('Repair Drone');
-    expect(loaded?.uidMappings.perks.A7291E13434D4D67CFEAD0928F4CEA69).toBe('Boarder');
-    expect(loaded?.uidMappings.perks['4F09C2D142262A675213A494006700AB']).toBe('Charlie Teleport');
-    expect(loaded?.uidSeedState.seedVersionApplied).toBe(2);
+    expect(loaded!.uidMappings!.players.C0C3960248AD43D20AA6DDA8AEB81424).toBe('Captain Sal');
+    expect(loaded!.uidMappings!.players.E7539B7C4483C338E55B15B102E2F006).toBe('Adrian');
+    expect(loaded!.uidMappings!.ships['0BFFF89B44027290DC6348B95A6B0F11']).toBe('Hunter');
+    expect(loaded!.uidMappings!.weapons.F350FD964B4A0E59F068AE88D6D9650C).toBe('The Doctor');
+    expect(loaded!.uidMappings!.equipment.F2B54FEC47BBDBEA641EB9AD846A0A8D).toBe('Repair Drone');
+    expect(loaded!.uidMappings!.perks!.A7291E13434D4D67CFEAD0928F4CEA69).toBe('Boarder');
+    expect(loaded!.uidMappings!.perks!['4F09C2D142262A675213A494006700AB']).toBe('Charlie Teleport');
+    expect(loaded!.uidSeedState!.seedVersionApplied).toBe(2);
   });
 
   it('hydrates teammate identity records from persisted storage', async () => {
@@ -295,8 +295,8 @@ describe('StorageService', () => {
 
     const loaded = await StorageService.init();
 
-    expect(loaded?.uidMappings.ships[PRIVATEER_GUID]).toBe('Privateer');
-    expect(loaded?.uidMappings.players[PRIVATEER_GUID]).toBeUndefined();
+    expect(loaded!.uidMappings!.ships[PRIVATEER_GUID]).toBe('Privateer');
+    expect(loaded!.uidMappings!.players[PRIVATEER_GUID]).toBeUndefined();
   });
 
   it('relocations in seed can move multiple misplaced GUIDs into weapons and equipment', async () => {
@@ -344,12 +344,12 @@ describe('StorageService', () => {
 
     const loaded = await StorageService.init();
 
-    expect(loaded?.uidMappings.players[SONIC_BOOM_GUID]).toBeUndefined();
-    expect(loaded?.uidMappings.players[THUNDER_DASH_GUID]).toBeUndefined();
-    expect(loaded?.uidMappings.players[ATTACK_DRONE_GUID]).toBeUndefined();
-    expect(loaded?.uidMappings.weapons[SONIC_BOOM_GUID]).toBe('Sonic Boom');
-    expect(loaded?.uidMappings.equipment[THUNDER_DASH_GUID]).toBe('Thunder Dash');
-    expect(loaded?.uidMappings.equipment[ATTACK_DRONE_GUID]).toBe('Attack Drone');
+    expect(loaded!.uidMappings!.players[SONIC_BOOM_GUID]).toBeUndefined();
+    expect(loaded!.uidMappings!.players[THUNDER_DASH_GUID]).toBeUndefined();
+    expect(loaded!.uidMappings!.players[ATTACK_DRONE_GUID]).toBeUndefined();
+    expect(loaded!.uidMappings!.weapons[SONIC_BOOM_GUID]).toBe('Sonic Boom');
+    expect(loaded!.uidMappings!.equipment[THUNDER_DASH_GUID]).toBe('Thunder Dash');
+    expect(loaded!.uidMappings!.equipment[ATTACK_DRONE_GUID]).toBe('Attack Drone');
   });
 
   it('strips ghost non-player player profiles and legacy player mappings even when the seed version is already applied', async () => {
@@ -409,7 +409,7 @@ describe('StorageService', () => {
 
     const loaded = await StorageService.init();
 
-    expect(loaded?.uidMappings.players[THUNDER_DASH_GUID]).toBeUndefined();
+    expect(loaded!.uidMappings!.players[THUNDER_DASH_GUID]).toBeUndefined();
     expect(loaded?.mappings?.[THUNDER_DASH_GUID]).toBeUndefined();
     expect(loaded?.playerIdMap?.[THUNDER_DASH_GUID]).toBeUndefined();
     expect(loaded?.playerProfiles?.[THUNDER_DASH_GUID]).toBeUndefined();
@@ -484,10 +484,10 @@ describe('StorageService', () => {
 
     const loaded = await StorageService.init();
 
-    expect(loaded?.uidMappings.equipment[STALE_GUID]).toBe('Drill Charge');
-    expect(loaded?.uidMappings.equipment[ROCK_GUID]).toBe('Rock!');
-    expect(loaded?.uidMappings.equipment[ADVENTURE_GUID]).toBe('Adventure Gear');
-    expect(loaded?.uidMappings.players[ADVENTURE_GUID]).toBeUndefined();
+    expect(loaded!.uidMappings!.equipment[STALE_GUID]).toBe('Drill Charge');
+    expect(loaded!.uidMappings!.equipment[ROCK_GUID]).toBe('Rock!');
+    expect(loaded!.uidMappings!.equipment[ADVENTURE_GUID]).toBe('Adventure Gear');
+    expect(loaded!.uidMappings!.players[ADVENTURE_GUID]).toBeUndefined();
     expect(loaded?.mappings?.[ADVENTURE_GUID]).toBeUndefined();
     expect(loaded?.playerIdMap?.[ADVENTURE_GUID]).toBeUndefined();
     expect(loaded?.playerProfiles?.[ADVENTURE_GUID]).toBeUndefined();
@@ -533,9 +533,9 @@ describe('StorageService', () => {
 
     const loaded = await StorageService.init();
 
-    expect(loaded?.uidMappings.weapons.B1B367B8429C67883B88D5B315F997B0).toBeUndefined();
-    expect(loaded?.uidMappings.equipment.B1B367B8429C67883B88D5B315F997B0).toBeUndefined();
-    expect(loaded?.uidMappings.equipment.D758D49F45005A77CB13ABAE81E204EB).toBe('Repulsor');
+    expect(loaded!.uidMappings!.weapons.B1B367B8429C67883B88D5B315F997B0).toBeUndefined();
+    expect(loaded!.uidMappings!.equipment.B1B367B8429C67883B88D5B315F997B0).toBeUndefined();
+    expect(loaded!.uidMappings!.equipment.D758D49F45005A77CB13ABAE81E204EB).toBe('Repulsor');
     expect(loaded?.matches[0]?.loadout?.weapons || []).toEqual([]);
     expect(loaded?.matches[0]?.loadout?.equipment || []).toEqual([]);
     expect(loaded?.matches[0]?.loadout?.characterWeapons || []).toEqual(['The Doctor']);

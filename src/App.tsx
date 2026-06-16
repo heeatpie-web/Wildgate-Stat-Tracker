@@ -1054,6 +1054,7 @@ const App: React.FC = () => {
                 state.tacticalMapKeybind === prevState.tacticalMapKeybind &&
                 state.holdTacticalMapKey === prevState.holdTacticalMapKey &&
                 state.gamepadModeEnabled === prevState.gamepadModeEnabled &&
+                state.macroSequenceConfig === prevState.macroSequenceConfig &&
                 state.ocrRegions === prevState.ocrRegions &&
                 state.ocrEnhancedNameRecoveryEnabled === prevState.ocrEnhancedNameRecoveryEnabled &&
                 state.ocrNameRerouteThreshold === prevState.ocrNameRerouteThreshold &&

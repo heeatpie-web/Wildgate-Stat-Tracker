@@ -5,7 +5,7 @@ import '@testing-library/jest-dom/vitest';
 
 const loggerInfo = vi.fn();
 const loggerWarn = vi.fn();
-const getElectronAPIMock = vi.fn(() => null);
+const getElectronAPIMock = vi.fn((): any => null);
 const discardTelemetryDraftMock = vi.fn();
 const autoFinalizeResultScreenCaptureMock = vi.fn();
 const startAutoCaptureMock = vi.fn();
@@ -101,21 +101,23 @@ const uiState = {
 };
 
 const gameDataState = {
-  matches: [],
+  matches: [] as any[],
   setMatches: vi.fn(),
   sessionStartTime: Date.now() - 1_000,
   setPendingMatchData: vi.fn(),
-  pilotRegistry: [],
+  pilotRegistry: [] as any[],
+  selectedTeammates: [] as string[],
   setSelectedTeammates: vi.fn(),
-  selectedOpponents: [],
+  selectedOpponents: [] as string[],
   setSelectedOpponents: vi.fn(),
+  sessionShipTypes: {} as Record<string, any>,
   activeShip: 'Hunter (4 Player)',
   setActiveShip: vi.fn(),
-  selectedReachModifiers: [],
+  selectedReachModifiers: [] as any[],
   setSelectedReachModifiers: vi.fn(),
   addPendingReview: vi.fn(),
-  pendingReviews: [],
-  sessionTeams: {},
+  pendingReviews: [] as any[],
+  sessionTeams: {} as Record<string, any>,
   setSessionTeams: vi.fn(),
   setSessionShipTypes: vi.fn(),
 };
@@ -774,7 +776,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    expect(api.invoke.mock.calls.filter(([channel]) => channel === 'capture-screen')).toHaveLength(0);
+    expect(api.invoke.mock.calls.filter(([channel]: any[]) => channel === 'capture-screen')).toHaveLength(0);
     expect(uiState.setTelemetryAutomationStatus).not.toHaveBeenCalledWith(expect.objectContaining({
       phase: 'manual-result-needed',
       message: 'Returned to menu before a result screen was confirmed',

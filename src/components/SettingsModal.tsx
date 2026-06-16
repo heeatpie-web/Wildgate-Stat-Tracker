@@ -18,6 +18,9 @@ import {
     type VirtualGamepadButton,
     type VirtualGamepadTrigger,
     type VirtualGamepadMovementId,
+    type MacroStepConfig,
+    type MacroSequenceConfig,
+    DEFAULT_MACRO_SEQUENCE_CONFIG,
     OCR_NAME_REROUTE_THRESHOLD_MAX,
     OCR_NAME_REROUTE_THRESHOLD_MIN,
     buildVirtualGamepadAxes,
@@ -213,6 +216,118 @@ const describeVirtualPadSelection = (
     return segments.join(' + ');
 };
 
+const MACRO_STEP_LABELS: Record<keyof MacroSequenceConfig, { label: string; description: string }> = {
+    openMenu: { label: 'Open Menu', description: 'Opens the in-game pause menu' },
+    navigate: { label: 'Navigate to Crew Hub', description: 'Navigates from menu to Crew Hub panel' },
+    moveRight: { label: 'Move Right', description: 'Navigates right within Crew Hub' },
+    moveEnd: { label: 'Scroll to End', description: 'Scrolls to the bottom of the panel' },
+    exit: { label: 'Exit Menu', description: 'Closes the menu after capture' },
+};
+
+const MACRO_STEP_ORDER: (keyof MacroSequenceConfig)[] = ['openMenu', 'navigate', 'moveRight', 'moveEnd', 'exit'];
+
+const MACRO_BUTTON_OPTIONS: Array<{ key: VirtualGamepadButton; label: string }> = [
+    { key: 'DPAD_UP', label: '↑' },
+    { key: 'DPAD_DOWN', label: '↓' },
+    { key: 'DPAD_LEFT', label: '←' },
+    { key: 'DPAD_RIGHT', label: '→' },
+    { key: 'A', label: 'A' },
+    { key: 'B', label: 'B' },
+    { key: 'X', label: 'X' },
+    { key: 'Y', label: 'Y' },
+    { key: 'START', label: 'Start' },
+    { key: 'BACK', label: 'Back' },
+    { key: 'LEFT_SHOULDER', label: 'LB' },
+    { key: 'RIGHT_SHOULDER', label: 'RB' },
+];
+
+const getMacroButtonLabel = (button: VirtualGamepadButton): string =>
+    MACRO_BUTTON_OPTIONS.find(o => o.key === button)?.label || button;
+
+const MacroStepRow: React.FC<{
+    stepKey: keyof MacroSequenceConfig;
+    steps: MacroStepConfig[];
+    onUpdate: (steps: MacroStepConfig[]) => void;
+}> = ({ stepKey, steps, onUpdate }) => {
+    const meta = MACRO_STEP_LABELS[stepKey];
+    const [addingButton, setAddingButton] = useState(false);
+
+    const handleRemove = (index: number) => {
+        const next = steps.filter((_, i) => i !== index);
+        onUpdate(next);
+    };
+
+    const handleCountChange = (index: number, count: number) => {
+        const next = steps.map((s, i) => i === index ? { ...s, count: Math.max(1, Math.min(10, count)) } : s);
+        onUpdate(next);
+    };
+
+    const handleAddButton = (button: VirtualGamepadButton) => {
+        onUpdate([...steps, { button, count: 1 }]);
+        setAddingButton(false);
+    };
+
+    return (
+        <div className="rounded-md border border-md-sys-outline/10 bg-md-sys-surface-container px-3 py-2">
+            <div className="flex items-center justify-between">
+                <div>
+                    <span className="text-label-sm font-semibold text-md-sys-on-surface/75">{meta.label}</span>
+                    <span className="ml-2 text-label-sm text-md-sys-on-surface/40">{meta.description}</span>
+                </div>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {steps.map((step, index) => (
+                    <div key={index} className="flex items-center gap-0.5 rounded-md border border-md-sys-primary/25 bg-md-sys-primary/10 px-2 py-1">
+                        <span className="text-label-sm font-semibold text-md-sys-on-surface/80">{getMacroButtonLabel(step.button)}</span>
+                        <span className="text-label-sm text-md-sys-on-surface/50">×</span>
+                        <input
+                            type="number"
+                            min={1}
+                            max={10}
+                            value={step.count}
+                            onChange={e => handleCountChange(index, Number(e.target.value))}
+                            className="w-8 bg-transparent text-center text-label-sm font-semibold text-md-sys-on-surface/80 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                        />
+                        <button
+                            onClick={() => handleRemove(index)}
+                            className="ml-0.5 text-md-sys-on-surface/30 transition-colors hover:text-red-400"
+                            title="Remove"
+                        >
+                            <X className="h-3 w-3" />
+                        </button>
+                    </div>
+                ))}
+                {addingButton ? (
+                    <div className="flex flex-wrap gap-1 rounded-md border border-md-sys-outline/15 bg-md-sys-surface p-1.5">
+                        {MACRO_BUTTON_OPTIONS.map(opt => (
+                            <button
+                                key={opt.key}
+                                onClick={() => handleAddButton(opt.key)}
+                                className="rounded border border-md-sys-outline/10 px-1.5 py-0.5 text-label-sm text-md-sys-on-surface/70 transition-colors hover:bg-md-sys-surface-container"
+                            >
+                                {opt.label}
+                            </button>
+                        ))}
+                        <button
+                            onClick={() => setAddingButton(false)}
+                            className="rounded border border-md-sys-outline/10 px-1.5 py-0.5 text-label-sm text-md-sys-on-surface/40 transition-colors hover:bg-md-sys-surface-container"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                ) : (
+                    <button
+                        onClick={() => setAddingButton(true)}
+                        className="rounded-md border border-dashed border-md-sys-outline/20 px-2 py-1 text-label-sm text-md-sys-on-surface/40 transition-colors hover:border-md-sys-primary/30 hover:text-md-sys-on-surface/60"
+                    >
+                        + Add
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+};
+
 const GamepadModeSection: React.FC<{
     enabled: boolean;
     onToggle: (enabled: boolean) => void;
@@ -222,6 +337,10 @@ const GamepadModeSection: React.FC<{
     const [connectionStatus, setConnectionStatus] = useState<GamepadConnectionStatus>('disconnected');
     const [testResult, setTestResult] = useState<string | null>(null);
     const [installError, setInstallError] = useState<string | null>(null);
+    const macroSequenceConfig = useAppStore(s => s.macroSequenceConfig);
+    const updateMacroSequenceStep = useAppStore(s => s.updateMacroSequenceStep);
+    const resetMacroSequenceConfig = useAppStore(s => s.resetMacroSequenceConfig);
+    const [macroEditorOpen, setMacroEditorOpen] = useState(false);
     const hotkeyEnabled = useAppStore(s => s.virtualGamepadHotkeyEnabled);
     const setHotkeyEnabled = useAppStore(s => s.setVirtualGamepadHotkeyEnabled);
     const selectedMovement = useAppStore(s => s.virtualGamepadMovement);
@@ -612,6 +731,58 @@ const GamepadModeSection: React.FC<{
                         </div>
                     )}
 
+                    <div className="rounded-lg border border-md-sys-outline/10 bg-md-sys-surface px-3 py-3">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <div className="text-label-sm font-semibold text-md-sys-on-surface/80">Crew Hub Macro Sequence</div>
+                                <div className="mt-1 text-label-sm text-md-sys-on-surface/60">
+                                    Configure the button inputs for each step of the auto-capture menu navigation macro.
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setMacroEditorOpen(!macroEditorOpen)}
+                                    className="rounded-md border border-md-sys-outline/15 px-2.5 py-1 text-label-sm text-md-sys-on-surface/70 transition-colors hover:bg-md-sys-surface-container"
+                                >
+                                    {macroEditorOpen ? 'Collapse' : 'Edit Sequence'}
+                                </button>
+                            </div>
+                        </div>
+                        {!macroEditorOpen && (
+                            <div className="mt-2 flex flex-wrap gap-2 text-label-sm text-md-sys-on-surface/50">
+                                {MACRO_STEP_ORDER.map((key) => {
+                                    const steps = macroSequenceConfig[key];
+                                    const desc = steps.map(s => `${getMacroButtonLabel(s.button)}×${s.count}`).join(', ');
+                                    return (
+                                        <span key={key} className="rounded border border-md-sys-outline/10 bg-md-sys-surface-container px-2 py-0.5">
+                                            <span className="font-semibold text-md-sys-on-surface/65">{MACRO_STEP_LABELS[key].label}:</span>{' '}{desc}
+                                        </span>
+                                    );
+                                })}
+                            </div>
+                        )}
+                        {macroEditorOpen && (
+                            <div className="mt-3 space-y-2">
+                                {MACRO_STEP_ORDER.map((key) => (
+                                    <MacroStepRow
+                                        key={key}
+                                        stepKey={key}
+                                        steps={macroSequenceConfig[key]}
+                                        onUpdate={(steps) => updateMacroSequenceStep(key, steps)}
+                                    />
+                                ))}
+                                <div className="flex justify-end pt-1">
+                                    <button
+                                        onClick={resetMacroSequenceConfig}
+                                        className="rounded-md border border-md-sys-outline/15 px-2.5 py-1 text-label-sm text-md-sys-on-surface/50 transition-colors hover:bg-md-sys-surface-container hover:text-md-sys-on-surface/70"
+                                    >
+                                        Reset to Defaults
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
                     {testResult && (
                         <div className="text-label-sm text-md-sys-on-surface/50">{testResult}</div>
                     )}
@@ -902,6 +1073,7 @@ const SettingsModalContent: React.FC = () => {
                 tacticalMapKeybind: (state as any).tacticalMapKeybind,
                 holdTacticalMapKey: (state as any).holdTacticalMapKey,
                 gamepadModeEnabled: (state as any).gamepadModeEnabled,
+                macroSequenceConfig: (state as any).macroSequenceConfig,
                 autoPopulateRosterOnSave: (state as any).autoPopulateRosterOnSave,
                 fullAutoEnabled: (state as any).fullAutoEnabled,
                 lockOcrTeams: state.lockOcrTeams,

@@ -109,7 +109,7 @@ const baseMatches: Match[] = [
 
 const gameDataState = {
     matches: baseMatches,
-    drillDownTarget: { type: 'Teammate', name: 'Wingman' } as { type: 'Teammate'; name: string; matchIds?: number[] } | null,
+    drillDownTarget: { type: 'Teammate', name: 'Wingman' } as any,
     setDrillDownTarget,
     pilotRegistry: [] as string[],
     pilotAliases: {} as Record<string, string[]>,

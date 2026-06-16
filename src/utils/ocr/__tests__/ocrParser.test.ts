@@ -637,7 +637,7 @@ describe('calculateOverallConfidence', () => {
     };
     const merged = mergeOCRData(existing, newData);
     expect(merged.enemyShips).toHaveLength(2);
-    expect(merged.enemyShips.map((ship) => ship.shipType).sort()).toEqual(['Hunter', 'Scout']);
+    expect(merged.enemyShips!.map((ship) => ship.shipType).sort()).toEqual(['Hunter', 'Scout']);
   });
 
   it('preserves multiplicity for anonymous same-type enemy ships', () => {
@@ -651,7 +651,7 @@ describe('calculateOverallConfidence', () => {
       }
     );
     expect(merged.enemyShips).toHaveLength(2);
-    expect(merged.enemyShips.every((ship) => ship.shipType === 'Hunter')).toBe(true);
+    expect(merged.enemyShips!.every((ship) => ship.shipType === 'Hunter')).toBe(true);
   });
 
   it('merges and normalizes player ship name separately from ship type', () => {

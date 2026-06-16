@@ -101,27 +101,27 @@ describe('generateSynergyEditorial', () => {
 describe('generateMomentumEditorial', () => {
   it('returns prompt for insufficient data', () => {
     const data: MomentumData = { timeline: [], currentMomentum: 0, peakMomentum: 0, trend: 'stable' };
-    expect(generateMomentumEditorial(data)).toContain('Keep playing');
+    expect(generateMomentumEditorial(data as any)).toContain('Keep playing');
   });
 
   it('describes rising trend', () => {
-    const data: MomentumData = {
+    const data = {
       timeline: Array.from({ length: 10 }, (_, i) => ({ matchIndex: i, score: 50 + i * 3 })),
       currentMomentum: 80,
       peakMomentum: 82,
       trend: 'rising',
     };
-    expect(generateMomentumEditorial(data)).toContain('rise');
+    expect(generateMomentumEditorial(data as any)).toContain('rise');
   });
 
   it('describes falling trend', () => {
-    const data: MomentumData = {
+    const data = {
       timeline: Array.from({ length: 10 }, (_, i) => ({ matchIndex: i, score: 80 - i * 3 })),
       currentMomentum: 40,
       peakMomentum: 80,
       trend: 'falling',
     };
-    const result = generateMomentumEditorial(data);
+    const result = generateMomentumEditorial(data as any);
     expect(result).toContain('dipped');
   });
 });
@@ -130,13 +130,13 @@ describe('generateMomentumEditorial', () => {
 
 describe('generateTimePatternEditorial', () => {
   it('returns prompt for no data', () => {
-    const data: TimePatternData = {
+    const data = {
       byHour: Array.from({ length: 24 }, (_, i) => ({ hour: i, matches: 0, wins: 0, losses: 0, winRate: 0 })),
       byDayOfWeek: Array.from({ length: 7 }, (_, i) => ({ day: i, matches: 0, wins: 0, losses: 0, winRate: 0 })),
       peakHour: 0,
       peakDay: 0,
     };
-    expect(generateTimePatternEditorial(data)).toContain('No time pattern');
+    expect(generateTimePatternEditorial(data as any)).toContain('No time pattern');
   });
 
   it('identifies peak hour and day', () => {
@@ -146,8 +146,8 @@ describe('generateTimePatternEditorial', () => {
     const byDayOfWeek = Array.from({ length: 7 }, (_, i) => ({
       day: i, matches: i === 5 ? 15 : 2, wins: i === 5 ? 10 : 1, losses: i === 5 ? 5 : 1, winRate: i === 5 ? 67 : 50,
     }));
-    const data: TimePatternData = { byHour, byDayOfWeek, peakHour: 20, peakDay: 5 };
-    const result = generateTimePatternEditorial(data);
+    const data = { byHour, byDayOfWeek, peakHour: 20, peakDay: 5 };
+    const result = generateTimePatternEditorial(data as any);
     expect(result).toContain('20:00');
     expect(result).toContain('Friday');
   });
@@ -157,22 +157,22 @@ describe('generateTimePatternEditorial', () => {
 
 describe('generateKillEfficiencyEditorial', () => {
   it('returns prompt for insufficient data', () => {
-    const data: KillEfficiencyData = {
+    const data = {
       timeline: [], overallAvgKills: 0, trendDirection: 'stable',
       killsByShipType: {}, killsByHero: {},
     };
-    expect(generateKillEfficiencyEditorial(data)).toContain('Play more');
+    expect(generateKillEfficiencyEditorial(data as any)).toContain('Play more');
   });
 
   it('describes kill trends', () => {
-    const data: KillEfficiencyData = {
+    const data = {
       timeline: Array.from({ length: 10 }, (_, i) => ({ matchIndex: i, kills: 3 + i })),
       overallAvgKills: 5,
       trendDirection: 'up',
       killsByShipType: { 'Hunter': { avgKills: 6, total: 5 } },
       killsByHero: { 'Adrian': { avgKills: 7, total: 4 } },
     };
-    const result = generateKillEfficiencyEditorial(data);
+    const result = generateKillEfficiencyEditorial(data as any);
     expect(result).toContain('5');
     expect(result).toContain('upward');
   });
@@ -182,7 +182,7 @@ describe('generateKillEfficiencyEditorial', () => {
 
 describe('generatePeriodComparisonEditorial', () => {
   it('returns prompt for no data', () => {
-    const data: PeriodComparisonData = {
+    const data = {
       thisWeek: { matches: 0, winRate: 0, avgKills: 0 },
       lastWeek: { matches: 0, winRate: 0, avgKills: 0 },
       weekDelta: { winRate: 0, avgKills: 0 },
@@ -190,11 +190,11 @@ describe('generatePeriodComparisonEditorial', () => {
       lastMonth: { matches: 0, winRate: 0, avgKills: 0 },
       monthDelta: { winRate: 0, avgKills: 0 },
     };
-    expect(generatePeriodComparisonEditorial(data)).toContain('No match data');
+    expect(generatePeriodComparisonEditorial(data as any)).toContain('No match data');
   });
 
   it('describes weekly improvement', () => {
-    const data: PeriodComparisonData = {
+    const data = {
       thisWeek: { matches: 10, winRate: 70, avgKills: 5 },
       lastWeek: { matches: 10, winRate: 50, avgKills: 4 },
       weekDelta: { winRate: 20, avgKills: 1 },
@@ -202,7 +202,7 @@ describe('generatePeriodComparisonEditorial', () => {
       lastMonth: { matches: 20, winRate: 55, avgKills: 4 },
       monthDelta: { winRate: 5, avgKills: 0.5 },
     };
-    const result = generatePeriodComparisonEditorial(data);
+    const result = generatePeriodComparisonEditorial(data as any);
     expect(result).toContain('up');
   });
 });
@@ -221,7 +221,7 @@ describe('generatePlacementEditorial', () => {
         { placement: 3, count: 4 },
       ],
     };
-    const result = generatePlacementEditorial(data);
+    const result = generatePlacementEditorial(data as any);
     expect(result).toContain('2.5');
     expect(result).toContain('top quartile');
   });
@@ -231,17 +231,17 @@ describe('generatePlacementEditorial', () => {
 
 describe('generateSessionSummaryEditorial', () => {
   it('handles no matches today', () => {
-    const data: SessionSummaryData = {
+    const data = {
       today: null,
       yesterday: null,
       last7Days: [],
       dailyAverage: { matches: 0, wins: 0, losses: 0, winRate: 0 },
     };
-    expect(generateSessionSummaryEditorial(data)).toContain('No matches played');
+    expect(generateSessionSummaryEditorial(data as any)).toContain('No matches played');
   });
 
   it('describes today session', () => {
-    const data: SessionSummaryData = {
+    const data = {
       today: { matches: 5, wins: 3, losses: 2, winRate: 60, totalKills: 12, bestStreak: 3 },
       yesterday: { matches: 4, wins: 1, losses: 3, winRate: 25, totalKills: 8, bestStreak: 1 },
       last7Days: [
@@ -251,7 +251,7 @@ describe('generateSessionSummaryEditorial', () => {
       ],
       dailyAverage: { matches: 4, wins: 2, losses: 2, winRate: 50 },
     };
-    const result = generateSessionSummaryEditorial(data);
+    const result = generateSessionSummaryEditorial(data as any);
     expect(result).toContain('5 matches');
     expect(result).toContain('60%');
     expect(result).toContain('higher than yesterday');
@@ -263,30 +263,30 @@ describe('generateSessionSummaryEditorial', () => {
 describe('generateStreakEditorial', () => {
   it('returns prompt for insufficient data', () => {
     const data: StreakData = { currentStreak: 0, longestWinStreak: 0, longestLossStreak: 0, averageStreakLength: 0, timeline: [] };
-    expect(generateStreakEditorial(data)).toContain('Play more');
+    expect(generateStreakEditorial(data as any)).toContain('Play more');
   });
 
   it('describes current win streak', () => {
-    const data: StreakData = {
+    const data = {
       currentStreak: 3,
       longestWinStreak: 5,
       longestLossStreak: 2,
       averageStreakLength: 2.5,
       timeline: Array.from({ length: 10 }, (_, i) => ({ matchIndex: i, streak: i % 3 === 0 ? 1 : -1 })),
     };
-    const result = generateStreakEditorial(data);
+    const result = generateStreakEditorial(data as any);
     expect(result).toContain('3-win streak');
   });
 
   it('describes current loss streak', () => {
-    const data: StreakData = {
+    const data = {
       currentStreak: -4,
       longestWinStreak: 3,
       longestLossStreak: 4,
       averageStreakLength: 2,
       timeline: Array.from({ length: 10 }, (_, i) => ({ matchIndex: i, streak: -1 })),
     };
-    const result = generateStreakEditorial(data);
+    const result = generateStreakEditorial(data as any);
     expect(result).toContain('4-loss streak');
   });
 });
@@ -345,7 +345,7 @@ describe('synthesizeNarrative', () => {
       winRate: 60,
       currentStreak: 2,
       momentum: {
-        timeline: Array.from({ length: 15 }, (_, i) => ({ matchIndex: i, score: 50 + i })),
+        timeline: Array.from({ length: 15 }, (_, i) => ({ matchIndex: i, score: 50 + i })) as any[],
         currentMomentum: 65,
         peakMomentum: 70,
         trend: 'rising',

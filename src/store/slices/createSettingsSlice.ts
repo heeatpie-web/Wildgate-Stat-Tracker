@@ -30,6 +30,60 @@ export const OCR_NAME_REROUTE_THRESHOLD_MIN = 50;
 export const OCR_NAME_REROUTE_THRESHOLD_MAX = 95;
 export const OCR_NAME_REROUTE_THRESHOLD_DEFAULT = 78;
 export type VirtualGamepadButton = 'DPAD_UP' | 'DPAD_DOWN' | 'DPAD_LEFT' | 'DPAD_RIGHT' | 'A' | 'B' | 'X' | 'Y' | 'LEFT_SHOULDER' | 'RIGHT_SHOULDER' | 'START' | 'BACK' | 'LEFT_THUMB' | 'RIGHT_THUMB';
+
+export interface MacroStepConfig {
+  button: VirtualGamepadButton;
+  count: number;
+}
+
+export interface MacroSequenceConfig {
+  openMenu: MacroStepConfig[];
+  navigate: MacroStepConfig[];
+  moveRight: MacroStepConfig[];
+  moveEnd: MacroStepConfig[];
+  exit: MacroStepConfig[];
+}
+
+export const DEFAULT_MACRO_SEQUENCE_CONFIG: MacroSequenceConfig = {
+  openMenu: [{ button: 'START', count: 1 }],
+  navigate: [{ button: 'DPAD_UP', count: 3 }, { button: 'A', count: 1 }],
+  moveRight: [{ button: 'DPAD_RIGHT', count: 2 }],
+  moveEnd: [{ button: 'DPAD_DOWN', count: 1 }],
+  exit: [{ button: 'B', count: 1 }],
+};
+
+const clampMacroStepCount = (value: unknown): number => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 1;
+  return Math.max(1, Math.min(10, Math.round(numeric)));
+};
+
+export const sanitizeMacroStepConfig = (steps: unknown): MacroStepConfig[] => {
+  if (!Array.isArray(steps)) return [];
+  return steps
+    .filter((step): step is { button: string; count: number } =>
+      step && typeof step === 'object'
+      && typeof step.button === 'string'
+      && VIRTUAL_GAMEPAD_BUTTON_SET.has(step.button as VirtualGamepadButton)
+    )
+    .map((step) => ({
+      button: step.button as VirtualGamepadButton,
+      count: clampMacroStepCount(step.count),
+    }))
+    .slice(0, 10);
+};
+
+export const sanitizeMacroSequenceConfig = (config: unknown): MacroSequenceConfig => {
+  if (!config || typeof config !== 'object') return { ...DEFAULT_MACRO_SEQUENCE_CONFIG };
+  const raw = config as Partial<Record<keyof MacroSequenceConfig, unknown>>;
+  return {
+    openMenu: sanitizeMacroStepConfig(raw.openMenu).length > 0 ? sanitizeMacroStepConfig(raw.openMenu) : DEFAULT_MACRO_SEQUENCE_CONFIG.openMenu,
+    navigate: sanitizeMacroStepConfig(raw.navigate).length > 0 ? sanitizeMacroStepConfig(raw.navigate) : DEFAULT_MACRO_SEQUENCE_CONFIG.navigate,
+    moveRight: sanitizeMacroStepConfig(raw.moveRight).length > 0 ? sanitizeMacroStepConfig(raw.moveRight) : DEFAULT_MACRO_SEQUENCE_CONFIG.moveRight,
+    moveEnd: sanitizeMacroStepConfig(raw.moveEnd).length > 0 ? sanitizeMacroStepConfig(raw.moveEnd) : DEFAULT_MACRO_SEQUENCE_CONFIG.moveEnd,
+    exit: sanitizeMacroStepConfig(raw.exit).length > 0 ? sanitizeMacroStepConfig(raw.exit) : DEFAULT_MACRO_SEQUENCE_CONFIG.exit,
+  };
+};
 export type VirtualGamepadTrigger = 'LEFT_TRIGGER' | 'RIGHT_TRIGGER';
 export type VirtualGamepadMovementId = 'UP_LEFT' | 'UP' | 'UP_RIGHT' | 'LEFT' | 'NONE' | 'RIGHT' | 'DOWN_LEFT' | 'DOWN' | 'DOWN_RIGHT';
 
@@ -286,6 +340,7 @@ export interface SettingsSlice {
   ocrCalibrationSamples: CalibrationSample[];
   ocrBatchAcceptThreshold: number;
   ocrRegions: OcrRegionSettings;
+  macroSequenceConfig: MacroSequenceConfig;
   tutorialCompleted: boolean;
 
   setActiveMode: (mode: GameMode) => void;
@@ -358,6 +413,9 @@ export interface SettingsSlice {
   setOcrBatchAcceptThreshold: (threshold: number) => void;
   setOcrRegions: (update: OcrRegionUpdate) => void;
   resetOcrRegions: () => void;
+  setMacroSequenceConfig: (config: MacroSequenceConfig) => void;
+  updateMacroSequenceStep: (step: keyof MacroSequenceConfig, steps: MacroStepConfig[]) => void;
+  resetMacroSequenceConfig: () => void;
   setTutorialCompleted: (completed: boolean) => void;
 
   fullAutoEnabled: boolean;
@@ -451,6 +509,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   ocrCalibrationSamples: [],
   ocrBatchAcceptThreshold: 85,
   ocrRegions: createDefaultOcrRegions(),
+  macroSequenceConfig: { ...DEFAULT_MACRO_SEQUENCE_CONFIG },
   tutorialCompleted: false,
   fullAutoEnabled: true,
   pregameAdviceEnabled: true,
@@ -662,6 +721,16 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
     }
   })),
   resetOcrRegions: () => set({ ocrRegions: createDefaultOcrRegions() }),
+  setMacroSequenceConfig: (config) => set({ macroSequenceConfig: sanitizeMacroSequenceConfig(config) }),
+  updateMacroSequenceStep: (step, steps) => set((state) => ({
+    macroSequenceConfig: {
+      ...state.macroSequenceConfig,
+      [step]: sanitizeMacroStepConfig(steps).length > 0
+        ? sanitizeMacroStepConfig(steps)
+        : DEFAULT_MACRO_SEQUENCE_CONFIG[step],
+    },
+  })),
+  resetMacroSequenceConfig: () => set({ macroSequenceConfig: { ...DEFAULT_MACRO_SEQUENCE_CONFIG } }),
   setTutorialCompleted: (completed) => set({ tutorialCompleted: completed }),
   setFullAutoEnabled: (enabled) => set({ fullAutoEnabled: Boolean(enabled) }),
   setPregameAdviceEnabled: (enabled) => set({ pregameAdviceEnabled: Boolean(enabled) }),

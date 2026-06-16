@@ -1105,7 +1105,7 @@ describe('Wizard', () => {
         fireEvent.click(screen.getByRole('button', { name: /save and apply/i }));
         expect(gameData.updateMatch).not.toHaveBeenCalled();
 
-        resolveRerun?.({
+        resolveRerun!({
             success: true,
             data: {
                 screenshotType: 'crew_hub',

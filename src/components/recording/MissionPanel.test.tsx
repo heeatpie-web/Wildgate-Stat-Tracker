@@ -50,7 +50,7 @@ const gameData = {
     characterPerks: [selectedCharacterPerk],
   },
   matches: [] as Array<Record<string, unknown>>,
-  pendingMatchData: null,
+  pendingMatchData: null as any,
   updateMatch: vi.fn(),
 };
 

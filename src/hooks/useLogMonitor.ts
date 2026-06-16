@@ -511,7 +511,9 @@ const buildNebLoadoutPayloadSignature = (value: unknown): string => {
 
 const normalizeEntityLabel = (value: unknown): string => String(value || '')
     .trim()
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
     .toLowerCase()
+    .replace(/[''`]/g, '')
     .replace(/\([^)]*\)/g, ' ')
     .replace(/\b\d+\s*player\b/g, ' ')
     .replace(/\s+/g, ' ')
@@ -2327,9 +2329,13 @@ export const useLogMonitor = (activeUser?: string) => {
                         const resolvedGuidEquipment = equipmentGuidCandidates
                             .map((g) => resolveGuid(g, EQUIPMENT_GUIDS, 'Equipment'))
                             .filter(Boolean) as string[];
-                        const resolvedGuidPerks = perkGuidCandidates
-                            .map((g) => resolveGuid(g, PERK_GUIDS, 'Perk'))
-                            .filter(Boolean) as string[];
+                        const resolvedGuidPerks: string[] = [];
+                        perkGuidCandidates.forEach((g) => {
+                            const resolved = resolveGuid(g, PERK_GUIDS, 'Perk');
+                            if (resolved) {
+                                resolvedGuidPerks.push(resolved);
+                            }
+                        });
 
                         const resolveDirectProspectorNames = (
                             candidates: string[],

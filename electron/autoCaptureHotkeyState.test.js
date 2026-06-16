@@ -106,6 +106,7 @@ describe('autoCaptureHotkeyState', () => {
       holdTacticalMapKey: true,
       ocrMode: 'local',
       ocrRegions: { mapScreen: { yourShip: { xMin: 0.1, xMax: 0.2 } } },
+      macroSequenceConfig: null,
       runtimeOptions: {
         routingProfile: 'names-only',
         fontProfile: 'ealing-black-italic',

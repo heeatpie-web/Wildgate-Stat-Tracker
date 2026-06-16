@@ -59,7 +59,7 @@ describe('mappingContract', () => {
         const unknowns = normalizeDetectedUnknownMappings({
             abc: { type: 'perk', lastSeen: 123 },
             def: { type: 'mystery', lastSeen: -1 },
-        });
+        } as any);
 
         expect(unknowns.abc).toEqual({ type: 'Perk', lastSeen: 123 });
         expect(unknowns.def).toEqual({ type: 'Unknown', lastSeen: 0 });

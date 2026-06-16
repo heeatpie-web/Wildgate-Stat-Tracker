@@ -39,7 +39,7 @@ const gameDataState = {
   setLastActivity,
   setSelectedTeammates: vi.fn(),
   setCurrentLoadout: vi.fn(),
-  currentLoadout: null,
+  currentLoadout: null as any,
   sessionStartTime: Date.now() - 5_000,
   clearTelemetryDetected: vi.fn(),
 };
@@ -1029,7 +1029,7 @@ describe('useLogMonitor', () => {
 
     const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
-    appStoreState.matches = [createdDraft];
+    appStoreState.matches = [createdDraft!];
 
     act(() => {
       ipcCallbacks['log-data']?.([
@@ -1076,7 +1076,7 @@ describe('useLogMonitor', () => {
 
     const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
-    appStoreState.matches = [createdDraft];
+    appStoreState.matches = [createdDraft!];
 
     act(() => {
       ipcCallbacks['log-data']?.([
@@ -1195,7 +1195,7 @@ describe('useLogMonitor', () => {
 
     const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
-    appStoreState.matches = [createdDraft];
+    appStoreState.matches = [createdDraft!];
 
     act(() => {
       ipcCallbacks['log-data']?.([
@@ -1245,7 +1245,7 @@ describe('useLogMonitor', () => {
 
     const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
-    appStoreState.matches = [createdDraft];
+    appStoreState.matches = [createdDraft!];
 
     act(() => {
       ipcCallbacks['log-data']?.([
@@ -1295,7 +1295,7 @@ describe('useLogMonitor', () => {
 
     const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
-    appStoreState.matches = [createdDraft];
+    appStoreState.matches = [createdDraft!];
 
     act(() => {
       ipcCallbacks['log-data']?.([
@@ -1866,7 +1866,7 @@ describe('useLogMonitor', () => {
 
     const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
-    appStoreState.matches = [createdDraft];
+    appStoreState.matches = [createdDraft!];
     gameDataState.setActiveHero.mockClear();
     gameDataState.setActiveShip.mockClear();
     gameDataState.setCurrentLoadout.mockClear();
@@ -1927,7 +1927,7 @@ describe('useLogMonitor', () => {
 
     const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
-    appStoreState.matches = [createdDraft];
+    appStoreState.matches = [createdDraft!];
     gameDataState.setActiveHero.mockClear();
     gameDataState.setActiveShip.mockClear();
     gameDataState.setCurrentLoadout.mockClear();
@@ -1985,7 +1985,7 @@ describe('useLogMonitor', () => {
 
     const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
-    appStoreState.matches = [createdDraft];
+    appStoreState.matches = [createdDraft!];
     gameDataState.setCurrentLoadout.mockClear();
 
     act(() => {
@@ -2035,7 +2035,7 @@ describe('useLogMonitor', () => {
 
     const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
-    appStoreState.matches = [createdDraft];
+    appStoreState.matches = [createdDraft!];
     gameDataState.setActiveHero.mockClear();
     gameDataState.setActiveShip.mockClear();
     gameDataState.setCurrentLoadout.mockClear();
@@ -2351,7 +2351,7 @@ describe('useLogMonitor', () => {
 
     const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
-    appStoreState.matches = [createdDraft];
+    appStoreState.matches = [createdDraft!];
 
     act(() => {
       ipcCallbacks['log-data']?.([
@@ -2401,7 +2401,7 @@ describe('useLogMonitor', () => {
 
     const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
-    appStoreState.matches = [createdDraft];
+    appStoreState.matches = [createdDraft!];
     updateMatch.mockClear();
     processTelemetryEvent.mockClear();
     appStoreState.setPlayerName.mockClear();
@@ -3041,7 +3041,7 @@ describe('useLogMonitor', () => {
     const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
     expect((createdDraft?.telemetryConsistency as { expectedTeammateCount?: number } | undefined)?.expectedTeammateCount).toBeUndefined();
-    appStoreState.matches = [createdDraft];
+    appStoreState.matches = [createdDraft!];
 
     act(() => {
       ipcCallbacks['log-data']?.([
@@ -3085,7 +3085,7 @@ describe('useLogMonitor', () => {
 
     const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
-    appStoreState.matches = [createdDraft];
+    appStoreState.matches = [createdDraft!];
 
     act(() => {
       ipcCallbacks['log-data']?.([
@@ -3138,7 +3138,7 @@ describe('useLogMonitor', () => {
 
     const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
-    appStoreState.matches = [createdDraft];
+    appStoreState.matches = [createdDraft!];
 
     act(() => {
       ipcCallbacks['log-data']?.([
@@ -3182,7 +3182,7 @@ describe('useLogMonitor', () => {
 
     const createdDraft = latestAddedMatch();
     expect(createdDraft).toBeTruthy();
-    appStoreState.matches = [createdDraft];
+    appStoreState.matches = [createdDraft!];
 
     act(() => {
       ipcCallbacks['log-data']?.([
