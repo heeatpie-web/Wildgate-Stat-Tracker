@@ -1,4 +1,11 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.7.3": [
+    "Configurable Crew Hub macro button sequence in Settings",
+    "1s delay after virtual controller connection",
+    "Perk detection fix for apostrophes and camelCase names",
+    "F9 hotkey reliability improvements",
+    "TypeScript strict mode fixes across test suite"
+  ],
   "v3.7.2": [
     "Optimize gamepad macro to use Right x2 / Down x1 navigation",
     "Add Baseline - Launch era to analytics filters",
