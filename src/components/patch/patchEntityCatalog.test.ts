@@ -73,9 +73,16 @@ describe('getMatchUpdateKey', () => {
         expect(getMatchUpdateKey(match)).toBe('drill-charge-ram-bastion-2026-03-12');
     });
 
-    it('leaves pre-update matches unassigned', () => {
+    it('assigns matches between 2026-01-01 and 2026-03-12 to the baseline launch bucket', () => {
         const match = baseMatch({
             timestamp: new Date(2026, 2, 11, 23, 59, 59).getTime(),
+        });
+        expect(getMatchUpdateKey(match)).toBe('baseline-launch');
+    });
+
+    it('leaves pre-update matches unassigned', () => {
+        const match = baseMatch({
+            timestamp: new Date(2025, 11, 31, 23, 59, 59).getTime(),
         });
         expect(getMatchUpdateKey(match)).toBe('');
     });

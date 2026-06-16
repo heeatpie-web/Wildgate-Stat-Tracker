@@ -22,6 +22,12 @@ export const UPDATE_DEFINITIONS: UpdateDefinition[] = [
         startDate: '2026-03-12',
         description: 'Matches played on or after March 12, 2026 until a newer update is added.',
     },
+    {
+        key: 'baseline-launch',
+        label: 'Baseline - Launch - 1/1/2026',
+        startDate: '2026-01-01',
+        description: 'Matches played on or after January 1, 2026 until a newer update is added.',
+    },
 ];
 
 const parseLocalStartOfDay = (value: string): number => {
@@ -63,5 +69,12 @@ export const GAME_PATCHES: GamePatch[] = [
         updateKey: 'drill-charge-ram-bastion-2026-03-12',
         title: 'Drill Charge / Ram Bastion',
         description: 'Current live update bucket for matches recorded on or after March 12, 2026.',
+    },
+    {
+        version: '1.0',
+        date: '2026-01-01',
+        updateKey: 'baseline-launch',
+        title: 'Baseline - Launch',
+        description: 'Game launch. Baseline meta established.',
     },
 ];

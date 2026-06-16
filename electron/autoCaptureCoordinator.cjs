@@ -383,15 +383,15 @@ function createAutoCaptureCoordinator({
 
         await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{ESC}', { useMenuSender: true });
         await waitStep(waitProfile.escMenuOpenMs);
-        await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{UP}{UP}{UP}{UP}{SPACE}', { useMenuSender: true });
+        await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{UP}{UP}{UP}{SPACE}', { useMenuSender: true });
         await waitStep(waitProfile.crewHubOpenMs);
+
+        await sendStepKeys(STEP_DEFINITIONS.moveCrewHubRight, '{RIGHT}{RIGHT}', { useMenuSender: true });
+        await waitStep(waitProfile.crewHubPanelStepMs);
 
         await captureStep(STEP_DEFINITIONS.captureCrewHubA, 2, attemptCaptures, 'crew_hub');
 
-        await sendStepKeys(STEP_DEFINITIONS.moveCrewHubRight, '{RIGHT}{RIGHT}{RIGHT}{RIGHT}', { useMenuSender: true });
-        await waitStep(waitProfile.crewHubPanelStepMs);
-
-        await sendStepKeys(STEP_DEFINITIONS.moveCrewHubEnd, '{END}', { useMenuSender: true });
+        await sendStepKeys(STEP_DEFINITIONS.moveCrewHubEnd, '{DOWN}', { useMenuSender: true });
         await waitStep(waitProfile.crewHubPanelEndMs);
 
         await captureStep(STEP_DEFINITIONS.captureCrewHubB, 3, attemptCaptures, 'crew_hub');

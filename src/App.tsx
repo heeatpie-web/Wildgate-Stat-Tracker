@@ -1041,7 +1041,27 @@ const App: React.FC = () => {
         };
 
         syncHotkeyState();
-        const unsubscribe = useAppStore.subscribe(() => {
+        const unsubscribe = useAppStore.subscribe((state, prevState) => {
+            if (
+                state.activeUser === prevState.activeUser &&
+                state.matches === prevState.matches &&
+                state.pendingMatchData === prevState.pendingMatchData &&
+                state.sessionStartTime === prevState.sessionStartTime &&
+                state.isMatchInProgress === prevState.isMatchInProgress &&
+                state.telemetryLifecycleStage === prevState.telemetryLifecycleStage &&
+                state.autoCaptureSendKeypresses === prevState.autoCaptureSendKeypresses &&
+                state.autoCaptureWaitMultiplier === prevState.autoCaptureWaitMultiplier &&
+                state.tacticalMapKeybind === prevState.tacticalMapKeybind &&
+                state.holdTacticalMapKey === prevState.holdTacticalMapKey &&
+                state.gamepadModeEnabled === prevState.gamepadModeEnabled &&
+                state.ocrRegions === prevState.ocrRegions &&
+                state.ocrEnhancedNameRecoveryEnabled === prevState.ocrEnhancedNameRecoveryEnabled &&
+                state.ocrNameRerouteThreshold === prevState.ocrNameRerouteThreshold &&
+                state.deviceDisplayInfo === prevState.deviceDisplayInfo &&
+                state.gameResolution === prevState.gameResolution
+            ) {
+                return;
+            }
             syncHotkeyState();
         });
         const heartbeatId = window.setInterval(() => {
@@ -1069,7 +1089,20 @@ const App: React.FC = () => {
         };
 
         syncHotkeyState();
-        const unsubscribe = useAppStore.subscribe(() => {
+        const unsubscribe = useAppStore.subscribe((state, prevState) => {
+            if (
+                state.gamepadModeEnabled === prevState.gamepadModeEnabled &&
+                state.virtualGamepadHotkeyEnabled === prevState.virtualGamepadHotkeyEnabled &&
+                state.virtualGamepadRepeatCount === prevState.virtualGamepadRepeatCount &&
+                state.virtualGamepadButtons === prevState.virtualGamepadButtons &&
+                state.virtualGamepadMovement === prevState.virtualGamepadMovement &&
+                state.virtualGamepadStickIntensityPercent === prevState.virtualGamepadStickIntensityPercent &&
+                state.virtualGamepadTriggers === prevState.virtualGamepadTriggers &&
+                state.virtualGamepadTriggerIntensityPercent === prevState.virtualGamepadTriggerIntensityPercent &&
+                state.virtualGamepadHoldDurationMs === prevState.virtualGamepadHoldDurationMs
+            ) {
+                return;
+            }
             syncHotkeyState();
         });
         const heartbeatId = window.setInterval(() => {

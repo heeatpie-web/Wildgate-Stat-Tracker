@@ -31,19 +31,19 @@ describe('GAMEPAD_STEP_SEQUENCES', () => {
     expect(GAMEPAD_STEP_SEQUENCES.openCrewHub_menu[0].button).toBe('START');
   });
 
-  it('uses D-pad Up x4 then A to navigate to crew hub', () => {
+  it('uses D-pad Up x3 then A to navigate to crew hub', () => {
     const seq = GAMEPAD_STEP_SEQUENCES.openCrewHub_navigate;
-    expect(seq).toHaveLength(5);
-    expect(seq.filter(a => a.button === 'DPAD_UP')).toHaveLength(4);
-    expect(seq[4].button).toBe('A');
+    expect(seq).toHaveLength(4);
+    expect(seq.filter(a => a.button === 'DPAD_UP')).toHaveLength(3);
+    expect(seq[3].button).toBe('A');
   });
 
   it('uses B to exit menus', () => {
     expect(GAMEPAD_STEP_SEQUENCES.exit[0].button).toBe('B');
   });
 
-  it('uses RIGHT_SHOULDER to jump to end panel', () => {
-    expect(GAMEPAD_STEP_SEQUENCES.moveCrewHubEnd[0].button).toBe('RIGHT_SHOULDER');
+  it('uses DPAD_DOWN to jump to end panel', () => {
+    expect(GAMEPAD_STEP_SEQUENCES.moveCrewHubEnd[0].button).toBe('DPAD_DOWN');
   });
 });
 
@@ -56,19 +56,19 @@ describe('getGamepadActionsForStep', () => {
 
   it('returns openCrewHub_navigate for non-ESC key sequence on crew hub step', () => {
     const step = { number: 4, label: 'Navigate to Crew Hub' };
-    const result = getGamepadActionsForStep(step, '{UP}{UP}{UP}{UP}{SPACE}');
+    const result = getGamepadActionsForStep(step, '{UP}{UP}{UP}{SPACE}');
     expect(result).toBe(GAMEPAD_STEP_SEQUENCES.openCrewHub_navigate);
   });
 
   it('returns moveCrewHubRight for the panel right step', () => {
     const step = { number: 5, label: 'Navigate to Crew Hub Panel (Right)' };
-    const result = getGamepadActionsForStep(step, '{RIGHT}{RIGHT}{RIGHT}{RIGHT}');
+    const result = getGamepadActionsForStep(step, '{RIGHT}{RIGHT}');
     expect(result).toBe(GAMEPAD_STEP_SEQUENCES.moveCrewHubRight);
   });
 
   it('returns moveCrewHubEnd for the panel end step', () => {
     const step = { number: 7, label: 'Navigate to Crew Hub Panel End' };
-    const result = getGamepadActionsForStep(step, '{END}');
+    const result = getGamepadActionsForStep(step, '{DOWN}');
     expect(result).toBe(GAMEPAD_STEP_SEQUENCES.moveCrewHubEnd);
   });
 

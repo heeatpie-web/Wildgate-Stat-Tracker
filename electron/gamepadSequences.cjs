@@ -36,16 +36,16 @@ const GAMEPAD_STEP_SEQUENCES = Object.freeze({
   ]),
 
   openCrewHub_navigate: Object.freeze([
-    ...repeat(btn('DPAD_UP'), 4),
+    ...repeat(btn('DPAD_UP'), 3),
     btn('A'),
   ]),
 
   moveCrewHubRight: Object.freeze([
-    ...repeat(btn('DPAD_RIGHT'), 4),
+    ...repeat(btn('DPAD_RIGHT'), 2),
   ]),
 
   moveCrewHubEnd: Object.freeze([
-    btn('RIGHT_SHOULDER'),
+    btn('DPAD_DOWN'),
   ]),
 
   exit: Object.freeze([

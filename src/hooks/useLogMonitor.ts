@@ -1949,7 +1949,6 @@ export const useLogMonitor = (activeUser?: string) => {
                             });
                             return lookup;
                         };
-                        const canonicalKnownMappings = buildCanonicalGuidLookup(knownMappings);
                         const canonicalUidWeaponMappings = buildCanonicalGuidLookup(uidMappings.weapons);
                         const canonicalUidEquipmentMappings = buildCanonicalGuidLookup(uidMappings.equipment);
                         const canonicalUidPerkMappings = buildCanonicalGuidLookup(uidMappings.perks);
@@ -2223,10 +2222,6 @@ export const useLogMonitor = (activeUser?: string) => {
                                 || domainMappings[cleanUpper]
                                 || domainMappings[cleanLower]
                                 || canonicalDomainMappings[cleanUpper]
-                                || knownMappings[clean]
-                                || knownMappings[cleanUpper]
-                                || knownMappings[cleanLower]
-                                || canonicalKnownMappings[cleanUpper]
                                 || db[clean]
                                 || db[cleanUpper]
                                 || db[cleanLower]
