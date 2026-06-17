@@ -1,4 +1,7 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.7.4": [
+    "OCR CPU throttling in performance mode to prevent power-spike shutdowns"
+  ],
   "v3.7.3": [
     "Configurable Crew Hub macro button sequence in Settings",
     "1s delay after virtual controller connection",
