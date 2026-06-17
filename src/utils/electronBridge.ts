@@ -31,6 +31,7 @@ export interface OCRProcessRuntimeOptions {
   fontProfile?: 'default' | 'ealing-black-italic';
   nameRerouteThreshold?: number;
   maxReroutePasses?: number;
+  performanceMode?: boolean;
 }
 
 export type GameUiAction =

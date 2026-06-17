@@ -4,6 +4,10 @@ const ort = require('onnxruntime-node');
 const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+
+const TOTAL_CORES = os.cpus().length;
+const PERF_MODE_THREADS = Math.max(1, Math.floor(TOTAL_CORES / 2));
 
 const REC_VARIANT = process.env.REC_VARIANT || 'v5_en';
 
@@ -39,6 +43,7 @@ let recSession = null;
 let charList = null;
 let paddleReadyLogged = false;
 let recShapeLogged = false;
+let currentPerformanceMode = false;
 
 async function runRecognition(imageBuffer) {
   const recInput = await preprocessForRec(imageBuffer);
@@ -59,8 +64,11 @@ async function runRecognition(imageBuffer) {
   return ctcDecode(logits).trim();
 }
 
-async function initPaddleOCR() {
-  if (detSession && recSession && charList) return;
+async function initPaddleOCR(performanceMode = false) {
+  const needsReinit = currentPerformanceMode !== performanceMode && detSession;
+  currentPerformanceMode = performanceMode;
+
+  if (detSession && recSession && charList && !needsReinit) return;
 
   if (!fs.existsSync(DET_MODEL_PATH)) {
     throw new Error(`PaddleOCR det model missing: ${DET_MODEL_PATH}`);
@@ -72,8 +80,14 @@ async function initPaddleOCR() {
     throw new Error(`PaddleOCR dict missing: ${EN_DICT_PATH}`);
   }
 
-  detSession = await ort.InferenceSession.create(DET_MODEL_PATH, { executionProviders: ['cpu'] });
-  recSession = await ort.InferenceSession.create(REC_MODEL_PATH, { executionProviders: ['cpu'] });
+  const sessionOptions = { executionProviders: ['cpu'] };
+  if (performanceMode) {
+    sessionOptions.interOpNumThreads = PERF_MODE_THREADS;
+    sessionOptions.intraOpNumThreads = PERF_MODE_THREADS;
+  }
+
+  detSession = await ort.InferenceSession.create(DET_MODEL_PATH, sessionOptions);
+  recSession = await ort.InferenceSession.create(REC_MODEL_PATH, sessionOptions);
 
   const dict = fs.readFileSync(EN_DICT_PATH, 'utf8').trim().split(/\r?\n/);
   const normalizedDict = dict[0] === '#' ? dict.slice(1) : dict;
@@ -81,7 +95,7 @@ async function initPaddleOCR() {
 
   if (!paddleReadyLogged) {
     console.log(
-      `[PaddleOCR] Ready. Variant=${REC_VARIANT} Detection=${DET_MODEL_PATH} Recognition=${REC_MODEL_PATH} Dict=${charList.length} DetFit=${DET_USE_CONTAIN ? 'contain' : 'fill'} PadY=${PADY_FACTOR} Normalise=${REC_USE_NORMALISE}`
+      `[PaddleOCR] Ready. Variant=${REC_VARIANT} Detection=${DET_MODEL_PATH} Recognition=${REC_MODEL_PATH} Dict=${charList.length} DetFit=${DET_USE_CONTAIN ? 'contain' : 'fill'} PadY=${PADY_FACTOR} Normalise=${REC_USE_NORMALISE} PerfMode=${performanceMode} Threads=${performanceMode ? PERF_MODE_THREADS : 'default'}`
     );
     paddleReadyLogged = true;
   }
@@ -299,7 +313,8 @@ function extractBboxes(detOutput, origH, origW, detH, detW, threshold = 0.2) {
  * Returns: Array of { text: string, bbox: {x0,y0,x1,y1}, confidence: number }
  */
 async function paddleOcrBuffer(imageBuffer, opts = {}) {
-  await initPaddleOCR();
+  const performanceMode = opts.performanceMode === true;
+  await initPaddleOCR(performanceMode);
   const {
     threshold = 0.3,
     minWidth = 40,
@@ -315,6 +330,9 @@ async function paddleOcrBuffer(imageBuffer, opts = {}) {
   const detH = 960;
   const detW = 960;
   const detInput = await preprocessForDet(imageBuffer, detH, detW);
+
+  if (performanceMode) await new Promise((r) => setTimeout(r, 10));
+
   const detResult = await detSession.run({ [detSession.inputNames[0]]: detInput });
   const detOutput = detResult[detSession.outputNames[0]];
   const bboxes = extractBboxes(detOutput, origH, origW, detH, detW, threshold)
@@ -329,8 +347,11 @@ async function paddleOcrBuffer(imageBuffer, opts = {}) {
       return true;
     });
 
+  const yieldEveryN = performanceMode ? 2 : 0;
+  const yieldMs = performanceMode ? 8 : 0;
   const results = [];
-  for (const bbox of bboxes) {
+  for (let i = 0; i < bboxes.length; i++) {
+    const bbox = bboxes[i];
     const cropW = bbox.x1 - bbox.x0;
     const cropH = bbox.y1 - bbox.y0;
     if (cropW < 8 || cropH < 4) continue;
@@ -345,12 +366,16 @@ async function paddleOcrBuffer(imageBuffer, opts = {}) {
     if (opts.allText ? cleaned.length > 0 : isLikelyPlayerName(cleaned)) {
       results.push({ text: cleaned, bbox, confidence: 80 });
     }
+
+    if (yieldEveryN > 0 && (i + 1) % yieldEveryN === 0 && i + 1 < bboxes.length) {
+      await new Promise((r) => setTimeout(r, yieldMs));
+    }
   }
   return results;
 }
 
-async function paddleRecognizeBuffer(imageBuffer) {
-  await initPaddleOCR();
+async function paddleRecognizeBuffer(imageBuffer, opts = {}) {
+  await initPaddleOCR(opts.performanceMode === true);
   const meta = await sharp(imageBuffer).metadata();
   if (!meta.width || !meta.height) return '';
   return runRecognition(imageBuffer);

@@ -852,6 +852,7 @@ export const Wizard: React.FC = () => {
 
         const runtimeOptions: OCRProcessRuntimeOptions = {
             forceUncached: true,
+            performanceMode: useAppStore.getState().performanceMode || false,
         };
 
         setIsRerunningOcr(true);

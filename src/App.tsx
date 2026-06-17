@@ -923,6 +923,7 @@ const App: React.FC = () => {
                     ? Number(state.ocrNameRerouteThreshold)
                     : 78,
                 maxReroutePasses: state.ocrEnhancedNameRecoveryEnabled ? 1 : 0,
+                performanceMode: state.performanceMode || false,
             };
             const result = await rerunOCRMulti(
                 ocrImagePaths,

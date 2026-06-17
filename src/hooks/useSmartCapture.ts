@@ -323,9 +323,11 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     fontProfile: ocrEnhancedNameRecoveryEnabled ? 'ealing-black-italic' : 'default',
     nameRerouteThreshold: ocrNameRerouteThreshold,
     maxReroutePasses: ocrEnhancedNameRecoveryEnabled ? 1 : 0,
+    performanceMode,
   }), [
     ocrEnhancedNameRecoveryEnabled,
     ocrNameRerouteThreshold,
+    performanceMode,
   ]);
 
   const createEmptyScopeEvidence = useCallback((): ScopeNameEvidence => ({

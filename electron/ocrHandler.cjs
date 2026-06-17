@@ -945,7 +945,7 @@ async function runOCR(imageBuffer, psm = null, options = {}) {
   const detectionThreshold = Number.isFinite(Number(options?.threshold))
     ? Number(options.threshold)
     : 0.2;
-  const paddleWords = await paddleOcrBuffer(imageBuffer, { threshold: detectionThreshold });
+  const paddleWords = await paddleOcrBuffer(imageBuffer, { threshold: detectionThreshold, performanceMode: options?.performanceMode === true });
   console.log(`[OCR] PaddleOCR complete in ${Date.now() - startTime}ms, rawWords=${paddleWords.length}`);
 
   const words = paddleWords
@@ -1798,7 +1798,9 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       gameResolution: rawGameResolution = null,
       deviceDisplayInfo: rawDeviceDisplayInfo = null,
       aspectProfile: rawAspectProfile = null,
+      performanceMode: rawPerformanceMode = false,
     } = options;
+    const performanceMode = rawPerformanceMode === true;
     const includeBboxes = rawIncludeBboxes === true;
     const shouldArchiveOcrSample = rawArchiveOcrSample === true;
     const archiveMetadata = (rawArchiveMetadata && typeof rawArchiveMetadata === 'object')
@@ -1916,7 +1918,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
 
     // Run local OCR
     console.log('[OCR] Running LOCAL-ONLY mode...');
-    const ocrResult = await runOCR(processed.buffer);
+    const ocrResult = await runOCR(processed.buffer, null, { performanceMode });
     console.log(`[OCR] Local OCR done, text length: ${ocrResult.text?.length || 0}`);
     console.log('[OCR] OCR complete, text length:', ocrResult.text?.length || 0);
 

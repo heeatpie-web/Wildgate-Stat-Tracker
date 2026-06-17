@@ -1126,6 +1126,7 @@ async function waitForGameScreenInternal(expectedType, options = {}) {
   const ocrRegions = (safeOptions.ocrRegions && typeof safeOptions.ocrRegions === 'object')
     ? safeOptions.ocrRegions
     : null;
+  const performanceMode = safeOptions.performanceMode === true;
 
   const startedAt = Date.now();
   let attempts = 0;
@@ -1145,6 +1146,7 @@ async function waitForGameScreenInternal(expectedType, options = {}) {
       const ocrResult = await processCapture(captureResult.imageBase64, activeUser, null, ocrMode, {
         skipDebugSave: true,
         ocrRegions,
+        performanceMode,
       });
 
       if (ocrResult?.success && ocrResult?.data) {
