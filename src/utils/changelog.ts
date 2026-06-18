@@ -1,4 +1,7 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.7.5": [
+    "Aggressive OCR CPU throttling — lower detection resolution, fewer ONNX threads, longer cool-down yields between jobs to prevent laptop thermal shutdowns during gameplay"
+  ],
   "v3.7.4": [
     "OCR CPU throttling in performance mode to prevent power-spike shutdowns"
   ],
