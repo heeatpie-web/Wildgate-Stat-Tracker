@@ -7,7 +7,7 @@ const path = require('path');
 const os = require('os');
 
 const TOTAL_CORES = os.cpus().length;
-const PERF_MODE_THREADS = Math.max(1, Math.floor(TOTAL_CORES / 2));
+const PERF_MODE_THREADS = Math.max(1, Math.floor(TOTAL_CORES / 4));
 
 const REC_VARIANT = process.env.REC_VARIANT || 'v5_en';
 
@@ -327,13 +327,16 @@ async function paddleOcrBuffer(imageBuffer, opts = {}) {
   const origH = meta.height;
   if (!origW || !origH) return [];
 
-  const detH = 960;
-  const detW = 960;
+  const detH = performanceMode ? 640 : 960;
+  const detW = performanceMode ? 640 : 960;
   const detInput = await preprocessForDet(imageBuffer, detH, detW);
 
-  if (performanceMode) await new Promise((r) => setTimeout(r, 10));
+  if (performanceMode) await new Promise((r) => setTimeout(r, 50));
 
   const detResult = await detSession.run({ [detSession.inputNames[0]]: detInput });
+
+  if (performanceMode) await new Promise((r) => setTimeout(r, 30));
+
   const detOutput = detResult[detSession.outputNames[0]];
   const bboxes = extractBboxes(detOutput, origH, origW, detH, detW, threshold)
     .filter((bbox) => {
@@ -347,8 +350,8 @@ async function paddleOcrBuffer(imageBuffer, opts = {}) {
       return true;
     });
 
-  const yieldEveryN = performanceMode ? 2 : 0;
-  const yieldMs = performanceMode ? 8 : 0;
+  const yieldEveryN = performanceMode ? 1 : 0;
+  const yieldMs = performanceMode ? 25 : 0;
   const results = [];
   for (let i = 0; i < bboxes.length; i++) {
     const bbox = bboxes[i];

@@ -1314,8 +1314,8 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
 
     try {
       const concurrency = 1;
-      const interJobDelayMs = performanceMode ? 250 : 120;
-      const yieldEvery = performanceMode ? 2 : 4;
+      const interJobDelayMs = performanceMode ? 800 : 120;
+      const yieldEvery = performanceMode ? 1 : 4;
       const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
       const results: Array<{ filePath: string; result: RerunOcrResult }> = [];
       const queue = [...unprocessed];
@@ -1431,8 +1431,8 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
 
     try {
       const concurrency = 1;
-      const interJobDelayMs = performanceMode ? 250 : 120;
-      const yieldEvery = performanceMode ? 2 : 4;
+      const interJobDelayMs = performanceMode ? 800 : 120;
+      const yieldEvery = performanceMode ? 1 : 4;
       const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
       const results: Array<{ filePath: string; result: RerunOcrResult }> = [];
       const queue = [...queuedArtifacts];

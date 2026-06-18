@@ -679,7 +679,7 @@ describe('useSmartCapture', () => {
 
     resolvers.shift()?.();
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await new Promise((resolve) => setTimeout(resolve, 900));
     });
     expect(vi.mocked(rerunOCROnArtifact)).toHaveBeenCalledTimes(2);
 
