@@ -493,16 +493,14 @@ describe('autoCaptureCoordinator sequencing', () => {
     expect(sendKeySequence).toHaveBeenCalledWith('{TAB}', 'Open Tactical Map');
     expect(sendKeySequence).toHaveBeenCalledWith('{TAB}', 'Close Tactical Map');
 
-    // Menu steps use gamepad instead of keyboard
-    expect(sendGamepadSequence).toHaveBeenCalledTimes(5);
-    expect(sendGamepadSequence).toHaveBeenNthCalledWith(1, expect.objectContaining({ label: 'Navigate to Crew Hub' }), '{ESC}', null);
-    expect(sendGamepadSequence).toHaveBeenNthCalledWith(2, expect.objectContaining({ label: 'Navigate to Crew Hub' }), '{UP}{UP}{UP}{SPACE}', null);
-    expect(sendGamepadSequence).toHaveBeenNthCalledWith(3, expect.objectContaining({ label: 'Navigate to Crew Hub Panel (Right)' }), '{RIGHT}{RIGHT}', null);
-    expect(sendGamepadSequence).toHaveBeenNthCalledWith(4, expect.objectContaining({ label: 'Navigate to Crew Hub Panel End' }), '{DOWN}', null);
-    expect(sendGamepadSequence).toHaveBeenNthCalledWith(5, expect.objectContaining({ label: 'Exit' }), '{ESC}', null);
+    // ESC steps use keyboard (sendMenuKeySequence) even in gamepad mode
+    expect(sendMenuKeySequence).toHaveBeenCalledWith('{ESC}', expect.any(String));
 
-    // sendMenuKeySequence should NOT be called — gamepad replaces it
-    expect(sendMenuKeySequence).not.toHaveBeenCalled();
+    // Navigation steps use gamepad
+    expect(sendGamepadSequence).toHaveBeenCalledTimes(3);
+    expect(sendGamepadSequence).toHaveBeenNthCalledWith(1, expect.objectContaining({ label: 'Navigate to Crew Hub' }), '{UP}{UP}{UP}{SPACE}', null);
+    expect(sendGamepadSequence).toHaveBeenNthCalledWith(2, expect.objectContaining({ label: 'Navigate to Crew Hub Panel (Right)' }), '{RIGHT}{RIGHT}', null);
+    expect(sendGamepadSequence).toHaveBeenNthCalledWith(3, expect.objectContaining({ label: 'Navigate to Crew Hub Panel End' }), '{DOWN}', null);
     expect(captureAndProcess).toHaveBeenCalledTimes(3);
   });
 

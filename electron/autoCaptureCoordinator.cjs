@@ -259,7 +259,13 @@ function createAutoCaptureCoordinator({
     const sendStepKeys = async (step, sequence, { useMenuSender = false } = {}) => {
       if (!sendKeypresses) return;
 
-      if (useGamepad && useMenuSender) {
+      // Menu open/close (ESC) is always sent via keyboard even in gamepad mode —
+      // the virtual controller connection can cause inconsistent START button inputs,
+      // while keyboard ESC reliably opens/closes the in-game menu.
+      const isMenuToggle = /^\{ESC\}$/i.test(String(sequence || '').trim())
+        || /^\{Escape\}$/i.test(String(sequence || '').trim());
+
+      if (useGamepad && useMenuSender && !isMenuToggle) {
         logAutoCaptureStep(step, '(gamepad)');
         const result = await sendGamepadSequence(step, sequence, macroSequenceConfig);
         if (!result?.success) {
@@ -269,7 +275,7 @@ function createAutoCaptureCoordinator({
         return;
       }
 
-      logAutoCaptureStep(step, '(keypress)');
+      logAutoCaptureStep(step, isMenuToggle && useGamepad ? '(keypress-esc, gamepad-mode)' : '(keypress)');
       const sender = useMenuSender && typeof sendMenuKeySequence === 'function'
         ? sendMenuKeySequence
         : sendKeySequence;

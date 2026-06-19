@@ -945,7 +945,7 @@ async function runOCR(imageBuffer, psm = null, options = {}) {
   const detectionThreshold = Number.isFinite(Number(options?.threshold))
     ? Number(options.threshold)
     : 0.2;
-  const paddleWords = await paddleOcrBuffer(imageBuffer, { threshold: detectionThreshold, performanceMode: options?.performanceMode === true });
+  const paddleWords = await paddleOcrBuffer(imageBuffer, { threshold: detectionThreshold, performanceMode: options?.performanceMode === true, allText: true });
   console.log(`[OCR] PaddleOCR complete in ${Date.now() - startTime}ms, rawWords=${paddleWords.length}`);
 
   const words = paddleWords

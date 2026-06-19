@@ -11,10 +11,16 @@ export interface GamePatch {
 
 export const UPDATE_DEFINITIONS: UpdateDefinition[] = [
     {
+        key: 'ship-speed-2026-06-18',
+        label: 'Ship Speed - 6/18/2026',
+        startDate: '2026-06-18',
+        description: 'Matches played on or after June 18, 2026 until a newer update is added.',
+    },
+    {
         key: '1-5-update-2026-06-14',
         label: '1.5 - 6/14/2026',
         startDate: '2026-06-14',
-        description: 'Matches played on or after June 14, 2026 until a newer update is added.',
+        description: 'Matches played on or after June 14, 2026 until the Ship Speed update.',
     },
     {
         key: 'drill-charge-ram-bastion-2026-03-12',
@@ -57,11 +63,18 @@ export const getUpdateForTimestamp = (timestamp: number): UpdateDefinition | nul
 
 export const GAME_PATCHES: GamePatch[] = [
     {
+        version: '1.5.1',
+        date: '2026-06-18',
+        updateKey: 'ship-speed-2026-06-18',
+        title: 'Ship Speed',
+        description: 'Ship speed balance update. Matches recorded on or after June 18, 2026.',
+    },
+    {
         version: '1.5',
         date: '2026-06-14',
         updateKey: '1-5-update-2026-06-14',
         title: 'Update 1.5',
-        description: 'Current live update bucket for matches recorded on or after June 14, 2026.',
+        description: 'Matches recorded on or after June 14, 2026 until the Ship Speed update.',
     },
     {
         version: '2026-03-12',

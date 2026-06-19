@@ -461,7 +461,11 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
     const removePendingReviews = useAppStore(s => s.removePendingReviews);
     const queueCollapsed = useAppStore(s => s.queueCollapsed);
     const toggleQueueCollapsed = useAppStore(s => s.toggleQueueCollapsed);
-    const rerunRuntimeOptions = useMemo<OCRProcessRuntimeOptions>(() => ({}), []);
+    const performanceMode = useAppStore(s => s.performanceMode);
+    const rerunRuntimeOptions = useMemo<OCRProcessRuntimeOptions>(() => ({
+        forceUncached: true,
+        performanceMode: performanceMode || false,
+    }), [performanceMode]);
     const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
     const [bulkBusy, setBulkBusy] = useState(false);
     const todayQueueDayKey = toLocalDateKey(Date.now());
