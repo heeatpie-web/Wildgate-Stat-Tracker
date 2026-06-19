@@ -1,4 +1,10 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.7.6": [
+    "Fix controller macro ESC consistency",
+    "Fix OCR rerun blank results",
+    "Fix SmartCaptures rerun performanceMode",
+    "Add Ship Speed era filter"
+  ],
   "v3.7.5": [
     "Aggressive OCR CPU throttling — lower detection resolution, fewer ONNX threads, longer cool-down yields between jobs to prevent laptop thermal shutdowns during gameplay"
   ],
