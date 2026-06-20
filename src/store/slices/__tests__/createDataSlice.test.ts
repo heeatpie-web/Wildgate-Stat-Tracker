@@ -277,8 +277,23 @@ describe('createDataSlice', () => {
       expect((s as any).playerProfiles['OldName']).toBeUndefined();
     });
 
-    it('does not create a duplicate when renaming into an existing normalized name', () => {
+    it('absorbs a registry-only collision when renaming (not a profile collision)', () => {
       store.getState().addToRegistry('OldName');
+      store.getState().addToRegistry('NewName');
+
+      store.getState().renamePilot('OldName', 'newname');
+
+      const s = store.getState();
+      expect(s.pilotRegistry).toContain('newname');
+      expect(s.pilotRegistry).not.toContain('OldName');
+      expect(s.pilotRegistry).not.toContain('NewName');
+      expect(s.pilotRegistry).toHaveLength(1);
+    });
+
+    it('blocks rename when the target name is an existing profile', () => {
+      store.getState().addPlayer('OldName');
+      store.getState().addToRegistry('OldName');
+      store.getState().addPlayer('NewName');
       store.getState().addToRegistry('NewName');
 
       store.getState().renamePilot('OldName', 'newname');
@@ -286,7 +301,8 @@ describe('createDataSlice', () => {
       const s = store.getState();
       expect(s.pilotRegistry).toContain('OldName');
       expect(s.pilotRegistry).toContain('NewName');
-      expect(s.pilotRegistry).not.toContain('newname');
+      expect(s.players).toContain('OldName');
+      expect(s.players).toContain('NewName');
     });
   });
 

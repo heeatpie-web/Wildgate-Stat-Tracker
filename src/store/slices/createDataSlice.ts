@@ -818,11 +818,15 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
     const oldKey = normalizeNameKey(oldName);
     const newKey = normalizeNameKey(newName);
     if (!newKey) return {};
-    const collision = state.pilotRegistry.some((entry) => (
+    const collidingEntry = state.pilotRegistry.find((entry) => (
       entry !== oldName && normalizeNameKey(entry) === newKey
     ));
-    if (collision) return {};
-    const newRegistry = state.pilotRegistry.map(p => p === oldName ? newName : p);
+    const isProfileCollision = collidingEntry && state.players.includes(collidingEntry);
+    if (isProfileCollision) return {};
+    const newRegistry = (collidingEntry
+      ? state.pilotRegistry.filter(p => p !== collidingEntry)
+      : state.pilotRegistry
+    ).map(p => p === oldName ? newName : p);
     const newPlayers = state.players.map(p => p === oldName ? newName : p);
     const newFavorites = state.favorites.map(f => f === oldName ? newName : f);
     const newNotes = { ...state.pilotNotes };
@@ -832,15 +836,20 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
     }
     const newMatches = state.matches.map((match) => rewriteMatchPlayerNames(
       match,
-      (name) => name === oldName,
+      (name) => name === oldName || (collidingEntry != null && name === collidingEntry),
       newName
     ));
 
     const newAliases = clonePilotAliases(state.pilotAliases);
+    if (collidingEntry && collidingEntry !== newName) {
+      delete newAliases[collidingEntry];
+    }
     const mergedAliases = dedupeAliasList([
       ...(newAliases[newName] || []),
       ...(newAliases[oldName] || []),
+      ...(collidingEntry ? (state.pilotAliases[collidingEntry] || []) : []),
       oldKey !== newKey ? oldName : '',
+      collidingEntry && collidingEntry !== newName ? collidingEntry : '',
     ], newName);
     if (mergedAliases.length > 0) newAliases[newName] = mergedAliases;
     else delete newAliases[newName];
@@ -848,7 +857,9 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
 
     const newIdMap = { ...state.playerIdMap };
     Object.entries(newIdMap).forEach(([id, name]) => {
-      if (normalizeNameKey(name) === oldKey) newIdMap[id] = newName;
+      if (normalizeNameKey(name) === oldKey || (collidingEntry && normalizeNameKey(name) === newKey)) {
+        newIdMap[id] = newName;
+      }
     });
     const nextRosterEntryMeta = normalizeRosterEntryMetaMap(
       newRegistry,

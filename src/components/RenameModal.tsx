@@ -5,6 +5,7 @@ import { Match } from '../types';
 import { parseShareCode } from '../utils/export';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { useAppStore } from '../store/useAppStore';
 
 export const RenameModal: React.FC = () => {
     const { renameModal, setRenameModal, renameValue, setRenameValue, setToast, activeUser, setActiveUser } = useUIState();
@@ -43,9 +44,15 @@ export const RenameModal: React.FC = () => {
             handleRegisterUser(renameValue.trim());
         } else if (renameModal.type === 'rename' && renameModal.oldName) {
             const nextName = renameValue.trim();
+            const playersBefore = useAppStore.getState().players;
             renamePilot(renameModal.oldName, nextName);
+            const playersAfter = useAppStore.getState().players;
+            if (playersBefore === playersAfter) {
+                setToast({ message: `Could not rename — "${nextName}" already exists as a profile.`, type: 'error' });
+                setRenameModal(null);
+                return;
+            }
             if (activeUser === renameModal.oldName) {
-                // Keep active profile in sync when the current profile is renamed.
                 setActiveUser(nextName);
             }
             setToast({ message: "Profile renamed successfully.", type: 'success' });
