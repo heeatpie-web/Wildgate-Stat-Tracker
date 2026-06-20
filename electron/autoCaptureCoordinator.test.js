@@ -452,6 +452,7 @@ describe('autoCaptureCoordinator sequencing', () => {
     const sendKeySequence = vi.fn().mockResolvedValue({ success: true });
     const sendMenuKeySequence = vi.fn().mockResolvedValue({ success: true });
     const sendGamepadSequence = vi.fn().mockResolvedValue({ success: true });
+    const prepareGamepadSequence = vi.fn().mockResolvedValue({ success: true });
     const captureAndProcess = vi.fn()
       .mockResolvedValueOnce({ success: true, filePath: 'map.png', filename: 'map.png', ocrData: { screenshotType: 'tactical_map' } })
       .mockResolvedValueOnce({ success: true, filePath: 'crew-a.png', filename: 'crew-a.png', ocrData: { screenshotType: 'crew_hub' } })
@@ -462,6 +463,7 @@ describe('autoCaptureCoordinator sequencing', () => {
       sendKeySequence,
       sendMenuKeySequence,
       sendGamepadSequence,
+      prepareGamepadSequence,
       captureAndProcess,
       lookupMapKeybind: vi.fn().mockResolvedValue({ raw: 'Tab', sendKeys: '{TAB}' }),
       delayFn: vi.fn(() => Promise.resolve()),
@@ -493,14 +495,17 @@ describe('autoCaptureCoordinator sequencing', () => {
     expect(sendKeySequence).toHaveBeenCalledWith('{TAB}', 'Open Tactical Map');
     expect(sendKeySequence).toHaveBeenCalledWith('{TAB}', 'Close Tactical Map');
 
-    // ESC steps use keyboard (sendMenuKeySequence) even in gamepad mode
-    expect(sendMenuKeySequence).toHaveBeenCalledWith('{ESC}', expect.any(String));
+    // Menu steps use gamepad, including open and exit
+    expect(sendMenuKeySequence).not.toHaveBeenCalled();
 
     // Navigation steps use gamepad
-    expect(sendGamepadSequence).toHaveBeenCalledTimes(3);
-    expect(sendGamepadSequence).toHaveBeenNthCalledWith(1, expect.objectContaining({ label: 'Navigate to Crew Hub' }), '{UP}{UP}{UP}{SPACE}', null);
-    expect(sendGamepadSequence).toHaveBeenNthCalledWith(2, expect.objectContaining({ label: 'Navigate to Crew Hub Panel (Right)' }), '{RIGHT}{RIGHT}', null);
-    expect(sendGamepadSequence).toHaveBeenNthCalledWith(3, expect.objectContaining({ label: 'Navigate to Crew Hub Panel End' }), '{DOWN}', null);
+    expect(prepareGamepadSequence).toHaveBeenCalledTimes(1);
+    expect(sendGamepadSequence).toHaveBeenCalledTimes(5);
+    expect(sendGamepadSequence).toHaveBeenNthCalledWith(1, expect.objectContaining({ label: 'Navigate to Crew Hub' }), '{ESC}', null);
+    expect(sendGamepadSequence).toHaveBeenNthCalledWith(2, expect.objectContaining({ label: 'Navigate to Crew Hub' }), '{UP}{UP}{UP}{SPACE}', null);
+    expect(sendGamepadSequence).toHaveBeenNthCalledWith(3, expect.objectContaining({ label: 'Navigate to Crew Hub Panel (Right)' }), '{RIGHT}{RIGHT}', null);
+    expect(sendGamepadSequence).toHaveBeenNthCalledWith(4, expect.objectContaining({ label: 'Navigate to Crew Hub Panel End' }), '{DOWN}', null);
+    expect(sendGamepadSequence).toHaveBeenNthCalledWith(5, expect.objectContaining({ label: 'Exit' }), '{ESC}', null);
     expect(captureAndProcess).toHaveBeenCalledTimes(3);
   });
 

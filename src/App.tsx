@@ -573,6 +573,7 @@ const App: React.FC = () => {
     const telemetryBackgroundResultOcrTimersRef = React.useRef<Map<number, number>>(new Map());
     const telemetryLobbyCaptureTimersRef = React.useRef<Map<number, number>>(new Map());
     const telemetryLobbyCaptureAttemptedRef = React.useRef<Set<number>>(new Set());
+    const telemetryLobbyCapturePendingRef = React.useRef<Set<number>>(new Set());
     const telemetryLobbyCaptureSkipLoggedRef = React.useRef<Set<number>>(new Set());
     const telemetryLobbyCaptureCompletedAtRef = React.useRef<Map<number, number>>(new Map());
     const telemetryFirstPregameAtRef = React.useRef<Map<number, number>>(new Map());
@@ -1024,6 +1025,7 @@ const App: React.FC = () => {
         const numericMatchId = Number(matchId || 0);
         if (!Number.isInteger(numericMatchId) || numericMatchId <= 0) return false;
         if (telemetryLobbyCaptureAttemptedRef.current.has(numericMatchId)) return true;
+        if (telemetryLobbyCapturePendingRef.current.has(numericMatchId)) return true;
         if (telemetryAutoCaptureInFlightRef.current.has(numericMatchId)) return true;
         return hasCompleteTelemetryCaptureBundleRef.current(numericMatchId);
     }, []);
@@ -2671,11 +2673,13 @@ const App: React.FC = () => {
                 window.clearTimeout(timerId);
                 telemetryLobbyCaptureTimersRef.current.delete(normalizedMatchId);
             }
+            telemetryLobbyCapturePendingRef.current.delete(normalizedMatchId);
             return;
         }
 
         telemetryLobbyCaptureTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
         telemetryLobbyCaptureTimersRef.current.clear();
+        telemetryLobbyCapturePendingRef.current.clear();
     }, []);
 
     const clearArtifactsAndGatesFallbackWatchTimer = useCallback(() => {
@@ -2724,6 +2728,17 @@ const App: React.FC = () => {
             telemetryLifecycleStage: 'pregame',
             isMatchInProgress: false,
         }));
+
+        if (!result.started && result.reason === 'in-progress') {
+            telemetryAutoCaptureOriginRef.current.delete(matchId);
+            setTelemetryAutomationStatus(createTelemetryAutomationStatus({
+                phase: 'capturing-lobby',
+                message: 'Auto-capture is busy; retrying lobby capture',
+                matchId,
+                level: 'info',
+            }));
+            return result;
+        }
 
         const startFailure = getTelemetryAutoCaptureStartFailure(result);
         if (!startFailure) {
@@ -3113,15 +3128,31 @@ const App: React.FC = () => {
 
         if (telemetryLobbyCaptureTimersRef.current.has(matchId)) return;
 
+        telemetryLobbyCapturePendingRef.current.add(matchId);
         const timerId = window.setTimeout(() => {
             telemetryLobbyCaptureTimersRef.current.delete(matchId);
-            if (shouldSuppressTelemetryLobbyAutoCapture(matchId)) return;
-            telemetryLobbyCaptureAttemptedRef.current.add(matchId);
+            if (
+                telemetryLobbyCaptureAttemptedRef.current.has(matchId)
+                || telemetryAutoCaptureInFlightRef.current.has(matchId)
+                || hasCompleteTelemetryCaptureBundleRef.current(matchId)
+            ) {
+                telemetryLobbyCapturePendingRef.current.delete(matchId);
+                return;
+            }
             Logger.info(
                 'AutoCapture',
                 `Pregame auto-capture triggered (matchId=${matchId}, mode=${detectedMatchMode}, delayMs=${PREGAME_LOBBY_MACRO_DELAY_MS})`,
             );
-            void startSilentTelemetryAutoCaptureRef.current(matchId);
+            void (async () => {
+                try {
+                    const result = await startSilentTelemetryAutoCaptureRef.current(matchId);
+                    if (result.started || result.reason !== 'in-progress') {
+                        telemetryLobbyCaptureAttemptedRef.current.add(matchId);
+                    }
+                } finally {
+                    telemetryLobbyCapturePendingRef.current.delete(matchId);
+                }
+            })();
         }, PREGAME_LOBBY_MACRO_DELAY_MS);
 
         telemetryLobbyCaptureTimersRef.current.set(matchId, timerId);

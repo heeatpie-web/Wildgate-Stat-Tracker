@@ -61,7 +61,11 @@ async function runRecognition(imageBuffer) {
     }
     recShapeLogged = true;
   }
-  return ctcDecode(logits).trim();
+  const decoded = ctcDecode(logits);
+  return {
+    text: decoded.text.trim(),
+    confidence: decoded.confidence,
+  };
 }
 
 async function initPaddleOCR(performanceMode = false) {
@@ -156,27 +160,60 @@ async function preprocessForRec(cropBuffer) {
 }
 
 // CTC greedy decode.
+function isProbabilityRow(data, offset, numChars) {
+  let sum = 0;
+  for (let c = 0; c < numChars; c++) {
+    const value = Number(data[offset + c]);
+    if (!Number.isFinite(value) || value < -0.00001 || value > 1.00001) return false;
+    sum += value;
+  }
+  return sum >= 0.9 && sum <= 1.1;
+}
+
+function getMaxClassProbability(data, offset, numChars, maxVal) {
+  if (isProbabilityRow(data, offset, numChars)) {
+    return Math.max(0, Math.min(1, Number(maxVal) || 0));
+  }
+
+  let denom = 0;
+  for (let c = 0; c < numChars; c++) {
+    denom += Math.exp(Number(data[offset + c]) - maxVal);
+  }
+  if (!Number.isFinite(denom) || denom <= 0) return 0;
+  return Math.max(0, Math.min(1, 1 / denom));
+}
+
 function ctcDecode(logits) {
   const [, seqLen, numChars] = logits.dims;
   const data = logits.data;
   let prev = 0;
   let text = '';
+  const confidences = [];
 
   for (let t = 0; t < seqLen; t++) {
+    const offset = t * numChars;
     let maxIdx = 0;
     let maxVal = -Infinity;
     for (let c = 0; c < numChars; c++) {
-      const v = data[t * numChars + c];
+      const v = data[offset + c];
       if (v > maxVal) {
         maxVal = v;
         maxIdx = c;
       }
     }
-    if (maxIdx !== 0 && maxIdx !== prev) text += charList[maxIdx] || '';
+    const char = charList[maxIdx] || '';
+    if (maxIdx !== 0 && maxIdx !== prev && char) {
+      text += char;
+      confidences.push(getMaxClassProbability(data, offset, numChars, maxVal));
+    }
     prev = maxIdx;
   }
 
-  return text;
+  const confidence = confidences.length > 0
+    ? (confidences.reduce((sum, value) => sum + value, 0) / confidences.length) * 100
+    : 0;
+
+  return { text, confidence };
 }
 
 function isLikelyPlayerName(text) {
@@ -363,11 +400,11 @@ async function paddleOcrBuffer(imageBuffer, opts = {}) {
       .extract({ left: bbox.x0, top: bbox.y0, width: cropW, height: cropH })
       .toBuffer();
 
-    const text = await runRecognition(cropBuf);
+    const recognition = await runRecognition(cropBuf);
 
-    const cleaned = text.trim();
+    const cleaned = recognition.text.trim();
     if (opts.allText ? cleaned.length > 0 : isLikelyPlayerName(cleaned)) {
-      results.push({ text: cleaned, bbox, confidence: 80 });
+      results.push({ text: cleaned, bbox, confidence: Math.max(0, Math.min(100, recognition.confidence)) });
     }
 
     if (yieldEveryN > 0 && (i + 1) % yieldEveryN === 0 && i + 1 < bboxes.length) {
@@ -381,7 +418,8 @@ async function paddleRecognizeBuffer(imageBuffer, opts = {}) {
   await initPaddleOCR(opts.performanceMode === true);
   const meta = await sharp(imageBuffer).metadata();
   if (!meta.width || !meta.height) return '';
-  return runRecognition(imageBuffer);
+  const recognition = await runRecognition(imageBuffer);
+  return recognition.text;
 }
 
 module.exports = { paddleOcrBuffer, paddleRecognizeBuffer, initPaddleOCR };

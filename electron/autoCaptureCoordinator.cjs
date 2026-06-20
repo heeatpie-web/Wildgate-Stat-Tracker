@@ -227,6 +227,7 @@ function createAutoCaptureCoordinator({
   sendKeySequence,
   sendMenuKeySequence = null,
   sendGamepadSequence = null,
+  prepareGamepadSequence = null,
   captureAndProcess,
   lookupMapKeybind = lookupTacticalMapKeybind,
   delayFn = delay,
@@ -256,17 +257,24 @@ function createAutoCaptureCoordinator({
       + `sendKeys=${tacticalMapKeybind?.sendKeys || 'unknown'} sendKeypresses=${sendKeypresses} gamepad=${useGamepad} waitMultiplier=${waitMultiplier}`
     );
 
+    if (useGamepad && typeof prepareGamepadSequence === 'function') {
+      const prepareResult = await prepareGamepadSequence();
+      if (!prepareResult?.success) {
+        throw new Error(`Virtual controller: ${prepareResult?.error || 'connect failed'}`);
+      }
+    }
+
     const sendStepKeys = async (step, sequence, { useMenuSender = false } = {}) => {
       if (!sendKeypresses) return;
 
-      // Menu open/close (ESC) is always sent via keyboard even in gamepad mode —
-      // the virtual controller connection can cause inconsistent START button inputs,
-      // while keyboard ESC reliably opens/closes the in-game menu.
+      // Menu navigation is sent through the virtual controller in gamepad mode.
+      // This keeps the game on controller prompts for START/A/B/D-pad menu input.
+      // Tactical map keypresses still use the configured keyboard binding.
       const isMenuToggle = /^\{ESC\}$/i.test(String(sequence || '').trim())
         || /^\{Escape\}$/i.test(String(sequence || '').trim());
 
-      if (useGamepad && useMenuSender && !isMenuToggle) {
-        logAutoCaptureStep(step, '(gamepad)');
+      if (useGamepad && useMenuSender) {
+        logAutoCaptureStep(step, isMenuToggle ? '(gamepad-menu)' : '(gamepad)');
         const result = await sendGamepadSequence(step, sequence, macroSequenceConfig);
         if (!result?.success) {
           const reason = result?.error || 'gamepad input failed';
@@ -275,7 +283,7 @@ function createAutoCaptureCoordinator({
         return;
       }
 
-      logAutoCaptureStep(step, isMenuToggle && useGamepad ? '(keypress-esc, gamepad-mode)' : '(keypress)');
+      logAutoCaptureStep(step, '(keypress)');
       const sender = useMenuSender && typeof sendMenuKeySequence === 'function'
         ? sendMenuKeySequence
         : sendKeySequence;
@@ -430,9 +438,13 @@ function createAutoCaptureCoordinator({
     }
   };
 
-  const tryEscapeCleanup = async (sendKeypresses) => {
-    if (!sendKeypresses) return;
+  const tryEscapeCleanup = async (payload) => {
+    if (!payload?.sendKeypresses) return;
     try {
+      if (payload.gamepadModeEnabled && typeof sendGamepadSequence === 'function') {
+        await sendGamepadSequence(STEP_DEFINITIONS.exit, '{ESC}', payload.macroSequenceConfig);
+        return;
+      }
       await sendKeySequence('{ESC}', 'Auto-Capture cleanup');
     } catch {
       // Cleanup is best-effort.
@@ -532,7 +544,7 @@ function createAutoCaptureCoordinator({
           const message = error instanceof Error ? error.message : 'Unknown error';
           const step = Object.values(STEP_DEFINITIONS).find((candidate) => message.includes(candidate.label))
             || null;
-          await tryEscapeCleanup(payload.sendKeypresses);
+          await tryEscapeCleanup(payload);
           notify(buildFailedPayload(
             step
               ? `Auto-Capture failed at Step ${step.number} — ${step.label}`

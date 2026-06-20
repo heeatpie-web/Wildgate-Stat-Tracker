@@ -11,6 +11,7 @@ let sharedAudioContext: AudioContext | null = null;
 const getAudioContext = (): AudioContext | null => {
     const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContextCtor) return null;
+    if (sharedAudioContext?.state === 'closed') sharedAudioContext = null;
     if (!sharedAudioContext) sharedAudioContext = new AudioContextCtor();
     return sharedAudioContext;
 };
@@ -31,35 +32,42 @@ export const useSoundEffects = () => {
         if (!soundEnabled) return;
 
         const ctx = getAudioContext();
-        if (!ctx) return;
+        if (!ctx || ctx.state === 'closed') return;
 
         const doPlay = () => {
-            const startAt = ctx.currentTime + Math.max(0, delay);
-            const stopAt = startAt + duration;
+            try {
+                if (ctx.state === 'closed') return;
+                const startAt = ctx.currentTime + Math.max(0, delay);
+                const stopAt = startAt + duration;
 
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
 
-            osc.type = type;
-            osc.frequency.setValueAtTime(freq, startAt);
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, startAt);
 
-            gain.gain.setValueAtTime(0.0001, startAt);
-            gain.gain.exponentialRampToValueAtTime(0.11, startAt + 0.01);
-            gain.gain.exponentialRampToValueAtTime(0.00001, stopAt);
+                gain.gain.setValueAtTime(0.0001, startAt);
+                gain.gain.exponentialRampToValueAtTime(0.11, startAt + 0.01);
+                gain.gain.exponentialRampToValueAtTime(0.00001, stopAt);
 
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.onended = () => {
-                osc.disconnect();
-                gain.disconnect();
-            };
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.onended = () => {
+                    osc.disconnect();
+                    gain.disconnect();
+                };
 
-            osc.start(startAt);
-            osc.stop(stopAt);
+                osc.start(startAt);
+                osc.stop(stopAt);
+            } catch {
+                sharedAudioContext = null;
+            }
         };
 
         if (ctx.state === 'suspended') {
-            ctx.resume().then(doPlay).catch(() => undefined);
+            ctx.resume().then(doPlay).catch(() => {
+                sharedAudioContext = null;
+            });
         } else {
             doPlay();
         }

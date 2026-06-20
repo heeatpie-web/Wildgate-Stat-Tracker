@@ -1,4 +1,10 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.7.7": [
+    "Improve start-of-match auto-capture reliability and prevent duplicate lobby macro starts",
+    "Run auto-capture menu navigation through the virtual controller when gamepad mode is enabled",
+    "Use real Paddle OCR recognition confidence instead of a fixed 80% value",
+    "Improve automation sound playback recovery"
+  ],
   "v3.7.6": [
     "Fix controller macro ESC consistency",
     "Fix OCR rerun blank results",

@@ -1046,6 +1046,7 @@ const autoCaptureCoordinator = createAutoCaptureCoordinator({
     }
     return gamepadInput.sendGamepadSequence(actions);
   },
+  prepareGamepadSequence: async () => gamepadInput.connectVirtualGamepad(),
   beforeSequence: async () => beginAutoCaptureWindowSession(),
   afterSequence: async () => endAutoCaptureWindowSession(),
   captureAndProcess: async ({
