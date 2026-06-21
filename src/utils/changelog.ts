@@ -1,4 +1,14 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.7.8": [
+    "OCR workbench parity with confidence meters and batch actions",
+    "performance optimization with memoized candidate rows",
+    "add-as-alias button in review queue",
+    "twilight label outline cleanup",
+    "roster chip right-alignment",
+    "win ship kill popup",
+    "smart capture single-shot fix",
+    "header button height normalization"
+  ],
   "v3.7.7": [
     "Improve start-of-match auto-capture reliability and prevent duplicate lobby macro starts",
     "Run auto-capture menu navigation through the virtual controller when gamepad mode is enabled",
