@@ -117,8 +117,9 @@ describe('Header', () => {
       activeUser: 'TestPilot',
       source: 'header',
       matchId: null,
+      behavior: 'single',
     });
-    expect(event.detail).toEqual({ activeUser: 'TestPilot', source: 'header', matchId: null, requestId: 'sc_req_1' });
+    expect(event.detail).toEqual({ activeUser: 'TestPilot', source: 'header', matchId: null, requestId: 'sc_req_1', behavior: 'single' });
 
     window.removeEventListener('smart-capture-request', eventSpy as EventListener);
   });
@@ -142,7 +143,7 @@ describe('Header', () => {
 
     expect(eventSpy).toHaveBeenCalledTimes(1);
     const event = eventSpy.mock.calls[0][0] as CustomEvent;
-    expect(event.detail).toEqual({ activeUser: 'TestPilot', source: 'header', matchId: 9001, requestId: 'sc_req_1' });
+    expect(event.detail).toEqual({ activeUser: 'TestPilot', source: 'header', matchId: 9001, requestId: 'sc_req_1', behavior: 'single' });
 
     window.removeEventListener('smart-capture-request', eventSpy as EventListener);
   });
@@ -180,7 +181,7 @@ describe('Header', () => {
 
     expect(eventSpy).toHaveBeenCalledTimes(1);
     const event = eventSpy.mock.calls[0][0] as CustomEvent;
-    expect(event.detail).toEqual({ activeUser: 'TestPilot', source: 'header', matchId: 9001, requestId: 'sc_req_1' });
+    expect(event.detail).toEqual({ activeUser: 'TestPilot', source: 'header', matchId: 9001, requestId: 'sc_req_1', behavior: 'single' });
 
     window.removeEventListener('smart-capture-request', eventSpy as EventListener);
   });

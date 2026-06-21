@@ -122,6 +122,7 @@ export const Wizard: React.FC = () => {
     const ocrMode = useAppStore((state) => state.ocrMode);
     const ocrRegions = useAppStore((state) => state.ocrRegions);
     const wizardCloseOnOcrApply = useAppStore((state) => state.wizardCloseOnOcrApply);
+    const addPilotAlias = useAppStore((state) => state.addPilotAlias);
     const setPendingDraftData = useAppStore((state) => state.setPendingMatchData);
     const pendingStoreMatch = useAppStore((state) => {
         const pendingId = Number(state.pendingMatchData?.id || 0);
@@ -1583,6 +1584,7 @@ export const Wizard: React.FC = () => {
                                     }}
                                     rerunOcrDisabled={isRerunningOcr || isPendingOcrProcessing}
                                     isRerunningOcr={isRerunningOcr}
+                                    onAddAlias={addPilotAlias}
                                     onAcceptAll={() => {
                                         const latestPending = useAppStore.getState().pendingMatchData;
                                         const matchId = latestPending?.id;

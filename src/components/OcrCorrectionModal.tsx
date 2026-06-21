@@ -61,6 +61,7 @@ interface OcrCorrectionModalProps {
     rerunOcrDisabled?: boolean;
     isRerunningOcr?: boolean;
     autoAcceptOnSaveAndApply?: boolean;
+    onAddAlias?: (rosterName: string, alias: string) => void;
 }
 
 interface DetectedPlayer {
@@ -487,6 +488,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     rerunOcrDisabled = false,
     isRerunningOcr = false,
     autoAcceptOnSaveAndApply = false,
+    onAddAlias,
 }) => {
     const {
         sessionTeams,
@@ -1735,6 +1737,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                     onPlayerAdd={addTeamPlayer}
                                     onPlayerMove={moveTeamPlayer}
                                     onAddToRoster={handleAddRosterPlayer}
+                                    onAddAlias={onAddAlias}
                                     dataTestId="ocr-team-assignment-board"
                                 />
                             </section>

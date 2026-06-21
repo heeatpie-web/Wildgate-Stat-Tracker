@@ -98,6 +98,7 @@ const AnalyticsPanel = React.lazy(loadAnalyticsPanel);
 import { APP_VERSION, GameMode, Match, MatchResult, WizardResult } from './types';
 import { UNKNOWN_PLAYER_LABELS } from './utils/constants';
 import { Toast } from './components/Toast';
+import { ShipKillPopup } from './components/ShipKillPopup';
 const loadDevOCRPanel = () => loadStandardDashboardChunk('dev-ocr');
 const DevOCRPanel = React.lazy(loadDevOCRPanel);
 const loadSmartCapturesPanel = () => loadPauseableDashboardChunk('smart-captures');
@@ -3730,6 +3731,9 @@ const App: React.FC = () => {
                 if (finalized.success) {
                     setFullAutoResultLatched(true);
                     scheduleFullAutoReadyForNextMatchStatus(normalizedDraftMatchId);
+                    if (resultData?.result === 'Win' && normalizedDraftMatchId > 0) {
+                        useAppStore.getState().showShipKillPopup(normalizedDraftMatchId);
+                    }
                     return;
                 }
 
@@ -4978,7 +4982,30 @@ const App: React.FC = () => {
                 </section>
             ), document.body)}
 
+            <ShipKillPopupWrapper />
         </div>
+    );
+};
+
+const ShipKillPopupWrapper: React.FC = () => {
+    const shipKillPopup = useAppStore(s => s.shipKillPopup);
+    const dismissShipKillPopup = useAppStore(s => s.dismissShipKillPopup);
+    const updateMatch = useAppStore(s => s.updateMatch);
+    const matches = useAppStore(s => s.matches);
+
+    if (!shipKillPopup) return null;
+
+    return (
+        <ShipKillPopup
+            matchId={shipKillPopup.matchId}
+            onDismiss={dismissShipKillPopup}
+            onSave={(matchId, kills) => {
+                const match = matches.find(m => m.id === matchId);
+                if (match) {
+                    updateMatch({ ...match, kills });
+                }
+            }}
+        />
     );
 };
 

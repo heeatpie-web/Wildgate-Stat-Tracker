@@ -1701,6 +1701,13 @@ function extractCrewHubNamesFromWords(words, imageWidth, imageHeight) {
     const cleaned = cleanupCrewHubPlayerName(String(parsed || ''));
     if (!cleaned) continue;
     if (!isValidCrewHubPlayerName(cleaned)) continue;
+    // Substring noise filter — mirrors parsePlayersFromLines (crewHubExtractor line 724).
+    // Catches UI text that passes isValidPlayerName when OCR concatenates words
+    // (e.g. "Hopintothesamevoicechanne", "CREWHUB", "YOURVOICE:ON").
+    if (/PARTY|CREW|HUB|VOICE|CHANNEL|PUSH|TALK|MUTE|DISABLE|DEAFEN|UNMUTE|TEXT|PINGS/i.test(cleaned)) continue;
+    // Also catch compact concatenated forms by stripping non-alpha and checking
+    const compactCleaned = cleaned.toUpperCase().replace(/[^A-Z]/g, '');
+    if (/VOICECHANNEL|CREWHUB|YOURVOICE|SWITCHVOICE|PUSHTOTALK|HOPINTO/.test(compactCleaned)) continue;
     const avgConfidence = Array.isArray(line?.words) && line.words.length > 0
       ? (line.words.reduce((sum, word) => sum + Number(word?.confidence || 0), 0) / line.words.length)
       : 0;
@@ -2610,6 +2617,7 @@ function cleanupLegacyTeammates(teammates, shipType, options = {}) {
     const rawName = typeof teammate === 'string' ? teammate : teammate?.name;
     const cleanedName = cleanupCrewHubPlayerName(String(rawName || ''));
     if (!cleanedName || isUnderCrewShipBonusText(cleanedName)) continue;
+    if (/PARTY|CREW|HUB|VOICE|CHANNEL|PUSH|TALK|MUTE|DISABLE|DEAFEN|UNMUTE|TEXT|PINGS/i.test(cleanedName)) continue;
     const key = normalizeNameKey(cleanedName);
     if (!key || seen.has(key)) continue;
     seen.add(key);
@@ -2634,6 +2642,7 @@ function cleanupLegacyOpponentTeams(opponentTeams) {
         const rawName = typeof player === 'string' ? player : player?.name;
         const cleanedName = cleanupCrewHubPlayerName(String(rawName || ''));
         if (!cleanedName || isUnderCrewShipBonusText(cleanedName)) continue;
+        if (/PARTY|CREW|HUB|VOICE|CHANNEL|PUSH|TALK|MUTE|DISABLE|DEAFEN|UNMUTE|TEXT|PINGS/i.test(cleanedName)) continue;
         const key = normalizeNameKey(cleanedName);
         if (!key || seenPlayers.has(key)) continue;
         seenPlayers.add(key);

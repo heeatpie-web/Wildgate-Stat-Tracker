@@ -50,6 +50,7 @@ interface OcrTeamAssignmentBoardProps {
         toPlayerIndex?: number | null
     ) => void;
     onAddToRoster?: (name: string) => void;
+    onAddAlias?: (rosterName: string, alias: string) => void;
 }
 
 const TEAM_COLOR_OPTIONS = [
@@ -149,6 +150,7 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
     onPlayerAdd,
     onPlayerMove,
     onAddToRoster,
+    onAddAlias,
 }) => {
     const [draggedPlayer, setDraggedPlayer] = useState<DraggedPlayerPayload | null>(null);
     const [dragHoverTeamIndex, setDragHoverTeamIndex] = useState<number | null>(null);
@@ -422,14 +424,29 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                                                         </span>
                                                     )}
                                                     {showFuzzyBadge && (
-                                                        <button
-                                                            type="button"
-                                                            className="ocr-assignment-fuzzy-badge ocr-assignment-fuzzy-badge--apply"
-                                                            title={`Click to apply fuzzy match: ${fuzzyMatch}`}
-                                                            onClick={() => onPlayerChange(teamIndex, playerIndex, fuzzyMatch)}
-                                                        >
-                                                            ~ {fuzzyMatch}
-                                                        </button>
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                className="ocr-assignment-fuzzy-badge ocr-assignment-fuzzy-badge--apply"
+                                                                title={`Click to apply fuzzy match: ${fuzzyMatch}`}
+                                                                onClick={() => onPlayerChange(teamIndex, playerIndex, fuzzyMatch)}
+                                                            >
+                                                                ~ {fuzzyMatch}
+                                                            </button>
+                                                            {onAddAlias && (
+                                                                <button
+                                                                    type="button"
+                                                                    className="ocr-assignment-fuzzy-badge ocr-assignment-fuzzy-badge--apply !text-info !border-info/30"
+                                                                    title={`Add "${displayName}" as alias for "${fuzzyMatch}"`}
+                                                                    onClick={() => {
+                                                                        onAddAlias(fuzzyMatch, displayName.trim());
+                                                                        onPlayerChange(teamIndex, playerIndex, fuzzyMatch);
+                                                                    }}
+                                                                >
+                                                                    As alias
+                                                                </button>
+                                                            )}
+                                                        </>
                                                     )}
                                                     {!isRosterMatch && !showFuzzyBadge && onAddToRoster && displayName.trim().length >= 2 && (
                                                         <button

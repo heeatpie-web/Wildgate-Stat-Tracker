@@ -1,7 +1,8 @@
-import React, { useState, type Dispatch, type FC, type SetStateAction } from 'react';
-import { Search, ScanEye, X, Image as ImageIcon, ChevronRight, Users, Merge, AlertTriangle } from 'lucide-react';
+import React, { useState, useDeferredValue, useMemo, type Dispatch, type FC, type SetStateAction } from 'react';
+import { Search, ScanEye, X, Image as ImageIcon, ChevronRight, Users, Merge, AlertTriangle, RefreshCw, CheckCheck, XCircle } from 'lucide-react';
 import type { PendingReview } from '../../store/slices/createDataSlice';
 import { normalizeOcrName } from '../../utils/stringUtils';
+import { ConfidenceMeter } from '../ConfidenceMeter';
 import type { RosterMergeSuggestionGroup } from '../../utils/rosterMergeSuggestions';
 import type { RoleConflictWorkbenchItem } from './playerHubTypes';
 
@@ -35,6 +36,11 @@ export interface PlayerHubOcrWorkbenchProps {
     ) => void;
     addPilotAlias: (pilotName: string, alias: string) => void;
     onSourcePreview: (preview: { src: string; label: string } | null) => void;
+    onBatchAcceptHighConfidence?: (candidates: PendingReview[]) => void;
+    onBatchDismissLowConfidence?: (candidates: PendingReview[]) => void;
+    onRequestRerunOcr?: () => void;
+    rerunOcrDisabled?: boolean;
+    isRerunningOcr?: boolean;
 }
 
 type WorkbenchTab = 'candidates' | 'conflicts' | 'merges';
@@ -47,6 +53,177 @@ const pillStyle = (active: boolean, color?: 'danger' | 'warning') => {
     }
     return 'border-md-sys-outline/10 text-md-sys-on-surface/55 hover:bg-md-sys-on-surface/[0.06]';
 };
+
+interface CandidateRowProps {
+    candidate: PendingReview;
+    pendingValue: string;
+    existingRosterMatch: string | null | undefined;
+    onEditValue: (id: string, value: string) => void;
+    resolveRosterCandidate: PlayerHubOcrWorkbenchProps['resolveRosterCandidate'];
+    mergeRosterCandidateIntoExisting: PlayerHubOcrWorkbenchProps['mergeRosterCandidateIntoExisting'];
+    addPilotAlias: PlayerHubOcrWorkbenchProps['addPilotAlias'];
+    findRosterMatch: PlayerHubOcrWorkbenchProps['findRosterMatch'];
+    onSourcePreview: PlayerHubOcrWorkbenchProps['onSourcePreview'];
+}
+
+const CandidateRow = React.memo<CandidateRowProps>(({
+    candidate,
+    pendingValue,
+    existingRosterMatch,
+    onEditValue,
+    resolveRosterCandidate,
+    mergeRosterCandidateIntoExisting,
+    addPilotAlias,
+    onSourcePreview,
+}) => {
+    const sourceScreenshotPath = String(candidate.sourceCapture?.screenshotPath || '').trim();
+    const sourceScreenshotLabel = String(candidate.sourceCapture?.screenshotLabel || 'Captured Screenshot').trim() || 'Captured Screenshot';
+    const sourceCapturedAt = Number(candidate.sourceCapture?.capturedAt || 0);
+    const sourceCapturedLabel = Number.isFinite(sourceCapturedAt) && sourceCapturedAt > 0
+        ? new Date(sourceCapturedAt).toLocaleString()
+        : '';
+    const normalizedPendingValue = normalizeOcrName(pendingValue);
+
+    const mergeSuggestions = useMemo(() => [
+        candidate.bestMatch && normalizeOcrName(candidate.bestMatch).toLowerCase() !== normalizeOcrName(candidate.value).toLowerCase()
+            ? { name: normalizeOcrName(candidate.bestMatch), score: Number(candidate.bestScore || 0), kind: 'best' as const }
+            : null,
+        ...((candidate.suggestions || []).map((s) => ({
+            name: normalizeOcrName(s.name),
+            score: Number(s.score || 0),
+            kind: 'suggestion' as const,
+        }))),
+    ]
+        .filter((e): e is { name: string; score: number; kind: 'best' | 'suggestion' } => Boolean(e?.name))
+        .filter((e, i, list) => (
+            normalizeOcrName(e.name).toLowerCase() !== normalizedPendingValue.toLowerCase()
+            && (!existingRosterMatch || normalizeOcrName(e.name).toLowerCase() !== normalizeOcrName(existingRosterMatch).toLowerCase())
+            && list.findIndex((x) => normalizeOcrName(x.name).toLowerCase() === normalizeOcrName(e.name).toLowerCase()) === i
+        ))
+        .slice(0, 4), [candidate.bestMatch, candidate.bestScore, candidate.suggestions, candidate.value, normalizedPendingValue, existingRosterMatch]);
+
+    const hasIdentityHints = existingRosterMatch || mergeSuggestions.length > 0;
+
+    return (
+        <div className="border-b border-md-sys-outline/[0.06] px-4 py-4 space-y-3">
+            <input
+                type="text"
+                value={pendingValue}
+                onChange={(e) => onEditValue(candidate.id, e.target.value)}
+                onKeyDown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        resolveRosterCandidate(candidate, 'approve', pendingValue);
+                    }
+                }}
+                className="w-full px-3 py-2 text-label-sm font-semibold text-md-sys-on-surface outline-none rounded-control border border-md-sys-outline/15 focus:border-md-sys-primary/40 focus:ring-2 focus:ring-md-sys-primary/10 transition-all"
+                style={{ background: 'var(--md-sys-color-surface-container)' }}
+                aria-label={`OCR candidate name ${candidate.id}`}
+            />
+
+            {candidate.originalConfidence > 0 && (
+                <ConfidenceMeter confidence={candidate.originalConfidence} size="sm" />
+            )}
+
+            {hasIdentityHints && (
+                <div className="space-y-2">
+                    <div className="text-label-xs font-semibold uppercase tracking-wide text-md-sys-on-surface/45">
+                        Possible existing identity
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                        {existingRosterMatch && (
+                            <div className="flex items-center gap-1.5">
+                                <button
+                                    type="button"
+                                    onClick={() => mergeRosterCandidateIntoExisting(candidate, existingRosterMatch, pendingValue)}
+                                    className="flex-1 flex items-center justify-between gap-2 px-3 py-2 rounded-control border border-md-sys-outline/15 text-left transition-colors hover:bg-md-sys-on-surface/[0.06]"
+                                    style={{ background: 'var(--md-sys-color-surface-container-high)' }}
+                                >
+                                    <span className="text-label-sm font-semibold text-md-sys-on-surface truncate">{existingRosterMatch}</span>
+                                    <span className="text-label-xs font-bold text-success shrink-0">exact match</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { addPilotAlias(existingRosterMatch, pendingValue); resolveRosterCandidate(candidate, 'dismiss', pendingValue); }}
+                                    className="h-9 px-2.5 rounded-control text-label-xs font-semibold border border-md-sys-outline/10 text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/[0.06] shrink-0 transition-colors"
+                                    style={{ background: 'var(--md-sys-color-surface-container-high)' }}
+                                    title={`Add "${pendingValue}" as alias of ${existingRosterMatch}`}
+                                >
+                                    As alias
+                                </button>
+                            </div>
+                        )}
+                        {mergeSuggestions.map((s) => (
+                            <div key={`${candidate.id}-${s.name}-${s.kind}`} className="flex items-center gap-1.5">
+                                <button
+                                    type="button"
+                                    onClick={() => mergeRosterCandidateIntoExisting(candidate, s.name, pendingValue)}
+                                    className="flex-1 flex items-center justify-between gap-2 px-3 py-2 rounded-control border border-md-sys-outline/15 text-left transition-colors hover:bg-md-sys-on-surface/[0.06]"
+                                    style={{ background: 'var(--md-sys-color-surface-container-high)' }}
+                                >
+                                    <span className="text-label-sm font-semibold text-md-sys-on-surface truncate">{s.name}</span>
+                                    {s.score > 0 && (
+                                        <span className="text-label-xs font-bold text-warning shrink-0">{Math.round(s.score)}%</span>
+                                    )}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { addPilotAlias(s.name, pendingValue); resolveRosterCandidate(candidate, 'dismiss', pendingValue); }}
+                                    className="h-9 px-2.5 rounded-control text-label-xs font-semibold border border-md-sys-outline/10 text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/[0.06] shrink-0 transition-colors"
+                                    style={{ background: 'var(--md-sys-color-surface-container-high)' }}
+                                    title={`Add "${pendingValue}" as alias of ${s.name}`}
+                                >
+                                    As alias
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {sourceScreenshotPath && (
+                <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-control border border-md-sys-outline/[0.08]" style={{ background: 'var(--md-sys-color-surface-container)' }}>
+                    <div className="min-w-0">
+                        <div className="text-label-xs font-medium text-md-sys-on-surface/60 truncate">{sourceScreenshotLabel}</div>
+                        {sourceCapturedLabel && (
+                            <div className="text-label-xs text-md-sys-on-surface/40 truncate">{sourceCapturedLabel}</div>
+                        )}
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => onSourcePreview({ src: sourceScreenshotPath, label: sourceScreenshotLabel })}
+                        className="h-7 px-2.5 rounded-control text-label-xs font-semibold border border-md-sys-outline/10 text-info hover:bg-info/8 inline-flex items-center gap-1.5 shrink-0 transition-colors"
+                        style={{ background: 'var(--md-sys-color-surface-container-high)' }}
+                    >
+                        <ImageIcon size={11} />
+                        View
+                    </button>
+                </div>
+            )}
+
+            <div className="flex items-center gap-1.5">
+                <button
+                    type="button"
+                    onClick={() => resolveRosterCandidate(candidate, 'approve', pendingValue)}
+                    disabled={!pendingValue.trim() || !!existingRosterMatch}
+                    className="flex-1 h-8 rounded-control text-label-xs font-semibold border border-success/25 bg-success/10 text-success hover:bg-success/15 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                    Add as New
+                </button>
+                <button
+                    type="button"
+                    onClick={() => resolveRosterCandidate(candidate, 'dismiss', pendingValue)}
+                    disabled={!pendingValue.trim()}
+                    className="flex-1 h-8 rounded-control text-label-xs font-semibold border border-md-sys-outline/10 text-md-sys-on-surface/55 hover:bg-md-sys-on-surface/[0.06] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    style={{ background: 'var(--md-sys-color-surface-container-high)' }}
+                >
+                    Dismiss
+                </button>
+            </div>
+        </div>
+    );
+});
 
 export const PlayerHubOcrWorkbench: FC<PlayerHubOcrWorkbenchProps> = ({
     containerClassName,
@@ -69,8 +246,22 @@ export const PlayerHubOcrWorkbench: FC<PlayerHubOcrWorkbenchProps> = ({
     resolveRosterCandidate,
     addPilotAlias,
     onSourcePreview,
+    onBatchAcceptHighConfidence,
+    onBatchDismissLowConfidence,
+    onRequestRerunOcr,
+    rerunOcrDisabled = false,
+    isRerunningOcr = false,
 }) => {
     const [activeTab, setActiveTab] = useState<WorkbenchTab>('candidates');
+
+    const highConfidenceCandidates = useMemo(() =>
+        pendingRosterCandidates.filter(c => c.originalConfidence >= 80),
+        [pendingRosterCandidates]
+    );
+    const lowConfidenceCandidates = useMemo(() =>
+        pendingRosterCandidates.filter(c => c.originalConfidence < 40),
+        [pendingRosterCandidates]
+    );
 
     const tabs: { id: WorkbenchTab; label: string; count: number; color?: 'danger' | 'warning' }[] = [
         { id: 'candidates', label: 'Candidates', count: pendingRosterCandidates.length },
@@ -88,12 +279,25 @@ export const PlayerHubOcrWorkbench: FC<PlayerHubOcrWorkbenchProps> = ({
                         <div className="h-10 w-10 rounded-card bg-gradient-to-br from-info/20 to-md-sys-primary/15 border border-md-sys-outline/10 flex items-center justify-center shrink-0">
                             <ScanEye size={16} className="text-info" />
                         </div>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                             <h2 className="text-lg font-bold tracking-tight text-md-sys-on-surface">OCR Workbench</h2>
                             <p className="text-label-sm text-md-sys-on-surface/40 font-medium">
                                 {ocrWorkbenchCount} item{ocrWorkbenchCount !== 1 ? 's' : ''} to review
                             </p>
                         </div>
+                        {onRequestRerunOcr && (
+                            <button
+                                type="button"
+                                onClick={onRequestRerunOcr}
+                                disabled={rerunOcrDisabled || isRerunningOcr}
+                                className="h-8 px-2.5 rounded-control text-label-xs font-semibold border border-md-sys-outline/10 text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/[0.06] disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5 shrink-0 transition-colors"
+                                style={{ background: 'var(--md-sys-color-surface-container-high)' }}
+                                title="Rerun OCR on latest screenshots"
+                            >
+                                <RefreshCw size={12} className={isRerunningOcr ? 'animate-spin' : ''} />
+                                Rerun
+                            </button>
+                        )}
                     </div>
                     <div className="flex gap-1">
                         {tabs.map((tab) => {
@@ -125,6 +329,32 @@ export const PlayerHubOcrWorkbench: FC<PlayerHubOcrWorkbenchProps> = ({
                 {/* Candidates tab */}
                 {activeTab === 'candidates' && (
                     <div className="flex flex-col flex-1 min-h-0">
+                        {/* Batch actions */}
+                        {pendingRosterCandidates.length > 0 && (onBatchAcceptHighConfidence || onBatchDismissLowConfidence) && (
+                            <div className="px-4 pt-3 pb-2 border-b border-md-sys-outline/[0.06] shrink-0 flex items-center gap-1.5 flex-wrap">
+                                {onBatchAcceptHighConfidence && highConfidenceCandidates.length > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onBatchAcceptHighConfidence(highConfidenceCandidates)}
+                                        className="h-7 px-2.5 rounded-control text-label-xs font-semibold border border-success/25 bg-success/10 text-success hover:bg-success/15 inline-flex items-center gap-1.5 transition-colors"
+                                    >
+                                        <CheckCheck size={12} />
+                                        Accept {highConfidenceCandidates.length} high conf.
+                                    </button>
+                                )}
+                                {onBatchDismissLowConfidence && lowConfidenceCandidates.length > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onBatchDismissLowConfidence(lowConfidenceCandidates)}
+                                        className="h-7 px-2.5 rounded-control text-label-xs font-semibold border border-danger/25 bg-danger/10 text-danger hover:bg-danger/15 inline-flex items-center gap-1.5 transition-colors"
+                                    >
+                                        <XCircle size={12} />
+                                        Dismiss {lowConfidenceCandidates.length} low conf.
+                                    </button>
+                                )}
+                            </div>
+                        )}
+
                         {/* Search */}
                         <div className="px-4 py-3 border-b border-md-sys-outline/[0.06] shrink-0">
                             <div className="relative group">
@@ -163,156 +393,20 @@ export const PlayerHubOcrWorkbench: FC<PlayerHubOcrWorkbenchProps> = ({
                             </div>
                         ) : (
                             <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
-                                {filteredOcrCandidates.map((candidate) => {
-                                    const pendingValue = pendingCandidateEdits[candidate.id] ?? candidate.value;
-                                    const sourceScreenshotPath = String(candidate.sourceCapture?.screenshotPath || '').trim();
-                                    const sourceScreenshotLabel = String(candidate.sourceCapture?.screenshotLabel || 'Captured Screenshot').trim() || 'Captured Screenshot';
-                                    const sourceCapturedAt = Number(candidate.sourceCapture?.capturedAt || 0);
-                                    const sourceCapturedLabel = Number.isFinite(sourceCapturedAt) && sourceCapturedAt > 0
-                                        ? new Date(sourceCapturedAt).toLocaleString()
-                                        : '';
-                                    const normalizedPendingValue = normalizeOcrName(pendingValue);
-                                    const existingRosterMatch = rosterCandidateMatchMap.get(candidate.id) ?? findRosterMatch(pendingValue);
-                                    const mergeSuggestions = [
-                                        candidate.bestMatch && normalizeOcrName(candidate.bestMatch).toLowerCase() !== normalizeOcrName(candidate.value).toLowerCase()
-                                            ? { name: normalizeOcrName(candidate.bestMatch), score: Number(candidate.bestScore || 0), kind: 'best' as const }
-                                            : null,
-                                        ...((candidate.suggestions || []).map((s) => ({
-                                            name: normalizeOcrName(s.name),
-                                            score: Number(s.score || 0),
-                                            kind: 'suggestion' as const,
-                                        }))),
-                                    ]
-                                        .filter((e): e is { name: string; score: number; kind: 'best' | 'suggestion' } => Boolean(e?.name))
-                                        .filter((e, i, list) => (
-                                            normalizeOcrName(e.name).toLowerCase() !== normalizedPendingValue.toLowerCase()
-                                            && (!existingRosterMatch || normalizeOcrName(e.name).toLowerCase() !== normalizeOcrName(existingRosterMatch).toLowerCase())
-                                            && list.findIndex((x) => normalizeOcrName(x.name).toLowerCase() === normalizeOcrName(e.name).toLowerCase()) === i
-                                        ))
-                                        .slice(0, 4);
-
-                                    const hasIdentityHints = existingRosterMatch || mergeSuggestions.length > 0;
-
-                                    return (
-                                        <div key={candidate.id} className="border-b border-md-sys-outline/[0.06] px-4 py-4 space-y-3">
-                                            {/* Name input */}
-                                            <input
-                                                type="text"
-                                                value={pendingValue}
-                                                onChange={(e) => setPendingCandidateEdits((prev) => ({ ...prev, [candidate.id]: e.target.value }))}
-                                                onKeyDown={(e) => {
-                                                    e.stopPropagation();
-                                                    if (e.key === 'Enter') {
-                                                        e.preventDefault();
-                                                        resolveRosterCandidate(candidate, 'approve', pendingValue);
-                                                    }
-                                                }}
-                                                className="w-full px-3 py-2 text-label-sm font-semibold text-md-sys-on-surface outline-none rounded-control border border-md-sys-outline/15 focus:border-md-sys-primary/40 focus:ring-2 focus:ring-md-sys-primary/10 transition-all"
-                                                style={{ background: 'var(--md-sys-color-surface-container)' }}
-                                                aria-label={`OCR candidate name ${candidate.id}`}
-                                            />
-
-                                            {/* Existing identity / merge suggestions */}
-                                            {hasIdentityHints && (
-                                                <div className="space-y-2">
-                                                    <div className="text-label-xs font-semibold uppercase tracking-wide text-md-sys-on-surface/45">
-                                                        Possible existing identity
-                                                    </div>
-                                                    <div className="flex flex-col gap-1.5">
-                                                        {existingRosterMatch && (
-                                                            <div className="flex items-center gap-1.5">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => mergeRosterCandidateIntoExisting(candidate, existingRosterMatch, pendingValue)}
-                                                                    className="flex-1 flex items-center justify-between gap-2 px-3 py-2 rounded-control border border-md-sys-outline/15 text-left transition-colors hover:bg-md-sys-on-surface/[0.06]"
-                                                                    style={{ background: 'var(--md-sys-color-surface-container-high)' }}
-                                                                >
-                                                                    <span className="text-label-sm font-semibold text-md-sys-on-surface truncate">{existingRosterMatch}</span>
-                                                                    <span className="text-label-xs font-bold text-success shrink-0">exact match</span>
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => { addPilotAlias(existingRosterMatch, pendingValue); resolveRosterCandidate(candidate, 'dismiss', pendingValue); }}
-                                                                    className="h-9 px-2.5 rounded-control text-label-xs font-semibold border border-md-sys-outline/10 text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/[0.06] shrink-0 transition-colors"
-                                                                    style={{ background: 'var(--md-sys-color-surface-container-high)' }}
-                                                                    title={`Add "${pendingValue}" as alias of ${existingRosterMatch}`}
-                                                                >
-                                                                    As alias
-                                                                </button>
-                                                            </div>
-                                                        )}
-                                                        {mergeSuggestions.map((s) => (
-                                                            <div key={`${candidate.id}-${s.name}-${s.kind}`} className="flex items-center gap-1.5">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => mergeRosterCandidateIntoExisting(candidate, s.name, pendingValue)}
-                                                                    className="flex-1 flex items-center justify-between gap-2 px-3 py-2 rounded-control border border-md-sys-outline/15 text-left transition-colors hover:bg-md-sys-on-surface/[0.06]"
-                                                                    style={{ background: 'var(--md-sys-color-surface-container-high)' }}
-                                                                >
-                                                                    <span className="text-label-sm font-semibold text-md-sys-on-surface truncate">{s.name}</span>
-                                                                    {s.score > 0 && (
-                                                                        <span className="text-label-xs font-bold text-warning shrink-0">{Math.round(s.score)}%</span>
-                                                                    )}
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => { addPilotAlias(s.name, pendingValue); resolveRosterCandidate(candidate, 'dismiss', pendingValue); }}
-                                                                    className="h-9 px-2.5 rounded-control text-label-xs font-semibold border border-md-sys-outline/10 text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/[0.06] shrink-0 transition-colors"
-                                                                    style={{ background: 'var(--md-sys-color-surface-container-high)' }}
-                                                                    title={`Add "${pendingValue}" as alias of ${s.name}`}
-                                                                >
-                                                                    As alias
-                                                                </button>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Source screenshot */}
-                                            {sourceScreenshotPath && (
-                                                <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-control border border-md-sys-outline/[0.08]" style={{ background: 'var(--md-sys-color-surface-container)' }}>
-                                                    <div className="min-w-0">
-                                                        <div className="text-label-xs font-medium text-md-sys-on-surface/60 truncate">{sourceScreenshotLabel}</div>
-                                                        {sourceCapturedLabel && (
-                                                            <div className="text-label-xs text-md-sys-on-surface/40 truncate">{sourceCapturedLabel}</div>
-                                                        )}
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => onSourcePreview({ src: sourceScreenshotPath, label: sourceScreenshotLabel })}
-                                                        className="h-7 px-2.5 rounded-control text-label-xs font-semibold border border-md-sys-outline/10 text-info hover:bg-info/8 inline-flex items-center gap-1.5 shrink-0 transition-colors"
-                                                        style={{ background: 'var(--md-sys-color-surface-container-high)' }}
-                                                    >
-                                                        <ImageIcon size={11} />
-                                                        View
-                                                    </button>
-                                                </div>
-                                            )}
-
-                                            {/* Actions */}
-                                            <div className="flex items-center gap-1.5">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => resolveRosterCandidate(candidate, 'approve', pendingValue)}
-                                                    disabled={!pendingValue.trim() || !!existingRosterMatch}
-                                                    className="flex-1 h-8 rounded-control text-label-xs font-semibold border border-success/25 bg-success/10 text-success hover:bg-success/15 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                                >
-                                                    Add as New
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => resolveRosterCandidate(candidate, 'dismiss', pendingValue)}
-                                                    disabled={!pendingValue.trim()}
-                                                    className="flex-1 h-8 rounded-control text-label-xs font-semibold border border-md-sys-outline/10 text-md-sys-on-surface/55 hover:bg-md-sys-on-surface/[0.06] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                                    style={{ background: 'var(--md-sys-color-surface-container-high)' }}
-                                                >
-                                                    Dismiss
-                                                </button>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
+                                {filteredOcrCandidates.map((candidate) => (
+                                    <CandidateRow
+                                        key={candidate.id}
+                                        candidate={candidate}
+                                        pendingValue={pendingCandidateEdits[candidate.id] ?? candidate.value}
+                                        existingRosterMatch={rosterCandidateMatchMap.get(candidate.id) ?? findRosterMatch(pendingCandidateEdits[candidate.id] ?? candidate.value)}
+                                        onEditValue={(id, value) => setPendingCandidateEdits((prev) => ({ ...prev, [id]: value }))}
+                                        resolveRosterCandidate={resolveRosterCandidate}
+                                        mergeRosterCandidateIntoExisting={mergeRosterCandidateIntoExisting}
+                                        addPilotAlias={addPilotAlias}
+                                        findRosterMatch={findRosterMatch}
+                                        onSourcePreview={onSourcePreview}
+                                    />
+                                ))}
                             </div>
                         )}
                     </div>

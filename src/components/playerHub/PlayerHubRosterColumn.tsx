@@ -265,14 +265,6 @@ export const PlayerHubRosterColumn: FC<PlayerHubRosterColumnProps> = ({
                                                 <div className="flex items-center gap-1.5 min-w-0">
                                                     {pilot.isFavorite && <Star size={10} className="text-warning fill-amber-400 shrink-0" />}
                                                     <span className="player-list-name text-label-sm font-semibold text-md-sys-on-surface truncate">{pilot.name}</span>
-                                                    {statusChips.map((chip) => (
-                                                        <span
-                                                            key={`${pilot.name}-${chip.key}`}
-                                                            className={`shrink-0 px-1.5 py-0.5 rounded-pill text-[10px] font-bold uppercase tracking-wide ${getStatusChipClassName(chip.key)}`}
-                                                        >
-                                                            {chip.label}
-                                                        </span>
-                                                    ))}
                                                 </div>
                                                 <div className="flex items-center gap-x-2 mt-0.5 text-label-xs text-md-sys-on-surface/40 flex-wrap">
                                                     {pilot.totalEncounters > 0 && (
@@ -291,6 +283,14 @@ export const PlayerHubRosterColumn: FC<PlayerHubRosterColumnProps> = ({
                                             </div>
 
                                             <div className="flex items-center gap-1.5 shrink-0">
+                                                {statusChips.map((chip) => (
+                                                    <span
+                                                        key={`${pilot.name}-${chip.key}`}
+                                                        className={`shrink-0 px-1.5 py-0.5 rounded-pill text-[10px] font-bold uppercase tracking-wide ${getStatusChipClassName(chip.key)}`}
+                                                    >
+                                                        {chip.label}
+                                                    </span>
+                                                ))}
                                                 {pilot.isRoster && pilot.note && (
                                                     <span className="w-1.5 h-1.5 rounded-full bg-md-sys-primary/40" title="Has note" />
                                                 )}

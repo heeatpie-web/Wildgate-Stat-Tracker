@@ -71,9 +71,10 @@ export const Header: React.FC<HeaderProps> = ({
                 activeUser: activeUser || null,
                 source: 'header',
                 matchId: captureMatchId,
+                behavior: 'single',
             });
             window.dispatchEvent(new CustomEvent('smart-capture-request', {
-                detail: { activeUser: activeUser || null, source: 'header', matchId: captureMatchId, requestId }
+                detail: { activeUser: activeUser || null, source: 'header', matchId: captureMatchId, requestId, behavior: 'single' }
             }));
         } catch (e: any) {
             pushNotification({

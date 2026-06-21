@@ -181,6 +181,9 @@ const appStoreState = {
   setPendingArtifactType: vi.fn(),
   setPendingMatchData: vi.fn(),
   updateMatch: vi.fn(),
+  shipKillPopup: null as any,
+  showShipKillPopup: vi.fn(),
+  dismissShipKillPopup: vi.fn(),
 };
 
 vi.mock('./providers/UIStateProvider', () => ({

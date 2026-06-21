@@ -187,6 +187,9 @@ export interface UISlice {
     setSmartCapturesFocusMatchId: (id: number | null) => void;
     smartCapturesOpenOcrReviewMatchId: number | null;
     setSmartCapturesOpenOcrReviewMatchId: (id: number | null) => void;
+    shipKillPopup: { matchId: number } | null;
+    showShipKillPopup: (matchId: number) => void;
+    dismissShipKillPopup: () => void;
 }
 
 type NotificationStateShape = Pick<
@@ -542,4 +545,7 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
     setSmartCapturesFocusMatchId: (id) => set({ smartCapturesFocusMatchId: id }),
     smartCapturesOpenOcrReviewMatchId: null,
     setSmartCapturesOpenOcrReviewMatchId: (id) => set({ smartCapturesOpenOcrReviewMatchId: id }),
+    shipKillPopup: null,
+    showShipKillPopup: (matchId) => set({ shipKillPopup: { matchId } }),
+    dismissShipKillPopup: () => set({ shipKillPopup: null }),
 });
