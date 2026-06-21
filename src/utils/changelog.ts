@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.7.9": [
+    "Fix OCR opponent player dropout from EnemyCrews UI header false positive",
+    "drop confidence reject thresholds",
+    "expand UI noise blocklist"
+  ],
   "v3.7.8": [
     "OCR workbench parity with confidence meters and batch actions",
     "performance optimization with memoized candidate rows",
