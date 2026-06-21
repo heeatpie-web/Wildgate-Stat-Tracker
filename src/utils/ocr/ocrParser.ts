@@ -710,11 +710,11 @@ export function validateExtractedData(data: OCRExtractedData): OCRExtractedData 
   );
   const validModifiers = data.reachModifiers.filter(m => m.confidence >= 60);
   const validOpponentTeams = data.opponentTeams
-    .filter(team => team.confidence >= 40)
+    .filter(team => team.confidence >= 0)
     .map(team => {
       let inferredShipType = String(team.shipType || '').trim();
       const filteredPlayers = team.players
-        .filter(p => p.confidence >= 50)
+        .filter(p => p.confidence >= 0)
         .filter(p => !isUnderCrewShipBonusText(p.name))
         .filter(p => {
           // Heuristic: skip players whose normalized name exactly matches a known team name label.

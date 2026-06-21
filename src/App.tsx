@@ -4064,7 +4064,7 @@ const App: React.FC = () => {
             if (!Number.isFinite(maxCount) || maxCount <= 0) return [];
             return dedupeNames(values).slice(0, maxCount);
         };
-        const OCR_REJECT_CONFIDENCE = 55;
+        const OCR_REJECT_CONFIDENCE = 0;
         const OCR_REVIEW_CONFIDENCE = 70;
         const MAX_OPPONENT_PLAYERS_PER_TEAM = 4;
         const toNameKey = (value: string) => normalizeOcrName(value || '').toLowerCase();

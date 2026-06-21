@@ -20,7 +20,7 @@ import { isReachModifierUiPlayerNoise } from '../utils/reachModifierUiNoise';
 import { useSoundEffects } from './useSoundEffects';
 
 const OCR_THRESHOLDS = {
-    REJECT: 55,
+    REJECT: 0,
     REVIEW: 75,
     ACCEPT: 80
 };

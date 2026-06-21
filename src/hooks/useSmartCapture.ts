@@ -520,7 +520,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
           longThreshold: 2,
         });
       };
-      const SMARTSCAN_REJECT_CONFIDENCE = 55;
+      const SMARTSCAN_REJECT_CONFIDENCE = 0;
       const SMARTSCAN_REVIEW_CONFIDENCE = 75;
       const pendingPlayerReviewKeys = new Set(
         (pendingReviews || [])
