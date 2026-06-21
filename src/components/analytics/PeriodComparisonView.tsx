@@ -36,7 +36,7 @@ const PeriodCard: React.FC<{ title: string; stats: PeriodStats; delta: PeriodDel
                 <DeltaBadge value={delta.avgKills} />
             </div>
             <div>
-                <div className="text-label-xs font-black uppercase opacity-40">Avg Damage</div>
+                <div className="text-label-xs font-black uppercase opacity-40">Avg Dmg Taken</div>
                 <div className={`font-black text-info ${dense ? 'text-xl' : 'text-2xl'}`}>{stats.avgDamage}</div>
                 <DeltaBadge value={delta.avgDamage} />
             </div>

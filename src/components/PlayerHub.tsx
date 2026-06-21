@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef, useDeferredValue } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useDeferredValue, useCallback } from 'react';
 import {
     Users, Star, Edit2, Trash2, ChevronRight, ChevronDown, Merge,
     ScanEye, Swords, Handshake, TrendingUp, X, Plus,
@@ -391,11 +391,11 @@ const PlayerHub: React.FC = () => {
         });
     }, [dismissedRosterMergePairKeys, ocrAutoApplyMinScore, panelMode, pendingReviews, pilotAliases, deferredPilotRegistry]);
 
-    const findRosterMatch = (value: string): string | null => {
+    const findRosterMatch = useCallback((value: string): string | null => {
         const normalizedValue = normalizeNameKey(value);
         if (!normalizedValue) return null;
         return normalizedPilotNameMap.get(normalizedValue) || null;
-    };
+    }, [normalizedPilotNameMap]);
 
     useEffect(() => {
         setShowAliases(false);
@@ -530,6 +530,9 @@ const PlayerHub: React.FC = () => {
 
     const encounterSnapshotsByPilot = useMemo(() => {
         const snapshots = new Map<string, EncounterSnapshot>();
+        // Use Sets during construction for O(1) dedup instead of O(n) Array.includes
+        const encounterIdSets = new Map<string, Set<number>>();
+        const conflictIdSets = new Map<string, Set<number>>();
         allTrackedPilots.forEach((name) => {
             snapshots.set(name, {
                 totalEncounters: 0,
@@ -540,6 +543,8 @@ const PlayerHub: React.FC = () => {
                 asTeammate: null,
                 asOpponent: null,
             });
+            encounterIdSets.set(name, new Set());
+            conflictIdSets.set(name, new Set());
         });
 
         const collectPilots = (names: string[]): Set<string> => {
@@ -558,10 +563,10 @@ const PlayerHub: React.FC = () => {
             snapshot.lastSeen = snapshot.lastSeen === null ? timestamp : Math.max(snapshot.lastSeen, timestamp);
         };
 
-        const recordEncounter = (snapshot: EncounterSnapshot, matchId: number, timestamp: number) => {
-            if (Number.isFinite(matchId) && !snapshot.encounterMatchIds.includes(matchId)) {
-                snapshot.encounterMatchIds.push(matchId);
-                snapshot.totalEncounters = snapshot.encounterMatchIds.length;
+        const recordEncounter = (snapshot: EncounterSnapshot, idSet: Set<number>, matchId: number, timestamp: number) => {
+            if (Number.isFinite(matchId) && !idSet.has(matchId)) {
+                idSet.add(matchId);
+                snapshot.totalEncounters = idSet.size;
             }
             touchSeen(snapshot, timestamp);
         };
@@ -586,7 +591,8 @@ const PlayerHub: React.FC = () => {
                 encounteredPilots.forEach((pilotName) => {
                     const snapshot = snapshots.get(pilotName);
                     if (!snapshot) return;
-                    recordEncounter(snapshot, matchId, timestamp);
+                    const idSet = encounterIdSets.get(pilotName)!;
+                    recordEncounter(snapshot, idSet, matchId, timestamp);
                     const resolvedRole = resolveEncounterRole({
                         selectedKeys: getKnownAliasKeys(pilotName),
                         friendlyKeys,
@@ -595,8 +601,9 @@ const PlayerHub: React.FC = () => {
                     });
 
                     if (resolvedRole === 'conflict') {
-                        if (Number.isFinite(matchId) && !snapshot.roleConflictMatchIds.includes(matchId)) {
-                            snapshot.roleConflictMatchIds.push(matchId);
+                        const conflictSet = conflictIdSets.get(pilotName)!;
+                        if (Number.isFinite(matchId) && !conflictSet.has(matchId)) {
+                            conflictSet.add(matchId);
                         }
                         return;
                     }
@@ -614,6 +621,12 @@ const PlayerHub: React.FC = () => {
                     }
                 });
             });
+
+        // Flush Sets to arrays on the snapshots
+        snapshots.forEach((snapshot, name) => {
+            snapshot.encounterMatchIds = Array.from(encounterIdSets.get(name) || []);
+            snapshot.roleConflictMatchIds = Array.from(conflictIdSets.get(name) || []);
+        });
 
         return snapshots;
     }, [allTrackedPilots, getKnownAliasKeys, getPlayerEncounterRoleCorrection, matches, pilotNamesByIdentityKey, playerEncounterRoleCorrections]);

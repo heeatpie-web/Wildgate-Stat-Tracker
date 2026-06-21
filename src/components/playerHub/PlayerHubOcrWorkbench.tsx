@@ -1,4 +1,4 @@
-import React, { useState, useDeferredValue, useMemo, type Dispatch, type FC, type SetStateAction } from 'react';
+import React, { useState, useDeferredValue, useMemo, useCallback, type Dispatch, type FC, type SetStateAction } from 'react';
 import { Search, ScanEye, X, Image as ImageIcon, ChevronRight, Users, Merge, AlertTriangle, RefreshCw, CheckCheck, XCircle } from 'lucide-react';
 import type { PendingReview } from '../../store/slices/createDataSlice';
 import { normalizeOcrName } from '../../utils/stringUtils';
@@ -84,23 +84,34 @@ const CandidateRow = React.memo<CandidateRowProps>(({
         : '';
     const normalizedPendingValue = normalizeOcrName(pendingValue);
 
-    const mergeSuggestions = useMemo(() => [
-        candidate.bestMatch && normalizeOcrName(candidate.bestMatch).toLowerCase() !== normalizeOcrName(candidate.value).toLowerCase()
-            ? { name: normalizeOcrName(candidate.bestMatch), score: Number(candidate.bestScore || 0), kind: 'best' as const }
-            : null,
-        ...((candidate.suggestions || []).map((s) => ({
-            name: normalizeOcrName(s.name),
-            score: Number(s.score || 0),
-            kind: 'suggestion' as const,
-        }))),
-    ]
-        .filter((e): e is { name: string; score: number; kind: 'best' | 'suggestion' } => Boolean(e?.name))
-        .filter((e, i, list) => (
-            normalizeOcrName(e.name).toLowerCase() !== normalizedPendingValue.toLowerCase()
-            && (!existingRosterMatch || normalizeOcrName(e.name).toLowerCase() !== normalizeOcrName(existingRosterMatch).toLowerCase())
-            && list.findIndex((x) => normalizeOcrName(x.name).toLowerCase() === normalizeOcrName(e.name).toLowerCase()) === i
-        ))
-        .slice(0, 4), [candidate.bestMatch, candidate.bestScore, candidate.suggestions, candidate.value, normalizedPendingValue, existingRosterMatch]);
+    const mergeSuggestions = useMemo(() => {
+        // e.name is already normalizeOcrName-applied, so no double-normalize needed for dedup
+        const entries = [
+            candidate.bestMatch && normalizeOcrName(candidate.bestMatch).toLowerCase() !== normalizeOcrName(candidate.value).toLowerCase()
+                ? { name: normalizeOcrName(candidate.bestMatch), score: Number(candidate.bestScore || 0), kind: 'best' as const }
+                : null,
+            ...((candidate.suggestions || []).map((s) => ({
+                name: normalizeOcrName(s.name),
+                score: Number(s.score || 0),
+                kind: 'suggestion' as const,
+            }))),
+        ].filter((e): e is { name: string; score: number; kind: 'best' | 'suggestion' } => Boolean(e?.name));
+
+        const pendingLower = normalizedPendingValue.toLowerCase();
+        const existingLower = existingRosterMatch ? normalizeOcrName(existingRosterMatch).toLowerCase() : null;
+        const seen = new Set<string>();
+        const result: typeof entries = [];
+        for (const e of entries) {
+            const key = e.name.toLowerCase();
+            if (key === pendingLower) continue;
+            if (existingLower && key === existingLower) continue;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            result.push(e);
+            if (result.length >= 4) break;
+        }
+        return result;
+    }, [candidate.bestMatch, candidate.bestScore, candidate.suggestions, candidate.value, normalizedPendingValue, existingRosterMatch]);
 
     const hasIdentityHints = existingRosterMatch || mergeSuggestions.length > 0;
 
@@ -254,6 +265,10 @@ export const PlayerHubOcrWorkbench: FC<PlayerHubOcrWorkbenchProps> = ({
 }) => {
     const [activeTab, setActiveTab] = useState<WorkbenchTab>('candidates');
 
+    const handleEditValue = useCallback((id: string, value: string) => {
+        setPendingCandidateEdits((prev) => ({ ...prev, [id]: value }));
+    }, [setPendingCandidateEdits]);
+
     const highConfidenceCandidates = useMemo(() =>
         pendingRosterCandidates.filter(c => c.originalConfidence >= 80),
         [pendingRosterCandidates]
@@ -399,7 +414,7 @@ export const PlayerHubOcrWorkbench: FC<PlayerHubOcrWorkbenchProps> = ({
                                         candidate={candidate}
                                         pendingValue={pendingCandidateEdits[candidate.id] ?? candidate.value}
                                         existingRosterMatch={rosterCandidateMatchMap.get(candidate.id) ?? findRosterMatch(pendingCandidateEdits[candidate.id] ?? candidate.value)}
-                                        onEditValue={(id, value) => setPendingCandidateEdits((prev) => ({ ...prev, [id]: value }))}
+                                        onEditValue={handleEditValue}
                                         resolveRosterCandidate={resolveRosterCandidate}
                                         mergeRosterCandidateIntoExisting={mergeRosterCandidateIntoExisting}
                                         addPilotAlias={addPilotAlias}

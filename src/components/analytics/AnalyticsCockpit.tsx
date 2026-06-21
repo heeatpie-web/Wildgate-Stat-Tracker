@@ -662,7 +662,7 @@ export const AnalyticsCockpit: React.FC<AnalyticsCockpitProps> = ({
                                             key={`weapon-${row.name}`}
                                             row={row}
                                             tile={!dense}
-                                            note={`${row.total} matches · ${row.avgDamage} avg dmg`}
+                                            note={`${row.total} matches`}
                                             onClick={() => onDrillDown(row.name, 'Weapon')}
                                         />
                                     ))}
@@ -678,7 +678,7 @@ export const AnalyticsCockpit: React.FC<AnalyticsCockpitProps> = ({
                                             key={`ship-weapon-${row.name}`}
                                             row={row}
                                             tile={!dense}
-                                            note={`${row.total} matches · ${row.avgDamage} avg dmg`}
+                                            note={`${row.total} matches`}
                                             onClick={() => onDrillDown(row.name, 'Weapon')}
                                         />
                                     ))}

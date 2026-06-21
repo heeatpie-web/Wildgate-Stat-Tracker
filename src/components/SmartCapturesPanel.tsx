@@ -5,7 +5,7 @@ import {
     Clock, HeartCrack, Target, Image, Eye, X, Edit3, Check,
     ShieldCheck, Crosshair, Users, AlertTriangle,
     ScanEye, RefreshCw, Plus, ImageOff, Trash2, Upload, Zap, FolderOpen,
-    FlaskConical, MoreHorizontal, Settings,
+    FlaskConical, MoreHorizontal, Settings, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { Match, SHIPS, getShipColor, OpponentTeam, Loadout, getTelemetryLoadoutSourceLabel } from '../types';
 import { UI_REACH_MODIFIERS, CHARACTERS, WEAPONS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT, SYSTEMS, ARTIFACT_TYPE_TO_DISPLAY, UNKNOWN_PLAYER_LABELS } from '../utils/constants';
@@ -5317,35 +5317,56 @@ const SmartMatchDetail: React.FC<{
 
                         <Section title="Points of Interest">
                             <div className="grid grid-cols-3 gap-2">
-                                <div className="md3-surface rounded-xl sc-bordered py-2.5 px-2 flex flex-col items-center justify-center gap-1 sc-editor-stat-card">
-                                    <span className="text-label-xs font-semibold uppercase tracking-wider flex items-center gap-1">
+                                <div className="md3-surface rounded-xl sc-bordered py-2.5 px-2 flex flex-col items-center justify-center gap-1 sc-editor-stat-card relative select-none group">
+                                    <span className="text-label-xs font-semibold uppercase tracking-wider flex items-center gap-1 pointer-events-none">
                                         <span className="w-2 h-2 rounded-full bg-success inline-block" />
                                         <span className="text-success">Easy</span>
                                     </span>
-                                    <input type="number" min="0" value={match.poiEasy || 0}
-                                        onChange={(e) => onUpdate({ ...match, poiEasy: parseInt(e.target.value) || 0 })}
-                                        className="w-full bg-transparent text-title-sm font-bold outline-none text-center focus:bg-md-sys-surface-container rounded"
-                                    />
+                                    <span className="text-title-sm font-bold pointer-events-none">{match.poiEasy || 0}</span>
+                                    <button type="button" aria-label="Decrease Easy POI"
+                                        className="absolute inset-y-0 left-0 w-1/2 rounded-l-xl flex items-center justify-start pl-1"
+                                        onClick={() => onUpdate({ ...match, poiEasy: Math.max(0, (match.poiEasy || 0) - 1) })}>
+                                        <ChevronLeft size={11} className="opacity-0 group-hover:opacity-40 transition-opacity" />
+                                    </button>
+                                    <button type="button" aria-label="Increase Easy POI"
+                                        className="absolute inset-y-0 right-0 w-1/2 rounded-r-xl flex items-center justify-end pr-1"
+                                        onClick={() => onUpdate({ ...match, poiEasy: (match.poiEasy || 0) + 1 })}>
+                                        <ChevronRight size={11} className="opacity-0 group-hover:opacity-40 transition-opacity" />
+                                    </button>
                                 </div>
-                                <div className="md3-surface rounded-xl sc-bordered py-2.5 px-2 flex flex-col items-center justify-center gap-1 sc-editor-stat-card">
-                                    <span className="text-label-xs font-semibold uppercase tracking-wider flex items-center gap-1">
+                                <div className="md3-surface rounded-xl sc-bordered py-2.5 px-2 flex flex-col items-center justify-center gap-1 sc-editor-stat-card relative select-none group">
+                                    <span className="text-label-xs font-semibold uppercase tracking-wider flex items-center gap-1 pointer-events-none">
                                         <span className="w-2 h-2 rounded-full bg-warning inline-block" />
                                         <span className="text-warning">Medium</span>
                                     </span>
-                                    <input type="number" min="0" value={match.poiMedium || 0}
-                                        onChange={(e) => onUpdate({ ...match, poiMedium: parseInt(e.target.value) || 0 })}
-                                        className="w-full bg-transparent text-title-sm font-bold outline-none text-center focus:bg-md-sys-surface-container rounded"
-                                    />
+                                    <span className="text-title-sm font-bold pointer-events-none">{match.poiMedium || 0}</span>
+                                    <button type="button" aria-label="Decrease Medium POI"
+                                        className="absolute inset-y-0 left-0 w-1/2 rounded-l-xl flex items-center justify-start pl-1"
+                                        onClick={() => onUpdate({ ...match, poiMedium: Math.max(0, (match.poiMedium || 0) - 1) })}>
+                                        <ChevronLeft size={11} className="opacity-0 group-hover:opacity-40 transition-opacity" />
+                                    </button>
+                                    <button type="button" aria-label="Increase Medium POI"
+                                        className="absolute inset-y-0 right-0 w-1/2 rounded-r-xl flex items-center justify-end pr-1"
+                                        onClick={() => onUpdate({ ...match, poiMedium: (match.poiMedium || 0) + 1 })}>
+                                        <ChevronRight size={11} className="opacity-0 group-hover:opacity-40 transition-opacity" />
+                                    </button>
                                 </div>
-                                <div className="md3-surface rounded-xl sc-bordered py-2.5 px-2 flex flex-col items-center justify-center gap-1 sc-editor-stat-card">
-                                    <span className="text-label-xs font-semibold uppercase tracking-wider flex items-center gap-1">
+                                <div className="md3-surface rounded-xl sc-bordered py-2.5 px-2 flex flex-col items-center justify-center gap-1 sc-editor-stat-card relative select-none group">
+                                    <span className="text-label-xs font-semibold uppercase tracking-wider flex items-center gap-1 pointer-events-none">
                                         <span className="w-2 h-2 rounded-full bg-accent inline-block" />
                                         <span className="text-accent">Epic</span>
                                     </span>
-                                    <input type="number" min="0" value={match.poiEpic || 0}
-                                        onChange={(e) => onUpdate({ ...match, poiEpic: parseInt(e.target.value) || 0 })}
-                                        className="w-full bg-transparent text-title-sm font-bold outline-none text-center focus:bg-md-sys-surface-container rounded"
-                                    />
+                                    <span className="text-title-sm font-bold pointer-events-none">{match.poiEpic || 0}</span>
+                                    <button type="button" aria-label="Decrease Epic POI"
+                                        className="absolute inset-y-0 left-0 w-1/2 rounded-l-xl flex items-center justify-start pl-1"
+                                        onClick={() => onUpdate({ ...match, poiEpic: Math.max(0, (match.poiEpic || 0) - 1) })}>
+                                        <ChevronLeft size={11} className="opacity-0 group-hover:opacity-40 transition-opacity" />
+                                    </button>
+                                    <button type="button" aria-label="Increase Epic POI"
+                                        className="absolute inset-y-0 right-0 w-1/2 rounded-r-xl flex items-center justify-end pr-1"
+                                        onClick={() => onUpdate({ ...match, poiEpic: (match.poiEpic || 0) + 1 })}>
+                                        <ChevronRight size={11} className="opacity-0 group-hover:opacity-40 transition-opacity" />
+                                    </button>
                                 </div>
                             </div>
                         </Section>

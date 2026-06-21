@@ -131,7 +131,7 @@ const MatchCard: React.FC<{
                 {row.kills} kills
             </span>
             <span className="rounded-pill bg-md-sys-surface px-2.5 py-1 text-label-sm font-bold text-md-sys-on-surface/70">
-                {row.damage} damage
+                {row.damage} dmg taken
             </span>
         </div>
         <div className="mt-3 text-label-sm text-md-sys-on-surface/70">
@@ -338,7 +338,7 @@ export const DrillDownOverlay: React.FC = () => {
                     tone={model.summary.trendDelta >= 0 ? 'text-md-sys-primary' : 'text-danger'}
                 />
                 <RailStat label="Avg kills" value={String(model.summary.avgKills)} />
-                <RailStat label="Avg damage" value={String(model.summary.avgDamage)} />
+                <RailStat label="Avg dmg taken" value={String(model.summary.avgDamage)} />
                 <RailStat
                     label="Avg placement"
                     value={model.summary.avgPlacement != null ? `#${model.summary.avgPlacement}` : 'N/A'}
@@ -495,7 +495,7 @@ export const DrillDownOverlay: React.FC = () => {
                         <DrillRowButton
                             key={`weapon-${row.name}`}
                             row={row}
-                            note={`${row.total} matches · ${row.avgDamage} avg damage`}
+                            note={`${row.total} matches`}
                             onClick={() => pushTarget(row.name, 'Weapon')}
                         />
                     ))}
@@ -506,7 +506,7 @@ export const DrillDownOverlay: React.FC = () => {
                         <DrillRowButton
                             key={`ship-weapon-${row.name}`}
                             row={row}
-                            note={`${row.total} matches · ${row.avgDamage} avg damage`}
+                            note={`${row.total} matches`}
                             onClick={() => pushTarget(row.name, 'Weapon')}
                         />
                     ))}

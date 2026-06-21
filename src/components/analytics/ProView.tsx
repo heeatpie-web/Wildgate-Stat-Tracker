@@ -128,7 +128,7 @@ export const ProView: React.FC<ProViewProps> = ({ matches, visualMode }) => {
                     <select value={proMetric} onChange={(e) => setProMetric(e.target.value)}
                         className="md3-textfield--outlined px-3 py-1.5 text-label-sm font-bold uppercase outline-none cursor-pointer border-transparent">
                         <option value="win_rate">Win Rate</option>
-                        <option value="avg_damage">Avg Damage</option>
+                        <option value="avg_damage">Avg Dmg Taken</option>
                         <option value="avg_kills">Avg Kills</option>
                         <option value="ship_usage">Usage</option>
                     </select>

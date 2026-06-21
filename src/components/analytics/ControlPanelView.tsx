@@ -197,8 +197,8 @@ export const ControlPanelView: React.FC<ControlPanelViewProps> = ({
                 </div>
             </AnalyticsCard>
 
-            {/* 5. Damage */}
-            <AnalyticsCard title="Damage" icon={<Zap size={16} />} visualMode="dense" variant="solid">
+            {/* 5. Damage Taken */}
+            <AnalyticsCard title="Dmg Taken" icon={<Zap size={16} />} visualMode="dense" variant="solid">
                 <div className="flex flex-col gap-2 h-full justify-center">
                     <div className="flex justify-between items-center">
                         <span className="text-success font-bold">{damageStats.avgWinDmg}</span>

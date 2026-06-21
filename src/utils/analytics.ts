@@ -190,7 +190,7 @@ export const calculateInsights = (matches: Match[]): Insight[] => {
     const topHero = Object.entries(heroStats).filter(([_, s]) => s.total >= 3).sort((a, b) => (b[1].wins / b[1].total) - (a[1].wins / a[1].total))[0];
     if (topHero && (topHero[1].wins / topHero[1].total) > baseWR) res.push({ title: "Ace Pilot", subtitle: "Best Hero Win Rate", value: topHero[0], subValue: `${Math.round((topHero[1].wins / topHero[1].total) * 100)}% Win Rate`, tone: "success", iconType: 'Crown', priority: 20 });
 
-    if (topDmgMatch && ((topDmgMatch as any).damageTaken || 0) > 500) res.push({ title: "Top Gun", subtitle: "Highest Damage Record", value: `${(topDmgMatch as any).damageTaken} DMG`, subValue: `${((topDmgMatch as any).ship || '').split('(')[0]}`, tone: "danger", iconType: 'Flame', priority: 15 });
+    if (topDmgMatch && ((topDmgMatch as any).damageTaken || 0) > 500) res.push({ title: "Iron Hull", subtitle: "Most Damage Tanked", value: `${(topDmgMatch as any).damageTaken} DMG Taken`, subValue: `${((topDmgMatch as any).ship || '').split('(')[0]}`, tone: "danger", iconType: 'Flame', priority: 15 });
 
     if (fastWinMatch) res.push({ title: "Blitz", subtitle: "Fastest Victory", value: (fastWinMatch as any).time || "00:00", subValue: `${((fastWinMatch as any).ship || '').split('(')[0]}`, tone: "warning", iconType: 'Zap', priority: 25 });
 

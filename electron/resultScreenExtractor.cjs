@@ -343,7 +343,7 @@ function parseResultSignals({
     'ARTIFACTRECOVERE',
     'ARIFACTRECOVERE',
     'RTIFACTRECOVERE',
-  ]) || (hasArtifactKeyword && hasRecoveredKeyword) || hasRecoveredKeyword;
+  ]) || (hasArtifactKeyword && hasRecoveredKeyword);
   const hasArtifactSignal = hasArtifactKeyword || hasArtifactExtracted || hasArtifactRecovered;
   const hasArtifactVictorySignal = hasArtifactExtracted || (hasVictory && hasArtifactSignal);
   const hasArtifactLossSignal = hasArtifactRecovered && !hasArtifactVictorySignal;
