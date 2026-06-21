@@ -32,6 +32,7 @@ export const PATCH_PERKS = [
     'Salvager',
     'Mad Bomber',
     'Turbine Factory',
+    'Pilot',
 ] as const;
 
 export const MAX_PERKS_PER_MATCH = 2;
@@ -59,6 +60,7 @@ export const PERK_CATALOG: PerkCatalogEntry[] = [
     { name: 'Salvager' },
     { name: 'Mad Bomber' },
     { name: 'Turbine Factory' },
+    { name: 'Pilot' },
 ];
 
 const normalize = (value: unknown): string => String(value || '').trim().toLowerCase();
