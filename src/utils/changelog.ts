@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.7.10": [
+    "Fix: OCR workbench UI freeze — O(n²) match history scan replaced with O(1) Set lookups, React.memo on candidate rows restored",
+    "Fix: Analytics damage labels now correctly read 'dmg taken' throughout",
+    "Feat: POI stepper — click left/right of Easy/Medium/Epic cards in smart capture detail to adjust counts"
+  ],
   "v3.7.9": [
     "Fix OCR opponent player dropout from EnemyCrews UI header false positive",
     "drop confidence reject thresholds",
