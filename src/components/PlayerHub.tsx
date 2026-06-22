@@ -175,6 +175,25 @@ const PlayerHub: React.FC = () => {
     const uniquePilotRegistry = useMemo(() => Array.from(new Set(pilotRegistry || [])), [pilotRegistry]);
     const rosterNameSet = useMemo(() => new Set(uniquePilotRegistry), [uniquePilotRegistry]);
     const aliasVariantMap = useMemo(() => buildAliasVariantMap(ocrAliasModel), [ocrAliasModel]);
+    // Reverse index: normalized variant key -> canonical name(s). Built once so
+    // resolveTrackedProfileRosterName can do an O(1) lookup instead of scanning
+    // every alias group per profile (previously O(profiles x aliases x variants)).
+    const aliasVariantCanonicalsByKey = useMemo(() => {
+        const lookup = new Map<string, string[]>();
+        Object.entries(aliasVariantMap).forEach(([canonicalName, variants]) => {
+            (variants || []).forEach((variant) => {
+                const variantKey = normalizeNameKey(variant);
+                if (!variantKey) return;
+                const existing = lookup.get(variantKey);
+                if (existing) {
+                    if (!existing.includes(canonicalName)) existing.push(canonicalName);
+                } else {
+                    lookup.set(variantKey, [canonicalName]);
+                }
+            });
+        });
+        return lookup;
+    }, [aliasVariantMap]);
     const normalizedPilotNameMap = useMemo(() => {
         const lookup = new Map<string, string>();
         uniquePilotRegistry.forEach((name) => {
@@ -205,17 +224,19 @@ const PlayerHub: React.FC = () => {
                 }
             }
 
-            for (const [canonicalName, variants] of Object.entries(aliasVariantMap)) {
-                if (!(variants || []).some((variant) => normalizeNameKey(variant) === directKey)) continue;
-                const canonicalKey = normalizeNameKey(canonicalName);
-                if (!canonicalKey) continue;
-                const canonicalRosterName = normalizedPilotNameMap.get(canonicalKey);
-                if (canonicalRosterName) return canonicalRosterName;
+            const canonicals = aliasVariantCanonicalsByKey.get(directKey);
+            if (canonicals) {
+                for (const canonicalName of canonicals) {
+                    const canonicalKey = normalizeNameKey(canonicalName);
+                    if (!canonicalKey) continue;
+                    const canonicalRosterName = normalizedPilotNameMap.get(canonicalKey);
+                    if (canonicalRosterName) return canonicalRosterName;
+                }
             }
 
             return undefined;
         }
-    ), [aliasVariantMap, normalizedPilotNameMap, ocrCorrections]);
+    ), [aliasVariantCanonicalsByKey, normalizedPilotNameMap, ocrCorrections]);
     const shouldHideTrackedProfile = useMemo(() => (
         (
             profileId: string,
@@ -297,6 +318,11 @@ const PlayerHub: React.FC = () => {
         ...uniquePilotRegistry,
         ...Array.from(trackedProfilesByPilot.keys()).filter((name) => !rosterNameSet.has(name)),
     ]), [rosterNameSet, trackedProfilesByPilot, uniquePilotRegistry]);
+    // Defer the inputs that drive the expensive identity/encounter cascade so a
+    // roster confirm/add/merge (or a mid-game telemetry match write) commits and
+    // paints immediately; the heavy O(matches) recompute then runs at low priority.
+    const deferredAllTrackedPilots = useDeferredValue(allTrackedPilots);
+    const deferredMatches = useDeferredValue(matches);
     const pendingRosterCandidates = useMemo(() => {
         const seen = new Set<string>();
         return (pendingReviews || [])
@@ -472,7 +498,7 @@ const PlayerHub: React.FC = () => {
     const identityKeysByPilot = useMemo(() => {
         const rawLookup = new Map<string, Set<string>>();
         const keyOwnerCounts = new Map<string, number>();
-        allTrackedPilots.forEach((name) => {
+        deferredAllTrackedPilots.forEach((name) => {
             const keys = new Set<string>();
             const normalizedName = normalizeNameKey(name);
             const isRoster = rosterNameSet.has(name);
@@ -510,7 +536,7 @@ const PlayerHub: React.FC = () => {
         });
 
         return lookup;
-    }, [allTrackedPilots, learnedAliasInsightsByTarget, normalizedPilotNameMap, pilotAliases, rosterNameSet, trackedProfilesByPilot]);
+    }, [deferredAllTrackedPilots, learnedAliasInsightsByTarget, normalizedPilotNameMap, pilotAliases, rosterNameSet, trackedProfilesByPilot]);
 
     const pilotNamesByIdentityKey = useMemo(() => {
         const lookup = new Map<string, Set<string>>();
@@ -533,7 +559,7 @@ const PlayerHub: React.FC = () => {
         // Use Sets during construction for O(1) dedup instead of O(n) Array.includes
         const encounterIdSets = new Map<string, Set<number>>();
         const conflictIdSets = new Map<string, Set<number>>();
-        allTrackedPilots.forEach((name) => {
+        deferredAllTrackedPilots.forEach((name) => {
             snapshots.set(name, {
                 totalEncounters: 0,
                 encounterMatchIds: [],
@@ -571,7 +597,7 @@ const PlayerHub: React.FC = () => {
             touchSeen(snapshot, timestamp);
         };
 
-        (matches || [])
+        (deferredMatches || [])
             .filter((match) => match?.result !== 'Ongoing')
             .forEach((match) => {
                 const matchId = Number(match?.id);
@@ -629,7 +655,7 @@ const PlayerHub: React.FC = () => {
         });
 
         return snapshots;
-    }, [allTrackedPilots, getKnownAliasKeys, getPlayerEncounterRoleCorrection, matches, pilotNamesByIdentityKey, playerEncounterRoleCorrections]);
+    }, [deferredAllTrackedPilots, getKnownAliasKeys, getPlayerEncounterRoleCorrection, deferredMatches, pilotNamesByIdentityKey, playerEncounterRoleCorrections]);
 
     const rosterModel = useMemo(() => {
         const startedAt = performance.now();
