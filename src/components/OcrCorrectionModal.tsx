@@ -23,12 +23,11 @@ import { Match, SHIPS } from '../types';
 import Logger from '../utils/logger';
 import { getElectronAPI } from '../utils/electronAPI';
 import {
-    findClosestMatch,
-    getAdaptiveNameDistanceThreshold,
     normalizeOcrName,
     similarityScore,
 } from '../utils/stringUtils';
-import { buildOcrCandidatePool } from '../utils/ocrNameResolver';
+import { createRosterFuzzyMatcher } from '../utils/ocr/rosterFuzzyMatch';
+import { filterRosterByQuery, foldLikelyOcrDigits } from '../utils/ocr/rosterFilter';
 import { BUNDLED_OCR_LEXICON } from '../utils/bundledOcrLexicon';
 import { OcrTeamAssignmentBoard } from './ocr/OcrTeamAssignmentBoard';
 import { WorkspaceImageViewer } from './media/WorkspaceImageViewer';
@@ -155,20 +154,6 @@ const clampSelectedScreenshotIndex = (value: number, count: number): number => {
     if (!Number.isFinite(value) || count <= 0) return 0;
     return Math.max(0, Math.min(count - 1, Math.floor(value)));
 };
-const foldLikelyOcrDigits = (value: string): string => (
-    String(value || '').replace(/[013456789]/g, (char) => (
-        char === '0' ? 'o'
-            : char === '1' ? 'i'
-                : char === '3' ? 'e'
-                    : char === '4' ? 'a'
-                        : char === '5' ? 's'
-                            : char === '6' ? 'g'
-                                : char === '7' ? 't'
-                                    : char === '8' ? 'b'
-                                        : char === '9' ? 'g'
-                                            : char
-    ))
-);
 
 const dedupeNames = (names: string[]): string[] => {
     const seen = new Set<string>();
@@ -879,17 +864,9 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         return players;
     }, [ignored, previewCorrections, sessionShipTypes, storedNameConfidenceByKey, teamDraft]);
     const fuzzyMatchByPlayer = useMemo<Record<string, string>>(() => {
-        const primaryCandidates = buildOcrCandidatePool({
-            seedNames: pilotRegistry,
-        });
-        const fallbackCandidates = buildOcrCandidatePool({
+        const matcher = createRosterFuzzyMatcher(pilotRegistry, {
             bundledSeedNames: BUNDLED_OCR_LEXICON,
-        });
-        const exactCandidateByKey = new Map<string, string>();
-        [...primaryCandidates, ...fallbackCandidates].forEach((pilot) => {
-            const key = normalizeNameKey(pilot);
-            if (!key || exactCandidateByKey.has(key)) return;
-            exactCandidateByKey.set(key, pilot);
+            normalizeKey: normalizeNameKey,
         });
         const next: Record<string, string> = {};
         previewTeamDraft.forEach((team) => {
@@ -897,13 +874,8 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                 const cleaned = normalizeSubmittedName(rawName);
                 const key = normalizeNameKey(cleaned);
                 if (!cleaned || !key) return;
-                if (exactCandidateByKey.has(key)) return;
-                const threshold = getAdaptiveNameDistanceThreshold(cleaned.length);
-                const primaryMatch = findClosestMatch(cleaned, primaryCandidates, threshold);
-                const match = primaryMatch || findClosestMatch(cleaned, fallbackCandidates, threshold);
-                if (!match) return;
-                if (normalizeNameKey(match) === key) return;
-                next[key] = match;
+                const result = matcher.resolve(cleaned);
+                if (result) next[key] = result.match;
             });
         });
         return next;
@@ -950,29 +922,9 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     }, [displayFriendlyTeamIndex, previewTeamDraft]);
 
     // Filter pilot registry for autocomplete
-    const getFilteredRegistry = (playerName: string) => {
-        const query = normalizeNameKey(searchQuery[playerName] || '');
-        if (!query) return pilotRegistry.slice(0, 10);
-        const foldedQuery = foldLikelyOcrDigits(query);
-        const minScore = query.length >= 6 ? 58 : 52;
-        return pilotRegistry
-            .map((pilot) => {
-                const normalizedPilot = normalizeNameKey(pilot);
-                const foldedPilot = foldLikelyOcrDigits(normalizedPilot);
-                const containsBoost = normalizedPilot.includes(query) ? 35 : 0;
-                const prefixBoost = normalizedPilot.startsWith(query) ? 15 : 0;
-                const exactBoost = normalizedPilot === query ? 100 : 0;
-                const score = Math.max(
-                    similarityScore(query, normalizedPilot),
-                    similarityScore(foldedQuery, foldedPilot)
-                ) + containsBoost + prefixBoost + exactBoost;
-                return { pilot, score };
-            })
-            .filter((entry) => entry.score >= minScore)
-            .sort((a, b) => b.score - a.score || a.pilot.localeCompare(b.pilot))
-            .slice(0, 10)
-            .map((entry) => entry.pilot);
-    };
+    const getFilteredRegistry = (playerName: string) => (
+        filterRosterByQuery(pilotRegistry, searchQuery[playerName] || '', 10)
+    );
 
     const handleCorrection = (ocrName: string, correctedName: string) => {
         const normalizedCorrected = normalizeSubmittedName(correctedName);

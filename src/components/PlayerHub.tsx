@@ -7,11 +7,13 @@ import {
 import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
 import { resolvePlayerProfileDisplayName } from '../store/slices/createMappingSlice';
+import type { PendingReview } from '../store/slices/createDataSlice';
 import type { Match } from '../types';
 import { getShipColor } from '../types';
 import { buildAliasVariantMap } from '../utils/ocrNameResolver';
 import { isOcrNoise, normalizeOcrName, similarityScore } from '../utils/stringUtils';
 import { buildRosterMergeSuggestionGroups, type RosterMergeSuggestionGroup } from '../utils/rosterMergeSuggestions';
+import { createRosterFuzzyMatcher, type RosterFuzzyMatch } from '../utils/ocr/rosterFuzzyMatch';
 import { LocalImage } from './LocalImage';
 import { useShallow } from 'zustand/react/shallow';
 import Logger from '../utils/logger';
@@ -89,6 +91,8 @@ const PlayerHub: React.FC = () => {
         ocrCorrections,
         ocrAliasModel,
         ocrAutoApplyMinScore,
+        ocrBatchAcceptThreshold,
+        setOcrBatchAcceptThreshold,
         playerEncounterRoleCorrections,
         recordOcrAliasCorrection,
         removeOcrAliasCorrection,
@@ -128,6 +132,8 @@ const PlayerHub: React.FC = () => {
         ocrCorrections: state.ocrCorrections,
         ocrAliasModel: state.ocrAliasModel,
         ocrAutoApplyMinScore: state.ocrAutoApplyMinScore,
+        ocrBatchAcceptThreshold: state.ocrBatchAcceptThreshold,
+        setOcrBatchAcceptThreshold: state.setOcrBatchAcceptThreshold,
         playerEncounterRoleCorrections: state.playerEncounterRoleCorrections,
         recordOcrAliasCorrection: state.recordOcrAliasCorrection,
         removeOcrAliasCorrection: state.removeOcrAliasCorrection,
@@ -406,6 +412,23 @@ const PlayerHub: React.FC = () => {
         });
         return lookup;
     }, [normalizedPilotNameMap, panelMode, pendingRosterCandidates]);
+    // Live fuzzy match of each pending candidate against the CURRENT roster, so
+    // the workbench surfaces "merge into existing pilot" suggestions for near
+    // misses (parity with the OCR Correction modal's fuzzyMatchByPlayer). Exact
+    // matches are already handled by rosterCandidateMatchMap, so skip those.
+    const rosterCandidateFuzzyMap = useMemo(() => {
+        const lookup = new Map<string, RosterFuzzyMatch | null>();
+        if (panelMode !== 'ocr-work') return lookup;
+        const matcher = createRosterFuzzyMatcher(uniquePilotRegistry);
+        pendingRosterCandidates.forEach((candidate) => {
+            if (rosterCandidateMatchMap.get(candidate.id)) {
+                lookup.set(candidate.id, null);
+                return;
+            }
+            lookup.set(candidate.id, matcher.resolve(candidate.value));
+        });
+        return lookup;
+    }, [panelMode, pendingRosterCandidates, rosterCandidateMatchMap, uniquePilotRegistry]);
     const possibleMergeGroups = useMemo(() => {
         if (panelMode !== 'ocr-work') return [] as RosterMergeSuggestionGroup[];
         return buildRosterMergeSuggestionGroups({
@@ -1360,6 +1383,45 @@ const PlayerHub: React.FC = () => {
         });
     };
 
+    const handleBatchAcceptHighConfidence = (candidates: PendingReview[]) => {
+        let accepted = 0;
+        candidates.forEach((candidate) => {
+            const value = String(pendingCandidateEdits[candidate.id] ?? candidate.value).trim();
+            if (!value) return;
+            const existingMatch = findRosterMatch(value);
+            if (existingMatch) {
+                clearResolvedRosterCandidates(candidate, existingMatch, 'approve');
+            } else {
+                addToRegistry(value, { origin: 'ocr', status: 'confirmed' });
+                clearResolvedRosterCandidates(candidate, value, 'approve');
+            }
+            accepted += 1;
+        });
+        if (accepted > 0) {
+            setToast({
+                message: `Accepted ${accepted} OCR candidate${accepted === 1 ? '' : 's'} into the roster`,
+                type: 'success',
+            });
+        }
+    };
+
+    const handleBatchDismissLowConfidence = (candidates: PendingReview[]) => {
+        const dismissKeys: string[] = [];
+        candidates.forEach((candidate) => {
+            const value = String(pendingCandidateEdits[candidate.id] ?? candidate.value).trim();
+            const dismissKey = normalizeOcrName(candidate.value || '').toLowerCase();
+            if (dismissKey) dismissKeys.push(dismissKey);
+            clearResolvedRosterCandidates(candidate, value, 'dismiss');
+        });
+        if (dismissKeys.length > 0) {
+            dismissRosterCandidateKeys(dismissKeys);
+            setToast({
+                message: `Dismissed ${dismissKeys.length} low-confidence OCR candidate${dismissKeys.length === 1 ? '' : 's'}`,
+                type: 'info',
+            });
+        }
+    };
+
 
     const ocrWorkbenchSharedProps = {
         panelMode,
@@ -1377,11 +1439,17 @@ const PlayerHub: React.FC = () => {
         pendingCandidateEdits,
         setPendingCandidateEdits,
         rosterCandidateMatchMap,
+        rosterCandidateFuzzyMap,
+        rosterNames: uniquePilotRegistry,
         findRosterMatch,
         mergeRosterCandidateIntoExisting,
         resolveRosterCandidate,
         addPilotAlias,
         onSourcePreview: setSourcePreview,
+        onBatchAcceptHighConfidence: handleBatchAcceptHighConfidence,
+        onBatchDismissLowConfidence: handleBatchDismissLowConfidence,
+        ocrBatchAcceptThreshold,
+        setOcrBatchAcceptThreshold,
     };
 
     return (

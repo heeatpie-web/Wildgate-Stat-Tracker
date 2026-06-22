@@ -1,9 +1,17 @@
 import React, { useState, useDeferredValue, useMemo, useCallback, type Dispatch, type FC, type SetStateAction } from 'react';
-import { Search, ScanEye, X, Image as ImageIcon, ChevronRight, Users, Merge, AlertTriangle, RefreshCw, CheckCheck, XCircle } from 'lucide-react';
+import { Search, ScanEye, X, Image as ImageIcon, ChevronRight, Users, Merge, AlertTriangle, RefreshCw, CheckCheck, XCircle, Minus, Plus } from 'lucide-react';
 import type { PendingReview } from '../../store/slices/createDataSlice';
 import { normalizeOcrName } from '../../utils/stringUtils';
 import { ConfidenceMeter } from '../ConfidenceMeter';
 import type { RosterMergeSuggestionGroup } from '../../utils/rosterMergeSuggestions';
+import type { RosterFuzzyMatch } from '../../utils/ocr/rosterFuzzyMatch';
+import { filterRosterByQuery } from '../../utils/ocr/rosterFilter';
+import {
+    OCR_BATCH_THRESHOLD_MAX,
+    OCR_BATCH_THRESHOLD_MIN,
+    OCR_BATCH_THRESHOLD_STEP,
+    normalizeOcrBatchThreshold,
+} from '../../utils/ocrBatchActions';
 import type { RoleConflictWorkbenchItem } from './playerHubTypes';
 
 export interface PlayerHubOcrWorkbenchProps {
@@ -23,6 +31,8 @@ export interface PlayerHubOcrWorkbenchProps {
     pendingCandidateEdits: Record<string, string>;
     setPendingCandidateEdits: Dispatch<SetStateAction<Record<string, string>>>;
     rosterCandidateMatchMap: Map<string, string | null>;
+    rosterCandidateFuzzyMap: Map<string, RosterFuzzyMatch | null>;
+    rosterNames: string[];
     findRosterMatch: (value: string) => string | null;
     mergeRosterCandidateIntoExisting: (
         candidate: { id: string; value: string; canonicalTargetKey?: string | null | undefined },
@@ -38,6 +48,8 @@ export interface PlayerHubOcrWorkbenchProps {
     onSourcePreview: (preview: { src: string; label: string } | null) => void;
     onBatchAcceptHighConfidence?: (candidates: PendingReview[]) => void;
     onBatchDismissLowConfidence?: (candidates: PendingReview[]) => void;
+    ocrBatchAcceptThreshold: number;
+    setOcrBatchAcceptThreshold: (threshold: number) => void;
     onRequestRerunOcr?: () => void;
     rerunOcrDisabled?: boolean;
     isRerunningOcr?: boolean;
@@ -58,6 +70,8 @@ interface CandidateRowProps {
     candidate: PendingReview;
     pendingValue: string;
     existingRosterMatch: string | null | undefined;
+    fuzzyRosterMatch: RosterFuzzyMatch | null | undefined;
+    rosterNames: string[];
     onEditValue: (id: string, value: string) => void;
     resolveRosterCandidate: PlayerHubOcrWorkbenchProps['resolveRosterCandidate'];
     mergeRosterCandidateIntoExisting: PlayerHubOcrWorkbenchProps['mergeRosterCandidateIntoExisting'];
@@ -70,12 +84,18 @@ const CandidateRow = React.memo<CandidateRowProps>(({
     candidate,
     pendingValue,
     existingRosterMatch,
+    fuzzyRosterMatch,
+    rosterNames,
     onEditValue,
     resolveRosterCandidate,
     mergeRosterCandidateIntoExisting,
     addPilotAlias,
     onSourcePreview,
 }) => {
+    const [inputFocused, setInputFocused] = useState(false);
+    const registrySuggestions = useMemo(() => (
+        inputFocused ? filterRosterByQuery(rosterNames, pendingValue, 6) : []
+    ), [inputFocused, rosterNames, pendingValue]);
     const sourceScreenshotPath = String(candidate.sourceCapture?.screenshotPath || '').trim();
     const sourceScreenshotLabel = String(candidate.sourceCapture?.screenshotLabel || 'Captured Screenshot').trim() || 'Captured Screenshot';
     const sourceCapturedAt = Number(candidate.sourceCapture?.capturedAt || 0);
@@ -87,6 +107,11 @@ const CandidateRow = React.memo<CandidateRowProps>(({
     const mergeSuggestions = useMemo(() => {
         // e.name is already normalizeOcrName-applied, so no double-normalize needed for dedup
         const entries = [
+            // Live fuzzy match against the CURRENT roster ranks first — it reflects
+            // roster edits made since the candidate was scanned.
+            fuzzyRosterMatch?.match
+                ? { name: normalizeOcrName(fuzzyRosterMatch.match), score: Number(fuzzyRosterMatch.score || 0), kind: 'roster' as const }
+                : null,
             candidate.bestMatch && normalizeOcrName(candidate.bestMatch).toLowerCase() !== normalizeOcrName(candidate.value).toLowerCase()
                 ? { name: normalizeOcrName(candidate.bestMatch), score: Number(candidate.bestScore || 0), kind: 'best' as const }
                 : null,
@@ -95,43 +120,91 @@ const CandidateRow = React.memo<CandidateRowProps>(({
                 score: Number(s.score || 0),
                 kind: 'suggestion' as const,
             }))),
-        ].filter((e): e is { name: string; score: number; kind: 'best' | 'suggestion' } => Boolean(e?.name));
+        ].filter((e): e is { name: string; score: number; kind: 'roster' | 'best' | 'suggestion' } => Boolean(e?.name));
 
         const pendingLower = normalizedPendingValue.toLowerCase();
         const existingLower = existingRosterMatch ? normalizeOcrName(existingRosterMatch).toLowerCase() : null;
-        const seen = new Set<string>();
-        const result: typeof entries = [];
+        // Merge same-name entries from different sources: keep the highest score
+        // and prefer the 'roster' flag (an actual roster pilot outranks a guess).
+        const byKey = new Map<string, typeof entries[number]>();
+        const order: string[] = [];
         for (const e of entries) {
             const key = e.name.toLowerCase();
             if (key === pendingLower) continue;
             if (existingLower && key === existingLower) continue;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            result.push(e);
+            const existing = byKey.get(key);
+            if (existing) {
+                existing.score = Math.max(existing.score, e.score);
+                if (e.kind === 'roster') existing.kind = 'roster';
+            } else {
+                byKey.set(key, { ...e });
+                order.push(key);
+            }
+        }
+        const result: typeof entries = [];
+        for (const key of order) {
+            const entry = byKey.get(key);
+            if (entry) result.push(entry);
             if (result.length >= 4) break;
         }
         return result;
-    }, [candidate.bestMatch, candidate.bestScore, candidate.suggestions, candidate.value, normalizedPendingValue, existingRosterMatch]);
+    }, [candidate.bestMatch, candidate.bestScore, candidate.suggestions, candidate.value, normalizedPendingValue, existingRosterMatch, fuzzyRosterMatch]);
 
     const hasIdentityHints = existingRosterMatch || mergeSuggestions.length > 0;
 
     return (
         <div className="border-b border-md-sys-outline/[0.06] px-4 py-4 space-y-3">
-            <input
-                type="text"
-                value={pendingValue}
-                onChange={(e) => onEditValue(candidate.id, e.target.value)}
-                onKeyDown={(e) => {
-                    e.stopPropagation();
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        resolveRosterCandidate(candidate, 'approve', pendingValue);
-                    }
-                }}
-                className="w-full px-3 py-2 text-label-sm font-semibold text-md-sys-on-surface outline-none rounded-control border border-md-sys-outline/15 focus:border-md-sys-primary/40 focus:ring-2 focus:ring-md-sys-primary/10 transition-all"
-                style={{ background: 'var(--md-sys-color-surface-container)' }}
-                aria-label={`OCR candidate name ${candidate.id}`}
-            />
+            <div className="relative">
+                <input
+                    type="text"
+                    value={pendingValue}
+                    onChange={(e) => onEditValue(candidate.id, e.target.value)}
+                    onFocus={() => setInputFocused(true)}
+                    onBlur={() => { window.setTimeout(() => setInputFocused(false), 120); }}
+                    onKeyDown={(e) => {
+                        e.stopPropagation();
+                        if (e.key === 'Escape') {
+                            setInputFocused(false);
+                            return;
+                        }
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            resolveRosterCandidate(candidate, 'approve', pendingValue);
+                        }
+                    }}
+                    className="w-full px-3 py-2 text-label-sm font-semibold text-md-sys-on-surface outline-none rounded-control border border-md-sys-outline/15 focus:border-md-sys-primary/40 focus:ring-2 focus:ring-md-sys-primary/10 transition-all"
+                    style={{ background: 'var(--md-sys-color-surface-container)' }}
+                    aria-label={`OCR candidate name ${candidate.id}`}
+                    autoComplete="off"
+                    role="combobox"
+                    aria-expanded={registrySuggestions.length > 0}
+                />
+                {inputFocused && registrySuggestions.length > 0 && (
+                    <div
+                        className="absolute z-20 left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-control border border-md-sys-outline/15 shadow-xl custom-scrollbar"
+                        style={{ background: 'var(--md-sys-color-surface-container-high)' }}
+                        role="listbox"
+                    >
+                        {registrySuggestions.map((pilot) => (
+                            <button
+                                key={`${candidate.id}-registry-${pilot}`}
+                                type="button"
+                                // onMouseDown (not onClick) so selection fires before the input blur.
+                                onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    onEditValue(candidate.id, pilot);
+                                    setInputFocused(false);
+                                }}
+                                className="w-full text-left px-3 py-2 text-label-sm text-md-sys-on-surface hover:bg-md-sys-on-surface/[0.06] truncate transition-colors"
+                                role="option"
+                                aria-selected={normalizeOcrName(pilot).toLowerCase() === normalizedPendingValue.toLowerCase()}
+                            >
+                                {pilot}
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
 
             {candidate.originalConfidence > 0 && (
                 <ConfidenceMeter confidence={candidate.originalConfidence} size="sm" />
@@ -174,9 +247,13 @@ const CandidateRow = React.memo<CandidateRowProps>(({
                                     style={{ background: 'var(--md-sys-color-surface-container-high)' }}
                                 >
                                     <span className="text-label-sm font-semibold text-md-sys-on-surface truncate">{s.name}</span>
-                                    {s.score > 0 && (
+                                    {s.kind === 'roster' ? (
+                                        <span className="text-label-xs font-bold text-success shrink-0">
+                                            {s.score > 0 ? `roster · ${Math.round(s.score)}%` : 'roster'}
+                                        </span>
+                                    ) : s.score > 0 ? (
                                         <span className="text-label-xs font-bold text-warning shrink-0">{Math.round(s.score)}%</span>
-                                    )}
+                                    ) : null}
                                 </button>
                                 <button
                                     type="button"
@@ -252,6 +329,8 @@ export const PlayerHubOcrWorkbench: FC<PlayerHubOcrWorkbenchProps> = ({
     pendingCandidateEdits,
     setPendingCandidateEdits,
     rosterCandidateMatchMap,
+    rosterCandidateFuzzyMap,
+    rosterNames,
     findRosterMatch,
     mergeRosterCandidateIntoExisting,
     resolveRosterCandidate,
@@ -259,6 +338,8 @@ export const PlayerHubOcrWorkbench: FC<PlayerHubOcrWorkbenchProps> = ({
     onSourcePreview,
     onBatchAcceptHighConfidence,
     onBatchDismissLowConfidence,
+    ocrBatchAcceptThreshold,
+    setOcrBatchAcceptThreshold,
     onRequestRerunOcr,
     rerunOcrDisabled = false,
     isRerunningOcr = false,
@@ -269,14 +350,24 @@ export const PlayerHubOcrWorkbench: FC<PlayerHubOcrWorkbenchProps> = ({
         setPendingCandidateEdits((prev) => ({ ...prev, [id]: value }));
     }, [setPendingCandidateEdits]);
 
+    // Single adjustable threshold partitions candidates: at/above is accept-eligible,
+    // below is dismiss-eligible (parity with the OCR Correction modal). Candidates
+    // with no confidence (<= 0) fall into neither bucket and need manual review.
+    const normalizedBatchThreshold = normalizeOcrBatchThreshold(ocrBatchAcceptThreshold);
     const highConfidenceCandidates = useMemo(() =>
-        pendingRosterCandidates.filter(c => c.originalConfidence >= 80),
-        [pendingRosterCandidates]
+        pendingRosterCandidates.filter(c => Number(c.originalConfidence) > 0 && Number(c.originalConfidence) >= normalizedBatchThreshold),
+        [pendingRosterCandidates, normalizedBatchThreshold]
     );
     const lowConfidenceCandidates = useMemo(() =>
-        pendingRosterCandidates.filter(c => c.originalConfidence < 40),
-        [pendingRosterCandidates]
+        pendingRosterCandidates.filter(c => Number(c.originalConfidence) > 0 && Number(c.originalConfidence) < normalizedBatchThreshold),
+        [pendingRosterCandidates, normalizedBatchThreshold]
     );
+    const batchThresholdProgress = Math.round(
+        ((normalizedBatchThreshold - OCR_BATCH_THRESHOLD_MIN) / (OCR_BATCH_THRESHOLD_MAX - OCR_BATCH_THRESHOLD_MIN)) * 100
+    );
+    const batchThresholdSliderStyle = {
+        '--ocr-threshold-progress': `${batchThresholdProgress}%`,
+    } as React.CSSProperties;
 
     const tabs: { id: WorkbenchTab; label: string; count: number; color?: 'danger' | 'warning' }[] = [
         { id: 'candidates', label: 'Candidates', count: pendingRosterCandidates.length },
@@ -346,27 +437,74 @@ export const PlayerHubOcrWorkbench: FC<PlayerHubOcrWorkbenchProps> = ({
                     <div className="flex flex-col flex-1 min-h-0">
                         {/* Batch actions */}
                         {pendingRosterCandidates.length > 0 && (onBatchAcceptHighConfidence || onBatchDismissLowConfidence) && (
-                            <div className="px-4 pt-3 pb-2 border-b border-md-sys-outline/[0.06] shrink-0 flex items-center gap-1.5 flex-wrap">
-                                {onBatchAcceptHighConfidence && highConfidenceCandidates.length > 0 && (
+                            <div className="px-4 pt-3 pb-3 border-b border-md-sys-outline/[0.06] shrink-0 flex flex-col gap-2.5">
+                                {/* Adjustable confidence threshold */}
+                                <div className="flex items-center gap-2.5">
+                                    <span className="text-label-xs font-semibold uppercase tracking-wide text-md-sys-on-surface/45 shrink-0">
+                                        Threshold
+                                    </span>
                                     <button
                                         type="button"
-                                        onClick={() => onBatchAcceptHighConfidence(highConfidenceCandidates)}
-                                        className="h-7 px-2.5 rounded-control text-label-xs font-semibold border border-success/25 bg-success/10 text-success hover:bg-success/15 inline-flex items-center gap-1.5 transition-colors"
+                                        onClick={() => setOcrBatchAcceptThreshold(Math.max(OCR_BATCH_THRESHOLD_MIN, normalizedBatchThreshold - OCR_BATCH_THRESHOLD_STEP))}
+                                        className="h-7 w-7 shrink-0 rounded-control border border-md-sys-outline/14 inline-flex items-center justify-center text-md-sys-on-surface/70 hover:bg-md-sys-on-surface/[0.06] transition-colors"
+                                        style={{ background: 'var(--md-sys-color-surface-container-high)' }}
+                                        aria-label="Lower batch confidence threshold"
+                                        title="Lower threshold"
                                     >
-                                        <CheckCheck size={12} />
-                                        Accept {highConfidenceCandidates.length} high conf.
+                                        <Minus size={12} />
                                     </button>
-                                )}
-                                {onBatchDismissLowConfidence && lowConfidenceCandidates.length > 0 && (
+                                    <input
+                                        type="range"
+                                        min={OCR_BATCH_THRESHOLD_MIN}
+                                        max={OCR_BATCH_THRESHOLD_MAX}
+                                        step={OCR_BATCH_THRESHOLD_STEP}
+                                        value={normalizedBatchThreshold}
+                                        onChange={(e) => setOcrBatchAcceptThreshold(Number(e.target.value))}
+                                        className="ocr-threshold-slider flex-1 h-7 cursor-pointer touch-manipulation"
+                                        style={batchThresholdSliderStyle}
+                                        aria-label="Batch confidence threshold"
+                                    />
                                     <button
                                         type="button"
-                                        onClick={() => onBatchDismissLowConfidence(lowConfidenceCandidates)}
-                                        className="h-7 px-2.5 rounded-control text-label-xs font-semibold border border-danger/25 bg-danger/10 text-danger hover:bg-danger/15 inline-flex items-center gap-1.5 transition-colors"
+                                        onClick={() => setOcrBatchAcceptThreshold(Math.min(OCR_BATCH_THRESHOLD_MAX, normalizedBatchThreshold + OCR_BATCH_THRESHOLD_STEP))}
+                                        className="h-7 w-7 shrink-0 rounded-control border border-md-sys-outline/14 inline-flex items-center justify-center text-md-sys-on-surface/70 hover:bg-md-sys-on-surface/[0.06] transition-colors"
+                                        style={{ background: 'var(--md-sys-color-surface-container-high)' }}
+                                        aria-label="Raise batch confidence threshold"
+                                        title="Raise threshold"
                                     >
-                                        <XCircle size={12} />
-                                        Dismiss {lowConfidenceCandidates.length} low conf.
+                                        <Plus size={12} />
                                     </button>
-                                )}
+                                    <span className="text-label-sm font-bold tabular-nums text-md-sys-primary shrink-0 w-10 text-right">
+                                        {normalizedBatchThreshold}%
+                                    </span>
+                                </div>
+                                {/* Accept / dismiss by threshold */}
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                    {onBatchAcceptHighConfidence && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onBatchAcceptHighConfidence(highConfidenceCandidates)}
+                                            disabled={highConfidenceCandidates.length === 0}
+                                            className="h-7 px-2.5 rounded-control text-label-xs font-semibold border border-success/25 bg-success/10 text-success hover:bg-success/15 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5 transition-colors"
+                                            title={`Accept candidates at or above ${normalizedBatchThreshold}% confidence`}
+                                        >
+                                            <CheckCheck size={12} />
+                                            Accept {highConfidenceCandidates.length} ≥ {normalizedBatchThreshold}%
+                                        </button>
+                                    )}
+                                    {onBatchDismissLowConfidence && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onBatchDismissLowConfidence(lowConfidenceCandidates)}
+                                            disabled={lowConfidenceCandidates.length === 0}
+                                            className="h-7 px-2.5 rounded-control text-label-xs font-semibold border border-danger/25 bg-danger/10 text-danger hover:bg-danger/15 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5 transition-colors"
+                                            title={`Dismiss candidates below ${normalizedBatchThreshold}% confidence`}
+                                        >
+                                            <XCircle size={12} />
+                                            Dismiss {lowConfidenceCandidates.length} &lt; {normalizedBatchThreshold}%
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         )}
 
@@ -414,6 +552,8 @@ export const PlayerHubOcrWorkbench: FC<PlayerHubOcrWorkbenchProps> = ({
                                         candidate={candidate}
                                         pendingValue={pendingCandidateEdits[candidate.id] ?? candidate.value}
                                         existingRosterMatch={rosterCandidateMatchMap.get(candidate.id) ?? findRosterMatch(pendingCandidateEdits[candidate.id] ?? candidate.value)}
+                                        fuzzyRosterMatch={rosterCandidateFuzzyMap.get(candidate.id)}
+                                        rosterNames={rosterNames}
                                         onEditValue={handleEditValue}
                                         resolveRosterCandidate={resolveRosterCandidate}
                                         mergeRosterCandidateIntoExisting={mergeRosterCandidateIntoExisting}
