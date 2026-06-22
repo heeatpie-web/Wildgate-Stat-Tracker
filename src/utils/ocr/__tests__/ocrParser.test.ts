@@ -754,7 +754,12 @@ describe('validateExtractedData', () => {
     expect(validated.reachModifiers).toHaveLength(1);
   });
 
-  it('filters opponent teams below 40 confidence', () => {
+  // Opponent confidence floors were intentionally dropped to 0 (commit 10637f9,
+  // "OCR opponent player dropout caused by EnemyCrews UI header false positive")
+  // so structurally valid teams/players always reach review rather than being
+  // silently dropped. UI-header false positives are filtered at extraction time
+  // (crewHubExtractor noise phrases), not by a confidence floor here.
+  it('retains low-confidence opponent teams so they reach review', () => {
     const data = makeData({
       opponentTeams: [{
         teamName: 'LowConf',
@@ -765,10 +770,10 @@ describe('validateExtractedData', () => {
       }],
     });
     const validated = validateExtractedData(data);
-    expect(validated.opponentTeams).toHaveLength(0);
+    expect(validated.opponentTeams).toHaveLength(1);
   });
 
-  it('removes players below 50 confidence from opponent teams', () => {
+  it('retains low-confidence opponent players so they reach review', () => {
     const data = makeData({
       opponentTeams: [{
         teamName: 'Team',
@@ -782,7 +787,7 @@ describe('validateExtractedData', () => {
       }],
     });
     const validated = validateExtractedData(data);
-    expect(validated.opponentTeams[0].players).toHaveLength(1);
+    expect(validated.opponentTeams[0].players).toHaveLength(2);
   });
 
   it('promotes ship-like player artifacts into team shipType metadata', () => {

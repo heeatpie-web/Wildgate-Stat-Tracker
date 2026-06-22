@@ -310,6 +310,7 @@ function parseResultSignals({
   const hasVictory = joined.includes('VICTORY') || joined.includes('VICTOR');
   const hasArtifactKeyword = joined.includes('ARTIFACT')
     || joined.includes('ARIFACT')
+    || joined.includes('ARTFACT')
     || joined.includes('TIFACT')
     || joined.includes('RTIFACT');
   const hasExtractedKeyword = includesAnyToken(joined, [
