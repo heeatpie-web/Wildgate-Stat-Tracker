@@ -1107,11 +1107,7 @@
         }
       ],
       "modifiers": [
-        "Dead Sensors",
-        "Artifact",
-        "Special Loot",
-        "Wildgate",
-        "Resources"
+        "Dead Sensors"
       ],
       "imagePaths": [
         "C:/Users/Alec Gougebas/AppData/Roaming/Wildgate Stat Tracker/match_artifacts/91/capture_2026-02-16T17-32-01-423Z.png",
