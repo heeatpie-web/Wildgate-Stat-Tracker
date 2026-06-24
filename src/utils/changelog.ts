@@ -1,4 +1,8 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.8.0": [
+    "Promote the v3.7.x OCR, rerun-review, and History-filter improvements into the 3.8.0 release",
+    "OCR modifier-detection accuracy fix so map legend icons are no longer miscounted as match modifiers"
+  ],
   "v3.7.11": [
     "Recover opponent names previously dropped during OCR over trailing platform glyphs",
     "Ignore departure/spectator/match-starting UI text when detecting rosters",
