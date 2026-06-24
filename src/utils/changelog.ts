@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.8.1": [
+    "Fix: Re-analyze on a match no longer wipes the enemy roster when OCR comes up empty (opponents are preserved alongside opponentTeams)",
+    "Players tab now uses page controls (50 per page) instead of an infinite-scrolling list of every tracked name",
+    "Switching between Player Details and OCR Work no longer recomputes the full encounter aggregation"
+  ],
   "v3.8.0": [
     "Promote the v3.7.x OCR, rerun-review, and History-filter improvements into the 3.8.0 release",
     "OCR modifier-detection accuracy fix so map legend icons are no longer miscounted as match modifiers"
