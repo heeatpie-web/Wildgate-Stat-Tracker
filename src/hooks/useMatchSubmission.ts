@@ -493,12 +493,26 @@ export const buildSilentBackgroundOcrMatch = ({
     const reviewedAt = Number(match.ocrReviewedAt || 0);
     const shouldPreserveSavedReview = reviewedAt > 0 || String(match.ocrState || '').trim().toLowerCase() === 'saved';
 
+    // When a rerun comes back with zero teams/opponents (OCR failed to detect
+    // enemies, e.g. wrong region or low confidence), preserve the prior data
+    // instead of wiping it. Previously replaceExisting=true could blank out
+    // every enemy player even though the user could still see them in the
+    // screenshot — opponentTeams already fell back, but the flat opponents
+    // list did not, leaving the match with 0 enemy players.
+    const ocrFoundNoOpponents = nextOpponentTeams.length === 0 && nextOpponents.length === 0;
+    const preservedOpponents = (replaceExisting && ocrFoundNoOpponents)
+        ? (match.opponents || [])
+        : nextOpponents;
+    const preservedOpponentTeams = nextOpponentTeams.length > 0
+        ? nextOpponentTeams
+        : (match.opponentTeams || []);
+
     return {
         ...match,
         ship: shipForTeammateCap || match.ship,
         teammates: nextTeammates,
-        opponents: nextOpponents,
-        opponentTeams: nextOpponentTeams.length > 0 ? nextOpponentTeams : (match.opponentTeams || []),
+        opponents: preservedOpponents,
+        opponentTeams: preservedOpponentTeams,
         reachModifiers: nextModifierNames,
         artifactSource: String(nextArtifactSource || match.artifactSource || '').trim() || undefined,
         ocrDebug: {

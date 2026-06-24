@@ -1,5 +1,5 @@
 import React, { type Dispatch, type FC, type RefObject, type SetStateAction } from 'react';
-import { Users, Search, Star, ChevronRight, Undo2, X, ScanEye } from 'lucide-react';
+import { Users, Search, Star, ChevronRight, ChevronLeft, Undo2, X, ScanEye } from 'lucide-react';
 import type { MergeHistoryEntry, PendingReview } from '../../store/slices/createDataSlice';
 import type { PlayerDetail, PlayerFilterMode, PlayerHubMode, SortMode } from './playerHubTypes';
 import { getPlayerStatusChips, getStatusChipClassName } from './playerHubUtils';
@@ -23,10 +23,13 @@ export interface PlayerHubRosterColumnProps {
     pendingRosterCandidates: PendingReview[];
     filtered: PlayerDetail[];
     rosterScrollRef: RefObject<HTMLDivElement | null>;
-    onRosterScroll: (scrollTop: number) => void;
-    rosterTotalHeight: number;
-    rosterVisibleOffsetY: number;
     rosterVisiblePilots: PlayerDetail[];
+    rosterPage: number;
+    rosterTotalPages: number;
+    rosterPageStart: number;
+    rosterPageEnd: number;
+    rosterTotalCount: number;
+    onRosterPageChange: Dispatch<SetStateAction<number>>;
     selectedPilot: string | null;
     setSelectedPilot: Dispatch<SetStateAction<string | null>>;
     timeAgo: (ts: number | null) => string;
@@ -58,14 +61,19 @@ export const PlayerHubRosterColumn: FC<PlayerHubRosterColumnProps> = ({
     pendingRosterCandidates,
     filtered,
     rosterScrollRef,
-    onRosterScroll,
-    rosterTotalHeight,
-    rosterVisibleOffsetY,
     rosterVisiblePilots,
+    rosterPage,
+    rosterTotalPages,
+    rosterPageStart,
+    rosterPageEnd,
+    rosterTotalCount,
+    onRosterPageChange,
     selectedPilot,
     setSelectedPilot,
     timeAgo,
 }) => {
+    const canPrev = rosterPage > 0;
+    const canNext = rosterPage < rosterTotalPages - 1;
     const scopeOptions = [
         { id: 'all' as PlayerFilterMode, label: 'All', count: enrichedPilots.length },
         { id: 'roster' as PlayerFilterMode, label: 'Roster', count: rosteredPlayerCount },
@@ -224,11 +232,10 @@ export const PlayerHubRosterColumn: FC<PlayerHubRosterColumnProps> = ({
                     <div
                         ref={rosterScrollRef as React.Ref<HTMLDivElement>}
                         data-testid="playerhub-roster-viewport"
-                        onScroll={(e) => onRosterScroll(e.currentTarget.scrollTop)}
                         className="flex-1 min-h-0 overflow-y-auto custom-scrollbar"
                     >
-                        <div style={{ height: `${rosterTotalHeight}px` }}>
-                            <div style={{ transform: `translateY(${rosterVisibleOffsetY}px)` }}>
+                        <div>
+                            <div>
                                 {rosterVisiblePilots.map((pilot) => {
                                     const statusChips = getPlayerStatusChips(pilot);
                                     const isSelected = selectedPilot === pilot.name;
@@ -300,6 +307,62 @@ export const PlayerHubRosterColumn: FC<PlayerHubRosterColumnProps> = ({
                                     );
                                 })}
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {filtered.length > 0 && rosterTotalPages > 1 && (
+                    <div
+                        className="flex items-center justify-between gap-2 px-4 py-2 border-t border-md-sys-outline/[0.06] shrink-0"
+                        style={{ background: 'var(--md-sys-color-surface-container)' }}
+                    >
+                        <span className="text-label-xs text-md-sys-on-surface/55">
+                            {rosterPageStart + 1}–{rosterPageEnd} of {rosterTotalCount}
+                        </span>
+                        <div className="flex items-center gap-1">
+                            <button
+                                type="button"
+                                onClick={() => onRosterPageChange(0)}
+                                disabled={!canPrev}
+                                className="h-7 px-2 rounded-control text-label-xs font-semibold border border-md-sys-outline/10 text-md-sys-on-surface/70 disabled:opacity-30 hover:bg-md-sys-on-surface/[0.06]"
+                                style={{ background: 'var(--md-sys-color-surface-container-high)' }}
+                                aria-label="First page"
+                            >
+                                «
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => onRosterPageChange((p) => Math.max(0, p - 1))}
+                                disabled={!canPrev}
+                                className="h-7 w-7 rounded-control inline-flex items-center justify-center border border-md-sys-outline/10 text-md-sys-on-surface/70 disabled:opacity-30 hover:bg-md-sys-on-surface/[0.06]"
+                                style={{ background: 'var(--md-sys-color-surface-container-high)' }}
+                                aria-label="Previous page"
+                            >
+                                <ChevronLeft size={14} />
+                            </button>
+                            <span className="text-label-xs font-semibold text-md-sys-on-surface/75 px-2">
+                                {rosterPage + 1} / {rosterTotalPages}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => onRosterPageChange((p) => Math.min(rosterTotalPages - 1, p + 1))}
+                                disabled={!canNext}
+                                className="h-7 w-7 rounded-control inline-flex items-center justify-center border border-md-sys-outline/10 text-md-sys-on-surface/70 disabled:opacity-30 hover:bg-md-sys-on-surface/[0.06]"
+                                style={{ background: 'var(--md-sys-color-surface-container-high)' }}
+                                aria-label="Next page"
+                            >
+                                <ChevronRight size={14} />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => onRosterPageChange(rosterTotalPages - 1)}
+                                disabled={!canNext}
+                                className="h-7 px-2 rounded-control text-label-xs font-semibold border border-md-sys-outline/10 text-md-sys-on-surface/70 disabled:opacity-30 hover:bg-md-sys-on-surface/[0.06]"
+                                style={{ background: 'var(--md-sys-color-surface-container-high)' }}
+                                aria-label="Last page"
+                            >
+                                »
+                            </button>
                         </div>
                     </div>
                 )}

@@ -19,15 +19,12 @@ import { useShallow } from 'zustand/react/shallow';
 import Logger from '../utils/logger';
 import { resolveEncounterRole } from '../utils/playerEncounterRoles';
 import {
-    DEFAULT_ROSTER_VIEWPORT_HEIGHT,
     EQUIPMENT_NAME_SET,
     GUID_HEX_PATTERN,
     IS_DEV_BUILD,
     NON_PLAYER_NAME_HINTS,
     PERK_NAME_SET,
     PROSPECTOR_NAME_SET,
-    ROSTER_GRID_OVERSCAN_ROWS,
-    ROSTER_GRID_ROW_HEIGHT,
     SHIP_NAME_SET,
     WEAPON_NAME_SET,
 } from './playerHub/playerHubConstants';
@@ -168,13 +165,7 @@ const PlayerHub: React.FC = () => {
     const [pendingCandidateEdits, setPendingCandidateEdits] = useState<Record<string, string>>({});
     const [sourcePreview, setSourcePreview] = useState<{ src: string; label: string } | null>(null);
     const [possibleMergesExpanded, setPossibleMergesExpanded] = useState(false);
-    const [rosterViewportWidth, setRosterViewportWidth] = useState<number>(() => (
-        typeof window !== 'undefined' && Number.isFinite(window.innerWidth) && window.innerWidth > 0
-            ? window.innerWidth
-            : 1280
-    ));
-    const [rosterViewportHeight, setRosterViewportHeight] = useState(DEFAULT_ROSTER_VIEWPORT_HEIGHT);
-    const [rosterScrollTop, setRosterScrollTop] = useState(0);
+    const [rosterPage, setRosterPage] = useState(0);
     const hadPossibleMergesRef = useRef(false);
     const mergeKeepNameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const rosterScrollRef = useRef<HTMLDivElement | null>(null);
@@ -353,33 +344,7 @@ const PlayerHub: React.FC = () => {
     }, [pendingRosterCandidates]);
 
     useEffect(() => {
-        if (typeof window === 'undefined') return undefined;
-        const handleResize = () => {
-            if (Number.isFinite(window.innerWidth) && window.innerWidth > 0) {
-                setRosterViewportWidth(window.innerWidth);
-            }
-        };
-        handleResize();
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
-
-    useEffect(() => {
-        const node = rosterScrollRef.current;
-        if (!node) return undefined;
-        const measure = () => {
-            const nextHeight = node.clientHeight || DEFAULT_ROSTER_VIEWPORT_HEIGHT;
-            setRosterViewportHeight(nextHeight);
-        };
-        measure();
-        if (typeof ResizeObserver === 'undefined') return undefined;
-        const observer = new ResizeObserver(() => measure());
-        observer.observe(node);
-        return () => observer.disconnect();
-    }, [pendingRosterCandidates.length, panelMode, searchTerm]);
-
-    useEffect(() => {
-        setRosterScrollTop(0);
+        setRosterPage(0);
         if (rosterScrollRef.current) {
             rosterScrollRef.current.scrollTop = 0;
         }
@@ -761,8 +726,6 @@ const PlayerHub: React.FC = () => {
         };
     }, [
         encounterSnapshotsByPilot,
-        panelMode,
-        pendingRosterCandidates.length,
         playerProfiles,
         rosterEntryMeta,
         allTrackedPilots,
@@ -1051,18 +1014,12 @@ const PlayerHub: React.FC = () => {
         };
     }, [getKnownAliasKeys, matches, normalizedPilotNameMap, pilotNamesByIdentityKey, selected]);
 
-    const rosterColumnCount = rosterViewportWidth >= 1536 ? 3 : 2;
-    const rosterTotalRows = Math.ceil(filtered.length / rosterColumnCount);
-    const rosterVisibleRowStart = Math.max(0, Math.floor(rosterScrollTop / ROSTER_GRID_ROW_HEIGHT) - ROSTER_GRID_OVERSCAN_ROWS);
-    const rosterVisibleRowEnd = Math.min(
-        rosterTotalRows,
-        Math.ceil((rosterScrollTop + rosterViewportHeight) / ROSTER_GRID_ROW_HEIGHT) + ROSTER_GRID_OVERSCAN_ROWS
-    );
-    const rosterVisibleStartIndex = rosterVisibleRowStart * rosterColumnCount;
-    const rosterVisibleEndIndex = Math.min(filtered.length, rosterVisibleRowEnd * rosterColumnCount);
-    const rosterVisiblePilots = filtered.slice(rosterVisibleStartIndex, rosterVisibleEndIndex);
-    const rosterVisibleOffsetY = rosterVisibleRowStart * ROSTER_GRID_ROW_HEIGHT;
-    const rosterTotalHeight = Math.max(rosterTotalRows * ROSTER_GRID_ROW_HEIGHT, rosterViewportHeight);
+    const ROSTER_PAGE_SIZE = 50;
+    const rosterTotalPages = Math.max(1, Math.ceil(filtered.length / ROSTER_PAGE_SIZE));
+    const rosterClampedPage = Math.min(rosterPage, rosterTotalPages - 1);
+    const rosterPageStart = rosterClampedPage * ROSTER_PAGE_SIZE;
+    const rosterPageEnd = Math.min(filtered.length, rosterPageStart + ROSTER_PAGE_SIZE);
+    const rosterVisiblePilots = filtered.slice(rosterPageStart, rosterPageEnd);
 
     const selectedTopTeammate = selectedPatternSignals.topTeammate;
     const selectedTopOpponent = selectedPatternSignals.topOpponent;
@@ -1485,10 +1442,13 @@ const PlayerHub: React.FC = () => {
                 pendingRosterCandidates={pendingRosterCandidates}
                 filtered={filtered}
                 rosterScrollRef={rosterScrollRef}
-                onRosterScroll={setRosterScrollTop}
-                rosterTotalHeight={rosterTotalHeight}
-                rosterVisibleOffsetY={rosterVisibleOffsetY}
                 rosterVisiblePilots={rosterVisiblePilots}
+                rosterPage={rosterClampedPage}
+                rosterTotalPages={rosterTotalPages}
+                rosterPageStart={rosterPageStart}
+                rosterPageEnd={rosterPageEnd}
+                rosterTotalCount={filtered.length}
+                onRosterPageChange={setRosterPage}
                 selectedPilot={selectedPilot}
                 setSelectedPilot={setSelectedPilot}
                 timeAgo={timeAgo}
