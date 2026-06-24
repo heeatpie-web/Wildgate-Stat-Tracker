@@ -1,4 +1,15 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.7.11": [
+    "Recover opponent names previously dropped during OCR over trailing platform glyphs",
+    "Ignore departure/spectator/match-starting UI text when detecting rosters",
+    "Smarter fuzzy roster matching with an Auto-merge tab and min-score slider",
+    "Rerun OCR now shows a confirmed-vs-reran review modal before applying, with clean replace (no duplicate names)",
+    "Bulk-rerun OCR across multiple selected matches",
+    "New History filters for Modifier, Hazard, and Artifact",
+    "Faster Players tab with instant favorite and note edits on large rosters",
+    "Auto performance-mode that follows the game",
+    "Import matches from video recordings"
+  ],
   "v3.7.10": [
     "Fix: OCR workbench UI freeze — O(n²) match history scan replaced with O(1) Set lookups, React.memo on candidate rows restored",
     "Fix: Analytics damage labels now correctly read 'dmg taken' throughout",
