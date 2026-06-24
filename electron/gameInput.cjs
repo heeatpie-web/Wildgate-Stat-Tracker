@@ -1230,6 +1230,7 @@ async function sendGameKeySequenceViaPowerShell(candidate, keySequence) {
 
 module.exports = {
   clearGameWindowCache,
+  fastCheckGameProcess,
   holdGameKeySequence,
   lookupGameWindowCandidate,
   lookupGameWindowGeometry,

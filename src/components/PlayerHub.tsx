@@ -723,13 +723,16 @@ const PlayerHub: React.FC = () => {
             }
             return {
                 name,
-                isFavorite: isRoster && favoritePilotNames.has(name),
+                // isFavorite / note are overlaid in a cheap pass below so toggling a
+                // favorite or editing a note does NOT recompute the whole roster
+                // aggregation (the prior cause of multi-second player-management lag).
+                isFavorite: false,
                 isRoster,
                 isTrackedOnly,
                 isDetected,
                 needsReview: isDetected || isTrackedOnly || roleConflictMatchIds.length > 0,
                 rosterMeta,
-                note: isRoster ? (pilotNotes[rosterName] || '') : '',
+                note: '',
                 asTeammate: encounterSnapshot?.asTeammate || null,
                 asOpponent: encounterSnapshot?.asOpponent || null,
                 totalEncounters,
@@ -745,7 +748,6 @@ const PlayerHub: React.FC = () => {
                 profileIds,
             } satisfies PlayerDetail;
         }).filter(Boolean) as PlayerDetail[];
-        const enrichedPilotsByName = new Map(enrichedPilots.map((pilot) => [pilot.name, pilot]));
         if (IS_DEV_BUILD) {
             Logger.debug('PlayerHub', 'Derived roster model', {
                 durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
@@ -756,14 +758,11 @@ const PlayerHub: React.FC = () => {
         }
         return {
             enrichedPilots,
-            enrichedPilotsByName,
         };
     }, [
         encounterSnapshotsByPilot,
-        favoritePilotNames,
         panelMode,
         pendingRosterCandidates.length,
-        pilotNotes,
         playerProfiles,
         rosterEntryMeta,
         allTrackedPilots,
@@ -771,7 +770,19 @@ const PlayerHub: React.FC = () => {
         rosterNameSet,
         trackedProfilesByPilot,
     ]);
-    const enrichedPilots = rosterModel.enrichedPilots;
+    // Cheap overlay: apply favorite + note state without recomputing the heavy
+    // per-pilot aggregation above. Only roster pilots can be favorited / noted.
+    const enrichedPilots = useMemo(() => (
+        rosterModel.enrichedPilots.map((pilot) => (
+            pilot.isRoster
+                ? { ...pilot, isFavorite: favoritePilotNames.has(pilot.name), note: pilotNotes[pilot.name] || '' }
+                : pilot
+        ))
+    ), [rosterModel.enrichedPilots, favoritePilotNames, pilotNotes]);
+    const enrichedPilotsByName = useMemo(
+        () => new Map(enrichedPilots.map((pilot) => [pilot.name, pilot])),
+        [enrichedPilots]
+    );
     useEffect(() => {
         if (!playerHubFocusName) return;
         const focusKey = normalizeNameKey(playerHubFocusName);
@@ -828,8 +839,8 @@ const PlayerHub: React.FC = () => {
 
     const selected = useMemo(() => {
         if (!selectedPilot) return null;
-        return rosterModel.enrichedPilotsByName.get(selectedPilot) || null;
-    }, [rosterModel.enrichedPilotsByName, selectedPilot]);
+        return enrichedPilotsByName.get(selectedPilot) || null;
+    }, [enrichedPilotsByName, selectedPilot]);
     const selectedStatusChips = selected ? getPlayerStatusChips(selected) : [];
     const roleConflictWorkbenchItems = useMemo(() => {
         const matchesById = new Map(

@@ -61,6 +61,12 @@ export const TIPS_BY_VIEW: Record<AppView, string[]> = {
     'If confidence drops after a tweak, roll back and isolate one variable at a time.',
     'Capture before/after OCR outputs when testing parser adjustments.',
   ],
+  'video-import': [
+    'Import recordings that include the lobby and result screens for best OCR coverage.',
+    'Processing a 30-min video takes roughly 10 minutes — you can switch views while it runs.',
+    'Each found match opens in the Wizard so you can fill in kills and hero before saving.',
+    'If no matches are detected, verify the recording includes an end-of-match result screen.',
+  ],
 };
 
 export const getTipsForView = (view: AppView, includeDevTips = true): string[] => {

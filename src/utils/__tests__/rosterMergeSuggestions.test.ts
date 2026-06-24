@@ -23,6 +23,33 @@ describe('rosterMergeSuggestions', () => {
     expect(groups[0].pairKeys).toHaveLength(3);
   });
 
+  it('surfaces extremely-similar pairs as an auto-tier group instead of dropping them', () => {
+    // NB: avoid names that collapse to the same normalized key under OCR digit
+    // folding (e.g. 'PilotOne'/'Pilot0ne' both normalize to 'pilotone', so no
+    // merge pair forms). 'Alixer'/'Alixerr' stay distinct and score ~87.
+    const groups = buildRosterMergeSuggestionGroups({
+      pilotRegistry: ['Alixer', 'Alixerr', 'OtherPilot'],
+      autoMergeThresholdPct: 83,
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].tier).toBe('auto');
+    expect(groups[0].score).toBeGreaterThanOrEqual(83);
+    expect(new Set([groups[0].canonicalName, ...groups[0].variants.map((v) => v.name)])).toEqual(
+      new Set(['Alixer', 'Alixerr'])
+    );
+  });
+
+  it('tags below-threshold groups as review tier', () => {
+    const groups = buildRosterMergeSuggestionGroups({
+      pilotRegistry: ['Ace Crew', 'Ace Pilot', 'Ace Squad', 'OtherPilot'],
+      autoMergeThresholdPct: 83,
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].tier).toBe('review');
+  });
+
   it('excludes dismissed or already-aliased merge pairs', () => {
     const dismissedPairKey = buildRosterMergePairKey('PilotOne', 'Pilot0ne');
     const groups = buildRosterMergeSuggestionGroups({

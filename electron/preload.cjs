@@ -37,7 +37,12 @@ const INVOKE_CHANNELS = [
   'send-virtual-gamepad-state',
   'send-virtual-gamepad-state-sequence',
   'test-gamepad-input',
+  'video-import-pick-file',
+  'video-import-start',
+  'video-import-cancel',
 ];
+
+
 
 const SEND_CHANNELS = [
   'start-log-monitoring', 'stop-log-monitoring',
@@ -51,6 +56,7 @@ const SEND_CHANNELS = [
   'result-monitor-start', 'result-monitor-stop',
   'result-flash-start', 'result-flash-stop',
   'result-text-start', 'result-text-stop',
+  'tactical-map-monitor-start', 'tactical-map-monitor-stop',
 ];
 
 const RECEIVE_CHANNELS = [
@@ -64,6 +70,9 @@ const RECEIVE_CHANNELS = [
   'telemetry-prune-needed',
   'result-flash-detected', 'result-flash-resolved', 'result-flash-debug',
   'result-text-detected', 'result-text-debug',
+  'video-import-progress',
+  'tactical-map-detected',
+  'game-process-status',
 ];
 
 contextBridge.exposeInMainWorld('electronAPI', {

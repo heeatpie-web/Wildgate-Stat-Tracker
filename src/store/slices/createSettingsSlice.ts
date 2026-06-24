@@ -285,6 +285,8 @@ export interface SettingsSlice {
   colorblindMode: ColorblindMode;
   disableAnimations: boolean;
   performanceMode: boolean;
+  /** When true, performance mode auto-follows game-exe detection (manual toggle overrides until next transition). */
+  autoPerformanceMode: boolean;
   showSmartCaptureInHeader: boolean;
   tipsEnabled: boolean;
   tipLibraryIndex: number;
@@ -352,6 +354,7 @@ export interface SettingsSlice {
   setColorblindMode: (mode: ColorblindMode) => void;
   setDisableAnimations: (disabled: boolean) => void;
   setPerformanceMode: (enabled: boolean) => void;
+  setAutoPerformanceMode: (enabled: boolean) => void;
   setShowSmartCaptureInHeader: (enabled: boolean) => void;
   setTipsEnabled: (enabled: boolean) => void;
   setTipLibraryIndex: (index: number) => void;
@@ -423,6 +426,9 @@ export interface SettingsSlice {
 
   pregameAdviceEnabled: boolean;
   setPregameAdviceEnabled: (enabled: boolean) => void;
+
+  tacticalMapAutoCapture: boolean;
+  setTacticalMapAutoCapture: (enabled: boolean) => void;
 }
 
 const defaultPreloadStats = (): Record<DashboardPreloadView, DashboardPreloadStat> => ({
@@ -443,6 +449,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   colorblindMode: 'none',
   disableAnimations: false,
   performanceMode: false,
+  autoPerformanceMode: true,
   showSmartCaptureInHeader: true,
   tipsEnabled: true,
   tipLibraryIndex: 0,
@@ -513,6 +520,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   tutorialCompleted: false,
   fullAutoEnabled: true,
   pregameAdviceEnabled: true,
+  tacticalMapAutoCapture: false,
 
   setActiveMode: (mode) => set({ activeMode: mode }),
   setActiveUser: (user) => set({ activeUser: user }),
@@ -523,6 +531,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   setColorblindMode: (mode) => set({ colorblindMode: mode }),
   setDisableAnimations: (disabled) => set({ disableAnimations: disabled }),
   setPerformanceMode: (enabled) => set({ performanceMode: enabled, disableAnimations: enabled ? true : false }),
+  setAutoPerformanceMode: (enabled) => set({ autoPerformanceMode: enabled }),
   setShowSmartCaptureInHeader: (enabled) => set({ showSmartCaptureInHeader: enabled }),
   setTipsEnabled: (enabled) => set({ tipsEnabled: enabled }),
   setTipLibraryIndex: (index) => set({ tipLibraryIndex: Math.max(0, Math.floor(Number(index) || 0)) }),
@@ -734,4 +743,5 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   setTutorialCompleted: (completed) => set({ tutorialCompleted: completed }),
   setFullAutoEnabled: (enabled) => set({ fullAutoEnabled: Boolean(enabled) }),
   setPregameAdviceEnabled: (enabled) => set({ pregameAdviceEnabled: Boolean(enabled) }),
+  setTacticalMapAutoCapture: (enabled) => set({ tacticalMapAutoCapture: Boolean(enabled) }),
 });

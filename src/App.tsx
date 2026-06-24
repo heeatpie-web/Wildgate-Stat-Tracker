@@ -5,10 +5,11 @@ import { useGameData } from './providers/GameDataProvider';
 import { useUserPreferences } from './providers/UserPreferencesProvider';
 import { useLogMonitor } from './hooks/useLogMonitor';
 import {
-    useResultMonitor,
-    type ResultFlashMonitorDebugSnapshot,
+    useResultMonitor,    type ResultFlashMonitorDebugSnapshot,
     type ResultTextDetectionPayload,
 } from './hooks/useResultMonitor';
+import { useTacticalMapMonitor } from './hooks/useTacticalMapMonitor';
+import { useAutoPerformanceMode } from './hooks/useAutoPerformanceMode';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useFocusTrap } from './hooks/useFocusTrap';
 import { useMatchSubmission } from './hooks/useMatchSubmission';
@@ -119,10 +120,11 @@ const ResetConfirmModal = React.lazy(() => import('./components/ResetConfirmModa
 const Wizard = React.lazy(() => import('./components/Wizard').then((m) => ({ default: m.Wizard })));
 const ReviewQueueModal = React.lazy(() => import('./components/ReviewQueueModal').then((m) => ({ default: m.ReviewQueueModal })));
 const MatchRecordingPage = React.lazy(() => import('./components/MatchRecordingPage').then(m => ({ default: m.MatchRecordingPage })));
+const VideoImportView = React.lazy(() => import('./components/VideoImport/VideoImportView').then(m => ({ default: m.VideoImportView })));
 import type { AppView } from './store/slices/createUISlice';
 const APP_VIEW_ORDER: AppView[] = IS_DEV_BUILD
-    ? ['recording', 'analytics', 'history', 'smart-captures', 'players', 'id-mapper', 'dev-ocr']
-    : ['recording', 'analytics', 'history', 'smart-captures', 'players', 'id-mapper'];
+    ? ['recording', 'analytics', 'history', 'smart-captures', 'players', 'id-mapper', 'video-import', 'dev-ocr']
+    : ['recording', 'analytics', 'history', 'smart-captures', 'players', 'id-mapper', 'video-import'];
 import type { OCRExtractedData } from './utils/ocr/ocrTypes';
 import { useAppStore } from './store/useAppStore';
 import { getElectronAPI } from './utils/electronAPI';
@@ -679,6 +681,7 @@ const App: React.FC = () => {
         players: activeView === 'players',
         'id-mapper': activeView === 'id-mapper',
         'dev-ocr': activeView === 'dev-ocr',
+        'video-import': activeView === 'video-import',
     }));
 
     const changelogDialogTitleId = React.useId();
@@ -1122,6 +1125,12 @@ const App: React.FC = () => {
     }, []);
 
     const { logFeed, logStatus } = useLogMonitor();
+
+    // Auto performance-mode: follow game-exe detection (manual toggle overrides
+    // until the next game start/stop transition). Falls back to match-start when
+    // the telemetry lifecycle reports an active match.
+    const autoPerfMatchInProgress = useAppStore((s) => s.isMatchInProgress);
+    useAutoPerformanceMode({ matchStartFallback: autoPerfMatchInProgress });
     const {
         discardTelemetryDraft,
         autoFinalizeResultScreenCapture,
@@ -3921,6 +3930,17 @@ const App: React.FC = () => {
         onTextDetected: handleResultTextDetected,
     });
 
+    const tacticalMapAutoCapture = useAppStore(s => s.tacticalMapAutoCapture);
+    const isMatchInProgressForMonitor = useAppStore(s => s.isMatchInProgress);
+
+    useTacticalMapMonitor({
+        enabled: tacticalMapAutoCapture,
+        isMatchInProgress: !!isMatchInProgressForMonitor,
+        onDetected: ({ confidence }) => {
+            setToast({ message: `Tactical map detected (${confidence}% confidence) — capturing…`, type: 'info' });
+        },
+    });
+
     const handleApplyOCRData = useCallback((
         data: OCRExtractedData,
         gateResult?: FinalMatchResult | null,
@@ -4624,6 +4644,12 @@ const App: React.FC = () => {
                 return (
                     <div className="h-full min-h-0 overflow-y-auto custom-scrollbar p-3">
                         <IdMapper />
+                    </div>
+                );
+            case 'video-import':
+                return (
+                    <div className="h-full min-h-0 overflow-y-auto custom-scrollbar p-3">
+                        <VideoImportView />
                     </div>
                 );
             case 'dev-ocr':

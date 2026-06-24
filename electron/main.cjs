@@ -27,10 +27,12 @@ const { extractResultScreen } = require('./resultScreenExtractor.cjs');
 const { cropImageBuffer, decodeImageBase64 } = require('./resultCaptureHelper.cjs');
 const { startResultMonitor, stopResultMonitor } = require('./resultCombinedMonitor.cjs');
 const { buildAutoCaptureRequestFromStateSnapshot } = require('./autoCaptureHotkeyState.cjs');
-const { clearGameWindowCache, holdGameKeySequence, lookupGameWindowCandidate, lookupGameWindowGeometry, sendGameKeySequence, setPersistentPSRunner, validateGameInputRuntime } = require('./gameInput.cjs');
+const { clearGameWindowCache, fastCheckGameProcess, holdGameKeySequence, lookupGameWindowCandidate, lookupGameWindowGeometry, sendGameKeySequence, setPersistentPSRunner, validateGameInputRuntime } = require('./gameInput.cjs');
 const gamepadInput = require('./gamepadInput.cjs');
 const { getGamepadActionsForStep } = require('./gamepadSequences.cjs');
 const { runPSWithEnv, startPersistentPS, killPersistentPS } = require('./persistentPowerShell.cjs');
+const { processVideoFile } = require('./videoMatchProcessor.cjs');
+const { startTacticalMapMonitor, stopTacticalMapMonitor, isTacticalMapMonitorRunning } = require('./tacticalMapMonitor.cjs');
 if (process.platform === 'win32') {
   setPersistentPSRunner(runPSWithEnv);
   gamepadInput.setPSRunner(runPSWithEnv);
@@ -106,8 +108,14 @@ const telemetryArchiveTokenRegistry = createScopedTokenRegistry({
   ttlMs: Number(process.env.WILDGATE_ARCHIVE_TOKEN_TTL_MS || (5 * 60 * 1000)),
   maxEntriesPerScope: Number(process.env.WILDGATE_ARCHIVE_TOKEN_MAX || 5000),
 });
-const TELEMETRY_RETENTION_MAX_BYTES = Number(process.env.WILDGATE_TELEMETRY_MAX_BYTES || (500 * 1024 * 1024));
-const TELEMETRY_RETENTION_MAX_AGE_MS = Number(process.env.WILDGATE_TELEMETRY_MAX_AGE_MS || (90 * 24 * 60 * 60 * 1000));
+const TELEMETRY_RETENTION_MAX_BYTES = Number(process.env.WILDGATE_TELEMETRY_MAX_BYTES || (4 * 1024 * 1024 * 1024));
+const TELEMETRY_RETENTION_MAX_AGE_MS = Number(process.env.WILDGATE_TELEMETRY_MAX_AGE_MS || (3650 * 24 * 60 * 60 * 1000));
+// The age rule alone must NOT nag the user when the data is trivially small. Only
+// surface the prune prompt for age-expired data once the store is meaningfully large.
+// (Fixes: thousands of entries totalling <1MB repeatedly prompting for cleanup.)
+const TELEMETRY_RETENTION_AGE_PROMPT_MIN_BYTES = Number(
+  process.env.WILDGATE_TELEMETRY_AGE_PROMPT_MIN_BYTES || (256 * 1024 * 1024)
+);
 const TELEMETRY_RETENTION_PROMPT_DISABLED = process.env.WILDGATE_TELEMETRY_DISABLE_RETENTION_PROMPT === '1';
 const TELEMETRY_HISTORY_NDJSON_PATH = path.join(USER_DATA_ROOT, 'telemetry_permanent_history.ndjson');
 const TELEMETRY_HISTORY_LEGACY_PATH = path.join(USER_DATA_ROOT, 'telemetry_permanent_history.json');
@@ -418,7 +426,10 @@ async function getTelemetryRetentionStatusInternal() {
   const cutoffMs = Date.now() - TELEMETRY_RETENTION_MAX_AGE_MS;
   const exceedsAge = oldestTimestampMs != null ? oldestTimestampMs < cutoffMs : false;
   const exceedsSize = sizeBytes > TELEMETRY_RETENTION_MAX_BYTES;
-  const exceedsLimits = exceedsAge || exceedsSize;
+  // Size always warrants a prompt. Age only warrants one once the store is large
+  // enough to matter — small-but-old telemetry should never nag the user.
+  const exceedsLimits = exceedsSize
+    || (exceedsAge && sizeBytes > TELEMETRY_RETENTION_AGE_PROMPT_MIN_BYTES);
   const preview = buildTelemetryPrunePlan(entries);
 
   return {
@@ -2262,6 +2273,82 @@ ipcMain.handle('rerun-ocr-multi', async (event, { imagePaths, activeUser, ocrMod
   }
 });
 
+// Video Import Handlers
+// Security: the file path must come from our own dialog, not from the renderer.
+// We store it in a module-level variable and only accept it back in video-import-start.
+let _pendingVideoImportPath = null;
+let _currentVideoJob = null;
+
+ipcMain.handle('video-import-pick-file', async (event) => {
+  try {
+    const { dialog } = require('electron');
+    const result = await dialog.showOpenDialog({
+      title: 'Select Gameplay Recording',
+      filters: [{ name: 'Video Files', extensions: ['mp4', 'mkv', 'mov', 'avi', 'webm'] }],
+      properties: ['openFile'],
+    });
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+    _pendingVideoImportPath = result.filePaths[0];
+    return { success: true, filePath: _pendingVideoImportPath };
+  } catch (e) {
+    return { success: false, error: e.message || 'Dialog failed' };
+  }
+});
+
+ipcMain.handle('video-import-start', async (event, { activeUser, ocrMode, ocrRegions } = {}) => {
+  try {
+    if (!_pendingVideoImportPath) {
+      return errorResult(IpcErrorCode.INVALID_INPUT, 'No video file selected. Call video-import-pick-file first.');
+    }
+    const videoPath = _pendingVideoImportPath;
+    _pendingVideoImportPath = null;
+
+    const ext = path.extname(videoPath).toLowerCase().replace('.', '');
+    const allowedVideoExts = ['mp4', 'mkv', 'mov', 'avi', 'webm'];
+    if (!allowedVideoExts.includes(ext)) {
+      return errorResult(IpcErrorCode.INVALID_INPUT, 'File type not allowed.');
+    }
+    if (!fs.existsSync(videoPath)) {
+      return errorResult(IpcErrorCode.INVALID_INPUT, 'File not found.');
+    }
+
+    const signal = { cancelled: false };
+    _currentVideoJob = { cancel: () => { signal.cancelled = true; } };
+    const webContents = event.sender;
+
+    // Run async — returns immediately; progress arrives via video-import-progress channel
+    processVideoFile(videoPath, {
+      activeUser: activeUser || null,
+      ocrMode: ocrMode || 'local',
+      ocrRegions: ocrRegions || null,
+      webContents,
+      signal,
+    }).catch((e) => {
+      try {
+        if (!webContents.isDestroyed()) {
+          webContents.send('video-import-progress', { type: 'error', message: e.message || 'Processing failed' });
+        }
+      } catch (_) {}
+    }).finally(() => {
+      _currentVideoJob = null;
+    });
+
+    return { success: true };
+  } catch (e) {
+    return errorResult(IpcErrorCode.INTERNAL_ERROR, e.message || 'Failed to start video import');
+  }
+});
+
+ipcMain.handle('video-import-cancel', async () => {
+  if (_currentVideoJob) {
+    _currentVideoJob.cancel();
+    _currentVideoJob = null;
+  }
+  return { success: true };
+});
+
 // Log Persistence Handler
 ipcMain.handle('persist-logs', async (event, logContent) => {
   try {
@@ -3330,6 +3417,39 @@ app.whenReady().then(async () => {
     };
     _warmupGameWindow();
     setInterval(_warmupGameWindow, 25_000); // Every 25s — keep cache warm inside the 30s TTL
+
+    // Auto performance-mode driver: poll whether the game exe is running and tell
+    // the renderer on every transition. The renderer edge-applies performance mode
+    // (ON while the game runs, OFF otherwise); a manual toggle wins until the next
+    // transition. See useAutoPerformanceMode in the renderer.
+    let _lastGameRunning = null;
+    let _gameStatusPollInFlight = false;
+    const _pollGameProcessStatus = async () => {
+      if (_gameStatusPollInFlight) return;
+      _gameStatusPollInFlight = true;
+      try {
+        const status = await fastCheckGameProcess(GAME_WINDOW_PROCESS_NAMES);
+        const running = Boolean(status && status.running);
+        if (running !== _lastGameRunning) {
+          _lastGameRunning = running;
+          console.log(`[AutoPerf] game process ${running ? 'detected' : 'not running'} (${status?.processName || GAME_WINDOW_PROCESS_NAMES.join(',') || 'none'})`);
+          if (win && !win.isDestroyed()) {
+            win.webContents.send('game-process-status', {
+              running,
+              processName: running ? (status.processName || '') : '',
+              pid: running ? (status.pid || null) : null,
+              detectedAt: Date.now(),
+            });
+          }
+        }
+      } catch (error) {
+        console.warn('[AutoPerf] game process poll failed:', error?.message || error);
+      } finally {
+        _gameStatusPollInFlight = false;
+      }
+    };
+    _pollGameProcessStatus();
+    setInterval(_pollGameProcessStatus, 5_000); // Every 5s — fast enough for match-start latency
   }
 
   // Legacy builds could accumulate massive artifact bundle copies in Documents.
@@ -4309,6 +4429,63 @@ ipcMain.on('result-monitor-start', (event, config = {}) => {
 ipcMain.on('result-monitor-stop', () => {
     console.log('[ResultMonitor] Stopping combined result monitor');
     stopResultMonitor();
+});
+
+ipcMain.on('tactical-map-monitor-start', (_event) => {
+  if (isTacticalMapMonitorRunning()) return;
+  console.log('[TacticalMapMonitor] Starting');
+  startTacticalMapMonitor({
+    onDetected: ({ confidence, detectedAt }) => {
+      // Notify renderer for toast
+      const liveWin = ensureMainWindow();
+      if (liveWin && !liveWin.isDestroyed()) {
+        liveWin.webContents.send('tactical-map-detected', { confidence, detectedAt });
+      }
+      // Guard: coordinator already running
+      if (typeof autoCaptureCoordinator.isBusy === 'function' && autoCaptureCoordinator.isBusy()) {
+        console.log('[TacticalMapMonitor] Suppressed: auto-capture busy');
+        return;
+      }
+      // Guard: F10 start already in flight
+      if (autoCaptureHotkeyStartInFlight) {
+        console.log('[TacticalMapMonitor] Suppressed: start in flight');
+        return;
+      }
+      // Guard: renderer state synced
+      if (!latestAutoCaptureHotkeyState) {
+        console.warn('[TacticalMapMonitor] Suppressed: no renderer state');
+        return;
+      }
+      // Guard: match active
+      const snap = latestAutoCaptureHotkeyState;
+      const isMatchActive = !!snap.isMatchInProgress
+        || ['loading', 'pregame', 'live'].includes(String(snap.telemetryLifecycleStage || '').toLowerCase());
+      if (!isMatchActive) {
+        console.log('[TacticalMapMonitor] Suppressed: match not in progress');
+        return;
+      }
+      // Guard: snapshot freshness
+      const stateAgeMs = latestAutoCaptureHotkeyStateAt > 0 ? Date.now() - latestAutoCaptureHotkeyStateAt : null;
+      if (isAutoCaptureHotkeySnapshotStale(stateAgeMs)) {
+        console.warn(`[TacticalMapMonitor] Suppressed: stale snapshot ageMs=${stateAgeMs}`);
+        return;
+      }
+      // Fire — same path as F10
+      console.log(`[TacticalMapMonitor] Map detected (${confidence}%) — firing auto-capture`);
+      autoCaptureHotkeyStartInFlight = true;
+      void startAutoCaptureFromHotkey(snap, { source: 'tactical-map-auto-detect', snapshotAgeMs: stateAgeMs }).finally(() => {
+        autoCaptureHotkeyStartInFlight = false;
+      });
+    },
+    onError: (err) => {
+      console.warn('[TacticalMapMonitor] Poll error:', err?.message || String(err));
+    },
+  });
+});
+
+ipcMain.on('tactical-map-monitor-stop', () => {
+  console.log('[TacticalMapMonitor] Stopping');
+  stopTacticalMapMonitor();
 });
 
 ipcMain.handle('capture-result-screen-region', async (_event, request = {}) => {

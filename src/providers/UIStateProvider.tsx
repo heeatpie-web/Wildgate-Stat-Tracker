@@ -120,8 +120,8 @@ interface UIStateContextType {
     setWizardInitialTab: (tab: 'result' | 'ocr' | null) => void;
     devMode: boolean;
     setDevMode: (enabled: boolean) => void;
-    activeView: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'id-mapper' | 'history' | 'dev-ocr';
-    setActiveView: (view: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'id-mapper' | 'history' | 'dev-ocr') => void;
+    activeView: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'id-mapper' | 'history' | 'dev-ocr' | 'video-import';
+    setActiveView: (view: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'id-mapper' | 'history' | 'dev-ocr' | 'video-import') => void;
     playerHubFocusName: string | null;
     setPlayerHubFocusName: (name: string | null) => void;
     hiddenForScan: boolean;

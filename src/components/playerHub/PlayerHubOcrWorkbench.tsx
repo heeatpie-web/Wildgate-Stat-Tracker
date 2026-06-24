@@ -55,7 +55,7 @@ export interface PlayerHubOcrWorkbenchProps {
     isRerunningOcr?: boolean;
 }
 
-type WorkbenchTab = 'candidates' | 'conflicts' | 'merges';
+type WorkbenchTab = 'candidates' | 'conflicts' | 'merges' | 'auto-merges';
 
 const pillStyle = (active: boolean, color?: 'danger' | 'warning') => {
     if (active) {
@@ -369,10 +369,23 @@ export const PlayerHubOcrWorkbench: FC<PlayerHubOcrWorkbenchProps> = ({
         '--ocr-threshold-progress': `${batchThresholdProgress}%`,
     } as React.CSSProperties;
 
+    // Partition merge groups by confidence tier. 'review' groups need the user to
+    // confirm; 'auto' groups are high-confidence (>= the auto-merge threshold) and
+    // get their own tab so the user can review/undo what auto-merging would apply.
+    const reviewMergeGroups = useMemo(
+        () => possibleMergeGroups.filter((group) => group.tier !== 'auto'),
+        [possibleMergeGroups]
+    );
+    const autoMergeGroups = useMemo(
+        () => possibleMergeGroups.filter((group) => group.tier === 'auto'),
+        [possibleMergeGroups]
+    );
+
     const tabs: { id: WorkbenchTab; label: string; count: number; color?: 'danger' | 'warning' }[] = [
         { id: 'candidates', label: 'Candidates', count: pendingRosterCandidates.length },
         { id: 'conflicts', label: 'Conflicts', count: roleConflictWorkbenchItems.length, color: 'danger' },
-        { id: 'merges', label: 'Merge Suggestions', count: possibleMergeGroups.length, color: 'warning' },
+        { id: 'merges', label: 'Merge Suggestions', count: reviewMergeGroups.length, color: 'warning' },
+        { id: 'auto-merges', label: 'Auto-merge', count: autoMergeGroups.length },
     ];
 
     return (
@@ -634,7 +647,7 @@ export const PlayerHubOcrWorkbench: FC<PlayerHubOcrWorkbenchProps> = ({
                 {/* Merge suggestions tab */}
                 {activeTab === 'merges' && (
                     <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
-                        {possibleMergeGroups.length === 0 ? (
+                        {reviewMergeGroups.length === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center text-md-sys-on-surface/40">
                                 <Merge size={28} className="mb-2 opacity-40" />
                                 <span className="text-label-sm font-semibold">No merge suggestions</span>
@@ -645,7 +658,7 @@ export const PlayerHubOcrWorkbench: FC<PlayerHubOcrWorkbenchProps> = ({
                                 <p className="text-label-xs text-md-sys-on-surface/50">
                                     These roster entries may represent the same player. Review and merge duplicates to consolidate encounter history.
                                 </p>
-                                {possibleMergeGroups.map((group) => (
+                                {reviewMergeGroups.map((group) => (
                                     <div key={group.pairKeys.join('|')} className="rounded-card border border-md-sys-outline/10 overflow-hidden" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
                                         <div className="px-4 py-3 border-b border-md-sys-outline/[0.06]">
                                             <div className="flex items-start justify-between gap-2">
@@ -679,6 +692,74 @@ export const PlayerHubOcrWorkbench: FC<PlayerHubOcrWorkbenchProps> = ({
                                                 aria-label={`Merge into ${group.canonicalDisplayName}`}
                                             >
                                                 Merge
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => onDismissMergeSuggestionGroup(group)}
+                                                className="flex-1 h-8 rounded-control text-label-xs font-semibold border border-md-sys-outline/10 text-md-sys-on-surface/55 hover:bg-md-sys-on-surface/[0.06] transition-colors"
+                                                style={{ background: 'var(--md-sys-color-surface-container)' }}
+                                                aria-label={`Dismiss merge suggestion for ${group.canonicalDisplayName}`}
+                                            >
+                                                Dismiss
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Auto-merge tab — high-confidence groups (>= the auto-merge threshold).
+                    Surfaced here so near-identical names are never silently lost and the
+                    user can review / apply / undo them. */}
+                {activeTab === 'auto-merges' && (
+                    <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+                        {autoMergeGroups.length === 0 ? (
+                            <div className="h-full flex flex-col items-center justify-center text-md-sys-on-surface/40">
+                                <Merge size={28} className="mb-2 opacity-40" />
+                                <span className="text-label-sm font-semibold">No high-confidence merges</span>
+                                <span className="text-label-xs mt-1 opacity-70">Nothing scored above the auto-merge threshold</span>
+                            </div>
+                        ) : (
+                            <div className="p-4 space-y-3">
+                                <p className="text-label-xs text-md-sys-on-surface/50">
+                                    These roster entries are near-identical (at or above the auto-merge threshold). Apply to consolidate, or dismiss to keep them separate.
+                                </p>
+                                {autoMergeGroups.map((group) => (
+                                    <div key={group.pairKeys.join('|')} className="rounded-card border border-md-sys-primary/25 overflow-hidden" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
+                                        <div className="px-4 py-3 border-b border-md-sys-outline/[0.06]">
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="min-w-0">
+                                                    <div className="text-label-sm font-semibold text-md-sys-on-surface truncate">
+                                                        Keep &ldquo;{group.canonicalDisplayName}&rdquo;
+                                                    </div>
+                                                    <div className="text-label-xs text-md-sys-on-surface/50 mt-0.5">
+                                                        {group.variants.length + 1} names · {Math.round(group.score)}% similarity · high confidence
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="mt-2 flex flex-wrap gap-1.5">
+                                                {group.variants.map((variant) => (
+                                                    <span
+                                                        key={`${group.canonicalName}-${variant.name}`}
+                                                        className="px-2 py-1 rounded-control text-label-xs font-medium border border-md-sys-outline/[0.08] text-md-sys-on-surface/65"
+                                                        style={{ background: 'var(--md-sys-color-surface-container)' }}
+                                                    >
+                                                        {variant.displayName}
+                                                        <span className="ml-1 opacity-50">{Math.round(variant.score)}%</span>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="px-4 py-3 flex gap-1.5">
+                                            <button
+                                                type="button"
+                                                onClick={() => onMergeSuggestionGroup(group)}
+                                                className="flex-1 h-8 rounded-control text-label-xs font-semibold border border-md-sys-primary/30 bg-md-sys-primary/10 text-md-sys-primary hover:bg-md-sys-primary/15 transition-colors"
+                                                aria-label={`Apply merge into ${group.canonicalDisplayName}`}
+                                            >
+                                                Apply
                                             </button>
                                             <button
                                                 type="button"

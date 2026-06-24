@@ -12,11 +12,13 @@ import { useGameData } from '../providers/GameDataProvider';
 import { LocalImage } from './LocalImage';
 import { useUIState } from '../providers/UIStateProvider';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
-import { getMatchArtifactsStructured, rerunOCROnArtifact } from '../utils/artifactService';
+import { getMatchArtifactsStructured } from '../utils/artifactService';
+import { rerunMatchArtifacts } from '../utils/ocr/rerunMatchArtifacts';
+import { RerunReviewModal, type RerunProposal } from './RerunReviewModal';
 import { runtimeConfig } from '../config/runtimeConfig';
 import { useAppStore } from '../store/useAppStore';
 import { Button } from './ui';
-import { removeMatchArtifactsThenDelete } from '../hooks/useMatchSubmission';
+import { removeMatchArtifactsThenDelete, buildSilentBackgroundOcrMatch } from '../hooks/useMatchSubmission';
 
 interface HistoryTableProps {
     isActive?: boolean;
@@ -63,11 +65,14 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
 
     const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
     const [bulkOcrBusy, setBulkOcrBusy] = useState(false);
+    const [rerunProposals, setRerunProposals] = useState<RerunProposal[]>([]);
 
     const [filtersOpen, setFiltersOpen] = useState(false);
     const [filterResult, setFilterResult] = useState<'all' | 'Win' | 'Loss' | 'Draw' | 'Ongoing'>('all');
     const [filterShip, setFilterShip] = useState<string>('all');
     const [filterModifier, setFilterModifier] = useState<string>('all');
+    const [filterHazard, setFilterHazard] = useState<string>('all');
+    const [filterArtifact, setFilterArtifact] = useState<string>('all');
     const [filterDateFrom, setFilterDateFrom] = useState<string>('');
     const [filterDateTo, setFilterDateTo] = useState<string>('');
 
@@ -83,20 +88,36 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
         return Array.from(set).sort();
     }, [matches]);
 
+    const uniqueHazards = useMemo(() => {
+        const set = new Set<string>();
+        matches.forEach(m => (m.ocrDebug?.hazards || []).forEach(h => { const v = String(h || '').trim(); if (v) set.add(v); }));
+        return Array.from(set).sort();
+    }, [matches]);
+
+    const uniqueArtifacts = useMemo(() => {
+        const set = new Set<string>();
+        matches.forEach(m => { const a = String(m.artifactSource || '').trim(); if (a) set.add(a); });
+        return Array.from(set).sort();
+    }, [matches]);
+
     const activeFilterCount = useMemo(() => {
         let c = 0;
         if (filterResult !== 'all') c++;
         if (filterShip !== 'all') c++;
         if (filterModifier !== 'all') c++;
+        if (filterHazard !== 'all') c++;
+        if (filterArtifact !== 'all') c++;
         if (filterDateFrom) c++;
         if (filterDateTo) c++;
         return c;
-    }, [filterResult, filterShip, filterModifier, filterDateFrom, filterDateTo]);
+    }, [filterResult, filterShip, filterModifier, filterHazard, filterArtifact, filterDateFrom, filterDateTo]);
 
     const clearAllFilters = () => {
         setFilterResult('all');
         setFilterShip('all');
         setFilterModifier('all');
+        setFilterHazard('all');
+        setFilterArtifact('all');
         setFilterDateFrom('');
         setFilterDateTo('');
     };
@@ -126,6 +147,8 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
             if (filterResult !== 'all' && m.result !== filterResult) return false;
             if (filterShip !== 'all' && m.ship !== filterShip) return false;
             if (filterModifier !== 'all' && !(m.reachModifiers || []).includes(filterModifier)) return false;
+            if (filterHazard !== 'all' && !((m.ocrDebug?.hazards) || []).includes(filterHazard)) return false;
+            if (filterArtifact !== 'all' && String(m.artifactSource || '').trim() !== filterArtifact) return false;
             if (m.timestamp < fromTs || m.timestamp > toTs) return false;
 
             if (!searchTerm) return true;
@@ -143,7 +166,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                 (m.reachModifiers || []).some(r => r.toLowerCase().includes(term))
             );
         });
-    }, [matches, searchTerm, filterResult, filterShip, filterModifier, filterDateFrom, filterDateTo]);
+    }, [matches, searchTerm, filterResult, filterShip, filterModifier, filterHazard, filterArtifact, filterDateFrom, filterDateTo]);
 
     const sortedMatches = useMemo(() => {
         const sortFn = (a: Match, b: Match) => {
@@ -287,30 +310,55 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
         });
 
         let successCount = 0;
+        const proposals: RerunProposal[] = [];
         for (const matchId of selectedMatches) {
             try {
+                const match = matches.find((m) => m.id === matchId);
+                if (!match) continue;
                 const { imageFiles } = await getMatchArtifactsStructured(matchId);
                 const imagePaths = imageFiles.map(f => f.path);
                 if (imagePaths.length === 0) continue;
 
-                const results = await Promise.allSettled(
-                    imagePaths.map(p => rerunOCROnArtifact(p, activeUser || '', ocrMode, ocrRegions))
-                );
-                if (results.some(r => r.status === 'fulfilled')) successCount++;
+                // Rerun OCR across all of the match's artifacts. We build the clean-
+                // replace candidate (replaceExisting=true so a rerun overwrites stale
+                // OCR rather than accumulating duplicates) but do NOT apply it yet —
+                // the user reviews confirmed-vs-reran in the modal and chooses which
+                // to bring into the confirmed data.
+                const { mergedData, successfulCount } = await rerunMatchArtifacts({
+                    imagePaths,
+                    activeUser: activeUser || '',
+                    ocrMode,
+                    ocrRegions,
+                });
+                if (mergedData && successfulCount > 0) {
+                    const proposed = buildSilentBackgroundOcrMatch({
+                        match,
+                        combined: mergedData,
+                        activeUser: activeUser || '',
+                        replaceExisting: true,
+                    });
+                    proposals.push({ match, proposed });
+                    successCount++;
+                }
             } catch {
                 // skip failed
             }
         }
 
         setBulkOcrBusy(false);
+        if (proposals.length > 0) {
+            setRerunProposals(proposals);
+        }
         pushNotification({
-            message: `OCR rerun complete: ${successCount}/${selectedMatches.length} succeeded`,
-            type: successCount > 0 ? 'success' : 'error',
+            message: proposals.length > 0
+                ? `OCR rerun ready: review ${proposals.length}/${selectedMatches.length} match(es)`
+                : `OCR rerun produced no results (${successCount}/${selectedMatches.length})`,
+            type: proposals.length > 0 ? 'success' : 'error',
             source: 'history',
             durationMs: 10_000,
             deepLink: { type: 'openView', view: 'history' },
         });
-    }, [selectedMatches, bulkOcrBusy, activeUser, ocrMode, ocrRegions, pushNotification]);
+    }, [selectedMatches, bulkOcrBusy, activeUser, ocrMode, ocrRegions, matches, pushNotification]);
 
     const handleOpenNote = (match: Match) => {
         setEditingNoteMatch(match);
@@ -504,17 +552,45 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                                 </select>
                             </div>
                             <div className="flex flex-col gap-1">
-                                <label className="text-label-xs font-bold uppercase tracking-wider text-md-sys-on-surface/40">Hazard</label>
+                                <label className="text-label-xs font-bold uppercase tracking-wider text-md-sys-on-surface/40">Modifier</label>
                                 <select
                                     value={filterModifier}
                                     onChange={e => setFilterModifier(e.target.value)}
                                     className="px-2.5 py-1.5 rounded-lg text-label-sm font-semibold outline-none cursor-pointer border border-md-sys-outline/10 text-md-sys-on-surface"
                                     style={{ background: 'var(--md-sys-color-surface-container-high)' }}
                                 >
-                                    <option value="all">All Hazards</option>
+                                    <option value="all">All Modifiers</option>
                                     {uniqueModifiers.map(m => <option key={m} value={m}>{m}</option>)}
                                 </select>
                             </div>
+                            {uniqueHazards.length > 0 && (
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-label-xs font-bold uppercase tracking-wider text-md-sys-on-surface/40">Hazard</label>
+                                    <select
+                                        value={filterHazard}
+                                        onChange={e => setFilterHazard(e.target.value)}
+                                        className="px-2.5 py-1.5 rounded-lg text-label-sm font-semibold outline-none cursor-pointer border border-md-sys-outline/10 text-md-sys-on-surface"
+                                        style={{ background: 'var(--md-sys-color-surface-container-high)' }}
+                                    >
+                                        <option value="all">All Hazards</option>
+                                        {uniqueHazards.map(h => <option key={h} value={h}>{h}</option>)}
+                                    </select>
+                                </div>
+                            )}
+                            {uniqueArtifacts.length > 0 && (
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-label-xs font-bold uppercase tracking-wider text-md-sys-on-surface/40">Artifact</label>
+                                    <select
+                                        value={filterArtifact}
+                                        onChange={e => setFilterArtifact(e.target.value)}
+                                        className="px-2.5 py-1.5 rounded-lg text-label-sm font-semibold outline-none cursor-pointer border border-md-sys-outline/10 text-md-sys-on-surface"
+                                        style={{ background: 'var(--md-sys-color-surface-container-high)' }}
+                                    >
+                                        <option value="all">All Artifacts</option>
+                                        {uniqueArtifacts.map(a => <option key={a} value={a}>{a}</option>)}
+                                    </select>
+                                </div>
+                            )}
                             <div className="flex flex-col gap-1">
                                 <label className="text-label-xs font-bold uppercase tracking-wider text-md-sys-on-surface/40">From</label>
                                 <input
@@ -911,6 +987,16 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
             </div>
 
             {editingMatch && <EditMatchModal match={editingMatch} onClose={() => setEditingMatch(null)} onSave={(m) => { onEdit(m); setEditingMatch(null); }} />}
+
+            {/* ── Rerun OCR review (confirmed vs reran) ── */}
+            {rerunProposals.length > 0 && (
+                <RerunReviewModal
+                    proposals={rerunProposals}
+                    onApply={(proposed) => onEdit(proposed)}
+                    onClose={() => setRerunProposals([])}
+                    formatName={formatPlayerForDisplay}
+                />
+            )}
 
             {/* ── Bulk Delete Confirmation Dialog ── */}
             {bulkDeleteConfirm && createPortal(

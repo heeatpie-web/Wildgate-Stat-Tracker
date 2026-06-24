@@ -23,6 +23,7 @@ import { UISlice, createUISlice } from './slices/createUISlice';
 import { FormSlice, createFormSlice } from './slices/createFormSlice';
 import { MappingSlice, createMappingSlice } from './slices/createMappingSlice';
 import { SmartCapturesUIState, createSmartCapturesSlice } from './slices/createSmartCapturesSlice';
+import { VideoImportSlice, createVideoImportSlice } from './slices/createVideoImportSlice';
 import { StorageService } from '../utils/storage';
 import {
   compactAliasModel,
@@ -37,7 +38,7 @@ import { runtimeConfig } from '../config/runtimeConfig';
 import { CHARACTERS, SHIPS, normalizeShipName, type Match } from '../types';
 import { normalizeSharedUidMappings } from '../services/mappingContract';
 
-export type AppState = DataSlice & SettingsSlice & UISlice & SmartCapturesUIState & FormSlice & MappingSlice;
+export type AppState = DataSlice & SettingsSlice & UISlice & SmartCapturesUIState & FormSlice & MappingSlice & VideoImportSlice;
 
 let _hydrated = false;
 
@@ -269,6 +270,7 @@ const buildStorageDataFromState = (state: AppState) => ({
     colorblind: state.colorblindMode,
     disableAnimations: state.disableAnimations,
     performanceMode: state.performanceMode,
+    autoPerformanceMode: state.autoPerformanceMode,
     soundEnabled: state.soundEnabled,
     showSmartCaptureInHeader: state.showSmartCaptureInHeader,
     tipsEnabled: state.tipsEnabled,
@@ -310,6 +312,7 @@ const buildStorageDataFromState = (state: AppState) => ({
     virtualGamepadRepeatCount: state.virtualGamepadRepeatCount,
     autoPopulateRosterOnSave: state.autoPopulateRosterOnSave,
     fullAutoEnabled: state.fullAutoEnabled,
+    tacticalMapAutoCapture: state.tacticalMapAutoCapture,
     lockOcrTeams: state.lockOcrTeams,
     ocrEnhancedNameRecoveryEnabled: state.ocrEnhancedNameRecoveryEnabled,
     ocrNameRerouteThreshold: state.ocrNameRerouteThreshold,
@@ -448,6 +451,7 @@ const customStorage: PersistStorage<AppState> = {
           colorblindMode: settings.colorblind || 'none',
           disableAnimations: settings.disableAnimations || false,
           performanceMode: settings.performanceMode || false,
+          autoPerformanceMode: settings.autoPerformanceMode !== false,
           showSmartCaptureInHeader: settings.showSmartCaptureInHeader ?? true,
           tipsEnabled: settings.tipsEnabled ?? true,
           tipLibraryIndex: Number.isFinite(settings.tipLibraryIndex) ? Math.max(0, Math.floor(Number(settings.tipLibraryIndex))) : 0,
@@ -500,6 +504,7 @@ const customStorage: PersistStorage<AppState> = {
             : 1,
           autoPopulateRosterOnSave: settings.autoPopulateRosterOnSave ?? true,
           fullAutoEnabled: settings.fullAutoEnabled === false ? false : true,
+          tacticalMapAutoCapture: settings.tacticalMapAutoCapture === true,
           lockOcrTeams: settings.lockOcrTeams || false,
           ocrEnhancedNameRecoveryEnabled: settings.ocrEnhancedNameRecoveryEnabled ?? true,
           ocrNameRerouteThreshold: normalizeOcrNameRerouteThreshold(settings.ocrNameRerouteThreshold),
@@ -615,6 +620,7 @@ export const useAppStore = create<AppState>()(
       ...createSmartCapturesSlice(...a),
       ...createFormSlice(...a),
       ...createMappingSlice(...a),
+      ...createVideoImportSlice(...a),
     }),
     {
       name: 'wg_db',
@@ -640,6 +646,7 @@ export const useAppStore = create<AppState>()(
         colorblindMode: state.colorblindMode,
         disableAnimations: state.disableAnimations,
         performanceMode: state.performanceMode,
+        autoPerformanceMode: state.autoPerformanceMode,
         tipsEnabled: state.tipsEnabled,
         tipLibraryIndex: state.tipLibraryIndex,
         soundEnabled: state.soundEnabled,

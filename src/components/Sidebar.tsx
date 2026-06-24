@@ -14,6 +14,7 @@ import {
     MinusCircle,
     HelpCircle,
     UserPlus,
+    Film,
 } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
 import { useGameData } from '../providers/GameDataProvider';
@@ -22,7 +23,7 @@ import { countOpenSmartCaptureWorkQueueMatches } from './smart-captures/smartCap
 
 const IS_DEV_BUILD = import.meta.env.DEV || process.env.NODE_ENV !== 'production';
 
-export type AppView = 'recording' | 'analytics' | 'smart-captures' | 'players' | 'id-mapper' | 'history' | 'dev-ocr';
+export type AppView = 'recording' | 'analytics' | 'smart-captures' | 'players' | 'id-mapper' | 'history' | 'dev-ocr' | 'video-import';
 
 interface NavItem {
     id: AppView;
@@ -37,6 +38,7 @@ const navItems: NavItem[] = [
     { id: 'players', icon: <Users size={18} />, label: 'Players' },
     { id: 'id-mapper', icon: <UserPlus size={18} />, label: 'ID Mapper' },
     { id: 'history', icon: <History size={18} />, label: 'History' },
+    { id: 'video-import', icon: <Film size={18} />, label: 'Video Import' },
 ];
 
 interface SidebarProps {

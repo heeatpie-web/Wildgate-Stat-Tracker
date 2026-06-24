@@ -15,6 +15,15 @@ export interface RosterMergeSuggestionGroup {
     variants: RosterMergeVariant[];
     pairKeys: string[];
     score: number;
+    /**
+     * 'auto' = top similarity is at/above the auto-merge threshold (high
+     * confidence — eligible for auto-apply / the "Auto applied" tab).
+     * 'review' = below the auto threshold but above the review floor (needs the
+     * user to confirm). Previously, 'auto'-tier pairs were silently dropped from
+     * the suggestion list, so extremely-similar names disappeared entirely; they
+     * are now surfaced and tagged instead.
+     */
+    tier: 'auto' | 'review';
 }
 
 const normalizeRosterMergeKey = (value: string): string => (
@@ -123,7 +132,12 @@ export const buildRosterMergeSuggestionGroups = ({
             if (!pairKey || excludedPairKeys.has(pairKey)) continue;
 
             const score = combinedNameSimilarityScore(leftName, rightName);
-            if (score < ROSTER_MERGE_REVIEW_MIN_SCORE || score >= normalizedThreshold) continue;
+            // Surface every pair above the review floor. High-confidence pairs
+            // (>= the auto-merge threshold) used to be excluded here on the
+            // assumption they'd be auto-applied elsewhere — but two already-
+            // registered pilots are never auto-merged, so they vanished from the
+            // UI entirely. Keep them and tag the resulting group as 'auto'.
+            if (score < ROSTER_MERGE_REVIEW_MIN_SCORE) continue;
 
             connect(leftKey, rightKey, score);
             connect(rightKey, leftKey, score);
@@ -204,12 +218,14 @@ export const buildRosterMergeSuggestionGroups = ({
             }
         }
 
+        const topScore = variants[0]?.score ?? 0;
         groups.push({
             canonicalName,
             canonicalDisplayName,
             variants,
             pairKeys,
-            score: variants[0]?.score ?? 0,
+            score: topScore,
+            tier: topScore >= normalizedThreshold ? 'auto' : 'review',
         });
     });
 

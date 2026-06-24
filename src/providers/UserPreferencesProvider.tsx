@@ -23,6 +23,8 @@ interface UserPreferencesContextType {
     setDisableAnimations: (disabled: boolean) => void;
     performanceMode: boolean;
     setPerformanceMode: (enabled: boolean) => void;
+    autoPerformanceMode: boolean;
+    setAutoPerformanceMode: (enabled: boolean) => void;
     soundEnabled: boolean;
     setSoundEnabled: (enabled: boolean) => void;
     language: Language;
@@ -55,6 +57,7 @@ export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = 
         colorblindMode, setColorblindMode,
         disableAnimations, setDisableAnimations,
         performanceMode, setPerformanceMode,
+        autoPerformanceMode, setAutoPerformanceMode,
         soundEnabled, setSoundEnabled,
         language, setLanguage,
         showSessionTimer, setShowSessionTimer,
@@ -68,6 +71,7 @@ export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = 
         colorblindMode: s.colorblindMode, setColorblindMode: s.setColorblindMode,
         disableAnimations: s.disableAnimations, setDisableAnimations: s.setDisableAnimations,
         performanceMode: s.performanceMode, setPerformanceMode: s.setPerformanceMode,
+        autoPerformanceMode: s.autoPerformanceMode, setAutoPerformanceMode: s.setAutoPerformanceMode,
         soundEnabled: s.soundEnabled, setSoundEnabled: s.setSoundEnabled,
         language: s.language, setLanguage: s.setLanguage,
         showSessionTimer: s.showSessionTimer, setShowSessionTimer: s.setShowSessionTimer,
@@ -159,6 +163,7 @@ export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = 
         colorblindMode, setColorblindMode,
         disableAnimations, setDisableAnimations,
         performanceMode, setPerformanceMode,
+        autoPerformanceMode, setAutoPerformanceMode,
         soundEnabled, setSoundEnabled,
         language, setLanguage,
         showSessionTimer, setShowSessionTimer,
@@ -167,7 +172,7 @@ export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = 
         visualMode, setVisualMode
     }), [appearanceMode, setAppearanceMode, colorTheme, setColorTheme, customHue, setCustomHue,
         colorblindMode, setColorblindMode, disableAnimations, setDisableAnimations,
-        performanceMode, setPerformanceMode,
+        performanceMode, setPerformanceMode, autoPerformanceMode, setAutoPerformanceMode,
         soundEnabled, setSoundEnabled, language, setLanguage, showSessionTimer, setShowSessionTimer,
         customBgUrl, setCustomBgUrl, overlayStyle, setOverlayStyle, visualMode, setVisualMode]);
 

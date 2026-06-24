@@ -222,6 +222,9 @@ const NOISE_WORDS = new Set([
   'WAYPOINT', 'COMPASS', 'MARKER', 'MINIMAP', 'ICON',
   'GATE', 'VAULT', 'STORM', 'SWARM', 'SWARMS',
   'RANK', 'LEVEL', 'PRESTIGE', 'PROGRESS',
+  // Lobby / pre-match countdown + spectator chrome (e.g. "Departure in 0:30")
+  'DEPARTURE', 'DEPARTING', 'DEPARTS', 'COUNTDOWN', 'STARTING', 'STARTS',
+  'SPECTATING', 'SPECTATOR', 'SPECTATORS', 'OBSERVER', 'OBSERVING',
   'SMALL CREW BONUS', 'SMALLCREWBONUS', 'SMALL CREWBONUS', 'SMALLCREW BONUS',
   'REDUCED FIRES', 'REDUCEDFIRES', 'REDUCED FIRED', 'REDUCEDFIRED',
 ]);
@@ -259,6 +262,14 @@ const UI_NOISE_PHRASES = [
   'ICEWHENDAMAGE',
   'UNKNOWN PLAYER',
   'UNKNOWN USER',
+  'DEPARTURE IN',
+  'DEPARTUREIN',
+  'DEPARTING IN',
+  'DEPARTINGIN',
+  'MATCH STARTING',
+  'MATCHSTARTING',
+  'SPECTATOR MODE',
+  'SPECTATORMODE',
 ];
 const SAME_COLOR_BASE_GAP_MULTIPLIER = 1.35;
 const SAME_COLOR_SPECTATOR_GAP_MULTIPLIER = 0.95;
@@ -1233,14 +1244,34 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
 
     const allowShortTagCandidate = isLikelyShortUiSuffixTagCandidate(line.words, playerName);
     if (!isValidOpponentName(playerName) && !allowShortTagCandidate) {
-      // Try stripping a leading digit-noise fragment to recover the real player name
-      // e.g. "4s lirolake" → strip "4s" → test "lirolake" alone
+      let _recovered = null;
+      // (a) Leading digit-noise fragment, e.g. "4s lirolake" → "lirolake".
       const _nameParts = playerName.trim().split(/\s+/);
       if (_nameParts.length >= 2 && /^\d/.test(_nameParts[0])) {
         const _stripped = _nameParts.slice(1).join(' ');
         if (isValidOpponentName(_stripped) || isLikelyShortUiSuffixTagCandidate(line.words, _stripped)) {
-          playerName = _stripped;
-        } else { dlog('[CrewHub] SKIP invalid-name: "' + playerName + '"'); continue; }
+          _recovered = _stripped;
+        }
+      }
+      // (b) Trailing platform-glyph artifact, e.g. "POTTLES22-D" → "POTTLES22",
+      //     "Delixer[" → "Delixer". OCR renders the Xbox/PS/PC/Discord icon at the
+      //     end of a handle as a stray bracket/pipe or a hyphen/space + 1-2 chars,
+      //     which makes a real handle look like an all-caps hyphenated ship name and
+      //     trips isValidOpponentName. Only runs on already-invalid names, so valid
+      //     handles are never altered; ship names (e.g. "ATTACK-O-LANTERN") have a
+      //     long trailing segment and are NOT recovered.
+      if (!_recovered) {
+        const _trimmedGlyph = playerName
+          .replace(/[\[\](){}<>|]+$/g, '')
+          .replace(/[\s-]+[A-Za-z0-9]{1,2}$/g, '')
+          .trim();
+        if (_trimmedGlyph && _trimmedGlyph !== playerName && isValidOpponentName(_trimmedGlyph)) {
+          _recovered = _trimmedGlyph;
+        }
+      }
+      if (_recovered) {
+        dlog('[CrewHub] Recovered name artifact: "' + playerName + '" → "' + _recovered + '"');
+        playerName = _recovered;
       } else { dlog('[CrewHub] SKIP invalid-name: "' + playerName + '"'); continue; }
     }
     if (/\b(?:PARTY|CREW|HUB|VOICE|CHANNEL|PUSH|TALK|MUTE|DISABLE|DEAFEN|UNMUTE|SAY|TEXT|PINGS)\b/i.test(playerName)) { dlog('[CrewHub] SKIP ui-word: "' + playerName + '"'); continue; }

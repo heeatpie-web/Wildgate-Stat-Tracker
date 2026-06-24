@@ -399,20 +399,34 @@ const toCanonicalModifierNames = (
     return stripArtifactSourceModifiers(merged);
 };
 
-const buildSilentBackgroundOcrMatch = ({
+export const buildSilentBackgroundOcrMatch = ({
     match,
     combined,
     activeUser,
+    replaceExisting = false,
 }: {
     match: Match;
     combined: OCRExtractedData;
     activeUser?: string | null;
+    /**
+     * When true, the reran OCR REPLACES the match's prior OCR-derived
+     * teammates/opponents/teams/modifiers instead of merging into them. Used by
+     * the History "Rerun OCR" action so reruns don't accumulate stale/duplicate
+     * data (the "pollution" the user reported). The prior values are snapshotted
+     * onto `ocrDebug.previousOcrSnapshot` so a compare/restore UI can offer them.
+     */
+    replaceExisting?: boolean;
 }): Match => {
     const activeUserKey = normalizeNameKey(activeUser || match.player || '');
     const isActiveUserLike = (rawName: string | null | undefined): boolean => {
         const key = normalizeNameKey(rawName);
         return !!key && key === activeUserKey;
     };
+    // In replace mode the prior arrays are NOT used as the merge base, so stale
+    // OCR reads can't survive a rerun.
+    const baseOpponents = replaceExisting ? [] : (match.opponents || []);
+    const baseTeammates = replaceExisting ? [] : (match.teammates || []);
+    const baseModifiers = replaceExisting ? [] : (match.reachModifiers || []);
 
     const nextTeammateNames = (combined.teammates || [])
         .map(coerceExtractedPlayerName)
@@ -451,12 +465,12 @@ const buildSilentBackgroundOcrMatch = ({
         enemyShips: combined.enemyShips,
     });
     const nextOpponents = dedupeNames(
-        match.opponents || [],
+        baseOpponents,
         nextOpponentTeams.flatMap((team) => team.players || []).filter((name) => !isActiveUserLike(name)),
     );
     const nextTeammates = capTeammateNames(
         dedupeNames(
-            match.teammates || [],
+            baseTeammates,
             nextTeammateNames,
             friendlyTeamSanitization.promotedFriendlyPlayers,
         ),
@@ -469,7 +483,7 @@ const buildSilentBackgroundOcrMatch = ({
         combined.artifactType,
     );
     const nextModifierNames = dedupeNames(
-        match.reachModifiers || [],
+        baseModifiers,
         toCanonicalModifierNames(
             (combined.reachModifiers || []) as Array<string | ExtractedModifier>,
             combined.hazards || [],

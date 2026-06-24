@@ -69,6 +69,10 @@ export const NOISE_WORDS = [
   'HAZARDS', 'FEATURES', 'KNOWN', 'ENEMY', 'CREWS', 'MODIFIERS',
   'ARTIFACT', 'HEALING', 'ICE', 'WEAPON', 'SPECIAL', 'LOOT',
 
+  // Lobby / pre-match countdown + spectator chrome (e.g. "Departure in 0:30")
+  'DEPARTURE', 'DEPARTING', 'DEPARTS', 'COUNTDOWN', 'STARTING', 'STARTS',
+  'SPECTATING', 'SPECTATOR', 'SPECTATORS', 'OBSERVER', 'OBSERVING',
+
   // Numbers that might appear alone
   '1', '2', '3', '4', '100', 'F1', 'F2', 'F3', 'F4', 'TAB',
 ];
@@ -88,6 +92,10 @@ export const HUD_PATTERNS = [
   /^\d+\s*MS$/i,  // Ping
   /^LEVEL\s*\d+$/i,
   /^[A-Z]\d+$/i,  // Function keys
+  /DEPARTURE\s*IN/i,   // Lobby countdown banner
+  /DEPARTING\s*IN/i,
+  /MATCH\s*STARTING/i,
+  /SPECTATOR\s*MODE/i,
 ];
 
 /**

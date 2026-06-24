@@ -799,6 +799,7 @@ const SettingsModalContent: React.FC = () => {
         customHue, setCustomHue,
         disableAnimations, setDisableAnimations,
         performanceMode, setPerformanceMode,
+        autoPerformanceMode, setAutoPerformanceMode,
         soundEnabled, setSoundEnabled,
         showSessionTimer, setShowSessionTimer,
         customBgUrl, setCustomBgUrl,
@@ -900,6 +901,8 @@ const SettingsModalContent: React.FC = () => {
 
     const fullAutoEnabled = useAppStore(s => s.fullAutoEnabled);
     const setFullAutoEnabled = useAppStore(s => s.setFullAutoEnabled);
+    const tacticalMapAutoCapture = useAppStore(s => s.tacticalMapAutoCapture);
+    const setTacticalMapAutoCapture = useAppStore(s => s.setTacticalMapAutoCapture);
     const pregameAdviceEnabled = useAppStore(s => s.pregameAdviceEnabled);
     const setPregameAdviceEnabled = useAppStore(s => s.setPregameAdviceEnabled);
 
@@ -1667,6 +1670,12 @@ const SettingsModalContent: React.FC = () => {
                                             setter: (v: boolean) => { setPerformanceMode(v); setDisableAnimations(v); },
                                             color: 'bg-md-sys-primary'
                                         },
+                                        {
+                                            label: 'Auto Performance Mode (follow game)',
+                                            value: autoPerformanceMode,
+                                            setter: (v: boolean) => { setAutoPerformanceMode(v); },
+                                            color: 'bg-md-sys-primary'
+                                        },
                                         { label: 'Session Timer', value: showSessionTimer, setter: setShowSessionTimer, color: 'bg-md-sys-primary' },
                                         { label: 'Sound Effects', value: soundEnabled, setter: setSoundEnabled, color: 'bg-md-sys-primary' },
                                     ].map((toggle, i) => (
@@ -2011,6 +2020,28 @@ const SettingsModalContent: React.FC = () => {
                         </div>
 
                         <div className="mt-4 rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-4 py-4">
+                            <div className="mt-3 flex items-start justify-between gap-3">
+                                <div>
+                                    <div className="text-label-sm font-semibold text-md-sys-on-surface">Tactical map auto-detect</div>
+                                    <div className="mt-0.5 text-label-sm text-md-sys-on-surface/60">
+                                        Watches for the tactical map screen during a match and automatically triggers the crew capture sequence — same as pressing the map hotkey manually.
+                                    </div>
+                                </div>
+                                <label className="flex cursor-pointer items-center gap-2 shrink-0 mt-0.5">
+                                    <input
+                                        type="checkbox"
+                                        checked={tacticalMapAutoCapture}
+                                        onChange={e => setTacticalMapAutoCapture(e.target.checked)}
+                                        className="h-4 w-4 accent-md-sys-primary"
+                                    />
+                                    <span className="text-label-sm text-md-sys-on-surface/70">
+                                        On
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div className="mt-4 rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-4 py-4">
                             <div className="flex items-start justify-between gap-3">
                                 <div>
                                     <div className="text-label-sm font-semibold text-md-sys-on-surface">Pregame advice</div>
@@ -2125,8 +2156,11 @@ const SettingsModalContent: React.FC = () => {
                                     <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${ocrLearningStrictMode ? 'translate-x-5' : ''}`} />
                                 </button>
                             </div>
+                            <div className="pt-1 text-label-xs text-md-sys-on-surface/40">
+                                Auto-merge confidence: lower = lean toward suggesting matches for you to confirm; higher = only auto-merge near-identical names. Anything at/above this score is applied automatically and listed in the Players → Auto-merge tab.
+                            </div>
                             <div className="grid grid-cols-2 gap-3 pt-1">
-                                <label className="text-label-sm opacity-60 flex items-center gap-2">
+                                <label className="text-label-sm opacity-60 flex items-center gap-2" title="Lower = suggest more for manual confirm; higher = only auto-merge near-identical names">
                                     Min score
                                     <input
                                         type="range"
