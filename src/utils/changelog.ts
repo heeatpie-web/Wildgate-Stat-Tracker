@@ -1,4 +1,11 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.8.2": [
+    "Auto-merge undo/restore in Auto-merge tab",
+    "Crew Hub macro recovers when wrong screen captured",
+    "Macro Step Delay slider relabeled with honest scope",
+    "Twilight outline calibration removes bright borders",
+    "Analytics fixes for sorties/day and meaningless 0pp comparisons"
+  ],
   "v3.8.1": [
     "Fix: Re-analyze on a match no longer wipes the enemy roster when OCR comes up empty (opponents are preserved alongside opponentTeams)",
     "Players tab now uses page controls (50 per page) instead of an infinite-scrolling list of every tracked name",
