@@ -46,7 +46,7 @@ export interface MacroSequenceConfig {
 
 export const DEFAULT_MACRO_SEQUENCE_CONFIG: MacroSequenceConfig = {
   openMenu: [{ button: 'START', count: 1 }],
-  navigate: [{ button: 'DPAD_UP', count: 3 }, { button: 'A', count: 1 }],
+  navigate: [{ button: 'DPAD_UP', count: 4 }, { button: 'A', count: 1 }],
   moveRight: [{ button: 'DPAD_RIGHT', count: 2 }],
   moveEnd: [{ button: 'DPAD_DOWN', count: 1 }],
   exit: [{ button: 'B', count: 1 }],

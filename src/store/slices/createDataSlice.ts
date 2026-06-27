@@ -237,10 +237,11 @@ const mergeRosterEntryMeta = (
   if (!incoming) return base;
 
   const incomingOrigin = coerceRosterOrigin(incoming.origin, base.origin);
+  const hasExistingOrigin = existing && (existing.origin === 'manual' || existing.origin === 'ocr');
   const origin: RosterEntryOrigin = (
-    base.origin === 'manual' || incomingOrigin === 'manual'
+    (hasExistingOrigin && base.origin === 'manual') || incomingOrigin === 'manual'
       ? 'manual'
-      : 'ocr'
+      : incomingOrigin
   );
   const status = coerceRosterStatus(
     incoming.status ?? base.status,
@@ -407,6 +408,42 @@ export interface MergeHistoryEntry {
   };
 }
 
+/**
+ * Record of an auto-merge group that was applied from the Auto-merge tab.
+ * Persisted so the UI can show an "Undo" affordance even after the active
+ * merge notification has been dismissed or the app has been reloaded.
+ *
+ * `mergeHistoryId` pairs the record with the corresponding [[MergeHistoryEntry]]
+ * — undo is only valid while that history entry is still the latest one in
+ * `mergeHistory`. Older records remain visible as historical context.
+ */
+export interface AutoMergeApplicationRecord {
+  id: string;
+  pairKeys: string[];
+  targetName: string;
+  targetDisplayName: string;
+  sourceNames: string[];
+  sourceDisplayNames: string[];
+  mergeHistoryId: string;
+  timestamp: number;
+}
+
+/**
+ * Record of an auto-merge suggestion that was explicitly dismissed from the
+ * Auto-merge tab. Persisted so the user can find and restore it later.
+ */
+export interface AutoMergeDismissalRecord {
+  id: string;
+  pairKeys: string[];
+  canonicalName: string;
+  canonicalDisplayName: string;
+  variantNames: string[];
+  variantDisplayNames: string[];
+  timestamp: number;
+}
+
+const RECENT_AUTO_MERGE_HISTORY_LIMIT = 10;
+
 /** An OCR result flagged for manual review before acceptance. */
 export interface PendingReviewSource {
   screenshotPath?: string;
@@ -427,6 +464,17 @@ export interface PendingReview {
   canonicalTargetKey?: string;
   source?: 'ocr' | 'telemetry' | 'manual';
   sourceCapture?: PendingReviewSource;
+}
+
+export interface RosterCandidateResolutionEntry {
+  name: string;
+  meta?: Partial<RosterEntryMeta>;
+}
+
+export interface RosterCandidateResolutionOptions {
+  registryEntries?: RosterCandidateResolutionEntry[];
+  removeReviewIds?: string[];
+  dismissCandidateKeys?: string[];
 }
 
 /** A timestamped event entry for the session timeline. */
@@ -523,6 +571,31 @@ export interface DataSlice {
   activeMergeNotificationId: string | null;
   dismissActiveMergeNotification: () => void;
   undoLastMerge: () => boolean;
+
+  /** Recent auto-merge group applications (most recent first). */
+  recentAutoMergeApplications: AutoMergeApplicationRecord[];
+  recordAutoMergeApplication: (
+    record: Omit<AutoMergeApplicationRecord, 'id' | 'timestamp'>
+  ) => void;
+  /** Removes an application record without undoing the underlying merge. */
+  clearAutoMergeApplication: (id: string) => void;
+  /**
+   * Undoes the merge associated with the given application id. Returns true
+   * iff the matching MergeHistoryEntry is still the most recent merge (i.e.,
+   * undoLastMerge can restore it). Older entries cannot be undone; this
+   * action will return false and leave the record in place so the caller can
+   * surface a stale-undo message.
+   */
+  undoAutoMergeApplication: (id: string) => boolean;
+
+  /** Recent auto-merge group dismissals (most recent first). */
+  recentAutoMergeDismissals: AutoMergeDismissalRecord[];
+  recordAutoMergeDismissal: (
+    record: Omit<AutoMergeDismissalRecord, 'id' | 'timestamp'>
+  ) => void;
+  /** Removes a dismissal record from `dismissedRosterMergePairKeys` so the
+   * suggestion can re-surface, and from the dismissals list. */
+  restoreAutoMergeDismissal: (id: string) => boolean;
   timelineEvents: TimelineEvent[];
   setTimelineEvents: (events: TimelineEvent[]) => void;
   addTimelineEvent: (event: TimelineEvent) => void;
@@ -531,6 +604,7 @@ export interface DataSlice {
   addPendingReview: (review: PendingReview) => void;
   removePendingReview: (id: string) => void;
   removePendingReviews: (ids: string[]) => void;
+  applyRosterCandidateResolution: (options: RosterCandidateResolutionOptions) => void;
   clearPendingReviews: () => void;
   dismissedRosterMergePairKeys: string[];
   dismissRosterMergeSuggestionPairs: (pairKeys: string[]) => void;
@@ -641,6 +715,65 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
     if (idSet.size === 0) return {};
     return { pendingReviews: state.pendingReviews.filter((review) => !idSet.has(review.id)) };
   }),
+  applyRosterCandidateResolution: (options) => set((state) => {
+    const registryEntries = Array.isArray(options?.registryEntries) ? options.registryEntries : [];
+    const removeReviewIds = Array.isArray(options?.removeReviewIds) ? options.removeReviewIds : [];
+    const dismissCandidateKeys = Array.isArray(options?.dismissCandidateKeys) ? options.dismissCandidateKeys : [];
+    const result: Partial<DataSlice> = {};
+    const now = Date.now();
+
+    if (registryEntries.length > 0) {
+      let nextRegistry = state.pilotRegistry;
+      let nextMeta = state.rosterEntryMeta;
+      const registryByKey = new Map<string, string>();
+      state.pilotRegistry.forEach((entry) => {
+        const key = normalizeRosterEntryKey(entry);
+        if (key && !registryByKey.has(key)) registryByKey.set(key, entry);
+      });
+
+      registryEntries.forEach((entry) => {
+        const cleaned = String(entry?.name || '').trim();
+        const key = normalizeRosterEntryKey(cleaned);
+        if (!cleaned || !key) return;
+        const existing = registryByKey.get(key);
+        if (!existing) {
+          if (nextRegistry === state.pilotRegistry) nextRegistry = [...state.pilotRegistry];
+          if (nextMeta === state.rosterEntryMeta) nextMeta = { ...state.rosterEntryMeta };
+          nextRegistry.push(cleaned);
+          nextMeta[key] = mergeRosterEntryMeta(undefined, entry.meta, now);
+          registryByKey.set(key, cleaned);
+          return;
+        }
+        const existingMeta = nextMeta[key];
+        if (!entry.meta && existingMeta) return;
+        if (nextMeta === state.rosterEntryMeta) nextMeta = { ...state.rosterEntryMeta };
+        nextMeta[key] = mergeRosterEntryMeta(existingMeta, entry.meta, now);
+      });
+
+      if (nextRegistry !== state.pilotRegistry) result.pilotRegistry = nextRegistry;
+      if (nextMeta !== state.rosterEntryMeta) result.rosterEntryMeta = nextMeta;
+    }
+
+    const removeIdSet = new Set(removeReviewIds.map((id) => String(id || '').trim()).filter(Boolean));
+    if (removeIdSet.size > 0) {
+      result.pendingReviews = state.pendingReviews.filter((review) => !removeIdSet.has(review.id));
+    }
+
+    const nextDismissedKeys = dismissCandidateKeys
+      .map((key) => String(key || '').trim().toLowerCase())
+      .filter(Boolean);
+    if (nextDismissedKeys.length > 0) {
+      const mergedDismissed = Array.from(new Set([
+        ...(state.dismissedRosterCandidateKeys || []),
+        ...nextDismissedKeys,
+      ]));
+      if (mergedDismissed.length !== (state.dismissedRosterCandidateKeys || []).length) {
+        result.dismissedRosterCandidateKeys = mergedDismissed;
+      }
+    }
+
+    return Object.keys(result).length > 0 ? result : {};
+  }),
   clearPendingReviews: () => set({ pendingReviews: [] }),
   dismissedRosterMergePairKeys: [],
   dismissRosterMergeSuggestionPairs: (pairKeys) => set((state) => {
@@ -664,6 +797,61 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
   mergeHistory: [],
   activeMergeNotificationId: null,
   dismissActiveMergeNotification: () => set({ activeMergeNotificationId: null }),
+
+  recentAutoMergeApplications: [],
+  recordAutoMergeApplication: (record) => set((state) => {
+    const entry: AutoMergeApplicationRecord = {
+      ...record,
+      id: `auto_merge_app_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      timestamp: Date.now(),
+    };
+    const next = [entry, ...(state.recentAutoMergeApplications || [])]
+      .slice(0, RECENT_AUTO_MERGE_HISTORY_LIMIT);
+    return { recentAutoMergeApplications: next };
+  }),
+  clearAutoMergeApplication: (id) => set((state) => ({
+    recentAutoMergeApplications: (state.recentAutoMergeApplications || [])
+      .filter((entry) => entry.id !== id),
+  })),
+  undoAutoMergeApplication: (id) => {
+    const state = get() as DataSlice;
+    const entry = (state.recentAutoMergeApplications || []).find((item) => item.id === id);
+    if (!entry) return false;
+    const latestMerge = (state.mergeHistory || [])[0];
+    if (!latestMerge || latestMerge.id !== entry.mergeHistoryId) return false;
+    const undone = state.undoLastMerge();
+    if (!undone) return false;
+    set((current) => ({
+      recentAutoMergeApplications: (current.recentAutoMergeApplications || [])
+        .filter((item) => item.id !== id),
+    }));
+    return true;
+  },
+
+  recentAutoMergeDismissals: [],
+  recordAutoMergeDismissal: (record) => set((state) => {
+    const entry: AutoMergeDismissalRecord = {
+      ...record,
+      id: `auto_merge_dismiss_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      timestamp: Date.now(),
+    };
+    const next = [entry, ...(state.recentAutoMergeDismissals || [])]
+      .slice(0, RECENT_AUTO_MERGE_HISTORY_LIMIT);
+    return { recentAutoMergeDismissals: next };
+  }),
+  restoreAutoMergeDismissal: (id) => {
+    const state = get() as DataSlice;
+    const entry = (state.recentAutoMergeDismissals || []).find((item) => item.id === id);
+    if (!entry) return false;
+    const pairKeySet = new Set(entry.pairKeys || []);
+    set((current) => ({
+      dismissedRosterMergePairKeys: (current.dismissedRosterMergePairKeys || [])
+        .filter((key) => !pairKeySet.has(key)),
+      recentAutoMergeDismissals: (current.recentAutoMergeDismissals || [])
+        .filter((item) => item.id !== id),
+    }));
+    return true;
+  },
 
   setMatches: (matches) => set((state) => {
     const sanitized = (matches || []).map((entry) => sanitizeMatchArtifactFields({ ...entry }));

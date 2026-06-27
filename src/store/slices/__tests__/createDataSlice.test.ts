@@ -149,6 +149,33 @@ describe('createDataSlice', () => {
       store.getState().removeFromRegistry('Alice');
       expect(store.getState().pilotRegistry).toEqual(['Bob']);
     });
+
+    it('applies batched OCR candidate resolution in one state update', () => {
+      store.getState().addPendingReview({
+        id: 'review-1',
+        type: 'roster_candidate',
+        value: 'Alicee',
+        originalConfidence: 82,
+      });
+      store.getState().addPendingReview({
+        id: 'review-2',
+        type: 'roster_candidate',
+        value: 'Ghost',
+        originalConfidence: 42,
+      });
+
+      store.getState().applyRosterCandidateResolution({
+        registryEntries: [{ name: 'Alice', meta: { origin: 'ocr', status: 'confirmed' } }],
+        removeReviewIds: ['review-1'],
+        dismissCandidateKeys: ['ghost'],
+      });
+
+      const state = store.getState();
+      expect(state.pilotRegistry).toContain('Alice');
+      expect(state.rosterEntryMeta.alice).toMatchObject({ origin: 'ocr', status: 'confirmed' });
+      expect(state.pendingReviews.map((review) => review.id)).toEqual(['review-2']);
+      expect(state.dismissedRosterCandidateKeys).toContain('ghost');
+    });
   });
 
   // ── Favorites ──
@@ -491,6 +518,91 @@ describe('createDataSlice', () => {
         'pilotone::pilot0ne',
         'pilotone::pilot one',
       ]);
+    });
+  });
+
+  describe('auto-merge application history', () => {
+    const baseApp = {
+      pairKeys: ['ace pilot::ace pliot'],
+      targetName: 'Ace Pilot',
+      targetDisplayName: 'Ace Pilot',
+      sourceNames: ['Ace Pliot'],
+      sourceDisplayNames: ['Ace Pliot'],
+      mergeHistoryId: 'merge-1',
+    };
+
+    it('records auto-merge applications most-recent-first with id and timestamp', () => {
+      store.getState().recordAutoMergeApplication(baseApp);
+      const entry = store.getState().recentAutoMergeApplications[0];
+      expect(entry.targetName).toBe('Ace Pilot');
+      expect(entry.id).toMatch(/^auto_merge_app_/);
+      expect(typeof entry.timestamp).toBe('number');
+    });
+
+    it('caps the application history at 10 entries', () => {
+      for (let index = 0; index < 12; index += 1) {
+        store.getState().recordAutoMergeApplication({
+          ...baseApp,
+          targetName: `Target${index}`,
+          mergeHistoryId: `merge-${index}`,
+        });
+      }
+      expect(store.getState().recentAutoMergeApplications).toHaveLength(10);
+      // Most recent first
+      expect(store.getState().recentAutoMergeApplications[0].targetName).toBe('Target11');
+    });
+
+    it('clearAutoMergeApplication removes the entry without touching merge history', () => {
+      store.getState().recordAutoMergeApplication(baseApp);
+      const { id } = store.getState().recentAutoMergeApplications[0];
+      store.getState().clearAutoMergeApplication(id);
+      expect(store.getState().recentAutoMergeApplications).toHaveLength(0);
+    });
+
+    it('undoAutoMergeApplication returns false when no application exists', () => {
+      expect(store.getState().undoAutoMergeApplication('missing')).toBe(false);
+    });
+
+    it('undoAutoMergeApplication returns false when the application is not the latest merge', () => {
+      store.getState().recordAutoMergeApplication(baseApp);
+      // Simulate a newer merge having happened since.
+      const id = store.getState().recentAutoMergeApplications[0].id;
+      // No matching mergeHistory entry — undo cannot restore it.
+      expect(store.getState().undoAutoMergeApplication(id)).toBe(false);
+      // Record stays so caller can decide what to do.
+      expect(store.getState().recentAutoMergeApplications).toHaveLength(1);
+    });
+  });
+
+  describe('auto-merge dismissal history', () => {
+    const baseDismissal = {
+      pairKeys: ['ace pilot::ace pliot'],
+      canonicalName: 'Ace Pilot',
+      canonicalDisplayName: 'Ace Pilot',
+      variantNames: ['Ace Pliot'],
+      variantDisplayNames: ['Ace Pliot'],
+    };
+
+    it('records dismissals most-recent-first with id and timestamp', () => {
+      store.getState().recordAutoMergeDismissal(baseDismissal);
+      const entry = store.getState().recentAutoMergeDismissals[0];
+      expect(entry.canonicalName).toBe('Ace Pilot');
+      expect(entry.id).toMatch(/^auto_merge_dismiss_/);
+      expect(typeof entry.timestamp).toBe('number');
+    });
+
+    it('restoreAutoMergeDismissal removes the dismissal record and the pair keys from dismissed list', () => {
+      store.getState().dismissRosterMergeSuggestionPairs(['ace pilot::ace pliot', 'unrelated::pair']);
+      store.getState().recordAutoMergeDismissal(baseDismissal);
+      const { id } = store.getState().recentAutoMergeDismissals[0];
+
+      expect(store.getState().restoreAutoMergeDismissal(id)).toBe(true);
+      expect(store.getState().recentAutoMergeDismissals).toHaveLength(0);
+      expect(store.getState().dismissedRosterMergePairKeys).toEqual(['unrelated::pair']);
+    });
+
+    it('restoreAutoMergeDismissal returns false for an unknown id', () => {
+      expect(store.getState().restoreAutoMergeDismissal('missing')).toBe(false);
     });
   });
 

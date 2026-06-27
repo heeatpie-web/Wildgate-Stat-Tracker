@@ -424,4 +424,139 @@ describe('useAnalyticsData', () => {
     expect(nemesis?.playerName).toBe('RivalPrime');
     expect(nemesis?.encounters).toBe(5);
   });
+
+  it('computes avgSortiesPerDay from actual match span for the ttk range', async () => {
+    const dayMs = 86_400_000;
+    const start = new Date('2026-05-01').getTime();
+    // 10 matches half-a-day apart starting after the ttk boundary (2026-04-28).
+    // Last timestamp at start + 4.5 days → Math.ceil(4.5) = 5 day span.
+    gameDataState.matches = Array.from({ length: 10 }, (_, index) => ({
+      id: index + 1,
+      timestamp: start + index * (dayMs / 2),
+      date: '2026-05-01',
+      mode: 'Fleet Battle',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      reachModifiers: [],
+      kills: {},
+      result: 'Win',
+      subType: 'Combat',
+    }));
+
+    const { useAnalyticsData } = await import('./useAnalyticsData');
+    const { result } = renderHook(() => useAnalyticsData('ttk'));
+
+    // 10 matches / 5-day span = 2/day. Previously this fell through to
+    // rangeStart=0 → ~57-year span → 0 sorties/day (the regression we fixed).
+    expect(result.current.avgSortiesPerDay).toBe(2);
+  });
+
+  it('avgSortiesPerDay for custom range divides by the chosen window, not now-since-epoch', async () => {
+    const start = new Date('2026-05-01').getTime();
+    const dayMs = 86_400_000;
+    gameDataState.matches = Array.from({ length: 6 }, (_, index) => ({
+      id: index + 1,
+      timestamp: start + index * dayMs,
+      date: '2026-05-01',
+      mode: 'Fleet Battle',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      reachModifiers: [],
+      kills: {},
+      result: 'Win',
+      subType: 'Combat',
+    }));
+
+    const { useAnalyticsData } = await import('./useAnalyticsData');
+    const { result } = renderHook(() => useAnalyticsData(
+      'custom',
+      20,
+      undefined,
+      { ship: [], prospectorWeapon: [], equipment: [], perk: [], update: [] },
+      { from: start, to: start + 5 * dayMs },
+    ));
+
+    // 6 matches over a 5-day custom window = ~1.2/day → rounds to 1.
+    expect(result.current.avgSortiesPerDay).toBe(1);
+  });
+
+  it('gates selectedLoadoutVsGlobal and selectedPerkSetVsAll when no entity filter is applied', async () => {
+    const now = Date.now();
+    gameDataState.matches = Array.from({ length: 20 }, (_, index) => ({
+      id: index + 1,
+      timestamp: now - (20 - index) * 60_000,
+      date: '2026-03-16',
+      mode: 'Fleet Battle',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      loadout: {
+        hero: 'Adrian',
+        ship: 'Hunter',
+        weapons: [],
+        equipment: [],
+        characterWeapons: [],
+        characterEquipment: [],
+        perks: ['Iron Skin'],
+      },
+      reachModifiers: [],
+      kills: {},
+      result: index % 2 === 0 ? 'Win' : 'Loss',
+      subType: 'Combat',
+    }));
+
+    const { useAnalyticsData } = await import('./useAnalyticsData');
+    const { result } = renderHook(() => useAnalyticsData('all', 20, 'pro'));
+
+    // Both comparisons should be gated when no filter is set, otherwise the
+    // tile would show a meaningless 0pp delta (selected === baseline).
+    expect(result.current.entityAnalytics.comparisons.selectedLoadoutVsGlobal.gated).toBe(true);
+    expect(result.current.entityAnalytics.comparisons.selectedLoadoutVsGlobal.gateReason).toMatch(/pick a ship/i);
+    expect(result.current.entityAnalytics.comparisons.selectedPerkSetVsAll.gated).toBe(true);
+    expect(result.current.entityAnalytics.comparisons.selectedPerkSetVsAll.gateReason).toMatch(/pick a perk/i);
+  });
+
+  it('runs selectedLoadoutVsGlobal once a loadout filter is applied', async () => {
+    const now = Date.now();
+    gameDataState.matches = Array.from({ length: 20 }, (_, index) => ({
+      id: index + 1,
+      timestamp: now - (20 - index) * 60_000,
+      date: '2026-03-16',
+      mode: 'Fleet Battle',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Adrian',
+      // Half Hunter, half Bastion — so Hunter-filtered selected != allInRange.
+      ship: index < 10 ? 'Hunter' : 'Bastion',
+      reachModifiers: [],
+      kills: {},
+      result: index < 10 ? 'Win' : 'Loss',
+      subType: 'Combat',
+    }));
+
+    const { useAnalyticsData } = await import('./useAnalyticsData');
+    const { result } = renderHook(() => useAnalyticsData(
+      'all',
+      20,
+      'pro',
+      { ship: ['Hunter'], prospectorWeapon: [], equipment: [], perk: [], update: [] },
+    ));
+
+    const loadout = result.current.entityAnalytics.comparisons.selectedLoadoutVsGlobal;
+    // 10 Hunter matches (all wins) selected, 20 in-range baseline (50% wins) →
+    // not gated, real delta computed.
+    expect(loadout.gated).toBe(false);
+    expect(loadout.selectedSample).toBe(10);
+    expect(loadout.baselineSample).toBe(20);
+    expect(loadout.absoluteDelta).not.toBeNull();
+  });
 });

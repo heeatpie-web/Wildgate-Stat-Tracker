@@ -21,9 +21,9 @@ const AUTO_CAPTURE_WAIT_PROFILES = Object.freeze({
     heldMapOpenMs: 80,
     heldMapCloseMs: 20,
     escMenuOpenMs: 25,
-    crewHubOpenMs: 30,
-    crewHubPanelStepMs: 10,
-    crewHubPanelEndMs: 8,
+    crewHubOpenMs: 60,
+    crewHubPanelStepMs: 20,
+    crewHubPanelEndMs: 20,
     exitMs: 10,
   }),
 });
@@ -250,6 +250,7 @@ function createAutoCaptureCoordinator({
     runtimeOptions = {},
     tacticalMapKeybind,
     holdTacticalMapKey = false,
+    retryCrewHubOnMismatch = true,
   }) => {
     const useGamepad = gamepadModeEnabled && typeof sendGamepadSequence === 'function';
     console.log(
@@ -311,6 +312,10 @@ function createAutoCaptureCoordinator({
           filePath: capture.filePath,
           filename: capture.filename,
           screenshotType: capture.screenshotType,
+          expectedScreenshotType: capture.expectedScreenshotType || null,
+          mismatch: Boolean(capture.mismatch),
+          retried: Boolean(capture.retried),
+          durationMs: typeof capture.durationMs === 'number' ? capture.durationMs : null,
         });
       });
     };
@@ -329,11 +334,12 @@ function createAutoCaptureCoordinator({
       }));
     };
 
-    const captureStep = async (step, captureIndex, attemptCaptures, screenshotTypeHint = null) => {
-      logAutoCaptureStep(step, '(capture)');
+    const captureStep = async (step, captureIndex, attemptCaptures, screenshotTypeHint = null, { isRetry = false } = {}) => {
+      logAutoCaptureStep(step, isRetry ? '(retry-capture)' : '(capture)');
       // Fire sound immediately so the user hears it when the capture begins,
       // not after the PNG encode + file save completes.
-      notify({ phase: 'capture-started', captureIndex, totalCaptures: 3, matchId });
+      notify({ phase: 'capture-started', captureIndex, totalCaptures: 3, matchId, isRetry });
+      const captureStartedAt = Date.now();
       const result = await withTimeout(() => captureAndProcess({
         matchId,
         activeUser,
@@ -342,22 +348,93 @@ function createAutoCaptureCoordinator({
         runtimeOptions,
         screenshotTypeHint,
       }), AUTO_CAPTURE_CAPTURE_TIMEOUT_MS, step.label);
+      const captureDurationMs = Date.now() - captureStartedAt;
 
       if (!result?.success || !result.filePath) {
         const reason = result?.error || 'capture failed';
         throw new Error(`${step.label}: ${reason}`);
       }
 
-      const detectedType = String(result?.ocrData?.screenshotType || result?.screenshotType || screenshotTypeHint || '').trim();
+      const detectedTypeRaw = String(result?.ocrData?.screenshotType || result?.screenshotType || '').trim();
+      const expectedType = screenshotTypeHint ? String(screenshotTypeHint).trim() : null;
+      // A mismatch requires positive evidence of a *different* screen. We
+      // intentionally do NOT treat empty/unknown detections as mismatches —
+      // those happen on fast-frame captures with no readable text and would
+      // produce noisy retries.
+      const mismatch = Boolean(
+        expectedType
+        && detectedTypeRaw
+        && detectedTypeRaw !== 'unknown'
+        && detectedTypeRaw !== expectedType
+      );
+
       const captureMeta = {
         captureIndex,
         filePath: result.filePath,
         filename: result.filename || null,
-        screenshotType: detectedType || null,
+        screenshotType: detectedTypeRaw || expectedType || null,
+        detectedScreenshotType: detectedTypeRaw || null,
+        expectedScreenshotType: expectedType,
+        mismatch,
+        isRetry,
+        durationMs: captureDurationMs,
       };
       attemptCaptures.push(captureMeta);
 
+      if (mismatch) {
+        console.warn(
+          `[AutoCapture] ${step.label}: expected ${expectedType} but detected ${detectedTypeRaw}`
+          + ` (capture #${captureIndex}${isRetry ? ', retry' : ''}, ${captureDurationMs}ms)`
+        );
+        notify({
+          phase: 'capture-mismatch',
+          captureIndex,
+          totalCaptures: 3,
+          matchId,
+          expectedType,
+          detectedType: detectedTypeRaw,
+          stepLabel: step.label,
+          filePath: result.filePath,
+          durationMs: captureDurationMs,
+          isRetry,
+        });
+      }
+
       return captureMeta;
+    };
+
+    // When the first crew hub capture comes back as a non-crew_hub screen, the
+    // SPACE keypress that should have opened Crew Hub likely landed on the
+    // wrong menu item. Best-effort recovery: back out fully, re-open the pause
+    // menu, re-select Crew Hub, and re-navigate to panel A. One attempt only —
+    // if recovery also fails we keep the original capture and continue so the
+    // macro never gates on screen-type detection.
+    const runCrewHubRecoverySequence = async (waitProfile) => {
+      if (!sendKeypresses) return;
+      // Two ESCs to reliably collapse whatever menu/dialog we landed on back
+      // to plain gameplay, plus a third to re-open the pause menu.
+      await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{ESC}', { useMenuSender: true });
+      await waitStep(waitProfile.escMenuOpenMs);
+      await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{ESC}', { useMenuSender: true });
+      await waitStep(waitProfile.escMenuOpenMs);
+      await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{ESC}', { useMenuSender: true });
+      await waitStep(waitProfile.escMenuOpenMs);
+      await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{UP}{UP}{UP}{UP}{SPACE}', { useMenuSender: true });
+      await waitStep(waitProfile.crewHubOpenMs);
+      await sendStepKeys(STEP_DEFINITIONS.moveCrewHubRight, '{RIGHT}{RIGHT}', { useMenuSender: true });
+      await waitStep(waitProfile.crewHubPanelStepMs);
+    };
+
+    const removeCaptureArtifact = async (filePath) => {
+      const trimmed = typeof filePath === 'string' ? filePath.trim() : '';
+      if (!trimmed) return;
+      try {
+        await fs.promises.unlink(trimmed);
+      } catch (error) {
+        if (error?.code !== 'ENOENT') {
+          console.warn(`[AutoCapture] Failed to remove mismatched capture ${trimmed}: ${error?.message || error}`);
+        }
+      }
     };
 
     const runAttempt = async (waitProfile) => {
@@ -398,13 +475,33 @@ function createAutoCaptureCoordinator({
 
         await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{ESC}', { useMenuSender: true });
         await waitStep(waitProfile.escMenuOpenMs);
-        await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{UP}{UP}{UP}{SPACE}', { useMenuSender: true });
+        await sendStepKeys(STEP_DEFINITIONS.openCrewHub, '{UP}{UP}{UP}{UP}{SPACE}', { useMenuSender: true });
         await waitStep(waitProfile.crewHubOpenMs);
 
         await sendStepKeys(STEP_DEFINITIONS.moveCrewHubRight, '{RIGHT}{RIGHT}', { useMenuSender: true });
         await waitStep(waitProfile.crewHubPanelStepMs);
 
-        await captureStep(STEP_DEFINITIONS.captureCrewHubA, 2, attemptCaptures, 'crew_hub');
+        const crewHubACapture = await captureStep(STEP_DEFINITIONS.captureCrewHubA, 2, attemptCaptures, 'crew_hub');
+
+        if (crewHubACapture.mismatch && retryCrewHubOnMismatch && sendKeypresses) {
+          // Drop the bad capture from the attempt list and remove the artifact;
+          // the recovery sequence + retry below will replace it (or, if retry
+          // also mismatches, we accept the failure and keep going).
+          const badIndex = attemptCaptures.indexOf(crewHubACapture);
+          if (badIndex >= 0) attemptCaptures.splice(badIndex, 1);
+          await removeCaptureArtifact(crewHubACapture.filePath);
+
+          await runCrewHubRecoverySequence(waitProfile);
+
+          const retryCapture = await captureStep(
+            STEP_DEFINITIONS.captureCrewHubA,
+            2,
+            attemptCaptures,
+            'crew_hub',
+            { isRetry: true }
+          );
+          retryCapture.retried = true;
+        }
 
         await sendStepKeys(STEP_DEFINITIONS.moveCrewHubEnd, '{DOWN}', { useMenuSender: true });
         await waitStep(waitProfile.crewHubPanelEndMs);
@@ -520,6 +617,7 @@ function createAutoCaptureCoordinator({
         macroSequenceConfig: request.macroSequenceConfig && typeof request.macroSequenceConfig === 'object'
           ? request.macroSequenceConfig
           : null,
+        retryCrewHubOnMismatch: request.retryCrewHubOnMismatch !== false,
       };
 
       inProgress = true;

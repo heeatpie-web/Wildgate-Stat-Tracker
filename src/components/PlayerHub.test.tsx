@@ -43,6 +43,13 @@ const gameDataState = {
     mergeHistory: [] as any[],
     activeMergeNotificationId: null as string | null,
     dismissActiveMergeNotification: vi.fn(),
+    recentAutoMergeApplications: [] as any[],
+    recordAutoMergeApplication: vi.fn(),
+    clearAutoMergeApplication: vi.fn(),
+    undoAutoMergeApplication: vi.fn(),
+    recentAutoMergeDismissals: [] as any[],
+    recordAutoMergeDismissal: vi.fn(),
+    restoreAutoMergeDismissal: vi.fn(),
     pendingReviews: [] as any[],
     dismissedRosterMergePairKeys: [] as string[],
     dismissedRosterCandidateKeys: [] as string[],
@@ -53,6 +60,7 @@ const gameDataState = {
     addPilotAlias: vi.fn(),
     removePilotAlias: vi.fn(),
     removePendingReviews: vi.fn(),
+    applyRosterCandidateResolution: vi.fn(),
     removePendingReview: vi.fn(),
     matches: [...baseMatches] as any[],
     playerProfiles: {
@@ -161,12 +169,17 @@ vi.mock('../providers/UIStateProvider', () => ({
     useUIState: () => uiState,
 }));
 
-vi.mock('../store/useAppStore', () => ({
-    useAppStore: (selector: (state: typeof gameDataState & typeof appStoreState) => unknown) => selector({
+vi.mock('../store/useAppStore', () => {
+    const useAppStore = (selector: (state: typeof gameDataState & typeof appStoreState) => unknown) => selector({
         ...gameDataState,
         ...appStoreState,
-    }),
-}));
+    });
+    (useAppStore as unknown as { getState: () => typeof gameDataState & typeof appStoreState }).getState = () => ({
+        ...gameDataState,
+        ...appStoreState,
+    });
+    return { useAppStore };
+});
 
 vi.mock('./LocalImage', () => ({
     LocalImage: (props: React.ImgHTMLAttributes<HTMLImageElement>) => <img {...props} />,
@@ -177,6 +190,7 @@ describe('PlayerHub', () => {
         vi.clearAllMocks();
         gameDataState.mergePilotsBatch = vi.fn();
         gameDataState.removePendingReviews = vi.fn();
+        gameDataState.applyRosterCandidateResolution = vi.fn();
         gameDataState.pilotRegistry = ['PilotOne', 'Pilot0ne'];
         gameDataState.rosterEntryMeta = {};
         gameDataState.pilotAliases = { PilotOne: ['Pilot One Old'] };
@@ -212,6 +226,13 @@ describe('PlayerHub', () => {
         gameDataState.pendingReviews = [];
         gameDataState.mergeHistory = [];
         gameDataState.activeMergeNotificationId = null;
+        gameDataState.recentAutoMergeApplications = [];
+        gameDataState.recentAutoMergeDismissals = [];
+        gameDataState.recordAutoMergeApplication = vi.fn();
+        gameDataState.clearAutoMergeApplication = vi.fn();
+        gameDataState.undoAutoMergeApplication = vi.fn();
+        gameDataState.recordAutoMergeDismissal = vi.fn();
+        gameDataState.restoreAutoMergeDismissal = vi.fn();
         gameDataState.dismissedRosterMergePairKeys = [];
         gameDataState.dismissedRosterCandidateKeys = [];
         appStoreState.knownMappings = {};
@@ -269,8 +290,10 @@ describe('PlayerHub', () => {
         fireEvent.click(screen.getByRole('button', { name: /pilotone.*91%/i }));
 
         expect(appStoreState.recordOcrAliasCorrection).toHaveBeenCalledWith('PliotOne', 'PilotOne', expect.any(Object));
-        expect(gameDataState.removePendingReviews).toHaveBeenCalledWith(['candidate-1']);
-        expect(gameDataState.addToRegistry).toHaveBeenCalledWith('PilotOne', { origin: 'ocr', status: 'confirmed' });
+        expect(gameDataState.applyRosterCandidateResolution).toHaveBeenCalledWith({
+            registryEntries: [{ name: 'PilotOne', meta: { origin: 'ocr', status: 'confirmed' } }],
+            removeReviewIds: ['candidate-1'],
+        });
     });
 
     it('shows detected roster badges and exposes confirm or dismiss actions for OCR-added entries', () => {
@@ -1042,6 +1065,179 @@ describe('PlayerHub', () => {
         expect(gameDataState.mergePilotsBatch).toHaveBeenCalledWith('🛸 Ace Pilot', ['Ace Pliot']);
     });
 
+    it('shows an undo button in the Auto-merge tab when an active merge notification exists', () => {
+        gameDataState.activeMergeNotificationId = 'merge-1';
+        gameDataState.mergeHistory = [{
+            id: 'merge-1',
+            timestamp: Date.now(),
+            sourceName: 'Ace Pliot',
+            targetName: 'Ace Pilot',
+        }];
+        gameDataState.pilotRegistry = ['Ace Pilot'];
+
+        render(<PlayerHub />);
+
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
+        fireEvent.click(screen.getByRole('button', { name: /auto-merge/i }));
+
+        expect(screen.getByRole('button', { name: /undo auto-merge/i })).toBeInTheDocument();
+        expect(screen.getByText(/Merged .Ace Pliot. into .Ace Pilot./i)).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /undo auto-merge/i }));
+        expect(gameDataState.undoLastMerge).toHaveBeenCalledTimes(1);
+    });
+
+    it('renders an Apply button for pending high-confidence auto-merge groups', () => {
+        // Alixer vs Alixerr scores ~87% — above the 83% auto threshold (see
+        // rosterMergeSuggestions.test.ts). The longer name 'Alixerr' wins the
+        // canonical resolution.
+        gameDataState.pilotRegistry = ['Alixer', 'Alixerr'];
+
+        render(<PlayerHub />);
+
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
+        fireEvent.click(screen.getByRole('button', { name: /auto-merge/i }));
+
+        const applyButton = screen.getByRole('button', { name: /apply merge into alixerr/i });
+        expect(applyButton).toBeInTheDocument();
+        expect(applyButton).toHaveTextContent(/apply/i);
+    });
+
+    it('records an auto-merge application and dismisses the pair when an auto-tier group is applied', () => {
+        gameDataState.pilotRegistry = ['Alixer', 'Alixerr'];
+        // Simulate the resulting merge-history entry so the wrapper can pair the
+        // application record with the latest snapshot.
+        gameDataState.mergePilotsBatch = vi.fn(() => {
+            gameDataState.mergeHistory = [{
+                id: 'merge-99',
+                timestamp: Date.now(),
+                sourceName: 'Alixer',
+                targetName: 'Alixerr',
+            }];
+        });
+
+        render(<PlayerHub />);
+
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
+        fireEvent.click(screen.getByRole('button', { name: /auto-merge/i }));
+        fireEvent.click(screen.getByRole('button', { name: /apply merge into alixerr/i }));
+
+        expect(gameDataState.mergePilotsBatch).toHaveBeenCalledWith('Alixerr', ['Alixer']);
+        expect(gameDataState.recordAutoMergeApplication).toHaveBeenCalledWith(
+            expect.objectContaining({
+                targetName: 'Alixerr',
+                sourceNames: ['Alixer'],
+                mergeHistoryId: 'merge-99',
+            }),
+        );
+    });
+
+    it('records an auto-merge dismissal when an auto-tier group is dismissed', () => {
+        gameDataState.pilotRegistry = ['Alixer', 'Alixerr'];
+
+        render(<PlayerHub />);
+
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
+        fireEvent.click(screen.getByRole('button', { name: /auto-merge/i }));
+        fireEvent.click(screen.getByRole('button', { name: /dismiss merge suggestion for alixerr/i }));
+
+        expect(gameDataState.dismissRosterMergeSuggestionPairs).toHaveBeenCalled();
+        expect(gameDataState.recordAutoMergeDismissal).toHaveBeenCalledWith(
+            expect.objectContaining({
+                canonicalName: 'Alixerr',
+                variantNames: ['Alixer'],
+            }),
+        );
+    });
+
+    it('does NOT record auto-merge metadata when a review-tier group is applied or dismissed', () => {
+        // Ace Pilot vs Ace Squad scores ~82% — below the 83% auto threshold, so
+        // this is a review-tier group and should not feed the auto-merge history.
+        gameDataState.pilotRegistry = ['Ace Pilot', 'Ace Squad'];
+
+        render(<PlayerHub />);
+
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
+        fireEvent.click(screen.getByRole('button', { name: /merge suggestions/i }));
+        fireEvent.click(screen.getByRole('button', { name: /merge into ace pilot/i }));
+
+        expect(gameDataState.recordAutoMergeApplication).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole('button', { name: /dismiss merge suggestion for ace pilot/i }));
+        expect(gameDataState.recordAutoMergeDismissal).not.toHaveBeenCalled();
+    });
+
+    it('renders Recently Applied entries with Undo and triggers undoAutoMergeApplication on click', () => {
+        gameDataState.recentAutoMergeApplications = [{
+            id: 'app-1',
+            pairKeys: ['alixer::alixerr'],
+            targetName: 'Alixer',
+            targetDisplayName: 'Alixer',
+            sourceNames: ['Alixerr'],
+            sourceDisplayNames: ['Alixerr'],
+            mergeHistoryId: 'merge-7',
+            timestamp: Date.now(),
+        }];
+        gameDataState.undoAutoMergeApplication = vi.fn(() => true);
+
+        render(<PlayerHub />);
+
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
+        fireEvent.click(screen.getByRole('button', { name: /auto-merge/i }));
+
+        expect(screen.getByTestId('auto-merge-applied-section')).toBeInTheDocument();
+        expect(screen.getByText(/Merged into .Alixer./i)).toBeInTheDocument();
+        const undoButton = screen.getByRole('button', { name: /undo auto-merge into alixer/i });
+        fireEvent.click(undoButton);
+        expect(gameDataState.undoAutoMergeApplication).toHaveBeenCalledWith('app-1');
+    });
+
+    it('falls back to clearAutoMergeApplication when undo can no longer restore the merge', () => {
+        gameDataState.recentAutoMergeApplications = [{
+            id: 'app-stale',
+            pairKeys: ['alixer::alixerr'],
+            targetName: 'Alixer',
+            targetDisplayName: 'Alixer',
+            sourceNames: ['Alixerr'],
+            sourceDisplayNames: ['Alixerr'],
+            mergeHistoryId: 'merge-old',
+            timestamp: Date.now(),
+        }];
+        gameDataState.undoAutoMergeApplication = vi.fn(() => false);
+
+        render(<PlayerHub />);
+
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
+        fireEvent.click(screen.getByRole('button', { name: /auto-merge/i }));
+        fireEvent.click(screen.getByRole('button', { name: /undo auto-merge into alixer/i }));
+
+        expect(gameDataState.undoAutoMergeApplication).toHaveBeenCalledWith('app-stale');
+        expect(gameDataState.clearAutoMergeApplication).toHaveBeenCalledWith('app-stale');
+    });
+
+    it('renders Recently Dismissed entries with Restore and triggers restoreAutoMergeDismissal on click', () => {
+        gameDataState.recentAutoMergeDismissals = [{
+            id: 'dis-1',
+            pairKeys: ['alixer::alixerr'],
+            canonicalName: 'Alixer',
+            canonicalDisplayName: 'Alixer',
+            variantNames: ['Alixerr'],
+            variantDisplayNames: ['Alixerr'],
+            timestamp: Date.now(),
+        }];
+        gameDataState.restoreAutoMergeDismissal = vi.fn(() => true);
+
+        render(<PlayerHub />);
+
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
+        fireEvent.click(screen.getByRole('button', { name: /auto-merge/i }));
+
+        expect(screen.getByTestId('auto-merge-dismissed-section')).toBeInTheDocument();
+        expect(screen.getByText(/Kept .Alixer. separate/i)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /restore dismissed merge suggestion for alixer/i }));
+        expect(gameDataState.restoreAutoMergeDismissal).toHaveBeenCalledWith('dis-1');
+    });
+
     it('focuses a requested player profile when the players tab opens from another workspace', () => {
         uiState.playerHubFocusName = 'PilotOne';
 
@@ -1068,6 +1264,9 @@ describe('PlayerHub', () => {
         expect(await screen.findByRole('button', { name: /pilot 399/i })).toBeInTheDocument();
 
         fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
+        expect(mergeSuggestionsSpy).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole('button', { name: /merge suggestions/i }));
 
         expect(mergeSuggestionsSpy).toHaveBeenCalled();
     });

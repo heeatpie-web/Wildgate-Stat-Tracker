@@ -2418,6 +2418,10 @@ const App: React.FC = () => {
             if (phase === 'capture-progress') {
                 const captureIndex = Number(payload?.captureIndex || 0);
                 const totalCaptures = Number(payload?.totalCaptures || 3);
+                const durationMs = Number(payload?.durationMs || 0);
+                const durationLabel = Number.isFinite(durationMs) && durationMs > 0 ? ` · ${(durationMs / 1000).toFixed(1)}s` : '';
+                const wasRetried = payload?.retried === true;
+                const retryLabel = wasRetried ? ' · retried' : '';
                 syncAutoCaptureArtifactToMatch(
                     Number(payload?.matchId || 0),
                     typeof payload?.filePath === 'string' ? payload.filePath : null
@@ -2425,12 +2429,29 @@ const App: React.FC = () => {
                 if (captureIndex > 0) {
                     setTelemetryAutomationStatus(createTelemetryAutomationStatus({
                         phase: capturePhase,
-                        message: `${captureLabel} capture ${captureIndex}/${totalCaptures}`,
+                        message: `${captureLabel} capture ${captureIndex}/${totalCaptures}${durationLabel}${retryLabel}`,
                         matchId: normalizedMatchId,
                         level: 'info',
                     }));
-                    setToast({ message: `${captureIndex}/${totalCaptures}`, type: 'info' });
+                    setToast({ message: `${captureIndex}/${totalCaptures}${durationLabel}${retryLabel}`, type: 'info' });
                 }
+                return;
+            }
+            if (phase === 'capture-mismatch') {
+                const captureIndex = Number(payload?.captureIndex || 0);
+                const expected = typeof payload?.expectedType === 'string' ? payload.expectedType : '';
+                const detected = typeof payload?.detectedType === 'string' ? payload.detectedType : '';
+                const isRetry = payload?.isRetry === true;
+                const message = isRetry
+                    ? `Capture #${captureIndex} retry still detected "${detected}" (expected "${expected}"). Keeping anyway.`
+                    : `Capture #${captureIndex} detected "${detected}" instead of "${expected}". Retrying…`;
+                setTelemetryAutomationStatus(createTelemetryAutomationStatus({
+                    phase: capturePhase,
+                    message,
+                    matchId: normalizedMatchId,
+                    level: 'warning',
+                }));
+                setToast({ message, type: 'info' });
                 return;
             }
             if (phase === 'completed') {

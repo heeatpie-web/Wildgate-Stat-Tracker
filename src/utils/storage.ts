@@ -1,6 +1,12 @@
 import { getElectronAPI } from './electronAPI';
 import type { Match, UidMappingsContract } from '../types';
-import type { PendingReview, RosterEntryMeta, TimelineEvent } from '../store/slices/createDataSlice';
+import type {
+  AutoMergeApplicationRecord,
+  AutoMergeDismissalRecord,
+  PendingReview,
+  RosterEntryMeta,
+  TimelineEvent,
+} from '../store/slices/createDataSlice';
 import type {
   OcrCorrection,
   PlayerEncounterRoleCorrection,
@@ -76,6 +82,8 @@ export interface StorageData {
   pendingReviews?: PendingReview[];
   dismissedRosterMergePairKeys?: string[];
   dismissedRosterCandidateKeys?: string[];
+  recentAutoMergeApplications?: AutoMergeApplicationRecord[];
+  recentAutoMergeDismissals?: AutoMergeDismissalRecord[];
   settings: StorageSettings;
   layouts: StorageLayouts;
   lastActivity: number;
@@ -173,6 +181,26 @@ const toTimelineEvents = (value: unknown): TimelineEvent[] =>
 
 const toPendingReviews = (value: unknown): PendingReview[] =>
   Array.isArray(value) ? value.filter((item): item is PendingReview => isRecord(item)) : [];
+
+const toAutoMergeApplications = (value: unknown): AutoMergeApplicationRecord[] =>
+  Array.isArray(value)
+    ? value.filter((item): item is AutoMergeApplicationRecord => (
+        isRecord(item)
+        && typeof item.id === 'string'
+        && typeof item.targetName === 'string'
+        && Array.isArray(item.pairKeys)
+      ))
+    : [];
+
+const toAutoMergeDismissals = (value: unknown): AutoMergeDismissalRecord[] =>
+  Array.isArray(value)
+    ? value.filter((item): item is AutoMergeDismissalRecord => (
+        isRecord(item)
+        && typeof item.id === 'string'
+        && typeof item.canonicalName === 'string'
+        && Array.isArray(item.pairKeys)
+      ))
+    : [];
 
 const toPlayerProfiles = (value: unknown): Record<string, PlayerProfile> => {
   if (!isRecord(value)) return {};
@@ -288,6 +316,8 @@ const createDefaultStorageData = (): StorageData => ({
   pendingReviews: [],
   dismissedRosterMergePairKeys: [],
   dismissedRosterCandidateKeys: [],
+  recentAutoMergeApplications: [],
+  recentAutoMergeDismissals: [],
   settings: {},
   layouts: {},
   lastActivity: Date.now(),
@@ -351,6 +381,8 @@ const coerceStorageData = (value: unknown): StorageData | null => {
     pendingReviews: toPendingReviews(value.pendingReviews),
     dismissedRosterMergePairKeys: toStringArray(value.dismissedRosterMergePairKeys),
     dismissedRosterCandidateKeys: toStringArray(value.dismissedRosterCandidateKeys),
+    recentAutoMergeApplications: toAutoMergeApplications(value.recentAutoMergeApplications),
+    recentAutoMergeDismissals: toAutoMergeDismissals(value.recentAutoMergeDismissals),
     settings: isRecord(value.settings) ? { ...value.settings } : {},
     layouts: toLayouts(value.layouts),
     lastActivity: toNumberOr(value.lastActivity, Date.now()),

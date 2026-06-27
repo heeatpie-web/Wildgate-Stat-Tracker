@@ -74,8 +74,8 @@ export const useSoundEffects = () => {
     }, [soundEnabled]);
 
     const playCapture = useCallback(() => {
-        playTone(1046.5, 'triangle', 0.045);
-        playTone(783.99, 'triangle', 0.08, 0.035);
+        playTone(1174.66, 'triangle', 0.055);
+        playTone(880, 'triangle', 0.09, 0.045);
     }, [playTone]);
 
     const playStart = useCallback(() => {
@@ -112,26 +112,26 @@ export const useSoundEffects = () => {
     }, [playTone]);
 
     const playAutomationStart = useCallback(() => {
-        playTone(540, 'triangle', 0.09);
-        playTone(660, 'triangle', 0.11, 0.08);
+        playTone(392, 'triangle', 0.11);
+        playTone(587.33, 'triangle', 0.13, 0.11);
     }, [playTone]);
 
     const playAutomationComplete = useCallback(() => {
-        playTone(620, 'triangle', 0.12);
-        playTone(820, 'triangle', 0.16, 0.08);
-        playTone(1046.5, 'triangle', 0.22, 0.18);
+        playTone(523.25, 'triangle', 0.11);
+        playTone(659.25, 'triangle', 0.13, 0.09);
+        playTone(987.77, 'sine', 0.24, 0.2);
     }, [playTone]);
 
     const playAutoResultApplied = useCallback(() => {
-        playTone(523.25, 'triangle', 0.08);
-        playTone(659.25, 'triangle', 0.12, 0.05);
-        playTone(783.99, 'sine', 0.16, 0.13);
+        playTone(783.99, 'sine', 0.07);
+        playTone(1046.5, 'triangle', 0.11, 0.07);
+        playTone(1318.51, 'triangle', 0.17, 0.16);
     }, [playTone]);
 
     const playAutomationFailed = useCallback(() => {
-        playTone(360, 'square', 0.12);
-        playTone(250, 'square', 0.18, 0.08);
-        playTone(180, 'square', 0.24, 0.18);
+        playTone(220, 'square', 0.16);
+        playTone(185, 'square', 0.18, 0.13);
+        playTone(146.83, 'sawtooth', 0.28, 0.28);
     }, [playTone]);
 
     const playEnd = useCallback(() => {

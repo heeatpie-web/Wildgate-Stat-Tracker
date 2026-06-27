@@ -321,7 +321,7 @@ describe('SettingsModal', () => {
     expect(storeState.setAutoSequenceOnCapture).toHaveBeenCalledWith(true);
   });
 
-  it('surfaces auto-capture speed and keypress controls in capture settings', async () => {
+  it('surfaces macro step delay and keypress controls in capture settings', async () => {
     const { SettingsModal } = await import('./SettingsModal');
     render(<SettingsModal />);
 
@@ -331,7 +331,7 @@ describe('SettingsModal', () => {
     // autoCaptureSendKeypresses defaults to true (keypresses); clicking Previous option cycles to manual
     const autocaptureRow = within(grid).getByText('Auto-capture Input').closest('div.py-3')!;
     fireEvent.click(within(autocaptureRow as HTMLElement).getByRole('button', { name: /previous option/i }));
-    fireEvent.change(screen.getByLabelText(/capture speed/i), {
+    fireEvent.change(screen.getByLabelText(/macro step delay/i), {
       target: { value: '2.4' },
     });
 

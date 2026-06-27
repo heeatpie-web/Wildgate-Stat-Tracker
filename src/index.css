@@ -4341,7 +4341,13 @@ body[data-mode='twilight'] {
   --md-sys-color-surface-container-high: #1e1f22;
   --md-sys-color-surface-container-highest: #17181b;
 
-  --md-sys-color-outline: #737983;
+  /* Outline lowered from #737983 — the previous value created a
+     too-bright "white outline" perception on dark twilight surfaces,
+     especially on Tailwind border-md-sys-outline/N utilities where the
+     slash modifier does not always reduce hex variables to subtle
+     enough alpha. This matches the relative brightness of dark
+     mode's outline (#444444 against #141414) against twilight surfaces. */
+  --md-sys-color-outline: #4a4d52;
   --md-sys-color-outline-variant: #1e1f22;
   --md-sys-color-shadow: rgba(0, 0, 0, 0.6);
   --md-sys-color-success: color-mix(in srgb, hsl(145, 72%, 66%), var(--md-sys-color-primary) 8%);
@@ -4414,7 +4420,9 @@ body[data-theme='grayscale'][data-mode='twilight'] {
   --md-sys-color-on-tertiary: #1f1f1f;
   --md-sys-color-tertiary-container: #54585e;
   --md-sys-color-on-tertiary-container: #f5f6f7;
-  --md-sys-color-outline: #7a8087;
+  /* Grayscale twilight: outline lowered from #7a8087 to keep relative
+     brightness similar to grayscale dark mode (#3b3f45 against #1A1A1A). */
+  --md-sys-color-outline: #4d5258;
   --md-sys-color-outline-variant: #30343a;
 
   --color-success: #a5abb2;
@@ -5237,4 +5245,19 @@ body[data-mode='dark'] .custom-scrollbar::-webkit-scrollbar-thumb {
 .sc-detail-action-btn,
 .sc-seg-btn {
   backface-visibility: hidden;
+}
+
+body[data-mode='dark'] button[class*='border-md-sys-outline']:not(:focus-visible),
+body[data-mode='dark'] [role='button'][class*='border-md-sys-outline']:not(:focus-visible),
+body[data-mode='twilight'] button[class*='border-md-sys-outline']:not(:focus-visible),
+body[data-mode='twilight'] [role='button'][class*='border-md-sys-outline']:not(:focus-visible) {
+  border-color: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 86%) !important;
+  box-shadow: none;
+}
+
+body[data-mode='dark'] button[class*='border-md-sys-outline']:hover:not(:focus-visible),
+body[data-mode='dark'] [role='button'][class*='border-md-sys-outline']:hover:not(:focus-visible),
+body[data-mode='twilight'] button[class*='border-md-sys-outline']:hover:not(:focus-visible),
+body[data-mode='twilight'] [role='button'][class*='border-md-sys-outline']:hover:not(:focus-visible) {
+  border-color: color-mix(in srgb, var(--md-sys-color-primary), transparent 72%) !important;
 }

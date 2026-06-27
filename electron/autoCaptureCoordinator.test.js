@@ -104,7 +104,7 @@ describe('autoCaptureCoordinator sequencing', () => {
     expect(sendKeySequence).toHaveBeenNthCalledWith(1, '{TAB}', 'Open Tactical Map');
     expect(sendKeySequence).toHaveBeenNthCalledWith(2, '{TAB}', 'Close Tactical Map');
     expect(sendMenuKeySequence).toHaveBeenNthCalledWith(1, '{ESC}', 'Navigate to Crew Hub');
-    expect(sendMenuKeySequence).toHaveBeenNthCalledWith(2, '{UP}{UP}{UP}{SPACE}', 'Navigate to Crew Hub');
+    expect(sendMenuKeySequence).toHaveBeenNthCalledWith(2, '{UP}{UP}{UP}{UP}{SPACE}', 'Navigate to Crew Hub');
     expect(sendMenuKeySequence).toHaveBeenNthCalledWith(3, '{RIGHT}{RIGHT}', 'Navigate to Crew Hub Panel (Right)');
     expect(sendMenuKeySequence).toHaveBeenNthCalledWith(4, '{DOWN}', 'Navigate to Crew Hub Panel End');
     expect(sendMenuKeySequence).toHaveBeenNthCalledWith(5, '{ESC}', 'Exit');
@@ -124,7 +124,7 @@ describe('autoCaptureCoordinator sequencing', () => {
       activeUser: 'Pilot',
       screenshotTypeHint: 'crew_hub',
     }));
-    expect(waits).toEqual([140, 20, 50, 60, 20, 16, 20]);
+    expect(waits).toEqual([140, 20, 50, 120, 40, 40, 20]);
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({
       phase: 'capture-progress',
       captureIndex: 1,
@@ -190,6 +190,171 @@ describe('autoCaptureCoordinator sequencing', () => {
       screenshotTypeHint: 'crew_hub',
     }));
     expect(sendMenuKeySequence).toHaveBeenNthCalledWith(1, '{ESC}', 'Navigate to Crew Hub');
+  });
+
+  it('retries the first crew-hub capture when the detected screen type does not match', async () => {
+    const notify = vi.fn();
+    const sendKeySequence = vi.fn().mockResolvedValue({ success: true });
+    const sendMenuKeySequence = vi.fn().mockResolvedValue({ success: true });
+    const unlinkSpy = vi.spyOn(fs.promises, 'unlink').mockResolvedValue(undefined);
+    const captureAndProcess = vi.fn()
+      .mockResolvedValueOnce({ success: true, filePath: 'map.png', filename: 'map.png', ocrData: { screenshotType: 'tactical_map' } })
+      // First crew hub capture lands on the wrong screen — the macro's SPACE
+      // keypress missed Crew Hub by one menu position.
+      .mockResolvedValueOnce({ success: true, filePath: 'crew-a-bad.png', filename: 'crew-a-bad.png', ocrData: { screenshotType: 'main_menu' } })
+      // Retry capture is on the correct screen.
+      .mockResolvedValueOnce({ success: true, filePath: 'crew-a-retry.png', filename: 'crew-a-retry.png', ocrData: { screenshotType: 'crew_hub' } })
+      .mockResolvedValueOnce({ success: true, filePath: 'crew-b.png', filename: 'crew-b.png', ocrData: { screenshotType: 'crew_hub' } });
+
+    const coordinator = createAutoCaptureCoordinator({
+      notify,
+      sendKeySequence,
+      sendMenuKeySequence,
+      captureAndProcess,
+      lookupMapKeybind: vi.fn().mockResolvedValue({ raw: 'Tab', sendKeys: '{TAB}' }),
+      delayFn: vi.fn(() => Promise.resolve()),
+    });
+
+    const result = await coordinator.start({
+      lifecycleActive: true,
+      matchId: 55,
+      activeUser: 'Pilot',
+      autoCaptureTacticalMapKey: 'Tab',
+    });
+
+    expect(result.started).toBe(true);
+
+    await vi.waitFor(() => {
+      expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+        phase: 'completed',
+        matchId: 55,
+      }));
+    });
+
+    // The mismatch notification fires for the first crew_hub capture.
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+      phase: 'capture-mismatch',
+      expectedType: 'crew_hub',
+      detectedType: 'main_menu',
+      isRetry: false,
+    }));
+
+    // Four captureAndProcess invocations: map, bad crew_hub, recovery retry, crew_hub B.
+    expect(captureAndProcess).toHaveBeenCalledTimes(4);
+
+    // The bad capture file is removed before retry.
+    expect(unlinkSpy).toHaveBeenCalledWith('crew-a-bad.png');
+
+    // The committed progress for capture #2 reflects the retried capture, not the bad one.
+    const captureTwoProgress = notify.mock.calls
+      .map(([payload]) => payload)
+      .find((p) => p?.phase === 'capture-progress' && p.captureIndex === 2);
+    expect(captureTwoProgress).toMatchObject({
+      filePath: 'crew-a-retry.png',
+      screenshotType: 'crew_hub',
+      retried: true,
+    });
+
+    unlinkSpy.mockRestore();
+  });
+
+  it('keeps the retry capture and continues even when retry also mismatches', async () => {
+    const notify = vi.fn();
+    const sendKeySequence = vi.fn().mockResolvedValue({ success: true });
+    const sendMenuKeySequence = vi.fn().mockResolvedValue({ success: true });
+    const unlinkSpy = vi.spyOn(fs.promises, 'unlink').mockResolvedValue(undefined);
+    const captureAndProcess = vi.fn()
+      .mockResolvedValueOnce({ success: true, filePath: 'map.png', filename: 'map.png', ocrData: { screenshotType: 'tactical_map' } })
+      .mockResolvedValueOnce({ success: true, filePath: 'crew-a-bad.png', filename: 'crew-a-bad.png', ocrData: { screenshotType: 'main_menu' } })
+      // Recovery also lands on the wrong screen — the macro accepts this and
+      // continues so the user still gets *some* artifact.
+      .mockResolvedValueOnce({ success: true, filePath: 'crew-a-retry-bad.png', filename: 'crew-a-retry-bad.png', ocrData: { screenshotType: 'settings' } })
+      .mockResolvedValueOnce({ success: true, filePath: 'crew-b.png', filename: 'crew-b.png', ocrData: { screenshotType: 'crew_hub' } });
+
+    const coordinator = createAutoCaptureCoordinator({
+      notify,
+      sendKeySequence,
+      sendMenuKeySequence,
+      captureAndProcess,
+      lookupMapKeybind: vi.fn().mockResolvedValue({ raw: 'Tab', sendKeys: '{TAB}' }),
+      delayFn: vi.fn(() => Promise.resolve()),
+    });
+
+    const result = await coordinator.start({
+      lifecycleActive: true,
+      matchId: 56,
+      activeUser: 'Pilot',
+      autoCaptureTacticalMapKey: 'Tab',
+    });
+
+    expect(result.started).toBe(true);
+
+    await vi.waitFor(() => {
+      expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+        phase: 'completed',
+        matchId: 56,
+      }));
+    });
+
+    // Two mismatch notifications — original + retry, both keyed to capture #2.
+    const mismatchCalls = notify.mock.calls
+      .map(([payload]) => payload)
+      .filter((p) => p?.phase === 'capture-mismatch' && p.captureIndex === 2);
+    expect(mismatchCalls).toHaveLength(2);
+    expect(mismatchCalls[0]).toMatchObject({ isRetry: false, detectedType: 'main_menu' });
+    expect(mismatchCalls[1]).toMatchObject({ isRetry: true, detectedType: 'settings' });
+
+    // Only one retry — we don't loop indefinitely.
+    expect(captureAndProcess).toHaveBeenCalledTimes(4);
+
+    // Bad original capture cleaned up; retry capture kept.
+    expect(unlinkSpy).toHaveBeenCalledWith('crew-a-bad.png');
+    expect(unlinkSpy).not.toHaveBeenCalledWith('crew-a-retry-bad.png');
+
+    unlinkSpy.mockRestore();
+  });
+
+  it('does not retry when retryCrewHubOnMismatch is false', async () => {
+    const notify = vi.fn();
+    const sendKeySequence = vi.fn().mockResolvedValue({ success: true });
+    const sendMenuKeySequence = vi.fn().mockResolvedValue({ success: true });
+    const captureAndProcess = vi.fn()
+      .mockResolvedValueOnce({ success: true, filePath: 'map.png', filename: 'map.png', ocrData: { screenshotType: 'tactical_map' } })
+      .mockResolvedValueOnce({ success: true, filePath: 'crew-a-bad.png', filename: 'crew-a-bad.png', ocrData: { screenshotType: 'main_menu' } })
+      .mockResolvedValueOnce({ success: true, filePath: 'crew-b.png', filename: 'crew-b.png', ocrData: { screenshotType: 'crew_hub' } });
+
+    const coordinator = createAutoCaptureCoordinator({
+      notify,
+      sendKeySequence,
+      sendMenuKeySequence,
+      captureAndProcess,
+      lookupMapKeybind: vi.fn().mockResolvedValue({ raw: 'Tab', sendKeys: '{TAB}' }),
+      delayFn: vi.fn(() => Promise.resolve()),
+    });
+
+    await coordinator.start({
+      lifecycleActive: true,
+      matchId: 57,
+      activeUser: 'Pilot',
+      autoCaptureTacticalMapKey: 'Tab',
+      retryCrewHubOnMismatch: false,
+    });
+
+    await vi.waitFor(() => {
+      expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+        phase: 'completed',
+        matchId: 57,
+      }));
+    });
+
+    // No retry — exactly three capture calls.
+    expect(captureAndProcess).toHaveBeenCalledTimes(3);
+
+    // Mismatch is still surfaced via the notification (observability is always on).
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+      phase: 'capture-mismatch',
+      detectedType: 'main_menu',
+    }));
   });
 
   it('skips tactical map key lookup when sendKeypresses is disabled', async () => {
@@ -502,7 +667,7 @@ describe('autoCaptureCoordinator sequencing', () => {
     expect(prepareGamepadSequence).toHaveBeenCalledTimes(1);
     expect(sendGamepadSequence).toHaveBeenCalledTimes(5);
     expect(sendGamepadSequence).toHaveBeenNthCalledWith(1, expect.objectContaining({ label: 'Navigate to Crew Hub' }), '{ESC}', null);
-    expect(sendGamepadSequence).toHaveBeenNthCalledWith(2, expect.objectContaining({ label: 'Navigate to Crew Hub' }), '{UP}{UP}{UP}{SPACE}', null);
+    expect(sendGamepadSequence).toHaveBeenNthCalledWith(2, expect.objectContaining({ label: 'Navigate to Crew Hub' }), '{UP}{UP}{UP}{UP}{SPACE}', null);
     expect(sendGamepadSequence).toHaveBeenNthCalledWith(3, expect.objectContaining({ label: 'Navigate to Crew Hub Panel (Right)' }), '{RIGHT}{RIGHT}', null);
     expect(sendGamepadSequence).toHaveBeenNthCalledWith(4, expect.objectContaining({ label: 'Navigate to Crew Hub Panel End' }), '{DOWN}', null);
     expect(sendGamepadSequence).toHaveBeenNthCalledWith(5, expect.objectContaining({ label: 'Exit' }), '{ESC}', null);

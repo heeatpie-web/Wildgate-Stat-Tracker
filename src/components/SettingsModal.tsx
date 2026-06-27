@@ -1945,14 +1945,19 @@ const SettingsModalContent: React.FC = () => {
                         <div className="mt-4 rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-4 py-4">
                             <div className="flex items-center justify-between gap-3">
                                 <div>
-                                    <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">Capture Speed</div>
+                                    <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">Macro Step Delay</div>
                                     <div className="mt-1 text-body font-bold text-md-sys-on-surface">{autoCaptureWaitMultiplier.toFixed(1)}x</div>
-                                    <div className="mt-1 text-label-sm text-md-sys-on-surface/60">Higher values wait longer between auto-capture steps for slower systems.</div>
+                                    <div className="mt-1 text-label-sm text-md-sys-on-surface/60">
+                                        Scales the wait time between menu navigation keys (ESC, arrows, SPACE). Higher = more delay between steps, more reliable on slower systems.
+                                    </div>
+                                    <div className="mt-1 text-label-xs text-md-sys-on-surface/45">
+                                        Does not affect screenshot save time or OCR processing — those are bound by your disk and CPU.
+                                    </div>
                                 </div>
                                 <div className="text-label-sm font-bold text-md-sys-primary">{autoCaptureWaitMultiplier.toFixed(1)}x</div>
                             </div>
                             <input
-                                aria-label="Capture Speed"
+                                aria-label="Macro Step Delay"
                                 type="range"
                                 min={0.5}
                                 max={3}
@@ -1962,9 +1967,9 @@ const SettingsModalContent: React.FC = () => {
                                 className="mt-4 h-2 w-full cursor-pointer accent-md-sys-primary"
                             />
                             <div className="mt-2 flex items-center justify-between text-label-xs text-md-sys-on-surface/45">
-                                <span>0.5x</span>
+                                <span>0.5x · faster</span>
                                 <span>1.0x</span>
-                                <span>3.0x</span>
+                                <span>3.0x · safer</span>
                             </div>
                         </div>
                         <div className="mt-4 rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-4 py-4">

@@ -468,17 +468,26 @@ export const useAnalyticsData = (
     const avgSortiesPerDay = useMemo(() => {
         if (filteredMatches.length === 0) return 0;
         const now = Date.now();
-        let start = rangeStart;
-        let end = now;
+        let start: number;
+        let end: number;
 
-        if (timeRange === 'all' || timeRange === 'lastN') {
+        if (timeRange === 'all' || timeRange === 'lastN' || timeRange === 'ttk') {
+            // rangeStart is 0 for these ranges, so the previous fallthrough
+            // produced a ~57-year span and a near-zero sorties/day value.
+            // Use the actual first/last filtered match timestamps instead.
             start = filteredMatches[0]?.timestamp || now;
             end = filteredMatches[filteredMatches.length - 1]?.timestamp || now;
+        } else if (timeRange === 'custom' && customDateRange) {
+            start = customDateRange.from;
+            end = customDateRange.to;
+        } else {
+            start = rangeStart;
+            end = now;
         }
 
         const spanDays = Math.max(1, Math.ceil((end - start) / 86400000));
         return Math.round(filteredMatches.length / spanDays);
-    }, [filteredMatches, timeRange, rangeStart]);
+    }, [filteredMatches, timeRange, rangeStart, customDateRange]);
 
     const entityAnalytics = useMemo(() => {
         if (!wantEntities) return EMPTY_ENTITY_ANALYTICS;
@@ -487,9 +496,42 @@ export const useAnalyticsData = (
         const half = Math.floor(allInRange.length / 2);
         const previousPeriodMatches = allInRange.slice(0, half);
         const currentPeriodMatches = allInRange.slice(half);
-        const selectedPerkMatches = entityFilters.perk.length > 0
+        // A loadout/perk comparison is only meaningful when there's a filter
+        // that distinguishes the "selected" side from the baseline — otherwise
+        // selected === allInRange and the delta is always exactly 0pp, which
+        // looks like a real measurement but isn't.
+        const hasLoadoutFilter = (
+            entityFilters.ship.length > 0
+            || entityFilters.prospectorWeapon.length > 0
+            || entityFilters.equipment.length > 0
+            || entityFilters.perk.length > 0
+        );
+        const hasPerkFilter = entityFilters.perk.length > 0;
+        const selectedPerkMatches = hasPerkFilter
             ? allInRange.filter((match) => matchPassesFilters(match, { ...EMPTY_ENTITY_FILTERS, perk: entityFilters.perk }))
             : selectedMatches;
+        const noPerkFilterGate: EntityComparison = {
+            label: 'Selected Perk Set vs All Matches',
+            selectedSample: 0,
+            baselineSample: allInRange.length,
+            selectedWinRate: 0,
+            baselineWinRate: 0,
+            absoluteDelta: null,
+            relativeDelta: null,
+            gated: true,
+            gateReason: 'Pick a perk to compare against all matches',
+        };
+        const noLoadoutFilterGate: EntityComparison = {
+            label: 'Selected Ship/Loadout vs Global Baseline',
+            selectedSample: 0,
+            baselineSample: allInRange.length,
+            selectedWinRate: 0,
+            baselineWinRate: 0,
+            absoluteDelta: null,
+            relativeDelta: null,
+            gated: true,
+            gateReason: 'Pick a ship, weapon, equipment, or perk to compare',
+        };
         const analytics = {
             filters: entityFilters,
             filteredCount: selectedMatches.length,
@@ -507,8 +549,12 @@ export const useAnalyticsData = (
             },
             comparisons: {
                 periodVsPrevious: calculateComparison('Current Period vs Previous Period', currentPeriodMatches, previousPeriodMatches),
-                selectedPerkSetVsAll: calculateComparison('Selected Perk Set vs All Matches', selectedPerkMatches, allInRange),
-                selectedLoadoutVsGlobal: calculateComparison('Selected Ship/Loadout vs Global Baseline', selectedMatches, allInRange),
+                selectedPerkSetVsAll: hasPerkFilter
+                    ? calculateComparison('Selected Perk Set vs All Matches', selectedPerkMatches, allInRange)
+                    : noPerkFilterGate,
+                selectedLoadoutVsGlobal: hasLoadoutFilter
+                    ? calculateComparison('Selected Ship/Loadout vs Global Baseline', selectedMatches, allInRange)
+                    : noLoadoutFilterGate,
             },
         } satisfies EntityAnalyticsData;
         return analytics;

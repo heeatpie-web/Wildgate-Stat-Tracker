@@ -70,14 +70,21 @@ const PlayerHub: React.FC = () => {
         mergeHistory,
         activeMergeNotificationId,
         dismissActiveMergeNotification,
+        recentAutoMergeApplications,
+        recordAutoMergeApplication,
+        clearAutoMergeApplication,
+        undoAutoMergeApplication,
+        recentAutoMergeDismissals,
+        recordAutoMergeDismissal,
+        restoreAutoMergeDismissal,
         pendingReviews,
         dismissedRosterMergePairKeys,
         dismissRosterMergeSuggestionPairs,
         dismissedRosterCandidateKeys,
-        dismissRosterCandidateKeys,
         addToRegistry,
         confirmRosterEntry,
         removePendingReviews,
+        applyRosterCandidateResolution,
         addPilotAlias,
         removePilotAlias,
         matches,
@@ -111,14 +118,21 @@ const PlayerHub: React.FC = () => {
         mergeHistory: state.mergeHistory,
         activeMergeNotificationId: state.activeMergeNotificationId,
         dismissActiveMergeNotification: state.dismissActiveMergeNotification,
+        recentAutoMergeApplications: state.recentAutoMergeApplications,
+        recordAutoMergeApplication: state.recordAutoMergeApplication,
+        clearAutoMergeApplication: state.clearAutoMergeApplication,
+        undoAutoMergeApplication: state.undoAutoMergeApplication,
+        recentAutoMergeDismissals: state.recentAutoMergeDismissals,
+        recordAutoMergeDismissal: state.recordAutoMergeDismissal,
+        restoreAutoMergeDismissal: state.restoreAutoMergeDismissal,
         pendingReviews: state.pendingReviews,
         dismissedRosterMergePairKeys: state.dismissedRosterMergePairKeys,
         dismissRosterMergeSuggestionPairs: state.dismissRosterMergeSuggestionPairs,
         dismissedRosterCandidateKeys: state.dismissedRosterCandidateKeys,
-        dismissRosterCandidateKeys: state.dismissRosterCandidateKeys,
         addToRegistry: state.addToRegistry,
         confirmRosterEntry: state.confirmRosterEntry,
         removePendingReviews: state.removePendingReviews,
+        applyRosterCandidateResolution: state.applyRosterCandidateResolution,
         addPilotAlias: state.addPilotAlias,
         removePilotAlias: state.removePilotAlias,
         matches: state.matches,
@@ -165,6 +179,7 @@ const PlayerHub: React.FC = () => {
     const [pendingCandidateEdits, setPendingCandidateEdits] = useState<Record<string, string>>({});
     const [sourcePreview, setSourcePreview] = useState<{ src: string; label: string } | null>(null);
     const [possibleMergesExpanded, setPossibleMergesExpanded] = useState(false);
+    const [ocrWorkbenchActiveTab, setOcrWorkbenchActiveTab] = useState<'candidates' | 'conflicts' | 'merges' | 'auto-merges'>('candidates');
     const [rosterPage, setRosterPage] = useState(0);
     const hadPossibleMergesRef = useRef(false);
     const mergeKeepNameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -395,15 +410,25 @@ const PlayerHub: React.FC = () => {
         return lookup;
     }, [panelMode, pendingRosterCandidates, rosterCandidateMatchMap, uniquePilotRegistry]);
     const possibleMergeGroups = useMemo(() => {
-        if (panelMode !== 'ocr-work') return [] as RosterMergeSuggestionGroup[];
-        return buildRosterMergeSuggestionGroups({
+        if (panelMode !== 'ocr-work' || (ocrWorkbenchActiveTab !== 'merges' && ocrWorkbenchActiveTab !== 'auto-merges')) return [] as RosterMergeSuggestionGroup[];
+        const startedAt = performance.now();
+        const groups = buildRosterMergeSuggestionGroups({
             pilotRegistry: deferredPilotRegistry,
             pilotAliases,
             pendingReviews,
             dismissedPairKeys: dismissedRosterMergePairKeys,
             autoMergeThresholdPct: Math.round((Number(ocrAutoApplyMinScore) || 0.83) * 100),
         });
-    }, [dismissedRosterMergePairKeys, ocrAutoApplyMinScore, panelMode, pendingReviews, pilotAliases, deferredPilotRegistry]);
+        if (IS_DEV_BUILD) {
+            Logger.debug('PlayerHub', 'Derived roster merge suggestions', {
+                durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
+                pilotCount: deferredPilotRegistry.length,
+                pendingReviewCount: pendingReviews.length,
+                groupCount: groups.length,
+            });
+        }
+        return groups;
+    }, [dismissedRosterMergePairKeys, ocrAutoApplyMinScore, ocrWorkbenchActiveTab, panelMode, pendingReviews, pilotAliases, deferredPilotRegistry]);
 
     const findRosterMatch = useCallback((value: string): string | null => {
         const normalizedValue = normalizeNameKey(value);
@@ -717,8 +742,6 @@ const PlayerHub: React.FC = () => {
             Logger.debug('PlayerHub', 'Derived roster model', {
                 durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
                 pilotCount: allTrackedPilots.length,
-                pendingCandidateCount: pendingRosterCandidates.length,
-                panelMode,
             });
         }
         return {
@@ -1249,8 +1272,9 @@ const PlayerHub: React.FC = () => {
     const clearResolvedRosterCandidates = (
         candidate: { id: string; value: string; canonicalTargetKey?: string | null | undefined },
         resolvedValue: string,
-        action: 'approve' | 'merge' | 'dismiss'
-    ) => {
+        action: 'approve' | 'merge' | 'dismiss',
+        options: { skipStoreUpdate?: boolean } = {}
+    ): string[] => {
         const candidateKey = normalizeOcrName(candidate.value || '').toLowerCase();
         const resolvedKey = normalizeOcrName(resolvedValue || '').toLowerCase();
         const idsToRemove = (pendingReviews || [])
@@ -1264,12 +1288,14 @@ const PlayerHub: React.FC = () => {
                 return false;
             })
             .map((review) => review.id);
-        if (idsToRemove.length > 0) removePendingReviews(idsToRemove);
+        if (idsToRemove.length > 0 && !options.skipStoreUpdate) removePendingReviews(idsToRemove);
         setPendingCandidateEdits((prev) => {
             const next = { ...prev };
+            idsToRemove.forEach((id) => { delete next[id]; });
             delete next[candidate.id];
             return next;
         });
+        return idsToRemove;
     };
 
     const mergeRosterCandidateIntoExisting = (
@@ -1292,8 +1318,11 @@ const PlayerHub: React.FC = () => {
                 confidenceWeight: 1,
             });
         }
-        addToRegistry(resolvedTarget, { origin: 'ocr', status: 'confirmed' });
-        clearResolvedRosterCandidates(candidate, resolvedTarget, 'merge');
+        const removeReviewIds = clearResolvedRosterCandidates(candidate, resolvedTarget, 'merge', { skipStoreUpdate: true });
+        applyRosterCandidateResolution({
+            registryEntries: [{ name: resolvedTarget, meta: { origin: 'ocr', status: 'confirmed' } }],
+            removeReviewIds,
+        });
         setSelectedPilot(resolvedTarget);
         setToast({
             message: `Merged OCR candidate "${rawValue}" into "${resolvedTarget}"`,
@@ -1316,14 +1345,22 @@ const PlayerHub: React.FC = () => {
                 setToast({ message: `"${existingMatch}" is already in the roster. Review merge suggestions instead.`, type: 'info' });
                 return;
             }
-            addToRegistry(value, { origin: 'ocr', status: 'confirmed' });
+            const removeReviewIds = clearResolvedRosterCandidates(candidate, value, action, { skipStoreUpdate: true });
+            applyRosterCandidateResolution({
+                registryEntries: [{ name: value, meta: { origin: 'ocr', status: 'confirmed' } }],
+                removeReviewIds,
+            });
             setToast({ message: `Added "${value}" to roster as a new player`, type: 'success' });
+            return;
         }
         if (action === 'dismiss') {
             const dismissKey = normalizeOcrName(candidate.value || '').toLowerCase();
-            if (dismissKey) dismissRosterCandidateKeys([dismissKey]);
+            const removeReviewIds = clearResolvedRosterCandidates(candidate, value, action, { skipStoreUpdate: true });
+            applyRosterCandidateResolution({
+                removeReviewIds,
+                dismissCandidateKeys: dismissKey ? [dismissKey] : [],
+            });
         }
-        clearResolvedRosterCandidates(candidate, value, action);
         if (action === 'dismiss') {
             setToast({ message: `Dismissed pending roster candidate "${value}"`, type: 'info' });
         }
@@ -1336,6 +1373,19 @@ const PlayerHub: React.FC = () => {
             group.variants.map((v) => v.name)
         );
         if (group.pairKeys.length > 0) dismissRosterMergeSuggestionPairs(group.pairKeys);
+        if (group.tier === 'auto') {
+            const latestMergeId = useAppStore.getState().mergeHistory?.[0]?.id;
+            if (latestMergeId) {
+                recordAutoMergeApplication({
+                    pairKeys: group.pairKeys,
+                    targetName: group.canonicalName,
+                    targetDisplayName: group.canonicalDisplayName,
+                    sourceNames: group.variants.map((v) => v.name),
+                    sourceDisplayNames: group.variants.map((v) => v.displayName),
+                    mergeHistoryId: latestMergeId,
+                });
+            }
+        }
         setSelectedPilot(group.canonicalName);
         setToast({
             message: `Merged ${group.variants.length} roster variant${group.variants.length === 1 ? '' : 's'} into "${group.canonicalDisplayName}"`,
@@ -1345,26 +1395,60 @@ const PlayerHub: React.FC = () => {
 
     const handleDismissMergeSuggestionGroup = (group: RosterMergeSuggestionGroup) => {
         dismissRosterMergeSuggestionPairs(group.pairKeys);
+        if (group.tier === 'auto') {
+            recordAutoMergeDismissal({
+                pairKeys: group.pairKeys,
+                canonicalName: group.canonicalName,
+                canonicalDisplayName: group.canonicalDisplayName,
+                variantNames: group.variants.map((v) => v.name),
+                variantDisplayNames: group.variants.map((v) => v.displayName),
+            });
+        }
         setToast({
             message: `Dismissed possible merge suggestion for "${group.canonicalDisplayName}"`,
             type: 'info',
         });
     };
 
+    const handleUndoAutoMergeApplication = (id: string) => {
+        const undone = undoAutoMergeApplication(id);
+        if (undone) {
+            setToast({ message: 'Undid auto-merge', type: 'info' });
+            return;
+        }
+        clearAutoMergeApplication(id);
+        setToast({
+            message: 'A newer merge was applied since — undo is no longer possible. Removed from history.',
+            type: 'info',
+        });
+    };
+
+    const handleRestoreAutoMergeDismissal = (id: string) => {
+        const restored = restoreAutoMergeDismissal(id);
+        if (restored) {
+            setToast({ message: 'Restored dismissed merge suggestion', type: 'info' });
+        }
+    };
+
     const handleBatchAcceptHighConfidence = (candidates: PendingReview[]) => {
         let accepted = 0;
+        const registryEntries: Array<{ name: string; meta: { origin: 'ocr'; status: 'confirmed' } }> = [];
+        const removeReviewIds: string[] = [];
         candidates.forEach((candidate) => {
             const value = String(pendingCandidateEdits[candidate.id] ?? candidate.value).trim();
             if (!value) return;
             const existingMatch = findRosterMatch(value);
             if (existingMatch) {
-                clearResolvedRosterCandidates(candidate, existingMatch, 'approve');
+                removeReviewIds.push(...clearResolvedRosterCandidates(candidate, existingMatch, 'approve', { skipStoreUpdate: true }));
             } else {
-                addToRegistry(value, { origin: 'ocr', status: 'confirmed' });
-                clearResolvedRosterCandidates(candidate, value, 'approve');
+                registryEntries.push({ name: value, meta: { origin: 'ocr', status: 'confirmed' } });
+                removeReviewIds.push(...clearResolvedRosterCandidates(candidate, value, 'approve', { skipStoreUpdate: true }));
             }
             accepted += 1;
         });
+        if (accepted > 0) {
+            applyRosterCandidateResolution({ registryEntries, removeReviewIds });
+        }
         if (accepted > 0) {
             setToast({
                 message: `Accepted ${accepted} OCR candidate${accepted === 1 ? '' : 's'} into the roster`,
@@ -1375,14 +1459,15 @@ const PlayerHub: React.FC = () => {
 
     const handleBatchDismissLowConfidence = (candidates: PendingReview[]) => {
         const dismissKeys: string[] = [];
+        const removeReviewIds: string[] = [];
         candidates.forEach((candidate) => {
             const value = String(pendingCandidateEdits[candidate.id] ?? candidate.value).trim();
             const dismissKey = normalizeOcrName(candidate.value || '').toLowerCase();
             if (dismissKey) dismissKeys.push(dismissKey);
-            clearResolvedRosterCandidates(candidate, value, 'dismiss');
+            removeReviewIds.push(...clearResolvedRosterCandidates(candidate, value, 'dismiss', { skipStoreUpdate: true }));
         });
         if (dismissKeys.length > 0) {
-            dismissRosterCandidateKeys(dismissKeys);
+            applyRosterCandidateResolution({ removeReviewIds, dismissCandidateKeys: dismissKeys });
             setToast({
                 message: `Dismissed ${dismissKeys.length} low-confidence OCR candidate${dismissKeys.length === 1 ? '' : 's'}`,
                 type: 'info',
@@ -1397,7 +1482,15 @@ const PlayerHub: React.FC = () => {
         roleConflictWorkbenchItems,
         onResolveRoleConflict: handleResolveRoleConflict,
         onOpenMatchInSmartCaptures: handleOpenMatchInSmartCaptures,
+        activeTab: ocrWorkbenchActiveTab,
+        onActiveTabChange: setOcrWorkbenchActiveTab,
         possibleMergeGroups,
+        activeMergeNotification,
+        onUndoLastMerge: undoLastMerge,
+        recentAutoMergeApplications,
+        recentAutoMergeDismissals,
+        onUndoAutoMergeApplication: handleUndoAutoMergeApplication,
+        onRestoreAutoMergeDismissal: handleRestoreAutoMergeDismissal,
         onMergeSuggestionGroup: handleMergeSuggestionGroup,
         onDismissMergeSuggestionGroup: handleDismissMergeSuggestionGroup,
         ocrSearchTerm,
