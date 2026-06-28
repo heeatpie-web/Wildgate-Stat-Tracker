@@ -29,6 +29,7 @@ const artifactTokenRegistry = createScopedTokenRegistry({
 const blockedSecurityCounters = new Map();
 const MATCH_ARTIFACT_REL_PATTERN = /match_artifacts[\\/](\d+)[\\/](.+)$/i;
 const AUTO_CAPTURE_FILENAME_PATTERN = /^capture_/i;
+const OCR_INTERNAL_FILENAME_PATTERN = /^(preprocessed|raw_capture)_/i;
 const RELINKED_SUFFIX_PATTERN = /(?:__relinked_\d+)+(?=\.[^.]+$)/ig;
 const CAPTURE_PREFIX_METADATA = Object.freeze({
   result: Object.freeze({ captureSource: 'result-macro', screenshotType: 'result' }),
@@ -413,6 +414,7 @@ async function collectMatchArtifacts(app, artifactHelpers, parsedPayload) {
         telemetry.push(content);
       } catch (e) { /* skip unparseable */ }
     } else if (IMAGE_EXTENSIONS.has(ext)) {
+      if (OCR_INTERNAL_FILENAME_PATTERN.test(f)) continue;
       const canonicalFilenameKey = getArtifactCanonicalFilename(fullPath);
       const existingPath = imageByCanonicalFilename.get(canonicalFilenameKey);
       imageByCanonicalFilename.set(

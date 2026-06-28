@@ -12,9 +12,14 @@ const { normalizeEvents } = require('./telemetryArchiveHelpers.cjs');
 const IMAGE_EXTS = ['.png', '.jpg', '.jpeg', '.bmp', '.webp'];
 const TIME_MARGIN_MS = { before: 5000, after: 30000 };
 const AUTO_CAPTURE_FILENAME_PATTERN = /^capture_/i;
+const OCR_INTERNAL_FILENAME_PATTERN = /^(preprocessed|raw_capture)_/i;
 
 function isAutoCaptureImage(fileName) {
   return AUTO_CAPTURE_FILENAME_PATTERN.test(String(fileName || '').trim());
+}
+
+function isOcrInternalDebugImage(fileName) {
+  return OCR_INTERNAL_FILENAME_PATTERN.test(String(fileName || '').trim());
 }
 
 /**
@@ -75,6 +80,7 @@ async function scanDirForImagesInWindow(dir, matchDir, startTime, endTime, state
     if (bundledNames.has(file)) continue;
     const ext = path.extname(file).toLowerCase();
     if (!IMAGE_EXTS.includes(ext)) continue;
+    if (isOcrInternalDebugImage(file)) continue;
 
     const fileKey = file.toLowerCase();
     if (assignedCaptureNames && isAutoCaptureImage(file) && assignedCaptureNames.has(fileKey)) continue;

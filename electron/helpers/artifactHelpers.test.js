@@ -68,6 +68,30 @@ describe('artifactHelpers.scanDirForImagesInWindow', () => {
     expect(fs.existsSync(sourcePath)).toBe(true);
   });
 
+  it('skips OCR-internal debug images (preprocessed_/raw_capture_) so they do not surface as artifacts', async () => {
+    const root = makeTempDir();
+    tempDirs.push(root);
+    const ocrDebugDir = path.join(root, 'ocr-debug');
+    const matchDir = path.join(root, 'match_artifacts', '104');
+    fs.mkdirSync(matchDir, { recursive: true });
+
+    writeImage(path.join(ocrDebugDir, 'capture_crew_hub_2026-03-08T10-00-00-000Z.png'), 'real-capture');
+    writeImage(path.join(ocrDebugDir, 'preprocessed_region_players.png'), 'preprocessed');
+    writeImage(path.join(ocrDebugDir, 'raw_capture_2026-03-08T10-00-00-000Z.png'), 'raw-debug');
+
+    const copied = await scanDirForImagesInWindow(ocrDebugDir, matchDir, 0, Date.now(), {
+      bundledNames: new Set(),
+      bundledSizes: new Set(),
+      assignedCaptureNames: new Set(),
+      consumeSource: false,
+      onCopy: () => {},
+    });
+
+    expect(copied).toHaveLength(1);
+    const bundledNames = fs.readdirSync(matchDir).sort();
+    expect(bundledNames).toEqual(['capture_crew_hub_2026-03-08T10-00-00-000Z.png']);
+  });
+
   it('bundles distinct same-size screenshots while skipping true duplicates', async () => {
     const root = makeTempDir();
     tempDirs.push(root);
