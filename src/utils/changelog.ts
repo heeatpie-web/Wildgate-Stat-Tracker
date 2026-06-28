@@ -1,4 +1,7 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.8.3": [
+    "Fix Crew Hub screenshots showing OCR-preprocessed (pixelated/chromatic) previews in app instead of the raw capture"
+  ],
   "v3.8.2": [
     "Auto-merge undo/restore in Auto-merge tab",
     "Crew Hub macro recovers when wrong screen captured",
