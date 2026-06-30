@@ -3404,6 +3404,18 @@ app.whenReady().then(async () => {
     });
 
   if (process.platform === 'win32') {
+    // Auto performance-mode driver + window-handle pre-warm.
+    //
+    // The game-process poll runs every 5s, but spawning tasklist.exe on every
+    // tick was a measurable CPU/stutter source while gaming. Optimization: once
+    // we know the game's PID, re-checking liveness is a cheap in-process syscall
+    // (process.kill(pid, 0)) with zero spawns. We only fall back to the tasklist
+    // scan when we have no known-live PID (i.e. the game isn't running yet), so a
+    // running game costs nothing per tick — exactly the state where stutter hurts.
+    let _lastGameRunning = null;
+    let _lastGamePid = null;
+    let _gameStatusPollInFlight = false;
+
     const _warmupGameWindow = () => {
       lookupGameWindowCandidate({
         processNames: GAME_WINDOW_PROCESS_NAMES,
@@ -3415,32 +3427,58 @@ app.whenReady().then(async () => {
         }
       }).catch(() => {});
     };
-    _warmupGameWindow();
-    setInterval(_warmupGameWindow, 25_000); // Every 25s — keep cache warm inside the 30s TTL
+
+    // Existence probe with no process spawn. Signal 0 doesn't kill — it just
+    // tests for the PID. EPERM means the process exists but is owned by another
+    // account (still alive); ESRCH means it's gone.
+    const _isPidAlive = (pid) => {
+      if (!Number.isFinite(pid) || pid <= 0) return false;
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch (err) {
+        return Boolean(err && err.code === 'EPERM');
+      }
+    };
 
     // Auto performance-mode driver: poll whether the game exe is running and tell
     // the renderer on every transition. The renderer edge-applies performance mode
     // (ON while the game runs, OFF otherwise); a manual toggle wins until the next
     // transition. See useAutoPerformanceMode in the renderer.
-    let _lastGameRunning = null;
-    let _gameStatusPollInFlight = false;
     const _pollGameProcessStatus = async () => {
       if (_gameStatusPollInFlight) return;
       _gameStatusPollInFlight = true;
       try {
-        const status = await fastCheckGameProcess(GAME_WINDOW_PROCESS_NAMES);
-        const running = Boolean(status && status.running);
+        // Fast path: a known, still-alive PID means the game is up — no spawn.
+        let running;
+        let pid = _lastGamePid;
+        let processName = '';
+        if (_lastGamePid != null && _isPidAlive(_lastGamePid)) {
+          running = true;
+        } else {
+          const status = await fastCheckGameProcess(GAME_WINDOW_PROCESS_NAMES);
+          running = Boolean(status && status.running);
+          pid = running ? (status.pid || null) : null;
+          processName = running ? (status.processName || '') : '';
+        }
+
         if (running !== _lastGameRunning) {
           _lastGameRunning = running;
-          console.log(`[AutoPerf] game process ${running ? 'detected' : 'not running'} (${status?.processName || GAME_WINDOW_PROCESS_NAMES.join(',') || 'none'})`);
+          _lastGamePid = running ? pid : null;
+          console.log(`[AutoPerf] game process ${running ? 'detected' : 'not running'} (${processName || GAME_WINDOW_PROCESS_NAMES.join(',') || 'none'})`);
           if (win && !win.isDestroyed()) {
             win.webContents.send('game-process-status', {
               running,
-              processName: running ? (status.processName || '') : '',
-              pid: running ? (status.pid || null) : null,
+              processName: running ? processName : '',
+              pid: running ? pid : null,
               detectedAt: Date.now(),
             });
           }
+          // Pre-warm the window cache the moment the game appears so the first
+          // auto-capture doesn't pay a cold PowerShell lookup.
+          if (running) _warmupGameWindow();
+        } else if (running) {
+          _lastGamePid = pid;
         }
       } catch (error) {
         console.warn('[AutoPerf] game process poll failed:', error?.message || error);
@@ -3449,7 +3487,14 @@ app.whenReady().then(async () => {
       }
     };
     _pollGameProcessStatus();
-    setInterval(_pollGameProcessStatus, 5_000); // Every 5s — fast enough for match-start latency
+    setInterval(_pollGameProcessStatus, 5_000); // Every 5s — cheap PID check while running, tasklist only when the game is down
+
+    // Keep the window-handle cache warm inside its 30s TTL, but only while the
+    // game is actually running. When it's closed the lookup just fails and
+    // re-spawns PowerShell every tick for nothing.
+    setInterval(() => {
+      if (_lastGameRunning) _warmupGameWindow();
+    }, 25_000);
   }
 
   // Legacy builds could accumulate massive artifact bundle copies in Documents.
