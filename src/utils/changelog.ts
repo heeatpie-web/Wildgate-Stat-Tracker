@@ -1,4 +1,7 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.8.4": [
+    "Fix CPU spike and in-game stutter from per-tick process polling (auto-performance-mode + window cache warmup)"
+  ],
   "v3.8.3": [
     "Fix Crew Hub screenshots showing OCR-preprocessed (pixelated/chromatic) previews in app instead of the raw capture"
   ],
