@@ -10,6 +10,33 @@ export const ARTIFACT_SCREENSHOT_BUCKET_ORDER: ArtifactScreenshotBucket[] = [
   'other',
 ];
 
+export interface RerunOcrCallGroup {
+  id: 'intel' | 'result' | 'other';
+  /** The group whose merged OCR data should win over other groups. */
+  isPrimary: boolean;
+  paths: string[];
+}
+
+/**
+ * Group bucketed screenshot paths into rerun-ocr-multi calls. crew_hub and
+ * tactical_map screenshots must share ONE call: the server-side ocrMerger
+ * cross-enriches crew-hub player rosters with tactical-map ship/team data, and
+ * issuing them as separate calls leaves whichever ran last as the only
+ * surviving result (dropping players or ships). crew_hub paths come first so
+ * the server-side accumulator seeds from the roster-bearing capture.
+ */
+export const buildRerunOcrCallGroups = (
+  bucketed: Record<ArtifactScreenshotBucket, string[]>
+): RerunOcrCallGroup[] => [
+  {
+    id: 'intel' as const,
+    isPrimary: true,
+    paths: [...(bucketed.crew_hub || []), ...(bucketed.tactical_map || [])],
+  },
+  { id: 'result' as const, isPrimary: false, paths: [...(bucketed.result || [])] },
+  { id: 'other' as const, isPrimary: false, paths: [...(bucketed.other || [])] },
+].filter((group) => group.paths.length > 0);
+
 export const normalizeArtifactScreenshotType = (
   value: unknown
 ): ArtifactScreenshotType | null => {

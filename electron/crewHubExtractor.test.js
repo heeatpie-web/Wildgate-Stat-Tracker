@@ -100,3 +100,61 @@ describe('clusterByHue grouping', () => {
     expect(clusters[0]).toHaveLength(2);
   });
 });
+
+describe('splitHueClusterByNamedColor', () => {
+  const entry = (name, color, hue, confidence = 88, y = 500) => ({
+    name,
+    hue,
+    card: { name, color, confidence, y, rawHue: hue },
+  });
+
+  it('splits red and orange cards that clusterByHue merged (hues only ~12° apart)', () => {
+    // Match-788 regression: red @5.22° + orange @17.62°/17.85° fell inside the
+    // 15° hue gap and collapsed into a single orange(3) team.
+    const cluster = [
+      entry('PermanentWinner', 'red', 5.22, 90),
+      entry('JusCallmeZae643', 'orange', 17.62, 88),
+      entry('Khalifa205166', 'orange', 17.85, 88),
+    ];
+    const parts = __test__.splitHueClusterByNamedColor(cluster);
+    expect(parts).toHaveLength(2);
+    const sizes = parts.map(p => p.length).sort();
+    expect(sizes).toEqual([1, 2]);
+    const redPart = parts.find(p => p[0].card.color === 'red');
+    expect(redPart.map(p => p.name)).toEqual(['PermanentWinner']);
+  });
+
+  it('keeps single-team name jitter merged when centroids are close', () => {
+    // Same bar sampled twice can flip between adjacent names (skyBlue vs
+    // periwinkle); measured hues stay within a few degrees so no split.
+    const cluster = [
+      entry('A', 'skyBlue', 203, 85),
+      entry('B', 'periwinkle', 206, 84),
+    ];
+    expect(__test__.splitHueClusterByNamedColor(cluster)).toHaveLength(1);
+  });
+
+  it('keeps interleaved same-hue names merged (red/orange measured at the same hue)', () => {
+    const cluster = [
+      entry('A', 'red', 18.64, 87),
+      entry('B', 'red', 21.73, 86),
+      entry('C', 'orange', 19.93, 85),
+    ];
+    expect(__test__.splitHueClusterByNamedColor(cluster)).toHaveLength(1);
+  });
+
+  it('assigns low-confidence and unknown cards to the nearest named part', () => {
+    const cluster = [
+      entry('A', 'red', 5, 90),
+      entry('B', 'orange', 18, 88),
+      entry('C', 'unknown', 6.5, 0),
+      entry('D', 'orange', 17, 30), // below confidence floor → treated as unnamed
+    ];
+    const parts = __test__.splitHueClusterByNamedColor(cluster);
+    expect(parts).toHaveLength(2);
+    const redPart = parts.find(p => p[0].card.color === 'red');
+    const orangePart = parts.find(p => p[0].card.color === 'orange');
+    expect(redPart.map(p => p.name).sort()).toEqual(['A', 'C']);
+    expect(orangePart.map(p => p.name).sort()).toEqual(['B', 'D']);
+  });
+});

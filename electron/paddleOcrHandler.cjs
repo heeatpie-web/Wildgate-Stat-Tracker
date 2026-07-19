@@ -8,6 +8,11 @@ const os = require('os');
 
 const TOTAL_CORES = os.cpus().length;
 const PERF_MODE_THREADS = Math.max(1, Math.floor(TOTAL_CORES / 4));
+// Uncapped ONNX sessions default to one thread per core, which saturates the
+// whole machine during OCR reruns and makes the app (and the game) stutter.
+// Half the cores is near the throughput plateau for these small models while
+// leaving headroom for everything else.
+const NORMAL_MODE_THREADS = Math.max(2, Math.floor(TOTAL_CORES / 2));
 
 const REC_VARIANT = process.env.REC_VARIANT || 'v5_en';
 
@@ -85,10 +90,9 @@ async function initPaddleOCR(performanceMode = false) {
   }
 
   const sessionOptions = { executionProviders: ['cpu'] };
-  if (performanceMode) {
-    sessionOptions.interOpNumThreads = PERF_MODE_THREADS;
-    sessionOptions.intraOpNumThreads = PERF_MODE_THREADS;
-  }
+  const sessionThreads = performanceMode ? PERF_MODE_THREADS : NORMAL_MODE_THREADS;
+  sessionOptions.interOpNumThreads = sessionThreads;
+  sessionOptions.intraOpNumThreads = sessionThreads;
 
   detSession = await ort.InferenceSession.create(DET_MODEL_PATH, sessionOptions);
   recSession = await ort.InferenceSession.create(REC_MODEL_PATH, sessionOptions);
@@ -99,7 +103,7 @@ async function initPaddleOCR(performanceMode = false) {
 
   if (!paddleReadyLogged) {
     console.log(
-      `[PaddleOCR] Ready. Variant=${REC_VARIANT} Detection=${DET_MODEL_PATH} Recognition=${REC_MODEL_PATH} Dict=${charList.length} DetFit=${DET_USE_CONTAIN ? 'contain' : 'fill'} PadY=${PADY_FACTOR} Normalise=${REC_USE_NORMALISE} PerfMode=${performanceMode} Threads=${performanceMode ? PERF_MODE_THREADS : 'default'}`
+      `[PaddleOCR] Ready. Variant=${REC_VARIANT} Detection=${DET_MODEL_PATH} Recognition=${REC_MODEL_PATH} Dict=${charList.length} DetFit=${DET_USE_CONTAIN ? 'contain' : 'fill'} PadY=${PADY_FACTOR} Normalise=${REC_USE_NORMALISE} PerfMode=${performanceMode} Threads=${sessionThreads}`
     );
     paddleReadyLogged = true;
   }

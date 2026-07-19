@@ -24,7 +24,7 @@ import type { OCRProcessRuntimeOptions } from '../utils/electronBridge';
 import type { OCRExtractedData } from '../utils/ocr/ocrTypes';
 import { bundleMatchArtifacts, rerunOCRMulti } from '../utils/artifactService';
 import {
-    ARTIFACT_SCREENSHOT_BUCKET_ORDER,
+    buildRerunOcrCallGroups,
     classifyArtifactScreenshotBucket,
 } from '../utils/artifactScreenshotBuckets';
 import {
@@ -835,10 +835,7 @@ export const Wizard: React.FC = () => {
             if (existing.some((value) => value.toLowerCase() === cleaned.toLowerCase())) return;
             existing.push(cleaned);
         });
-        const buckets = ARTIFACT_SCREENSHOT_BUCKET_ORDER.map((bucket) => ({
-            id: bucket,
-            paths: bucketedPaths[bucket],
-        })).filter((bucket) => bucket.paths.length > 0);
+        const buckets = buildRerunOcrCallGroups(bucketedPaths);
         const totalImageCount = buckets.reduce((sum, bucket) => sum + bucket.paths.length, 0);
         if (totalImageCount === 0) {
             pushNotification({
@@ -880,7 +877,7 @@ export const Wizard: React.FC = () => {
                     runtimeOptions,
                 );
                 perFileResults.push(...(rerun.perFile || []));
-                if ((bucket.id === 'crew_hub' || bucket.id === 'tactical_map') && rerun.data) {
+                if (bucket.isPrimary && rerun.data) {
                     mergedData = rerun.data;
                 } else if (!mergedData && rerun.data) {
                     mergedData = rerun.data;

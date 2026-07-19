@@ -46,6 +46,64 @@ const WILDGATE_COLOR_HUE = new Map(
   })
 );
 
+function circularMeanHue(hues) {
+  const sinSum = hues.reduce((s, h) => s + Math.sin(h * Math.PI / 180), 0);
+  const cosSum = hues.reduce((s, h) => s + Math.cos(h * Math.PI / 180), 0);
+  const meanRad = Math.atan2(sinSum / hues.length, cosSum / hues.length);
+  return ((meanRad * 180 / Math.PI) + 360) % 360;
+}
+
+// Bar naming resolves colors from full HSL, so it reliably separates teams
+// whose raw hues sit closer than clusterByHue's 15° gap (red ≈5° vs orange
+// ≈18°). Split a hue cluster when it holds two confidently-named colors whose
+// measured hue centroids are clearly apart; single-team name jitter (e.g.
+// skyBlue vs periwinkle sampled from the same bar) keeps centroids close
+// together and stays merged.
+const NAMED_SPLIT_MIN_HUE_SEPARATION = 6;
+const NAMED_SPLIT_MIN_CONFIDENCE = 55;
+function splitHueClusterByNamedColor(cluster) {
+  const byName = new Map();
+  const unnamed = [];
+  for (const p of cluster) {
+    const isNamed = p.card.color && p.card.color !== 'unknown'
+      && (p.card.confidence || 0) >= NAMED_SPLIT_MIN_CONFIDENCE;
+    if (!isNamed) {
+      unnamed.push(p);
+      continue;
+    }
+    if (!byName.has(p.card.color)) byName.set(p.card.color, []);
+    byName.get(p.card.color).push(p);
+  }
+  if (byName.size < 2) return [cluster];
+  const parts = [...byName.values()].map((members) => ({
+    members,
+    hue: circularMeanHue(members.map((m) => m.hue)),
+  }));
+  let maxSeparation = 0;
+  for (let i = 0; i < parts.length; i += 1) {
+    for (let j = i + 1; j < parts.length; j += 1) {
+      maxSeparation = Math.max(maxSeparation, hueDistance(parts[i].hue, parts[j].hue));
+    }
+  }
+  if (maxSeparation < NAMED_SPLIT_MIN_HUE_SEPARATION) return [cluster];
+  for (const p of unnamed) {
+    let best = parts[0];
+    let bestDist = Infinity;
+    for (const part of parts) {
+      const dist = hueDistance(p.hue, part.hue);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = part;
+      }
+    }
+    best.members.push(p);
+  }
+  dlog('[CrewHub] Step4b split hue cluster by named color: '
+    + parts.map((part) => part.members[0].card.color + '(' + part.members.length + ')').join(', ')
+    + ' sep=' + Math.round(maxSeparation) + '°');
+  return parts.map((part) => part.members);
+}
+
 /**
  * // LAYOUT-DEPENDENT
  * Screen layout constants (percentage-based, calibrated from real 1920×1080 screenshots)
@@ -1824,7 +1882,8 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
       const huePlayers = chromaticCards.map(c => ({ name: c.name, hue: c.rawHue, card: c }));
       // Keep every distinct hue cluster we can separate instead of truncating to
       // the old four-enemy-team assumption.
-      const hueClusters = clusterByHue(huePlayers, Math.max(5, huePlayers.length), 15);
+      const hueClusters = clusterByHue(huePlayers, Math.max(5, huePlayers.length), 15)
+        .flatMap((cluster) => splitHueClusterByNamedColor(cluster));
 
       for (const hueCluster of hueClusters) {
         const clusterCards = hueCluster.map(p => p.card);
@@ -3263,5 +3322,6 @@ module.exports = {
     isValidOpponentName,
     getDistinctTextTeamSingletonName,
     shouldSkipSalvageCandidateForKnownTeamLabel,
+    splitHueClusterByNamedColor,
   },
 };

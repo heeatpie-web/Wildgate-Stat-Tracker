@@ -26,6 +26,7 @@ import {
 } from '../utils/artifactService';
 import {
     ARTIFACT_SCREENSHOT_BUCKET_ORDER,
+    buildRerunOcrCallGroups,
     classifyArtifactScreenshotBucket,
     type ArtifactScreenshotBucket,
 } from '../utils/artifactScreenshotBuckets';
@@ -1259,10 +1260,12 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
                     result: [],
                     other: [],
                 };
-                const buckets = ARTIFACT_SCREENSHOT_BUCKET_ORDER.map((bucket) => ({
-                    bucket,
-                    paths: (bucketed[bucket] || []).filter((path) => IMAGE_EXTS.some((ext) => path.toLowerCase().endsWith(ext))),
-                })).filter((entry) => entry.paths.length > 0);
+                const buckets = buildRerunOcrCallGroups(bucketed)
+                    .map((group) => ({
+                        ...group,
+                        paths: group.paths.filter((path) => IMAGE_EXTS.some((ext) => path.toLowerCase().endsWith(ext))),
+                    }))
+                    .filter((group) => group.paths.length > 0);
                 if (buckets.length === 0) continue;
 
                 updateMatch({ ...match, ocrState: 'processing' });
@@ -1277,7 +1280,7 @@ const SmartCapturesPanel: React.FC<SmartCapturesPanelProps> = ({ isActive = true
                         rerunRuntimeOptions,
                     );
                     hasSuccessfulBucket = hasSuccessfulBucket || rerun.success;
-                    if ((entry.bucket === 'crew_hub' || entry.bucket === 'tactical_map') && rerun.data) {
+                    if (entry.isPrimary && rerun.data) {
                         combined = rerun.data as OCRExtractedData;
                     } else if (!combined && rerun.data) {
                         combined = rerun.data as OCRExtractedData;
@@ -3989,10 +3992,12 @@ const SmartMatchDetail: React.FC<{
             const processingBaseMatch = getLatestMatchSnapshot();
             onUpdate({ ...processingBaseMatch, ocrState: 'processing' });
             const imageExts = ['.png', '.jpg', '.jpeg', '.bmp', '.webp'];
-            const buckets = ARTIFACT_SCREENSHOT_BUCKET_ORDER.map((bucket) => ({
-                id: bucket,
-                paths: bucketedCandidates[bucket].filter((p) => imageExts.some((ext) => p.toLowerCase().endsWith(ext))),
-            })).filter((bucket) => bucket.paths.length > 0);
+            const buckets = buildRerunOcrCallGroups(bucketedCandidates)
+                .map((group) => ({
+                    ...group,
+                    paths: group.paths.filter((p) => imageExts.some((ext) => p.toLowerCase().endsWith(ext))),
+                }))
+                .filter((group) => group.paths.length > 0);
             const totalImageCount = buckets.reduce((sum, bucket) => sum + bucket.paths.length, 0);
             if (totalImageCount === 0) {
                 setRerunning(false);
@@ -4030,7 +4035,7 @@ const SmartMatchDetail: React.FC<{
                         rerunRuntimeOptions,
                     );
                     perFileRaw.push(...(rerun.perFile || []));
-                    if ((bucket.id === 'crew_hub' || bucket.id === 'tactical_map') && rerun.data) {
+                    if (bucket.isPrimary && rerun.data) {
                         mergedData = rerun.data;
                     } else if (!mergedData && rerun.data) {
                         mergedData = rerun.data;

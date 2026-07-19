@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ArtifactFile } from './artifactService';
-import { classifyArtifactScreenshotBucket, normalizeArtifactScreenshotType } from './artifactScreenshotBuckets';
+import { buildRerunOcrCallGroups, classifyArtifactScreenshotBucket, normalizeArtifactScreenshotType } from './artifactScreenshotBuckets';
 
 describe('artifactScreenshotBuckets', () => {
     it('normalizes persisted screenshot types and OCR aliases', () => {
@@ -36,5 +36,35 @@ describe('artifactScreenshotBuckets', () => {
     it('falls back to other when a screenshot has no persisted classification', () => {
         expect(classifyArtifactScreenshotBucket('C:\\captures\\capture_ocr_1.png')).toBe('other');
         expect(classifyArtifactScreenshotBucket('C:\\captures\\random.png')).toBe('other');
+    });
+
+    it('combines crew_hub and tactical_map into one primary rerun call group', () => {
+        const groups = buildRerunOcrCallGroups({
+            crew_hub: ['C:\\captures\\capture_crew_hub_1.png', 'C:\\captures\\capture_crew_hub_2.png'],
+            tactical_map: ['C:\\captures\\capture_map_1.png'],
+            result: ['C:\\captures\\capture_result_1.png'],
+            other: [],
+        });
+
+        expect(groups).toHaveLength(2);
+        expect(groups[0]).toMatchObject({ id: 'intel', isPrimary: true });
+        // crew_hub paths lead so the server-side merge seeds from the roster capture
+        expect(groups[0].paths).toEqual([
+            'C:\\captures\\capture_crew_hub_1.png',
+            'C:\\captures\\capture_crew_hub_2.png',
+            'C:\\captures\\capture_map_1.png',
+        ]);
+        expect(groups[1]).toMatchObject({ id: 'result', isPrimary: false });
+    });
+
+    it('omits empty rerun call groups', () => {
+        const groups = buildRerunOcrCallGroups({
+            crew_hub: [],
+            tactical_map: [],
+            result: [],
+            other: ['C:\\captures\\random.png'],
+        });
+        expect(groups).toHaveLength(1);
+        expect(groups[0]).toMatchObject({ id: 'other', isPrimary: false });
     });
 });
