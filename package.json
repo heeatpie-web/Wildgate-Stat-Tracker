@@ -175,8 +175,7 @@
       {
         "provider": "github",
         "owner": "heeatpie-web",
-        "repo": "Wildgate-Stat-Tracker",
-        "releaseType": "release"
+        "repo": "Wildgate-Stat-Tracker"
       }
     ]
   }
