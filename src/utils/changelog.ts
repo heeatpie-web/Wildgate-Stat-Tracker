@@ -1,4 +1,8 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.8.5": [
+    "Roster Manager now shows your username with a YOU tag instead of a standalone YOU entry",
+    "History table lists your name with (you) instead of hiding it"
+  ],
   "v3.8.4": [
     "Fix CPU spike and in-game stutter from per-tick process polling (auto-performance-mode + window cache warmup)"
   ],
