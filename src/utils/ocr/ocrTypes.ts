@@ -124,6 +124,10 @@ export interface OCRExtractedData {
     fontProfile: 'default' | 'ealing-black-italic';
   };
   ocrCorpusSampleId?: string;
+  /** Hex map seed extracted from tactical map OCR (e.g. "A1B2C3D4"). */
+  mapSeed?: string;
+  /** Diagnostic flags from seed canonicalization. */
+  mapSeedFlags?: string[];
   isPartialCapture?: boolean;
 }
 

@@ -67,6 +67,11 @@ export const TIPS_BY_VIEW: Record<AppView, string[]> = {
     'Each found match opens in the Wizard so you can fill in kills and hero before saving.',
     'If no matches are detected, verify the recording includes an end-of-match result screen.',
   ],
+  seeds: [
+    'Map seeds are automatically parsed from tactical map OCR during match captures.',
+    'Use the seed search bar to quickly check your win rate on specific hex layout seeds.',
+    'Hazard frequencies show which map features spawn together under each seed value.',
+  ],
 };
 
 export const getTipsForView = (view: AppView, includeDevTips = true): string[] => {

@@ -15,6 +15,7 @@ import {
     HelpCircle,
     UserPlus,
     Film,
+    Hash,
 } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
 import { useGameData } from '../providers/GameDataProvider';
@@ -23,7 +24,7 @@ import { countOpenSmartCaptureWorkQueueMatches } from './smart-captures/smartCap
 
 const IS_DEV_BUILD = import.meta.env.DEV || process.env.NODE_ENV !== 'production';
 
-export type AppView = 'recording' | 'analytics' | 'smart-captures' | 'players' | 'id-mapper' | 'history' | 'dev-ocr' | 'video-import';
+export type AppView = 'recording' | 'analytics' | 'smart-captures' | 'players' | 'id-mapper' | 'seeds' | 'history' | 'dev-ocr' | 'video-import';
 
 interface NavItem {
     id: AppView;
@@ -37,6 +38,7 @@ const navItems: NavItem[] = [
     { id: 'smart-captures', icon: <ScanEye size={18} />, label: 'Smart Captures' },
     { id: 'players', icon: <Users size={18} />, label: 'Players' },
     { id: 'id-mapper', icon: <UserPlus size={18} />, label: 'ID Mapper' },
+    { id: 'seeds', icon: <Hash size={18} />, label: 'Seeds' },
     { id: 'history', icon: <History size={18} />, label: 'History' },
     { id: 'video-import', icon: <Film size={18} />, label: 'Video Import' },
 ];

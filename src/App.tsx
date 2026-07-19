@@ -122,10 +122,11 @@ const Wizard = React.lazy(() => import('./components/Wizard').then((m) => ({ def
 const ReviewQueueModal = React.lazy(() => import('./components/ReviewQueueModal').then((m) => ({ default: m.ReviewQueueModal })));
 const MatchRecordingPage = React.lazy(() => import('./components/MatchRecordingPage').then(m => ({ default: m.MatchRecordingPage })));
 const VideoImportView = React.lazy(() => import('./components/VideoImport/VideoImportView').then(m => ({ default: m.VideoImportView })));
+const SeedsPanel = React.lazy(() => import('./components/SeedsPanel').then(m => ({ default: m.SeedsPanel })));
 import type { AppView } from './store/slices/createUISlice';
 const APP_VIEW_ORDER: AppView[] = IS_DEV_BUILD
-    ? ['recording', 'analytics', 'history', 'smart-captures', 'players', 'id-mapper', 'video-import', 'dev-ocr']
-    : ['recording', 'analytics', 'history', 'smart-captures', 'players', 'id-mapper', 'video-import'];
+    ? ['recording', 'analytics', 'history', 'smart-captures', 'players', 'id-mapper', 'seeds', 'video-import', 'dev-ocr']
+    : ['recording', 'analytics', 'history', 'smart-captures', 'players', 'id-mapper', 'seeds', 'video-import'];
 import type { OCRExtractedData } from './utils/ocr/ocrTypes';
 import { useAppStore } from './store/useAppStore';
 import { getElectronAPI } from './utils/electronAPI';
@@ -681,6 +682,7 @@ const App: React.FC = () => {
         'smart-captures': activeView === 'smart-captures',
         players: activeView === 'players',
         'id-mapper': activeView === 'id-mapper',
+        seeds: activeView === 'seeds',
         'dev-ocr': activeView === 'dev-ocr',
         'video-import': activeView === 'video-import',
     }));
@@ -1972,6 +1974,7 @@ const App: React.FC = () => {
             || rawActiveView === 'recording'
             || rawActiveView === 'history'
             || rawActiveView === 'id-mapper'
+            || rawActiveView === 'seeds'
         )
             ? (rawActiveView as RestoreSessionPayload['activeView'])
             : 'recording';
@@ -4486,6 +4489,8 @@ const App: React.FC = () => {
             opponents: nextDraftOpponents.length > 0 ? nextDraftOpponents : (basePendingMatch.opponents || []),
             artifacts: mergedArtifactPaths.length > 0 ? mergedArtifactPaths : basePendingMatch.artifacts,
             reachModifiers: Array.from(pendingModifierMap.values()),
+            mapSeed: String(data.mapSeed || basePendingMatch.mapSeed || '').trim() || undefined,
+            mapSeedFlags: Array.isArray(data.mapSeedFlags) ? data.mapSeedFlags : basePendingMatch.mapSeedFlags,
             artifactSource: extractedArtifactSource || String(basePendingMatch.artifactSource || '').trim() || undefined,
             opponentTeams: structuredTeams.length > 0 ? structuredTeams : (basePendingMatch.opponentTeams || []),
             ocrState: 'reviewing',
@@ -4517,6 +4522,8 @@ const App: React.FC = () => {
                 teammates: Array.isArray(nextPendingMatchData.teammates) ? [...nextPendingMatchData.teammates] : canonicalMatch.teammates,
                 opponents: Array.isArray(nextPendingMatchData.opponents) ? [...nextPendingMatchData.opponents] : canonicalMatch.opponents,
                 reachModifiers: Array.isArray(nextPendingMatchData.reachModifiers) ? [...nextPendingMatchData.reachModifiers] : canonicalMatch.reachModifiers,
+                mapSeed: nextPendingMatchData.mapSeed || canonicalMatch.mapSeed,
+                mapSeedFlags: nextPendingMatchData.mapSeedFlags || canonicalMatch.mapSeedFlags,
                 artifactSource: String(nextPendingMatchData.artifactSource || canonicalMatch.artifactSource || '').trim() || undefined,
                 artifacts: mergedArtifactPaths.length > 0 ? mergedArtifactPaths : canonicalMatch.artifacts,
                 opponentTeams: Array.isArray(nextPendingMatchData.opponentTeams) ? nextPendingMatchData.opponentTeams : canonicalMatch.opponentTeams,
@@ -4669,6 +4676,12 @@ const App: React.FC = () => {
                 return (
                     <div className="h-full min-h-0 overflow-y-auto custom-scrollbar p-3">
                         <IdMapper />
+                    </div>
+                );
+            case 'seeds':
+                return (
+                    <div className="h-full min-h-0 overflow-hidden p-3">
+                        <SeedsPanel />
                     </div>
                 );
             case 'video-import':

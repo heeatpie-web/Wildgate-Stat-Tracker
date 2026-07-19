@@ -10,6 +10,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { GameMode, WizardResult } from '../types';
 import type {
     AppNotification,
+    AppView,
     NotificationInput,
     TelemetryAutomationStatusState,
     TelemetryLifecycleStage,
@@ -120,8 +121,8 @@ interface UIStateContextType {
     setWizardInitialTab: (tab: 'result' | 'ocr' | null) => void;
     devMode: boolean;
     setDevMode: (enabled: boolean) => void;
-    activeView: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'id-mapper' | 'history' | 'dev-ocr' | 'video-import';
-    setActiveView: (view: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'id-mapper' | 'history' | 'dev-ocr' | 'video-import') => void;
+    activeView: AppView;
+    setActiveView: (view: AppView) => void;
     playerHubFocusName: string | null;
     setPlayerHubFocusName: (name: string | null) => void;
     hiddenForScan: boolean;

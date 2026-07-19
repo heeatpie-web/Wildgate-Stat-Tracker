@@ -182,6 +182,10 @@ export interface Match {
   perks?: string[];
   weapons?: Record<string, number>; // Legacy/Usage stats
   reachModifiers: string[];
+  /** Hex map seed extracted from the tactical map OCR (e.g. "A1B2C3D4"). */
+  mapSeed?: string;
+  /** Diagnostic flags from seed canonicalization (length mismatch, char substitution, etc.). */
+  mapSeedFlags?: string[];
   kills: KillMap;
   result: MatchResult;
   subType: string;
