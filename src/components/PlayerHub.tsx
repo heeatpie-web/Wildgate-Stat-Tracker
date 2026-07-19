@@ -53,6 +53,17 @@ import {
     normalizeNameKey,
 } from './playerHub/playerHubUtils';
 
+// A player is auto-archived once unseen for longer than this window, which keeps
+// the default "Active" roster small so large (1000+) rosters stay responsive.
+// Curated roster entries and favorites are always kept active; anyone seen again
+// automatically returns to Active because their lastSeen refreshes.
+const ROSTER_ARCHIVE_THRESHOLD_MS = 30 * 24 * 60 * 60 * 1000;
+const isPilotActive = (pilot: { isRoster?: boolean; isFavorite?: boolean; lastSeen?: number | null }, now: number): boolean => {
+    if (pilot.isRoster || pilot.isFavorite) return true;
+    if (pilot.lastSeen == null) return true;
+    return (now - pilot.lastSeen) <= ROSTER_ARCHIVE_THRESHOLD_MS;
+};
+
 const PlayerHub: React.FC = () => {
     const {
         pilotRegistry,
@@ -157,7 +168,9 @@ const PlayerHub: React.FC = () => {
         setSmartCapturesFocusMatchId,
         playerHubFocusName,
         setPlayerHubFocusName,
+        activeUser,
     } = useUIState();
+    const activeUserKey = React.useMemo(() => normalizeNameKey(activeUser || ''), [activeUser]);
 
     const [searchTerm, setSearchTerm] = useState('');
     const [ocrSearchTerm, setOcrSearchTerm] = useState('');
@@ -790,10 +803,17 @@ const PlayerHub: React.FC = () => {
     const rosteredPlayerCount = useMemo(() => enrichedPilots.filter((pilot) => pilot.isRoster).length, [enrichedPilots]);
     const trackedOnlyPlayerCount = useMemo(() => enrichedPilots.filter((pilot) => pilot.isTrackedOnly).length, [enrichedPilots]);
     const needsReviewPlayerCount = useMemo(() => enrichedPilots.filter((pilot) => pilot.needsReview).length, [enrichedPilots]);
+    const activePlayerCount = useMemo(() => { const now = Date.now(); return enrichedPilots.filter((pilot) => isPilotActive(pilot, now)).length; }, [enrichedPilots]);
+    const archivedPlayerCount = useMemo(() => { const now = Date.now(); return enrichedPilots.filter((pilot) => !isPilotActive(pilot, now)).length; }, [enrichedPilots]);
 
     const filtered = useMemo(() => {
         let list = enrichedPilots;
-        if (playerFilterMode === 'roster') {
+        const nowTs = Date.now();
+        if (playerFilterMode === 'active') {
+            list = list.filter((pilot) => isPilotActive(pilot, nowTs));
+        } else if (playerFilterMode === 'archived') {
+            list = list.filter((pilot) => !isPilotActive(pilot, nowTs));
+        } else if (playerFilterMode === 'roster') {
             list = list.filter((pilot) => pilot.isRoster);
         } else if (playerFilterMode === 'tracked-only') {
             list = list.filter((pilot) => pilot.isTrackedOnly);
@@ -1517,9 +1537,12 @@ const PlayerHub: React.FC = () => {
         <div data-tour="view-players" className="players-solid-scope players-shell-surface w-full flex-1 h-full min-h-0 flex flex-col lg:grid lg:grid-cols-[minmax(22rem,30rem)_minmax(0,1fr)] 2xl:grid-cols-[minmax(24rem,34rem)_minmax(0,1fr)] gap-4 overflow-visible rounded-2xl">
             {/* Column 1: Roster List */}
             <PlayerHubRosterColumn
+                activeUserKey={activeUserKey}
                 panelMode={panelMode}
                 setPanelMode={setPanelMode}
                 rosteredPlayerCount={rosteredPlayerCount}
+                activePlayerCount={activePlayerCount}
+                archivedPlayerCount={archivedPlayerCount}
                 trackedOnlyPlayerCount={trackedOnlyPlayerCount}
                 searchTerm={searchTerm}
                 setSearchTerm={setSearchTerm}
@@ -1659,6 +1682,9 @@ const PlayerHub: React.FC = () => {
                                         ) : (
                                             <div className="flex items-center gap-2 min-w-0">
                                                 <h2 className="text-body font-bold text-md-sys-on-surface truncate">{selected.name}</h2>
+                                                {activeUserKey && normalizeNameKey(selected.name) === activeUserKey && (
+                                                    <span className="shrink-0 px-2 py-0.5 rounded-pill text-label-xs font-black uppercase tracking-wide bg-md-sys-primary/15 text-md-sys-primary border border-md-sys-primary/25" title="This is you">YOU</span>
+                                                )}
                                                 {selectedStatusChips.map((chip) => (
                                                     <span
                                                         key={`selected-${chip.key}`}

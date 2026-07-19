@@ -2,7 +2,7 @@ import type { RosterEntryMeta } from '../../store/slices/createDataSlice';
 import type { Match } from '../../types';
 
 export type SortMode = 'alpha' | 'favorites' | 'recent' | 'encounters';
-export type PlayerFilterMode = 'all' | 'roster' | 'tracked-only' | 'needs-review';
+export type PlayerFilterMode = 'active' | 'all' | 'roster' | 'tracked-only' | 'needs-review' | 'archived';
 export type PlayerHubMode = 'roster' | 'ocr-work';
 
 export interface PlayerDetail {

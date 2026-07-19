@@ -2,12 +2,16 @@ import React, { type Dispatch, type FC, type RefObject, type SetStateAction } fr
 import { Users, Search, Star, ChevronRight, ChevronLeft, Undo2, X, ScanEye } from 'lucide-react';
 import type { MergeHistoryEntry, PendingReview } from '../../store/slices/createDataSlice';
 import type { PlayerDetail, PlayerFilterMode, PlayerHubMode, SortMode } from './playerHubTypes';
-import { getPlayerStatusChips, getStatusChipClassName } from './playerHubUtils';
+import { getPlayerStatusChips, getStatusChipClassName, normalizeNameKey } from './playerHubUtils';
+
+const ROSTER_ARCHIVE_THRESHOLD_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface PlayerHubRosterColumnProps {
     panelMode: PlayerHubMode;
     setPanelMode: Dispatch<SetStateAction<PlayerHubMode>>;
     rosteredPlayerCount: number;
+    activePlayerCount: number;
+    archivedPlayerCount: number;
     trackedOnlyPlayerCount: number;
     searchTerm: string;
     setSearchTerm: Dispatch<SetStateAction<string>>;
@@ -33,6 +37,8 @@ export interface PlayerHubRosterColumnProps {
     selectedPilot: string | null;
     setSelectedPilot: Dispatch<SetStateAction<string | null>>;
     timeAgo: (ts: number | null) => string;
+    /** Normalized name key of the signed-in player, for the YOU tag. */
+    activeUserKey?: string;
 }
 
 const SORT_OPTIONS: { id: SortMode; label: string }[] = [
@@ -46,6 +52,8 @@ export const PlayerHubRosterColumn: FC<PlayerHubRosterColumnProps> = ({
     panelMode,
     setPanelMode,
     rosteredPlayerCount,
+    activePlayerCount,
+    archivedPlayerCount,
     trackedOnlyPlayerCount,
     searchTerm,
     setSearchTerm,
@@ -71,14 +79,17 @@ export const PlayerHubRosterColumn: FC<PlayerHubRosterColumnProps> = ({
     selectedPilot,
     setSelectedPilot,
     timeAgo,
+    activeUserKey,
 }) => {
     const canPrev = rosterPage > 0;
     const canNext = rosterPage < rosterTotalPages - 1;
     const scopeOptions = [
+        { id: 'active' as PlayerFilterMode, label: 'Active', count: activePlayerCount },
         { id: 'all' as PlayerFilterMode, label: 'All', count: enrichedPilots.length },
         { id: 'roster' as PlayerFilterMode, label: 'Roster', count: rosteredPlayerCount },
         { id: 'tracked-only' as PlayerFilterMode, label: 'Tracked', count: trackedOnlyPlayerCount },
         { id: 'needs-review' as PlayerFilterMode, label: 'Review', count: needsReviewPlayerCount },
+        { id: 'archived' as PlayerFilterMode, label: 'Archived', count: archivedPlayerCount },
     ];
 
     return (
@@ -239,6 +250,7 @@ export const PlayerHubRosterColumn: FC<PlayerHubRosterColumnProps> = ({
                                 {rosterVisiblePilots.map((pilot) => {
                                     const statusChips = getPlayerStatusChips(pilot);
                                     const isSelected = selectedPilot === pilot.name;
+                                    const isArchived = !pilot.isRoster && !pilot.isFavorite && pilot.lastSeen != null && (Date.now() - pilot.lastSeen) > ROSTER_ARCHIVE_THRESHOLD_MS;
                                     const teammateWr = pilot.asTeammate && pilot.asTeammate.total > 0
                                         ? Math.round((pilot.asTeammate.wins / pilot.asTeammate.total) * 100)
                                         : null;
@@ -272,6 +284,12 @@ export const PlayerHubRosterColumn: FC<PlayerHubRosterColumnProps> = ({
                                                 <div className="flex items-center gap-1.5 min-w-0">
                                                     {pilot.isFavorite && <Star size={10} className="text-warning fill-amber-400 shrink-0" />}
                                                     <span className="player-list-name text-label-sm font-semibold text-md-sys-on-surface truncate">{pilot.name}</span>
+                                                    {activeUserKey && normalizeNameKey(pilot.name) === activeUserKey && (
+                                                        <span className="shrink-0 px-1.5 py-0.5 rounded-pill text-[9px] font-black uppercase tracking-wide leading-none bg-md-sys-primary/15 text-md-sys-primary border border-md-sys-primary/25" title="This is you">YOU</span>
+                                                    )}
+                                                    {isArchived && (
+                                                        <span className="shrink-0 px-1.5 py-0.5 rounded-pill text-[9px] font-bold uppercase tracking-wide leading-none bg-md-sys-on-surface/[0.08] text-md-sys-on-surface/45 border border-md-sys-outline/10" title="Archived — not seen in over 30 days">Archived</span>
+                                                    )}
                                                 </div>
                                                 <div className="flex items-center gap-x-2 mt-0.5 text-label-xs text-md-sys-on-surface/40 flex-wrap">
                                                     {pilot.totalEncounters > 0 && (
