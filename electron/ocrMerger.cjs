@@ -481,6 +481,45 @@ function mergeLegacyTacticalMap(existing, newData) {
  * Result is an enriched crew_hub with shipType filled in on each opponent team,
  * and the user's own ship type populated from playerShip.
  */
+/**
+ * Backfill the friendly crew from the crew-hub roster when cross-merging with a
+ * tactical-map capture.  The crew hub lists teammates in a clean vertical panel
+ * and is authoritative for the (match-stable) friendly crew; the tactical map's
+ * friendly names are small, sit over a busy background, and are frequently
+ * partial.  So when a crew-hub roster exists we treat it as the base and let the
+ * map only *refine* existing entries (fuzzy-matched OCR corrections) — never add
+ * brand-new teammates, which on the map are almost always noise.  When no crew
+ * roster exists we fall back to whatever the map captured so nothing is lost.
+ */
+function teammateNameKey(entry) {
+  const name = typeof entry === 'string' ? entry : (entry && entry.name) || '';
+  return String(name).toLowerCase().replace(/[^a-z0-9\u00c0-\u024f\u0400-\u04ff\u4e00-\u9fff]/g, '');
+}
+function teammatesLikelySame(a, b) {
+  const ka = teammateNameKey(a);
+  const kb = teammateNameKey(b);
+  if (!ka || !kb) return false;
+  if (ka === kb) return true;
+  const shorter = ka.length <= kb.length ? ka : kb;
+  const longer = ka.length <= kb.length ? kb : ka;
+  if (shorter.length >= 6 && longer.startsWith(shorter)) return true; // clan-tag / suffix split
+  if (shorter.length >= 8 && longer.includes(shorter)) return true;   // containment
+  if (Math.abs(ka.length - kb.length) <= 2 && Math.min(ka.length, kb.length) >= 8) {
+    return levenshteinDistance(ka, kb) <= 2;
+  }
+  return false;
+}
+function backfillTeammatesFromCrewRoster(crewRoster, mapTeammates) {
+  const roster = (Array.isArray(crewRoster) ? crewRoster : []).filter(Boolean);
+  const mapList = (Array.isArray(mapTeammates) ? mapTeammates : []).filter(Boolean);
+  if (countNamedPlayers(roster) > 0) {
+    // Only fold in map names that correspond to an existing roster entry.
+    const refinements = mapList.filter(mp => roster.some(r => teammatesLikelySame(r, mp)));
+    return mergePlayers(roster, refinements);
+  }
+  return mergePlayers([], mapList);
+}
+
 function crossMergeCrewHubAndMap(crewHub, tactMap) {
   // Map ship lookup: normalized team name → ship metadata
   const mapShipByName = new Map();
@@ -683,7 +722,7 @@ function crossMergeCrewHubAndMap(crewHub, tactMap) {
     screenshotType: 'crew_hub',
     playerShipName: mergedPlayerShipName,
     playerShip: crewHub.playerShip || tactMap.playerShip,
-    teammates: mergePlayers(crewHub.teammates || [], tactMap.teammates || []).slice(0, MAX_TEAM_PLAYERS),
+    teammates: backfillTeammatesFromCrewRoster(crewHub.teammates || [], tactMap.teammates || []).slice(0, MAX_TEAM_PLAYERS),
     opponentTeams: sortTeamsByColor(cleanedCombinedTeams, (team) => team?.color || team?.teamColor),
     reachModifiers: mergeHazards(crewHub.reachModifiers || [], tactMap.reachModifiers || []),
     captureTimestamp: crewHub.captureTimestamp || tactMap.captureTimestamp,
@@ -930,7 +969,7 @@ function crossMergeInternalCrewAndMap(crew, map) {
       ...crew.yourTeam,
       name: yourTeamName,
       shipType: map.yourShip?.shipType || crew.yourTeam?.shipType,
-      players: mergePlayers(yourPlayersFiltered, map.players || []),
+      players: backfillTeammatesFromCrewRoster(yourPlayersFiltered, map.players || []),
     },
     enemyTeams: sortTeamsByColor(finalEnrichedTeams, (team) => team?.color || team?.teamColor),
     hazards: (map.hazards && map.hazards.length > 0) ? map.hazards : (crew.hazards || []),

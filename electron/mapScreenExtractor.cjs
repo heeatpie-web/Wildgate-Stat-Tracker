@@ -174,6 +174,33 @@ function logMapLayoutDebug(enabled, label, payload) {
 }
 
 /**
+ * Map seed canonicalization (ported from scripts/ocr_seed_extract.py::canonicalize_seed).
+ * The tactical map shows a "MAP SEED: <hex>" line (bottom-right). OCR frequently
+ * confuses O/0, I/1, L/1 inside the hex value, so those are translated back.
+ * This is a PURE parse over already-recognized text — no new crops/OCR passes.
+ *
+ * @param {string} input - Full-screen OCR text (any case, any line breaks)
+ * @returns {{ seed: string, flags: string[] }} Cleaned seed ('' when not found) + flags
+ */
+const MAP_SEED_PATTERN = /MAP\s*SEED\s*:?\s*([0-9A-FOIL]{4,12})/;
+const SEED_TRANSLATION = { O: '0', I: '1', L: '1' };
+
+function canonicalizeSeedFromText(input) {
+  const joined = String(input || '').toUpperCase().replace(/\s+/g, ' ').trim();
+  const match = joined.match(MAP_SEED_PATTERN);
+  if (!match) {
+    return { seed: '', flags: ['NO_SEED_FOUND'] };
+  }
+  const raw = String(match[1] || '').toUpperCase();
+  const cleaned = raw.replace(/[OIL]/g, (ch) => SEED_TRANSLATION[ch] || ch);
+  const flags = [];
+  if (cleaned.length !== 8) flags.push(`LENGTH_${cleaned.length}_NOT_8`);
+  if (!/^[0-9A-F]+$/.test(cleaned)) flags.push('NON_HEX_CHARS');
+  if (cleaned !== raw) flags.push(`SUBST(${raw}->${cleaned})`);
+  return { seed: cleaned, flags };
+}
+
+/**
  * Known ship types
  */
 // Keep multi-word / more specific ship names before generic ones so findShipType
@@ -466,6 +493,13 @@ async function extractMapScreen(imageBuffer, ocrResult, imageWidth, imageHeight,
   console.log(`[MapScreen] Words after map-centre exclusion: ${words.length}/${rawWords.length}`);
   const lines = ocrResult.lines || [];
   const text = ocrResult.text || '';
+
+  // Additive parse: pull the map seed out of the already-recognized full-screen
+  // text (the tactical map shows a "MAP SEED: <hex>" line bottom-right). Pure
+  // string parsing only -- no new crops, no changes to existing extraction.
+  const seedParse = canonicalizeSeedFromText(text);
+  if (seedParse.seed) result.mapSeed = seedParse.seed;
+  result.mapSeedFlags = seedParse.flags;
 
   try {
     // Step 1: Extract YOUR SHIP info
@@ -1904,4 +1938,5 @@ module.exports = {
   KNOWN_HAZARDS,
   SHIP_TYPES,
   looksLikeTeamName,
+  canonicalizeSeedFromText,
 };

@@ -328,6 +328,12 @@ const UI_NOISE_PHRASES = [
   'MATCHSTARTING',
   'SPECTATOR MODE',
   'SPECTATORMODE',
+  // Capture-quality / smart-capture overlay toast — never a player name
+  'CAPTURE QUALITY LOOKS GOOD',
+  'CAPTUREQUALITYLOOKSGOOD',
+  'CAPTURE QUALITY',
+  'CAPTUREQUALITY',
+  'CAPTURE QUALITY LOOKS',
 ];
 const SAME_COLOR_BASE_GAP_MULTIPLIER = 1.35;
 const SAME_COLOR_SPECTATOR_GAP_MULTIPLIER = 0.95;
@@ -780,6 +786,9 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
       if (Math.abs(line.y - 1355) < 10) dlog('[LPdbg1355b] extractResult="' + playerName + '" nameColWords=' + nameColWords.length);
       if (!playerName) { dlog('[LPdbg] y=' + Math.round(line.y) + ' → no name from: ' + nameColWords.map(w=>'"'+w.text+'"(c'+Math.round(w.confidence)+')').join(' ')); continue; }
       if (containsUnderCrewBonusPhrase(playerName)) { dlog('[LPdbg] y=' + Math.round(line.y) + ' → filtered ship-bonus phrase "' + playerName + '"'); continue; }
+      // Left-panel (teammate) names must also reject UI-noise phrases (e.g. the
+      // smart-capture "Capture quality looks good" toast that can overlap the crew list).
+      if (containsUiNoisePhrase(playerName)) { dlog('[LPdbg] y=' + Math.round(line.y) + ' → filtered ui-noise phrase "' + playerName + '"'); continue; }
       if (!isValidPlayerName(playerName)) { dlog('[LPdbg] y=' + Math.round(line.y) + ' → invalid: "' + playerName + '"'); continue; }
       // Filter team name banner fragments.
       // e.g. "PEED ED RUN!s" ← "SPEED RUN!'s" — handles:
@@ -3140,6 +3149,14 @@ function namesAreNearDuplicate(a, b) {
   const shorter = aKey.length <= bKey.length ? aKey : bKey;
   const longer  = aKey.length <= bKey.length ? bKey : aKey;
   if (shorter.length >= 8 && longer.includes(shorter)) return true;
+  // Clan-tag suffix split dedup: one name is the base handle and the other is the
+  // base handle with a short trailing clan/stream tag ("Goblina" vs "Goblina TTV"
+  // / "GoblinaTTV").  Guard with shorter.length >= 6 so short handles like "riv"
+  // are never conflated, and require the appended tail to be a short alpha token.
+  if (shorter.length >= 6 && longer.startsWith(shorter)) {
+    const tail = longer.slice(shorter.length);
+    if (/^[a-z]{1,4}$/.test(tail)) return true;
+  }
   // Phantom-suffix dedup: "Daafin" and "Daafin19" are the same player —
   // the digit suffix is an OCR badge artifact.  Match when the shorter name
   // is a prefix of the longer and the extra chars are 1–2 digits only.

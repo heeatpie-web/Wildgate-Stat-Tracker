@@ -2869,6 +2869,8 @@ function convertMapScreenToLegacy(mapScreenData, rawText) {
     opponentTeams,
     reachModifiers: [...extractModifiers(rawText), ...hazardMods],
     hazards: mapScreenData.hazards || [],
+    mapSeed: String(mapScreenData.mapSeed || '').trim() || undefined,
+    mapSeedFlags: Array.isArray(mapScreenData.mapSeedFlags) ? mapScreenData.mapSeedFlags : undefined,
     mapRoutingMeta: mapScreenData.routingMeta || null,
     overallConfidence,
     captureTimestamp: Date.now(),
