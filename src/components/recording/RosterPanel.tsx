@@ -318,7 +318,8 @@ export const RosterPanel: React.FC<RosterPanelProps> = ({ workspaceToggle }) => 
                             {normalizedActiveUser && (
                                 <span className="roster-you-chip flex items-center gap-2 rounded-control px-2 py-1.5 text-label-xs font-semibold">
                                     <span className="w-2 h-2 rounded-full bg-success" />
-                                    <span className="font-bold text-success tracking-wide">YOU</span>
+                                    <span className="font-bold tracking-wide">{activeUser}</span>
+                                    <span className="px-1.5 py-0.5 rounded-full bg-success-soft text-success text-label-xs font-bold tracking-wide">YOU</span>
                                 </span>
                             )}
                             {visibleTeammates.map((p: string) => (
@@ -496,6 +497,7 @@ export const RosterPanel: React.FC<RosterPanelProps> = ({ workspaceToggle }) => 
                     )}
                     {sorted.map((p: string) => {
                         const teamColor = pilotTeamColorMap.get(p);
+                        const isActiveUserRow = Boolean(normalizedActiveUser) && normalizeOcrName(p || '').toLowerCase() === normalizedActiveUser;
 
                         return (
                             <div key={p} className="roster-player-row group md3-surface rounded-control px-3 py-2.5 border border-md-sys-outline/12 hover:border-md-sys-primary/28 hover:bg-md-sys-on-surface/5 transition-colors flex items-center justify-between gap-2 min-w-0">
@@ -522,6 +524,9 @@ export const RosterPanel: React.FC<RosterPanelProps> = ({ workspaceToggle }) => 
                                     >
                                         {p}
                                     </button>
+                                    {isActiveUserRow && (
+                                        <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-success-soft text-success text-label-xs font-bold tracking-wide">YOU</span>
+                                    )}
                                 </div>
                                 <div className="flex items-center gap-1 shrink-0 opacity-100 pointer-events-auto transition-opacity [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:pointer-events-none [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:group-hover:pointer-events-auto [@media(hover:hover)_and_(pointer:fine)]:group-focus-within:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:group-focus-within:pointer-events-auto">
                                     <button

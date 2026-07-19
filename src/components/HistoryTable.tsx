@@ -43,7 +43,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
     );
     const formatPlayerForDisplay = useCallback((name: string) => {
         const key = normalizeDisplayKey(name);
-        if (activeUserKey && key && key === activeUserKey) return '(you)';
+        if (activeUserKey && key && key === activeUserKey) return `${name} (you)`;
         return name;
     }, [activeUserKey, normalizeDisplayKey]);
 
