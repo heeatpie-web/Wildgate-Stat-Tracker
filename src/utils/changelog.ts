@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.8.6": [
+    "Fix rerun OCR merging red and orange enemy teams into one ship",
+    "fix rerun OCR letting tactical-map results overwrite crew-hub rosters (ships now cross-merge in one pass)",
+    "cap OCR CPU threads to stop app-wide lag spikes during reruns"
+  ],
   "v3.8.5": [
     "Roster Manager now shows your username with a YOU tag instead of a standalone YOU entry",
     "History table lists your name with (you) instead of hiding it"
