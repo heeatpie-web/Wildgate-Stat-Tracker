@@ -1,4 +1,8 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.8.10": [
+    "Fix automated release publication in GitHub Actions",
+    "Add Seeds tab and map seed analytics"
+  ],
   "v3.8.9": [
     "Fix auto-updater release publishing workflow",
     "Add Seeds tab and map seed analytics"
