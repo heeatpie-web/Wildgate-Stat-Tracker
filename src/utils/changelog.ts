@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.8.7": [
+    "Add Seeds navigation tab and map seed analytics",
+    "Parse and canonicalize map seeds from tactical map OCR",
+    "Polish player hub roster filters and smart-capture overlay noise filtering"
+  ],
   "v3.8.6": [
     "Fix rerun OCR merging red and orange enemy teams into one ship",
     "fix rerun OCR letting tactical-map results overwrite crew-hub rosters (ships now cross-merge in one pass)",
