@@ -1,4 +1,8 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.8.9": [
+    "Fix auto-updater release publishing workflow",
+    "Add Seeds tab and map seed analytics"
+  ],
   "v3.8.8": [
     "Enable automated public releases for auto-updater",
     "Add Seeds tab and map seed analytics"
