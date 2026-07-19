@@ -5,6 +5,15 @@ const SEND_START = 'tactical-map-monitor-start';
 const SEND_STOP = 'tactical-map-monitor-stop';
 const RECEIVE_DETECTED = 'tactical-map-detected';
 
+/**
+ * Feature lock: the tactical-map auto-detect loop runs a full-desktop
+ * screenshot + PaddleOCR pass every 3s in the main process, and a stale
+ * isMatchInProgress flag can keep it burning CPU in the background after the
+ * game closes. Locked OFF until the detector gets a cheap pre-filter and a
+ * game-exit teardown. Flip to false to re-enable the feature.
+ */
+export const TACTICAL_MAP_MONITOR_LOCKED = true;
+
 export interface TacticalMapDetectedPayload {
   confidence: number;
   detectedAt: number;
@@ -28,7 +37,7 @@ export function useTacticalMapMonitor({
     const api = getElectronAPI();
     if (!api) return;
 
-    const shouldRun = enabled && isMatchInProgress;
+    const shouldRun = !TACTICAL_MAP_MONITOR_LOCKED && enabled && isMatchInProgress;
 
     if (!shouldRun) {
       api.send(SEND_STOP);

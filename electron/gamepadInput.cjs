@@ -35,6 +35,39 @@ const SLIDER_NAME_MAP = Object.freeze({
 let _psRunner = null;
 let _connected = false;
 let _dllDir = null;
+let _idleDisconnectTimer = null;
+
+// Lead time after a fresh ViGEm connect before any input is sent, so the game
+// has a good margin to enumerate the new controller (a combo fired into a
+// just-plugged pad gets eaten). Applied inside connectVirtualGamepad, so every
+// path — auto-capture prepare, F11 hotkey, direct sends — gets the margin.
+const CONNECT_SETTLE_MS = 2000;
+
+// The controller no longer stays connected for the app's lifetime. After the
+// last input (or a bare connect with no follow-up), it auto-disconnects once
+// this linger elapses. The linger is generous enough to cover the gaps inside
+// a single auto-capture macro (OCR waits between gamepad steps) so the game
+// never sees a mid-sequence unplug; the auto-capture coordinator additionally
+// releases the pad immediately when its sequence finishes.
+const IDLE_DISCONNECT_MS = 30_000;
+
+function _cancelIdleDisconnect() {
+  if (_idleDisconnectTimer) {
+    clearTimeout(_idleDisconnectTimer);
+    _idleDisconnectTimer = null;
+  }
+}
+
+function _scheduleIdleDisconnect() {
+  _cancelIdleDisconnect();
+  if (!_connected) return;
+  _idleDisconnectTimer = setTimeout(() => {
+    _idleDisconnectTimer = null;
+    console.log(`[Gamepad] Idle for ${IDLE_DISCONNECT_MS}ms — disconnecting virtual controller.`);
+    void disconnectVirtualGamepad();
+  }, IDLE_DISCONNECT_MS);
+  if (typeof _idleDisconnectTimer.unref === 'function') _idleDisconnectTimer.unref();
+}
 
 function setPSRunner(runner) {
   _psRunner = typeof runner === 'function' ? runner : null;
@@ -322,6 +355,7 @@ function findSetupExe(dir) {
 
 async function connectVirtualGamepad() {
   if (_connected) {
+    _scheduleIdleDisconnect();
     return { success: true, alreadyConnected: true };
   }
 
@@ -340,8 +374,18 @@ async function connectVirtualGamepad() {
 
   if (parsed?.success) {
     _connected = true;
+    const alreadyConnected = parsed.alreadyConnected === true;
     console.log('[Gamepad] Virtual Xbox 360 controller connected.');
-    return { success: true, alreadyConnected: parsed.alreadyConnected === true };
+    if (!alreadyConnected && !process.env.VITEST) {
+      // Give the game a good margin to recognize the newly plugged pad before
+      // any caller fires inputs at it. (Skipped under vitest so unit tests
+      // don't pay a real 2s wait per fresh connect.)
+      await new Promise((resolve) => setTimeout(resolve, CONNECT_SETTLE_MS));
+    }
+    // A bare connect with no follow-up input must not leave the pad attached
+    // forever — start the idle linger now; sends will keep refreshing it.
+    _scheduleIdleDisconnect();
+    return { success: true, alreadyConnected };
   }
 
   const error = parsed?.error || result?.stderr || 'Failed to connect virtual gamepad';
@@ -350,6 +394,7 @@ async function connectVirtualGamepad() {
 }
 
 async function disconnectVirtualGamepad() {
+  _cancelIdleDisconnect();
   if (!_connected) return;
 
   try {
@@ -367,28 +412,32 @@ async function sendGamepadSequence(actions) {
   }
 
   if (!_connected) {
+    // connectVirtualGamepad settles for CONNECT_SETTLE_MS after a fresh
+    // connect, giving the game its recognition margin before inputs fire.
     const connectResult = await connectVirtualGamepad();
     if (!connectResult.success) {
       return { success: false, error: connectResult.error || 'Virtual gamepad not connected' };
     }
-    if (!connectResult.alreadyConnected) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  _cancelIdleDisconnect();
+
+  try {
+    const script = buildButtonSequenceScript(actions);
+    const result = await runPS(script, {}, { timeoutMs: 10000 });
+    const parsed = parseJsonSafely(String(result?.stdout || '').trim());
+
+    if (parsed?.success) {
+      return { success: true, count: parsed.count };
     }
-  }
 
-  const script = buildButtonSequenceScript(actions);
-  const result = await runPS(script, {}, { timeoutMs: 10000 });
-  const parsed = parseJsonSafely(String(result?.stdout || '').trim());
-
-  if (parsed?.success) {
-    return { success: true, count: parsed.count };
+    const error = parsed?.error || result?.stderr || 'Gamepad sequence failed';
+    if (error.includes('not connected')) {
+      _connected = false;
+    }
+    return { success: false, error };
+  } finally {
+    _scheduleIdleDisconnect();
   }
-
-  const error = parsed?.error || result?.stderr || 'Gamepad sequence failed';
-  if (error.includes('not connected')) {
-    _connected = false;
-  }
-  return { success: false, error };
 }
 
 async function sendVirtualGamepadState(state) {
@@ -402,32 +451,50 @@ async function sendVirtualGamepadState(state) {
   }
 
   if (!_connected) {
+    // connectVirtualGamepad settles for CONNECT_SETTLE_MS after a fresh
+    // connect, giving the game its recognition margin before inputs fire.
     const connectResult = await connectVirtualGamepad();
     if (!connectResult.success) {
       return { success: false, error: connectResult.error || 'Virtual gamepad not connected' };
     }
   }
+  _cancelIdleDisconnect();
 
-  const result = await runPS(buildControllerStateScript(normalized), {}, {
-    timeoutMs: Math.max(5000, normalized.durationMs + 4000),
-  });
-  const parsed = parseJsonSafely(String(result?.stdout || '').trim());
+  try {
+    const result = await runPS(buildControllerStateScript(normalized), {}, {
+      timeoutMs: Math.max(5000, normalized.durationMs + 4000),
+    });
+    const parsed = parseJsonSafely(String(result?.stdout || '').trim());
 
-  if (parsed?.success) {
-    return {
-      success: true,
-      buttons: parsed.buttons,
-      axes: parsed.axes,
-      sliders: parsed.sliders,
-      durationMs: parsed.durationMs,
-    };
+    if (parsed?.success) {
+      return {
+        success: true,
+        buttons: parsed.buttons,
+        axes: parsed.axes,
+        sliders: parsed.sliders,
+        durationMs: parsed.durationMs,
+      };
+    }
+
+    const error = parsed?.error || result?.stderr || 'Virtual controller state send failed';
+    if (error.includes('not connected')) {
+      _connected = false;
+    }
+    return { success: false, error };
+  } finally {
+    _scheduleIdleDisconnect();
   }
+}
 
-  const error = parsed?.error || result?.stderr || 'Virtual controller state send failed';
-  if (error.includes('not connected')) {
-    _connected = false;
-  }
-  return { success: false, error };
+/**
+ * Immediately disconnect the virtual controller once a macro run is finished
+ * (rather than waiting out the idle linger). Safe to call when not connected.
+ */
+async function releaseVirtualGamepad(reason = '') {
+  _cancelIdleDisconnect();
+  if (!_connected) return;
+  console.log(`[Gamepad] Releasing virtual controller${reason ? ` (${reason})` : ''}.`);
+  await disconnectVirtualGamepad();
 }
 
 async function sendVirtualGamepadStateSequence(state, options = {}) {
@@ -466,6 +533,7 @@ module.exports = {
   disconnectVirtualGamepad,
   installViGEmBus,
   isGamepadConnected,
+  releaseVirtualGamepad,
   sendGamepadSequence,
   sendVirtualGamepadState,
   sendVirtualGamepadStateSequence,

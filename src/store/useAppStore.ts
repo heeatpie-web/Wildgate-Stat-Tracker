@@ -508,7 +508,9 @@ const customStorage: PersistStorage<AppState> = {
             : 1,
           autoPopulateRosterOnSave: settings.autoPopulateRosterOnSave ?? true,
           fullAutoEnabled: settings.fullAutoEnabled === false ? false : true,
-          tacticalMapAutoCapture: settings.tacticalMapAutoCapture === true,
+          // Feature lock: force OFF on hydration even if a previous version
+          // persisted it as enabled (see TACTICAL_MAP_MONITOR_LOCKED).
+          tacticalMapAutoCapture: false,
           lockOcrTeams: settings.lockOcrTeams || false,
           ocrEnhancedNameRecoveryEnabled: settings.ocrEnhancedNameRecoveryEnabled ?? true,
           ocrNameRerouteThreshold: normalizeOcrNameRerouteThreshold(settings.ocrNameRerouteThreshold),

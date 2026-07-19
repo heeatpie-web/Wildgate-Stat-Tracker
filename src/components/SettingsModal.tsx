@@ -901,8 +901,8 @@ const SettingsModalContent: React.FC = () => {
 
     const fullAutoEnabled = useAppStore(s => s.fullAutoEnabled);
     const setFullAutoEnabled = useAppStore(s => s.setFullAutoEnabled);
-    const tacticalMapAutoCapture = useAppStore(s => s.tacticalMapAutoCapture);
-    const setTacticalMapAutoCapture = useAppStore(s => s.setTacticalMapAutoCapture);
+    // Tactical map auto-detect is feature-locked OFF (see TACTICAL_MAP_MONITOR_LOCKED);
+    // the store selectors were removed with the disabled toggle below.
     const pregameAdviceEnabled = useAppStore(s => s.pregameAdviceEnabled);
     const setPregameAdviceEnabled = useAppStore(s => s.setPregameAdviceEnabled);
 
@@ -2031,16 +2031,20 @@ const SettingsModalContent: React.FC = () => {
                                     <div className="mt-0.5 text-label-sm text-md-sys-on-surface/60">
                                         Watches for the tactical map screen during a match and automatically triggers the crew capture sequence — same as pressing the map hotkey manually.
                                     </div>
+                                    <div className="mt-1.5 text-label-sm font-medium text-md-sys-on-surface/50">
+                                        Temporarily locked off: the detector's screen-OCR polling could keep running in the background after the game closed, taxing the system. It will return once it has a cheap pre-filter and a game-exit shutoff. Use the map hotkey to capture manually.
+                                    </div>
                                 </div>
-                                <label className="flex cursor-pointer items-center gap-2 shrink-0 mt-0.5">
+                                <label className="flex cursor-not-allowed items-center gap-2 shrink-0 mt-0.5 opacity-50">
                                     <input
                                         type="checkbox"
-                                        checked={tacticalMapAutoCapture}
-                                        onChange={e => setTacticalMapAutoCapture(e.target.checked)}
+                                        checked={false}
+                                        disabled
+                                        aria-disabled="true"
                                         className="h-4 w-4 accent-md-sys-primary"
                                     />
                                     <span className="text-label-sm text-md-sys-on-surface/70">
-                                        On
+                                        Locked
                                     </span>
                                 </label>
                             </div>

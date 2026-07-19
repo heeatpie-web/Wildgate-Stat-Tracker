@@ -1059,7 +1059,13 @@ const autoCaptureCoordinator = createAutoCaptureCoordinator({
   },
   prepareGamepadSequence: async () => gamepadInput.connectVirtualGamepad(),
   beforeSequence: async () => beginAutoCaptureWindowSession(),
-  afterSequence: async () => endAutoCaptureWindowSession(),
+  afterSequence: async () => {
+    const result = await endAutoCaptureWindowSession();
+    // The macro run is over — drop the virtual controller right away instead
+    // of waiting out the idle linger, so it never lingers system-wide.
+    try { await gamepadInput.releaseVirtualGamepad('auto-capture sequence finished'); } catch { /* no-op */ }
+    return result;
+  },
   captureAndProcess: async ({
     matchId,
     activeUser = null,
@@ -3415,6 +3421,9 @@ app.whenReady().then(async () => {
     let _lastGameRunning = null;
     let _lastGamePid = null;
     let _gameStatusPollInFlight = false;
+    // Throttles the tasklist.exe scan while the game is known to be down, so an
+    // idle tray app spawns scan processes every ~15s instead of every 5s tick.
+    let _downScanSkipTicks = 0;
 
     const _warmupGameWindow = () => {
       lookupGameWindowCandidate({
@@ -3455,7 +3464,15 @@ app.whenReady().then(async () => {
         let processName = '';
         if (_lastGamePid != null && _isPidAlive(_lastGamePid)) {
           running = true;
+        } else if (_lastGameRunning === false && _downScanSkipTicks < 2) {
+          // Game already known to be down: skip 2 of every 3 ticks so the
+          // tasklist.exe spawn scan runs every ~15s instead of every 5s while
+          // the app idles in the tray. Worst-case game-start detection latency
+          // rises from 5s to 15s, which auto-perf/pre-warm tolerate easily.
+          _downScanSkipTicks += 1;
+          running = false;
         } else {
+          _downScanSkipTicks = 0;
           const status = await fastCheckGameProcess(GAME_WINDOW_PROCESS_NAMES);
           running = Boolean(status && status.running);
           pid = running ? (status.pid || null) : null;
@@ -3463,7 +3480,9 @@ app.whenReady().then(async () => {
         }
 
         if (running !== _lastGameRunning) {
+          const wasRunning = _lastGameRunning;
           _lastGameRunning = running;
+          lastKnownGameRunning = running;
           _lastGamePid = running ? pid : null;
           console.log(`[AutoPerf] game process ${running ? 'detected' : 'not running'} (${processName || GAME_WINDOW_PROCESS_NAMES.join(',') || 'none'})`);
           if (win && !win.isDestroyed()) {
@@ -3477,6 +3496,12 @@ app.whenReady().then(async () => {
           // Pre-warm the window cache the moment the game appears so the first
           // auto-capture doesn't pay a cold PowerShell lookup.
           if (running) _warmupGameWindow();
+          // Game just exited (true -> false edge only; the startup null -> false
+          // transition has nothing to tear down): release session resources so
+          // nothing keeps taxing the machine while the app idles in the tray.
+          if (wasRunning === true && !running) {
+            teardownGameSessionResources('game process exited');
+          }
         } else if (running) {
           _lastGamePid = pid;
         }
@@ -4414,8 +4439,42 @@ async function loadResultScreenshotBuffer(request = {}) {
 }
 
 ipcMain.handle('result-flash-sample', async (_event, config) => sampleResultFlashRegion(config));
+
+// Last game-running state reported by the AutoPerf process poll (win32 only).
+// null = unknown (poll hasn't run / non-win32) — treated as permissive.
+let lastKnownGameRunning = null;
+
+// Releases everything that only makes sense while the game is running. Called
+// on the game-exit edge of the process poll so a closed game can't leave the
+// app taxing the machine in the background:
+// - result monitor (10Hz screen sampler) and tactical-map monitor (OCR loop)
+// - the ViGEm virtual gamepad (otherwise stays connected until app quit,
+//   and other software keeps polling the phantom controller)
+// - the persistent PowerShell host (~50-100MB resident; restarts on demand)
+function teardownGameSessionResources(reason) {
+    console.log(`[GameExit] Releasing game-session resources (${reason})`);
+    try { stopResultMonitor(); } catch { /* no-op */ }
+    try { stopTacticalMapMonitor(); } catch { /* no-op */ }
+    // Disconnect uses the persistent PS host, so kill the host only afterwards.
+    Promise.resolve()
+        .then(() => gamepadInput.disconnectVirtualGamepad())
+        .catch(() => { /* no-op */ })
+        .finally(() => {
+            try { killPersistentPS(); } catch { /* no-op */ }
+        });
+}
+
 ipcMain.on('result-monitor-start', (event, config = {}) => {
     const sender = event.sender;
+    // The result screens only exist while the game runs; refuse to start the
+    // 10Hz screen sampler when the process poll says the game is down (stale
+    // renderer match state must not burn CPU in the background). null = poll
+    // hasn't reported yet — allow, to avoid startup races.
+    if (lastKnownGameRunning === false) {
+        console.log('[ResultMonitor] Start refused: game process not running');
+        stopResultMonitor();
+        return;
+    }
     const armAt = Number.isFinite(Number(config?.armAt)) ? Math.round(Number(config.armAt)) : 0;
 
     const flashNormalized = normalizeResultFlashNormalizedRegion({ normalizedRegion: config?.flashRegion });
@@ -4476,7 +4535,19 @@ ipcMain.on('result-monitor-stop', () => {
     stopResultMonitor();
 });
 
+// Feature lock: tactical-map auto-detect is disabled app-wide. The monitor's
+// pollOnce() runs a full-desktop screenshot + PaddleOCR pass every 3s, and a
+// stale isMatchInProgress flag could leave it burning CPU in the background
+// after the game closes. Mirrors TACTICAL_MAP_MONITOR_LOCKED in
+// src/hooks/useTacticalMapMonitor.ts — flip both to re-enable.
+const TACTICAL_MAP_MONITOR_LOCKED = true;
+
 ipcMain.on('tactical-map-monitor-start', (_event) => {
+  if (TACTICAL_MAP_MONITOR_LOCKED) {
+    console.log('[TacticalMapMonitor] Start suppressed: feature locked');
+    stopTacticalMapMonitor();
+    return;
+  }
   if (isTacticalMapMonitorRunning()) return;
   console.log('[TacticalMapMonitor] Starting');
   startTacticalMapMonitor({

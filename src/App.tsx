@@ -10,6 +10,7 @@ import {
 } from './hooks/useResultMonitor';
 import { useTacticalMapMonitor } from './hooks/useTacticalMapMonitor';
 import { useAutoPerformanceMode } from './hooks/useAutoPerformanceMode';
+import { useGameExitCleanup } from './hooks/useGameExitCleanup';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useFocusTrap } from './hooks/useFocusTrap';
 import { useMatchSubmission } from './hooks/useMatchSubmission';
@@ -1131,6 +1132,9 @@ const App: React.FC = () => {
     // the telemetry lifecycle reports an active match.
     const autoPerfMatchInProgress = useAppStore((s) => s.isMatchInProgress);
     useAutoPerformanceMode({ matchStartFallback: autoPerfMatchInProgress });
+    // Clear a stale isMatchInProgress flag when the game process exits, so
+    // screen monitors can't keep running in the background indefinitely.
+    useGameExitCleanup();
     const {
         discardTelemetryDraft,
         autoFinalizeResultScreenCapture,

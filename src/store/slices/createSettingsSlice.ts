@@ -743,5 +743,8 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   setTutorialCompleted: (completed) => set({ tutorialCompleted: completed }),
   setFullAutoEnabled: (enabled) => set({ fullAutoEnabled: Boolean(enabled) }),
   setPregameAdviceEnabled: (enabled) => set({ pregameAdviceEnabled: Boolean(enabled) }),
-  setTacticalMapAutoCapture: (enabled) => set({ tacticalMapAutoCapture: Boolean(enabled) }),
+  // Feature lock: tactical-map auto-detect is disabled app-wide (see
+  // TACTICAL_MAP_MONITOR_LOCKED in useTacticalMapMonitor.ts). The setter is
+  // forced OFF so no code path can re-enable the OCR polling loop.
+  setTacticalMapAutoCapture: () => set({ tacticalMapAutoCapture: false }),
 });
