@@ -901,6 +901,19 @@ const SettingsModalContent: React.FC = () => {
 
     const fullAutoEnabled = useAppStore(s => s.fullAutoEnabled);
     const setFullAutoEnabled = useAppStore(s => s.setFullAutoEnabled);
+
+    const disableHardwareAcceleration = useAppStore(s => s.disableHardwareAcceleration);
+    const setDisableHardwareAccelerationState = useAppStore(s => s.setDisableHardwareAcceleration);
+    // Electron fixes hardware acceleration at app-ready, so the toggle only takes hold
+    // on the next launch; track the launch-time value to know when a restart is pending.
+    const hardwareAccelerationAtLaunchRef = React.useRef(disableHardwareAcceleration);
+    const [hardwareAccelerationNeedsRestart, setHardwareAccelerationNeedsRestart] = useState(false);
+
+    const handleToggleHardwareAcceleration = useCallback((disabled: boolean) => {
+        setDisableHardwareAccelerationState(disabled);
+        getElectronAPI()?.send('set-hardware-acceleration-disabled', disabled);
+        setHardwareAccelerationNeedsRestart(disabled !== hardwareAccelerationAtLaunchRef.current);
+    }, [setDisableHardwareAccelerationState]);
     // Tactical map auto-detect is feature-locked OFF (see TACTICAL_MAP_MONITOR_LOCKED);
     // the store selectors were removed with the disabled toggle below.
     const pregameAdviceEnabled = useAppStore(s => s.pregameAdviceEnabled);
@@ -1663,7 +1676,7 @@ const SettingsModalContent: React.FC = () => {
                         <section className="space-y-6">
                             <div className="grid gap-4 xl:grid-cols-2">
                                 <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10 space-y-4">
-                                    {[
+                                    {([
                                         {
                                             label: 'Performance Mode',
                                             value: performanceMode,
@@ -1676,19 +1689,44 @@ const SettingsModalContent: React.FC = () => {
                                             setter: (v: boolean) => { setAutoPerformanceMode(v); },
                                             color: 'bg-md-sys-primary'
                                         },
+                                        {
+                                            label: 'Disable Hardware Acceleration',
+                                            value: disableHardwareAcceleration,
+                                            setter: handleToggleHardwareAcceleration,
+                                            color: 'bg-md-sys-primary',
+                                            note: 'Stops the app from competing with the game for the GPU. Applies after a restart.'
+                                        },
                                         { label: 'Session Timer', value: showSessionTimer, setter: setShowSessionTimer, color: 'bg-md-sys-primary' },
                                         { label: 'Sound Effects', value: soundEnabled, setter: setSoundEnabled, color: 'bg-md-sys-primary' },
-                                    ].map((toggle, i) => (
-                                        <div key={i} className="flex justify-between items-center">
-                                            <span className="text-label-sm font-medium opacity-60">{toggle.label}</span>
+                                    ] as Array<{ label: string; value: boolean; setter: (v: boolean) => void; color: string; note?: string }>).map((toggle, i) => (
+                                        <div key={i} className="flex justify-between items-start gap-3">
+                                            <div className="min-w-0">
+                                                <span className="text-label-sm font-medium opacity-60">{toggle.label}</span>
+                                                {toggle.note && (
+                                                    <p className="mt-1 text-label-sm text-md-sys-on-surface/45 leading-snug">{toggle.note}</p>
+                                                )}
+                                            </div>
                                             <button
                                                 onClick={() => toggle.setter(!toggle.value)}
-                                                className={`w-11 h-6 rounded-full transition-colors ${toggle.value ? toggle.color : 'md3-surface-high'} relative`}
+                                                className={`shrink-0 w-11 h-6 rounded-full transition-colors ${toggle.value ? toggle.color : 'md3-surface-high'} relative`}
                                             >
                                                 <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${toggle.value ? 'translate-x-5' : ''}`} />
                                             </button>
                                         </div>
                                     ))}
+                                    {hardwareAccelerationNeedsRestart && (
+                                        <div className="rounded-control border border-md-sys-outline/20 bg-md-sys-surface-container-high px-3 py-2 flex items-center justify-between gap-3">
+                                            <span className="text-label-sm text-md-sys-on-surface/60 leading-snug">
+                                                Restart to apply the hardware acceleration change.
+                                            </span>
+                                            <button
+                                                onClick={() => getElectronAPI()?.send('relaunch-app')}
+                                                className="shrink-0 px-3 py-1.5 rounded-control bg-md-sys-primary text-md-sys-on-primary text-label-sm font-medium"
+                                            >
+                                                Restart
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10 flex flex-col justify-between gap-3">
                                     <div>

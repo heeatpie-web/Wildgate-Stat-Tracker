@@ -63,6 +63,24 @@ if (isDev && userDataDirOverride) {
   app.setPath('userData', path.resolve(userDataDirOverride));
 }
 
+// Electron only honours disableHardwareAcceleration() before app-ready, so the
+// Settings toggle is mirrored into a tiny sidecar file we can read cheaply here.
+// (The main DB is several MB — parsing it on the startup path for one boolean is
+// not worth the added latency before first paint.)
+const STARTUP_FLAGS_PATH = path.join(app.getPath('userData'), 'startup-flags.json');
+function readStartupFlags() {
+  try {
+    return JSON.parse(fs.readFileSync(STARTUP_FLAGS_PATH, 'utf-8')) || {};
+  } catch {
+    return {}; // Absent on fresh installs — defaults apply.
+  }
+}
+if (readStartupFlags().disableHardwareAcceleration === true) {
+  // Skips Electron's GPU process so the app stops competing with the game for the GPU.
+  app.disableHardwareAcceleration();
+  console.log('[Startup] Hardware acceleration disabled by user setting');
+}
+
 // Keep Chromium cache/service-worker storage in a writable local path on Windows.
 const SESSION_DATA_ROOT = (() => {
   const override = String(process.env.WILDGATE_SESSION_DATA_ROOT || '').trim();
@@ -3269,6 +3287,25 @@ function createWindow() {
   ipcMain.on('skip-taskbar', (event, skip) => { if (win) win.setSkipTaskbar(skip); });
   ipcMain.on('restore-window', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
   ipcMain.on('set-always-on-top', (event, always) => { if (win) win.setAlwaysOnTop(always, 'screen-saver'); });
+
+  // Plain restart. Distinct from 'restart_app', which is autoUpdater.quitAndInstall()
+  // and only valid once an update has been downloaded.
+  ipcMain.on('relaunch-app', () => {
+    app.relaunch();
+    app.quit();
+  });
+
+  // Persisted for the next launch only — see STARTUP_FLAGS_PATH above.
+  ipcMain.on('set-hardware-acceleration-disabled', (event, disabled) => {
+    try {
+      const flags = readStartupFlags();
+      flags.disableHardwareAcceleration = disabled === true;
+      fs.writeFileSync(STARTUP_FLAGS_PATH, JSON.stringify(flags, null, 2), 'utf-8');
+      console.log(`[Startup] Hardware acceleration flag set to disabled=${flags.disableHardwareAcceleration} (applies next launch)`);
+    } catch (e) {
+      console.warn('[Startup] Failed to persist hardware acceleration flag:', e?.message || e);
+    }
+  });
 
   ipcMain.on('toggle-overlay', (event, payload) => {
     if (!win) return;

@@ -57,6 +57,8 @@ const SEND_CHANNELS = [
   'result-flash-start', 'result-flash-stop',
   'result-text-start', 'result-text-stop',
   'tactical-map-monitor-start', 'tactical-map-monitor-stop',
+  'set-hardware-acceleration-disabled',
+  'relaunch-app',
 ];
 
 const RECEIVE_CHANNELS = [

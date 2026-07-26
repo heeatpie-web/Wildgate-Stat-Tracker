@@ -287,6 +287,12 @@ export interface SettingsSlice {
   performanceMode: boolean;
   /** When true, performance mode auto-follows game-exe detection (manual toggle overrides until next transition). */
   autoPerformanceMode: boolean;
+  /**
+   * Skips Electron's GPU process so the app stops competing with the game for the
+   * GPU. Electron only honours `app.disableHardwareAcceleration()` before app-ready,
+   * so main reads this straight off the DB at startup and it takes a restart to apply.
+   */
+  disableHardwareAcceleration: boolean;
   showSmartCaptureInHeader: boolean;
   tipsEnabled: boolean;
   tipLibraryIndex: number;
@@ -355,6 +361,7 @@ export interface SettingsSlice {
   setDisableAnimations: (disabled: boolean) => void;
   setPerformanceMode: (enabled: boolean) => void;
   setAutoPerformanceMode: (enabled: boolean) => void;
+  setDisableHardwareAcceleration: (enabled: boolean) => void;
   setShowSmartCaptureInHeader: (enabled: boolean) => void;
   setTipsEnabled: (enabled: boolean) => void;
   setTipLibraryIndex: (index: number) => void;
@@ -450,6 +457,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   disableAnimations: false,
   performanceMode: false,
   autoPerformanceMode: true,
+  disableHardwareAcceleration: false,
   showSmartCaptureInHeader: true,
   tipsEnabled: true,
   tipLibraryIndex: 0,
@@ -532,6 +540,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   setDisableAnimations: (disabled) => set({ disableAnimations: disabled }),
   setPerformanceMode: (enabled) => set({ performanceMode: enabled, disableAnimations: enabled ? true : false }),
   setAutoPerformanceMode: (enabled) => set({ autoPerformanceMode: enabled }),
+  setDisableHardwareAcceleration: (enabled) => set({ disableHardwareAcceleration: Boolean(enabled) }),
   setShowSmartCaptureInHeader: (enabled) => set({ showSmartCaptureInHeader: enabled }),
   setTipsEnabled: (enabled) => set({ tipsEnabled: enabled }),
   setTipLibraryIndex: (index) => set({ tipLibraryIndex: Math.max(0, Math.floor(Number(index) || 0)) }),

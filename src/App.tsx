@@ -1137,6 +1137,16 @@ const App: React.FC = () => {
     // Clear a stale isMatchInProgress flag when the game process exits, so
     // screen monitors can't keep running in the background indefinitely.
     useGameExitCleanup();
+    // The hardware-acceleration flag lives in two places: the DB (user-visible, backed
+    // up) and a startup sidecar main reads before app-ready. Re-push the DB value once
+    // per launch so a restored backup can't leave the toggle disagreeing with reality.
+    const disableHardwareAccelerationSetting = useAppStore((s) => s.disableHardwareAcceleration);
+    const hardwareAccelerationSyncedRef = React.useRef(false);
+    useEffect(() => {
+        if (isStoreLoading || hardwareAccelerationSyncedRef.current) return;
+        hardwareAccelerationSyncedRef.current = true;
+        getElectronAPI()?.send('set-hardware-acceleration-disabled', disableHardwareAccelerationSetting);
+    }, [isStoreLoading, disableHardwareAccelerationSetting]);
     const {
         discardTelemetryDraft,
         autoFinalizeResultScreenCapture,

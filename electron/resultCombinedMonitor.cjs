@@ -551,8 +551,12 @@ async function pollOnce() {
     && now < _flash.cooldownUntil;
   const flashNeedsSample = Boolean(_flash) && !_flash.disabledForMatch && !flashInCooldown;
   const textNeedsSample = Boolean(_text) && !_text.detected && !_text.disabledForMatch;
+  // Before armAt the tripwire verdict is always discarded (see applyTextTripwireSample),
+  // so skip the per-pixel analysis while arming. The text crop itself still runs when
+  // flash is sampling, because computeHeadlineFlashAssist feeds pre-arm flash counting.
+  const textNeedsAnalysis = textNeedsSample && now >= _text.armAt;
 
-  if (!flashNeedsSample && !textNeedsSample) {
+  if (!flashNeedsSample && !textNeedsAnalysis) {
     if (_flash) {
       _flash.lastUpdatedAt = now;
       emitFlashDebug(flashSamplingStatus(_flash, now));
@@ -620,7 +624,14 @@ async function pollOnce() {
       }
     }
 
-    if (textNeedsSample && _text) {
+    if (textNeedsSample && !textNeedsAnalysis && _text) {
+      // Mirrors the !isArmed branch of applyTextTripwireSample without paying for the scan.
+      _text.tripwireConsecutiveHits = 0;
+      _text.lastUpdatedAt = capturedAt;
+      emitTextDebug('arming-delay');
+    }
+
+    if (textNeedsAnalysis && _text) {
       try {
         if (sharedTextRaw && combinedTextThenFlash) {
           processTextRaw(sharedTextRaw, sharedTextW, sharedTextH, capturedAt);
