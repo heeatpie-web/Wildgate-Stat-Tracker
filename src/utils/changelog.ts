@@ -1,4 +1,12 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.10.2": [
+    "Toast feedback for Check for Updates",
+    "Seeds tab filters by mode/ship/hazard instead of meaningless win rate",
+    "map name split out of hazard modifier list",
+    "Players tab sort/scope controls collapse behind a toggle",
+    "fixed twilight theme white outline and duplicate Analytics Cockpit title",
+    "recording view player names ellipsis-truncate instead of clipping"
+  ],
   "v3.10.1": [
     "Match archiving in History (hide/show archived matches)",
     "Roster archive threshold reduced 90→60 days with periodic re-sweep instead of one-time migration",
