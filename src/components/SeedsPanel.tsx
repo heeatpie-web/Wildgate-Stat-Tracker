@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useId, useRef } from 'react';
 import {
     Hash,
     Copy,
@@ -15,9 +15,16 @@ import {
     Layers,
     Shield,
     Sparkles,
+    Eye,
+    X,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import type { Match } from '../types';
+import { getMatchArtifactsStructured } from '../utils/artifactService';
+import { classifyArtifactScreenshotBucket } from '../utils/artifactScreenshotBuckets';
+import { LocalImage } from './LocalImage';
+import { useFocusTrap } from '../hooks/useFocusTrap';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 
 /**
  * Regex pattern for extracting map seeds from OCR rawText (ported from backend canonicalizeSeedFromText).
@@ -55,6 +62,33 @@ export interface SeedGroup {
 
 export type SeedSortMode = 'recent' | 'count' | 'winrate';
 
+/**
+ * Find the tactical map capture for a match. Prefers the on-disk artifact
+ * records (they carry an explicit screenshotType) and falls back to filename
+ * classification of the match's bundled paths when the lookup is unavailable.
+ */
+const resolveTacticalMapPath = async (match: Match): Promise<string | null> => {
+    const fallback = (match.artifacts || []).find(
+        (path) => classifyArtifactScreenshotBucket(String(path || '')) === 'tactical_map'
+    );
+
+    try {
+        const structured = await getMatchArtifactsStructured(match.id, match.artifacts || []);
+        const images = structured.images || [];
+        for (let i = 0; i < images.length; i++) {
+            const bucket = classifyArtifactScreenshotBucket(images[i], structured.imageFiles?.[i] || null);
+            if (bucket === 'tactical_map') {
+                const cleaned = String(images[i] || '').trim();
+                if (cleaned) return cleaned;
+            }
+        }
+    } catch {
+        // Fall through to the filename-based guess below.
+    }
+
+    return fallback ? String(fallback).trim() || null : null;
+};
+
 export const SeedsPanel: React.FC = () => {
     const matches = useAppStore((s) => s.matches) || [];
     const performanceMode = useAppStore((s) => s.performanceMode) || false;
@@ -64,6 +98,15 @@ export const SeedsPanel: React.FC = () => {
     const [sortMode, setSortMode] = useState<SeedSortMode>('recent');
     const [selectedSeed, setSelectedSeed] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
+    const [tacticalMaps, setTacticalMaps] = useState<Record<number, string | null>>({});
+    const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+    const requestedTacticalMaps = useRef<Set<number>>(new Set());
+
+    const lightboxTitleId = useId();
+    const lightboxFocusTrapRef = useFocusTrap<HTMLDivElement>(Boolean(lightboxSrc));
+    useKeyboardShortcuts([
+        { key: 'Escape', handler: () => setLightboxSrc(null) },
+    ], Boolean(lightboxSrc));
 
     // Group matches by map seed (combining forward match.mapSeed and backward rawText parsing)
     const seedGroups = useMemo(() => {
@@ -171,6 +214,35 @@ export const SeedsPanel: React.FC = () => {
         }
         return seedGroups.find((g) => g.seed === selectedSeed) || (filteredSeeds.length > 0 ? filteredSeeds[0] : null);
     }, [selectedSeed, seedGroups, filteredSeeds]);
+
+    // Resolve tactical map captures for the seed on screen only. Each match is
+    // looked up once and kept, so re-selecting a seed never refetches.
+    useEffect(() => {
+        if (!activeGroup) return;
+
+        const pending = activeGroup.matches.filter((m) => !requestedTacticalMaps.current.has(m.id));
+        if (pending.length === 0) return;
+        pending.forEach((m) => requestedTacticalMaps.current.add(m.id));
+
+        let cancelled = false;
+        (async () => {
+            const resolved = await Promise.all(
+                pending.map(async (m) => [m.id, await resolveTacticalMapPath(m)] as const)
+            );
+            if (cancelled) {
+                // Allow a later render to retry what this run never committed.
+                pending.forEach((m) => requestedTacticalMaps.current.delete(m.id));
+                return;
+            }
+            setTacticalMaps((prev) => {
+                const next = { ...prev };
+                resolved.forEach(([id, path]) => { next[id] = path; });
+                return next;
+            });
+        })();
+
+        return () => { cancelled = true; };
+    }, [activeGroup]);
 
     const handleCopySeed = useCallback((seedText: string) => {
         navigator.clipboard.writeText(seedText);
@@ -480,38 +552,96 @@ export const SeedsPanel: React.FC = () => {
                                 <Calendar size={14} className="text-md-sys-primary" /> Matches Played on Seed
                             </h3>
                             <div className="flex flex-col gap-2">
-                                {activeGroup.matches.map((m) => (
-                                    <div
-                                        key={m.id}
-                                        className="p-3 rounded-xl bg-md-sys-on-surface/[0.02] border border-md-sys-outline/5 flex items-center justify-between gap-3 text-label-xs"
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <span
-                                                className={`px-2 py-0.5 rounded-pill font-bold uppercase text-[10px] ${
-                                                    m.result === 'Win'
-                                                        ? 'bg-green-500/15 text-green-400'
-                                                        : m.result === 'Loss'
-                                                        ? 'bg-red-500/15 text-red-400'
-                                                        : 'bg-amber-500/15 text-amber-400'
-                                                }`}
-                                            >
-                                                {m.result || 'Saved'}
-                                            </span>
-                                            <span className="font-semibold text-md-sys-on-surface">{m.ship || 'Unknown Ship'}</span>
-                                            <span className="text-md-sys-on-surface/40">•</span>
-                                            <span className="text-md-sys-on-surface/60">{m.mode}</span>
-                                        </div>
+                                {activeGroup.matches.map((m) => {
+                                    const mapSrc = tacticalMaps[m.id];
+                                    return (
+                                        <div
+                                            key={m.id}
+                                            className="p-3 rounded-xl bg-md-sys-on-surface/[0.02] border border-md-sys-outline/5 flex items-center gap-3 text-label-xs"
+                                        >
+                                            {mapSrc && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setLightboxSrc(mapSrc)}
+                                                    aria-label={`Open tactical map for the ${m.date || new Date(m.timestamp).toLocaleDateString()} match`}
+                                                    title="View tactical map"
+                                                    className="relative shrink-0 w-28 aspect-video rounded-lg overflow-hidden bg-md-sys-on-surface/[0.06] border border-md-sys-outline/10 group"
+                                                >
+                                                    <LocalImage
+                                                        src={mapSrc}
+                                                        alt="Tactical map capture"
+                                                        className="w-full h-full object-cover"
+                                                        fallback={<div className="w-full h-full bg-md-sys-on-surface/[0.06]" />}
+                                                    />
+                                                    <div
+                                                        className={`absolute inset-0 bg-scrim-40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-md-sys-on-surface ${
+                                                            isAnimDisabled ? '' : 'transition-opacity'
+                                                        }`}
+                                                    >
+                                                        <Eye size={16} />
+                                                    </div>
+                                                </button>
+                                            )}
 
-                                        <div className="flex items-center gap-3 text-md-sys-on-surface/50">
-                                            <span>{m.date || new Date(m.timestamp).toLocaleDateString()}</span>
+                                            <div className="flex-1 min-w-0 flex items-center justify-between gap-3">
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <span
+                                                        className={`px-2 py-0.5 rounded-pill font-bold uppercase text-[10px] ${
+                                                            m.result === 'Win'
+                                                                ? 'bg-green-500/15 text-green-400'
+                                                                : m.result === 'Loss'
+                                                                ? 'bg-red-500/15 text-red-400'
+                                                                : 'bg-amber-500/15 text-amber-400'
+                                                        }`}
+                                                    >
+                                                        {m.result || 'Saved'}
+                                                    </span>
+                                                    <span className="font-semibold text-md-sys-on-surface truncate">{m.ship || 'Unknown Ship'}</span>
+                                                    <span className="text-md-sys-on-surface/40">•</span>
+                                                    <span className="text-md-sys-on-surface/60 truncate">{m.mode}</span>
+                                                </div>
+
+                                                <div className="flex items-center gap-3 text-md-sys-on-surface/50 shrink-0">
+                                                    <span>{m.date || new Date(m.timestamp).toLocaleDateString()}</span>
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
                 )}
             </div>
+
+            {/* Tactical map lightbox */}
+            {lightboxSrc && (
+                <div className="fixed inset-0 z-modal bg-scrim-90 p-8" onClick={() => setLightboxSrc(null)}>
+                    <div
+                        ref={lightboxFocusTrapRef}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby={lightboxTitleId}
+                        className="w-full h-full"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <h2 id={lightboxTitleId} className="a11y-sr-only">Tactical map preview</h2>
+                        <button
+                            type="button"
+                            onClick={() => setLightboxSrc(null)}
+                            aria-label="Close tactical map preview"
+                            className="absolute top-4 right-4 text-md-sys-on-surface/60 hover:text-md-sys-on-surface z-10"
+                        >
+                            <X size={24} />
+                        </button>
+                        <LocalImage
+                            src={lightboxSrc}
+                            alt="Tactical map preview"
+                            className="w-full h-full object-contain rounded-lg"
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
