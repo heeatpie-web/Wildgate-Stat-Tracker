@@ -2399,10 +2399,28 @@ const App: React.FC = () => {
         Logger.info('Hotkeys', 'Registering renderer hotkey listeners', {
             channels: ['hotkey-toggle-overlay', 'auto-capture-status', 'virtual-gamepad-hotkey-status'],
         });
-        const unsubAvailable = api.on('update_available', () => setUpdateStatus('available'));
-        const unsubDownloaded = api.on('update_downloaded', () => setUpdateStatus('downloaded'));
-        const unsubNotAvailable = api.on('update_not_available', () => setUpdateStatus('not-available'));
-        const unsubError = api.on('update_error', () => setUpdateStatus('not-available'));
+        const unsubAvailable = api.on('update_available', () => {
+            setUpdateStatus('available');
+            setToast({ message: 'Update found — downloading in the background…', type: 'info' });
+        });
+        const unsubDownloaded = api.on('update_downloaded', () => {
+            setUpdateStatus('downloaded');
+            setToast({ message: 'Update downloaded. Restart to install.', type: 'success' });
+        });
+        const unsubNotAvailable = api.on('update_not_available', () => {
+            const wasManualCheck = useAppStore.getState().updateStatus === 'checking';
+            setUpdateStatus('not-available');
+            if (wasManualCheck) {
+                setToast({ message: 'No updates available — you’re up to date.', type: 'info' });
+            }
+        });
+        const unsubError = api.on('update_error', () => {
+            const wasManualCheck = useAppStore.getState().updateStatus === 'checking';
+            setUpdateStatus('not-available');
+            if (wasManualCheck) {
+                setToast({ message: 'Update check failed. Please try again later.', type: 'error' });
+            }
+        });
 
         const unsubHotkey = api.on('hotkey-toggle-overlay', (forceState?: boolean) => {
             if (typeof forceState === 'boolean') {
@@ -4519,6 +4537,7 @@ const App: React.FC = () => {
             opponents: nextDraftOpponents.length > 0 ? nextDraftOpponents : (basePendingMatch.opponents || []),
             artifacts: mergedArtifactPaths.length > 0 ? mergedArtifactPaths : basePendingMatch.artifacts,
             reachModifiers: Array.from(pendingModifierMap.values()),
+            mapType: String(data.mapType || basePendingMatch.mapType || '').trim() || undefined,
             mapSeed: String(data.mapSeed || basePendingMatch.mapSeed || '').trim() || undefined,
             mapSeedFlags: Array.isArray(data.mapSeedFlags) ? data.mapSeedFlags : basePendingMatch.mapSeedFlags,
             artifactSource: extractedArtifactSource || String(basePendingMatch.artifactSource || '').trim() || undefined,
@@ -4552,6 +4571,7 @@ const App: React.FC = () => {
                 teammates: Array.isArray(nextPendingMatchData.teammates) ? [...nextPendingMatchData.teammates] : canonicalMatch.teammates,
                 opponents: Array.isArray(nextPendingMatchData.opponents) ? [...nextPendingMatchData.opponents] : canonicalMatch.opponents,
                 reachModifiers: Array.isArray(nextPendingMatchData.reachModifiers) ? [...nextPendingMatchData.reachModifiers] : canonicalMatch.reachModifiers,
+                mapType: nextPendingMatchData.mapType || canonicalMatch.mapType,
                 mapSeed: nextPendingMatchData.mapSeed || canonicalMatch.mapSeed,
                 mapSeedFlags: nextPendingMatchData.mapSeedFlags || canonicalMatch.mapSeedFlags,
                 artifactSource: String(nextPendingMatchData.artifactSource || canonicalMatch.artifactSource || '').trim() || undefined,

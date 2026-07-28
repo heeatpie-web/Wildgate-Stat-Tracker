@@ -37,15 +37,12 @@
     { "displayName": "Blooming Expanse", "aliases": ["BLOOMING EXPANSE"] },
     { "displayName": "Cosmic Storm", "aliases": ["COSMIC STORM"] },
     { "displayName": "Cryon Reach", "aliases": ["CRYON REACH"] },
-    { "displayName": "Cryon Rift", "aliases": ["CRYON RIFT"] },
     { "displayName": "Dead Sensors", "aliases": ["DEAD SENSORS"] },
-    { "displayName": "Dead Worlds", "aliases": ["DEAD WORLDS", "DEADWORLDS"] },
     { "displayName": "Easy Loot", "aliases": ["EASY LOOT"] },
     { "displayName": "Epic Loot", "aliases": ["EPIC LOOT"] },
     { "displayName": "Fast Gate", "aliases": ["FAST GATE"] },
     { "displayName": "Few Asteroids", "aliases": ["FEW ASTEROIDS"] },
     { "displayName": "Few Ships", "aliases": ["FEW SHIPS"] },
-    { "displayName": "Gloaming Expanse", "aliases": ["GLOAMING EXPANSE"] },
     { "displayName": "Haunted Storm", "aliases": ["HAUNTED STORM"] },
     { "displayName": "Ice Storm", "aliases": ["ICE STORM"] },
     { "displayName": "Lava Epics", "aliases": ["LAVA EPICS"] },
@@ -57,5 +54,10 @@
     { "displayName": "Many Asteroids", "aliases": ["MANY ASTEROIDS"] },
     { "displayName": "Rogue Turrets", "aliases": ["ROGUE TURRETS"] },
     { "displayName": "Sandstorm", "aliases": ["SANDSTORM", "SAND STORM"] }
+  ],
+  "mapTypes": [
+    { "displayName": "Cryon Rift", "aliases": ["CRYON RIFT"] },
+    { "displayName": "Dead Worlds", "aliases": ["DEAD WORLDS", "DEADWORLDS"] },
+    { "displayName": "Gloaming Expanse", "aliases": ["GLOAMING EXPANSE"] }
   ]
 }

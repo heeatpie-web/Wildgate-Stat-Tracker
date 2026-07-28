@@ -108,7 +108,9 @@ describe('AnalyticsCockpit', () => {
             />
         );
 
-        expect(screen.getByText(/data-dense/i)).toBeInTheDocument();
+        expect(screen.getByText(/next drill/i)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /team views/i })).toBeInTheDocument();
+        expect(screen.queryByText(/analytics cockpit/i)).not.toBeInTheDocument();
         expect(screen.queryByText(/See what is actually moving the needle/i)).not.toBeInTheDocument();
         expect(screen.queryByText(/Suggested next drill-down/i)).not.toBeInTheDocument();
         expect(screen.queryByText('Next moves')).not.toBeInTheDocument();

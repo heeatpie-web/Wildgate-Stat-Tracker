@@ -192,7 +192,7 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
                             </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                            <div className="rounded-full border border-white/10 bg-white/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em]">
+                            <div className="rounded-full border border-current/20 bg-current/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em]">
                                 {lifecycleBadgeLabel}
                             </div>
                         </div>

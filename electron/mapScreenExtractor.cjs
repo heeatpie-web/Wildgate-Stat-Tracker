@@ -322,6 +322,20 @@ const KNOWN_HAZARD_COMPACT_KEYS = new Set(
     .filter(Boolean)
 );
 
+const buildKnownMapTypeMap = () => {
+  const next = {};
+  (HAZARD_CATALOG.mapTypes || []).forEach((entry) => {
+    [entry.displayName, ...(entry.aliases || [])].forEach((alias) => {
+      const key = String(alias || '').trim().toUpperCase();
+      if (!key) return;
+      next[key] = entry.displayName;
+    });
+  });
+  return next;
+};
+
+const KNOWN_MAP_TYPES = buildKnownMapTypeMap();
+
 function normalizeHazardTokenSequence(value) {
   return String(value || '')
     .toLowerCase()
@@ -458,6 +472,7 @@ async function extractMapScreen(imageBuffer, ocrResult, imageWidth, imageHeight,
     yourShip: null,
     enemyShips: [],
     hazards: [],
+    mapType: null,
     players: [],
     routingMeta: {
       anchorsUsed: (layoutOverrides && layoutOverrides.__anchors) || null,
@@ -530,6 +545,7 @@ async function extractMapScreen(imageBuffer, ocrResult, imageWidth, imageHeight,
 
     // Step 3: Extract HAZARDS
     result.hazards = extractHazards(text, words, imageWidth, imageHeight, layout, extractorOptions);
+    result.mapType = extractMapType(text, words, imageWidth, imageHeight, layout, extractorOptions);
 
     // Step 4: Extract player list (bottom-left)
     result.players = extractPlayerList(words, imageWidth, imageHeight, layout, extractorOptions);
@@ -1446,14 +1462,14 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
 /**
  * Extract hazards from text
  */
-function extractHazards(text, words = [], imageWidth = 0, imageHeight = 0, layout = LAYOUT, options = null) {
+function scanCatalogInHazardRegion(catalogMap, text, words = [], imageWidth = 0, imageHeight = 0, layout = LAYOUT, options = null) {
   const geometry = options?.geometry || null;
   const hazards = new Set();
   const exactMatchedPatterns = new Set();
   const scanForHazards = (sourceText) => {
     const upperText = String(sourceText || '').toUpperCase();
     const compactText = upperText.replace(/[^A-Z0-9]/g, '');
-    for (const [pattern, displayName] of Object.entries(KNOWN_HAZARDS)) {
+    for (const [pattern, displayName] of Object.entries(catalogMap)) {
       if (upperText.includes(pattern)) {
         hazards.add(displayName);
         exactMatchedPatterns.add(pattern);
@@ -1468,7 +1484,7 @@ function extractHazards(text, words = [], imageWidth = 0, imageHeight = 0, layou
 
     const normalizedWords = normalizeHazardTokenSequence(sourceText);
     if (normalizedWords.length === 0) return;
-    for (const [pattern, displayName] of Object.entries(KNOWN_HAZARDS)) {
+    for (const [pattern, displayName] of Object.entries(catalogMap)) {
       if (exactMatchedPatterns.has(pattern)) continue;
       const patternWords = normalizeHazardTokenSequence(pattern);
       if (fuzzyHazardPatternMatch(normalizedWords, patternWords)) {
@@ -1527,6 +1543,15 @@ function extractHazards(text, words = [], imageWidth = 0, imageHeight = 0, layou
   }
 
   return Array.from(hazards);
+}
+
+function extractHazards(text, words = [], imageWidth = 0, imageHeight = 0, layout = LAYOUT, options = null) {
+  return scanCatalogInHazardRegion(KNOWN_HAZARDS, text, words, imageWidth, imageHeight, layout, options);
+}
+
+function extractMapType(text, words = [], imageWidth = 0, imageHeight = 0, layout = LAYOUT, options = null) {
+  const matches = scanCatalogInHazardRegion(KNOWN_MAP_TYPES, text, words, imageWidth, imageHeight, layout, options);
+  return matches.length > 0 ? matches[0] : null;
 }
 
 /**
@@ -1933,9 +1958,11 @@ module.exports = {
   extractYourShip,
   extractEnemyShips,
   extractHazards,
+  extractMapType,
   extractPlayerList,
   groupWordsIntoLines,
   KNOWN_HAZARDS,
+  KNOWN_MAP_TYPES,
   SHIP_TYPES,
   looksLikeTeamName,
   canonicalizeSeedFromText,

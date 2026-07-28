@@ -1,5 +1,5 @@
-import React, { type Dispatch, type FC, type RefObject, type SetStateAction } from 'react';
-import { Users, Search, Star, ChevronRight, ChevronLeft, Undo2, X, ScanEye, Archive } from 'lucide-react';
+import React, { useState, type Dispatch, type FC, type RefObject, type SetStateAction } from 'react';
+import { Users, Search, Star, ChevronRight, ChevronLeft, ChevronDown, Undo2, X, ScanEye, Archive } from 'lucide-react';
 import type { MergeHistoryEntry, PendingReview } from '../../store/slices/createDataSlice';
 import { ROSTER_ARCHIVE_THRESHOLD_MS, isRosterEntryArchived } from '../../store/slices/createDataSlice';
 import type { PlayerDetail, PlayerFilterMode, PlayerHubMode, SortMode } from './playerHubTypes';
@@ -82,6 +82,7 @@ export const PlayerHubRosterColumn: FC<PlayerHubRosterColumnProps> = ({
     timeAgo,
     activeUserKey,
 }) => {
+    const [filtersExpanded, setFiltersExpanded] = useState(false);
     const canPrev = rosterPage > 0;
     const canNext = rosterPage < rosterTotalPages - 1;
     const scopeOptions = [
@@ -92,6 +93,8 @@ export const PlayerHubRosterColumn: FC<PlayerHubRosterColumnProps> = ({
         { id: 'needs-review' as PlayerFilterMode, label: 'Review', count: needsReviewPlayerCount },
         { id: 'archived' as PlayerFilterMode, label: 'Archived', count: archivedPlayerCount },
     ];
+    const activeSortLabel = SORT_OPTIONS.find((s) => s.id === sortMode)?.label ?? '';
+    const activeScopeLabel = scopeOptions.find((f) => f.id === playerFilterMode)?.label ?? '';
 
     return (
         <div className="w-full shrink-0 flex flex-col h-full min-h-0">
@@ -134,59 +137,78 @@ export const PlayerHubRosterColumn: FC<PlayerHubRosterColumnProps> = ({
                         )}
                     </div>
 
-                    {/* Sort */}
-                    <div className="flex gap-1">
-                        {SORT_OPTIONS.map((s) => {
-                            const active = sortMode === s.id;
-                            return (
-                                <button
-                                    key={s.id}
-                                    type="button"
-                                    onClick={() => setSortMode(s.id)}
-                                    className={`flex-1 h-7 rounded-control text-label-xs font-semibold transition-all border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary/35 ${
-                                        active
-                                            ? 'border-md-sys-primary/30 bg-md-sys-primary/10 text-md-sys-primary'
-                                            : 'border-md-sys-outline/10 text-md-sys-on-surface/55 hover:bg-md-sys-on-surface/[0.06]'
-                                    }`}
-                                    style={!active ? { background: 'var(--md-sys-color-surface-container-high)' } : undefined}
-                                >
-                                    {s.label}
-                                </button>
-                            );
-                        })}
-                    </div>
+                    {/* Filters toggle */}
+                    <button
+                        type="button"
+                        onClick={() => setFiltersExpanded((prev) => !prev)}
+                        className="flex items-center justify-between gap-2 h-7 px-1 rounded-control text-label-xs font-semibold text-md-sys-on-surface/55 hover:text-md-sys-on-surface transition-colors"
+                        aria-expanded={filtersExpanded}
+                    >
+                        <span className="flex items-center gap-1.5">
+                            <span className="px-2 py-0.5 rounded-full border border-md-sys-outline/10 text-md-sys-on-surface/70" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
+                                {activeScopeLabel} · {activeSortLabel}
+                            </span>
+                        </span>
+                        <ChevronDown size={13} className={`transition-transform ${filtersExpanded ? 'rotate-180' : ''}`} />
+                    </button>
 
-                    {/* Scope */}
-                    <div className="flex gap-1 flex-wrap">
-                        {scopeOptions.map((f) => {
-                            const active = playerFilterMode === f.id;
-                            return (
+                    {filtersExpanded && (
+                        <>
+                            {/* Sort */}
+                            <div className="flex gap-1">
+                                {SORT_OPTIONS.map((s) => {
+                                    const active = sortMode === s.id;
+                                    return (
+                                        <button
+                                            key={s.id}
+                                            type="button"
+                                            onClick={() => setSortMode(s.id)}
+                                            className={`flex-1 h-7 rounded-control text-label-xs font-semibold transition-all border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary/35 ${
+                                                active
+                                                    ? 'border-md-sys-primary/30 bg-md-sys-primary/10 text-md-sys-primary'
+                                                    : 'border-md-sys-outline/10 text-md-sys-on-surface/55 hover:bg-md-sys-on-surface/[0.06]'
+                                            }`}
+                                            style={!active ? { background: 'var(--md-sys-color-surface-container-high)' } : undefined}
+                                        >
+                                            {s.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Scope */}
+                            <div className="flex gap-1 flex-wrap">
+                                {scopeOptions.map((f) => {
+                                    const active = playerFilterMode === f.id;
+                                    return (
+                                        <button
+                                            key={f.id}
+                                            type="button"
+                                            onClick={() => setPlayerFilterMode(f.id)}
+                                            className={`h-7 px-2.5 rounded-control text-label-xs font-semibold whitespace-nowrap transition-all border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary/35 ${
+                                                active
+                                                    ? 'border-md-sys-primary/30 bg-md-sys-primary/10 text-md-sys-primary'
+                                                    : 'border-md-sys-outline/10 text-md-sys-on-surface/55 hover:bg-md-sys-on-surface/[0.06]'
+                                            }`}
+                                            style={!active ? { background: 'var(--md-sys-color-surface-container-high)' } : undefined}
+                                        >
+                                            {f.label}{f.count > 0 ? ` (${f.count})` : ''}
+                                        </button>
+                                    );
+                                })}
                                 <button
-                                    key={f.id}
                                     type="button"
-                                    onClick={() => setPlayerFilterMode(f.id)}
-                                    className={`h-7 px-2.5 rounded-control text-label-xs font-semibold whitespace-nowrap transition-all border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary/35 ${
-                                        active
-                                            ? 'border-md-sys-primary/30 bg-md-sys-primary/10 text-md-sys-primary'
-                                            : 'border-md-sys-outline/10 text-md-sys-on-surface/55 hover:bg-md-sys-on-surface/[0.06]'
-                                    }`}
-                                    style={!active ? { background: 'var(--md-sys-color-surface-container-high)' } : undefined}
+                                    onClick={onArchiveStale}
+                                    className="h-7 px-2.5 rounded-control text-label-xs font-semibold whitespace-nowrap transition-all border border-md-sys-outline/10 text-md-sys-on-surface/55 hover:bg-md-sys-on-surface/[0.06] inline-flex items-center gap-1"
+                                    style={{ background: 'var(--md-sys-color-surface-container-high)' }}
+                                    title="Archive every player (rostered or tracked-only) unseen for 60+ days"
                                 >
-                                    {f.label}{f.count > 0 ? ` (${f.count})` : ''}
+                                    <Archive size={11} />
+                                    Archive stale
                                 </button>
-                            );
-                        })}
-                        <button
-                            type="button"
-                            onClick={onArchiveStale}
-                            className="h-7 px-2.5 rounded-control text-label-xs font-semibold whitespace-nowrap transition-all border border-md-sys-outline/10 text-md-sys-on-surface/55 hover:bg-md-sys-on-surface/[0.06] inline-flex items-center gap-1"
-                            style={{ background: 'var(--md-sys-color-surface-container-high)' }}
-                            title="Archive every player (rostered or tracked-only) unseen for 60+ days"
-                        >
-                            <Archive size={11} />
-                            Archive stale
-                        </button>
-                    </div>
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 {/* Merge notification banner */}

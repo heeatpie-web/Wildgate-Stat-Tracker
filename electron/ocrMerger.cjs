@@ -443,6 +443,7 @@ function mergeLegacyCrewHub(existing, newData) {
     teammates: capPlayerEntries(mergedTeammates),
     opponentTeams: sortTeamsByColor(cleanedTeams, (team) => team?.color || team?.teamColor),
     reachModifiers: mergeHazards(existing.reachModifiers || [], newData.reachModifiers || []),
+    mapType: newData.mapType ?? existing.mapType ?? null,
     overallConfidence: Math.round(((existing.overallConfidence || 0) + (newData.overallConfidence || 0)) / 2),
     isPartialCapture: (existing.isPartialCapture || newData.isPartialCapture) && false, // recalc below
     captureTimestamp: newData.captureTimestamp || existing.captureTimestamp,
@@ -470,6 +471,7 @@ function mergeLegacyTacticalMap(existing, newData) {
       (team) => team?.color || team?.teamColor
     ),
     reachModifiers: mergeHazards(existing.reachModifiers || [], newData.reachModifiers || []),
+    mapType: newData.mapType ?? existing.mapType ?? null,
     teammates: capPlayerEntries(mergePlayers(existing.teammates || [], newData.teammates || [])),
     overallConfidence: Math.round(((existing.overallConfidence || 0) + (newData.overallConfidence || 0)) / 2),
     captureTimestamp: newData.captureTimestamp || existing.captureTimestamp,
@@ -725,6 +727,7 @@ function crossMergeCrewHubAndMap(crewHub, tactMap) {
     teammates: backfillTeammatesFromCrewRoster(crewHub.teammates || [], tactMap.teammates || []).slice(0, MAX_TEAM_PLAYERS),
     opponentTeams: sortTeamsByColor(cleanedCombinedTeams, (team) => team?.color || team?.teamColor),
     reachModifiers: mergeHazards(crewHub.reachModifiers || [], tactMap.reachModifiers || []),
+    mapType: tactMap.mapType ?? crewHub.mapType ?? null,
     captureTimestamp: crewHub.captureTimestamp || tactMap.captureTimestamp,
   };
 }
@@ -973,6 +976,7 @@ function crossMergeInternalCrewAndMap(crew, map) {
     },
     enemyTeams: sortTeamsByColor(finalEnrichedTeams, (team) => team?.color || team?.teamColor),
     hazards: (map.hazards && map.hazards.length > 0) ? map.hazards : (crew.hazards || []),
+    mapType: map.mapType ?? crew.mapType ?? null,
     mapSeed: map.mapSeed,
     isPartialCapture: crew.isPartialCapture,
     confidence: Math.round(((crew.confidence || 0) + (map.confidence || 0)) / 2),
@@ -988,6 +992,7 @@ function mergeCrewHubData(existing, newData) {
     yourTeam: mergeYourTeam(existing.yourTeam, newData.yourTeam),
     enemyTeams: mergeEnemyTeams(existing.enemyTeams, newData.enemyTeams),
     hazards: mergeHazards(existing.hazards || [], newData.hazards || []),
+    mapType: newData.mapType ?? existing.mapType ?? null,
     isPartialCapture: false,
     confidence: 0,
   };
@@ -1023,6 +1028,7 @@ function mergeMapScreenData(existing, newData) {
     yourShip: newData.yourShip || existing.yourShip,
     enemyShips: mergeEnemyShips(existing.enemyShips, newData.enemyShips),
     hazards: mergeHazards(existing.hazards, newData.hazards),
+    mapType: newData.mapType ?? existing.mapType ?? null,
     players: capPlayerEntries(mergePlayers(existing.players, newData.players)),
     confidence: 0,
   };

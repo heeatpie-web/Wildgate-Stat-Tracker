@@ -70,6 +70,7 @@ export interface OCRExtractedData {
     sourceSlotY?: number;
   }>;
   hazards?: string[];
+  mapType?: string;
 
   // From Crew Hub
   teammates: ExtractedPlayer[];

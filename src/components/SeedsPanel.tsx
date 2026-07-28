@@ -7,7 +7,6 @@ import {
     ChevronRight,
     Search,
     ArrowUpDown,
-    TrendingUp,
     MapPin,
     Ship,
     Crosshair,
@@ -17,6 +16,7 @@ import {
     Sparkles,
     Eye,
     X,
+    Filter,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import type { Match } from '../types';
@@ -57,10 +57,11 @@ export interface SeedGroup {
     winRate: number;
     hazards: Record<string, number>;
     shipsUsed: Record<string, number>;
+    modes: Record<string, number>;
     lastPlayed: number;
 }
 
-export type SeedSortMode = 'recent' | 'count' | 'winrate';
+export type SeedSortMode = 'recent' | 'count';
 
 /**
  * Find the tactical map capture for a match. Prefers the on-disk artifact
@@ -101,6 +102,11 @@ export const SeedsPanel: React.FC = () => {
     const [tacticalMaps, setTacticalMaps] = useState<Record<number, string | null>>({});
     const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
     const requestedTacticalMaps = useRef<Set<number>>(new Set());
+    const [showFilters, setShowFilters] = useState(false);
+    const [modeFilter, setModeFilter] = useState('');
+    const [shipFilter, setShipFilter] = useState('');
+    const [hazardFilter, setHazardFilter] = useState('');
+    const filterPopoverRef = useRef<HTMLDivElement>(null);
 
     const lightboxTitleId = useId();
     const lightboxFocusTrapRef = useFocusTrap<HTMLDivElement>(Boolean(lightboxSrc));
@@ -148,6 +154,10 @@ export const SeedsPanel: React.FC = () => {
                 if (match.ship) {
                     existing.shipsUsed[match.ship] = (existing.shipsUsed[match.ship] || 0) + 1;
                 }
+                // Add mode
+                if (match.mode) {
+                    existing.modes[match.mode] = (existing.modes[match.mode] || 0) + 1;
+                }
                 // Accumulate flags uniquely
                 seedFlags.forEach((f) => {
                     if (!existing.flags.includes(f)) existing.flags.push(f);
@@ -165,6 +175,11 @@ export const SeedsPanel: React.FC = () => {
                     shipsUsed[match.ship] = 1;
                 }
 
+                const modes: Record<string, number> = {};
+                if (match.mode) {
+                    modes[match.mode] = 1;
+                }
+
                 groups.set(seedVal, {
                     seed: seedVal,
                     flags: [...seedFlags],
@@ -176,6 +191,7 @@ export const SeedsPanel: React.FC = () => {
                     winRate: 0,
                     hazards,
                     shipsUsed,
+                    modes,
                     lastPlayed: match.timestamp,
                 });
             }
@@ -191,6 +207,37 @@ export const SeedsPanel: React.FC = () => {
         return list;
     }, [matches]);
 
+    // Distinct filter option lists, built from every seed group's accumulated data.
+    const modeFilterOptions = useMemo(() => {
+        const set = new Set<string>();
+        seedGroups.forEach((g) => Object.keys(g.modes).forEach((m) => set.add(m)));
+        return Array.from(set).sort();
+    }, [seedGroups]);
+    const shipFilterOptions = useMemo(() => {
+        const set = new Set<string>();
+        seedGroups.forEach((g) => Object.keys(g.shipsUsed).forEach((s) => set.add(s)));
+        return Array.from(set).sort();
+    }, [seedGroups]);
+    const hazardFilterOptions = useMemo(() => {
+        const set = new Set<string>();
+        seedGroups.forEach((g) => Object.keys(g.hazards).forEach((h) => set.add(h)));
+        return Array.from(set).sort();
+    }, [seedGroups]);
+    const activeFilterCount = [modeFilter, shipFilter, hazardFilter].filter(Boolean).length;
+
+    // Close the filter popover on outside click.
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (filterPopoverRef.current && !filterPopoverRef.current.contains(e.target as Node)) {
+                setShowFilters(false);
+            }
+        };
+        if (showFilters) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showFilters]);
+
     // Filter and sort seed groups
     const filteredSeeds = useMemo(() => {
         let result = seedGroups;
@@ -199,13 +246,21 @@ export const SeedsPanel: React.FC = () => {
             const term = searchTerm.trim().toUpperCase();
             result = result.filter((g) => g.seed.includes(term));
         }
+        if (modeFilter) {
+            result = result.filter((g) => modeFilter in g.modes);
+        }
+        if (shipFilter) {
+            result = result.filter((g) => shipFilter in g.shipsUsed);
+        }
+        if (hazardFilter) {
+            result = result.filter((g) => hazardFilter in g.hazards);
+        }
 
-        return result.sort((a, b) => {
+        return [...result].sort((a, b) => {
             if (sortMode === 'count') return b.totalMatches - a.totalMatches;
-            if (sortMode === 'winrate') return b.winRate - a.winRate;
             return b.lastPlayed - a.lastPlayed;
         });
-    }, [seedGroups, searchTerm, sortMode]);
+    }, [seedGroups, searchTerm, sortMode, modeFilter, shipFilter, hazardFilter]);
 
     // Currently selected group
     const activeGroup = useMemo(() => {
@@ -281,41 +336,100 @@ export const SeedsPanel: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Sort Toggle */}
-                        <div className="flex items-center gap-1 bg-md-sys-on-surface/[0.04] p-1 rounded-lg border border-md-sys-outline/10">
-                            <button
-                                onClick={() => setSortMode('recent')}
-                                className={`px-2 py-1 rounded text-label-xs font-semibold ${
-                                    sortMode === 'recent'
-                                        ? 'bg-md-sys-primary/15 text-md-sys-primary'
-                                        : 'text-md-sys-on-surface/60 hover:text-md-sys-on-surface'
-                                }`}
-                                title="Sort by Most Recent"
-                            >
-                                Recent
-                            </button>
-                            <button
-                                onClick={() => setSortMode('count')}
-                                className={`px-2 py-1 rounded text-label-xs font-semibold ${
-                                    sortMode === 'count'
-                                        ? 'bg-md-sys-primary/15 text-md-sys-primary'
-                                        : 'text-md-sys-on-surface/60 hover:text-md-sys-on-surface'
-                                }`}
-                                title="Sort by Match Count"
-                            >
-                                Count
-                            </button>
-                            <button
-                                onClick={() => setSortMode('winrate')}
-                                className={`px-2 py-1 rounded text-label-xs font-semibold ${
-                                    sortMode === 'winrate'
-                                        ? 'bg-md-sys-primary/15 text-md-sys-primary'
-                                        : 'text-md-sys-on-surface/60 hover:text-md-sys-on-surface'
-                                }`}
-                                title="Sort by Win Rate"
-                            >
-                                Win %
-                            </button>
+                        <div className="flex items-center gap-2">
+                            {/* Sort Toggle */}
+                            <div className="flex items-center gap-1 bg-md-sys-on-surface/[0.04] p-1 rounded-lg border border-md-sys-outline/10">
+                                <button
+                                    onClick={() => setSortMode('recent')}
+                                    className={`px-2 py-1 rounded text-label-xs font-semibold ${
+                                        sortMode === 'recent'
+                                            ? 'bg-md-sys-primary/15 text-md-sys-primary'
+                                            : 'text-md-sys-on-surface/60 hover:text-md-sys-on-surface'
+                                    }`}
+                                    title="Sort by Most Recent"
+                                >
+                                    Recent
+                                </button>
+                                <button
+                                    onClick={() => setSortMode('count')}
+                                    className={`px-2 py-1 rounded text-label-xs font-semibold ${
+                                        sortMode === 'count'
+                                            ? 'bg-md-sys-primary/15 text-md-sys-primary'
+                                            : 'text-md-sys-on-surface/60 hover:text-md-sys-on-surface'
+                                    }`}
+                                    title="Sort by Match Count"
+                                >
+                                    Count
+                                </button>
+                            </div>
+
+                            {/* Filter Toggle */}
+                            <div className="relative" ref={filterPopoverRef}>
+                                <button
+                                    onClick={() => setShowFilters((v) => !v)}
+                                    className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-label-xs font-semibold border transition-colors ${
+                                        activeFilterCount > 0 || showFilters
+                                            ? 'bg-md-sys-primary/15 text-md-sys-primary border-md-sys-primary/30'
+                                            : 'bg-md-sys-on-surface/[0.04] text-md-sys-on-surface/60 border-md-sys-outline/10 hover:text-md-sys-on-surface'
+                                    }`}
+                                    aria-label={`Filters${activeFilterCount > 0 ? ` (${activeFilterCount} active)` : ''}`}
+                                >
+                                    <Filter size={12} />
+                                    {activeFilterCount > 0 && (
+                                        <span className="min-w-[14px] h-3.5 rounded-full bg-md-sys-primary text-md-sys-onPrimary text-[9px] font-black flex items-center justify-center px-1">
+                                            {activeFilterCount}
+                                        </span>
+                                    )}
+                                </button>
+                                {showFilters && (
+                                    <div className="absolute right-0 top-full mt-2 z-30 w-64 rounded-card mg-surface-high border border-md-sys-outline/20 shadow-xl p-3.5 flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-150 origin-top-right">
+                                        <div className="flex items-center justify-between pb-2 border-b border-md-sys-outline/10">
+                                            <span className="text-label-xs font-bold uppercase tracking-widest text-md-sys-on-surface/50">Filter Seeds</span>
+                                            {activeFilterCount > 0 && (
+                                                <button
+                                                    onClick={() => { setModeFilter(''); setShipFilter(''); setHazardFilter(''); }}
+                                                    className="text-label-xs font-bold text-md-sys-primary hover:underline"
+                                                >
+                                                    Clear all
+                                                </button>
+                                            )}
+                                        </div>
+                                        <label className="flex flex-col gap-1">
+                                            <span className="text-label-xs text-md-sys-on-surface/50 font-semibold">Mode</span>
+                                            <select
+                                                value={modeFilter}
+                                                onChange={(e) => setModeFilter(e.target.value)}
+                                                className="w-full px-2.5 py-1.5 rounded-control border border-md-sys-outline/20 bg-md-sys-surface text-md-sys-on-surface text-label-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary transition-colors hover:border-md-sys-outline/40"
+                                            >
+                                                <option value="">All Modes</option>
+                                                {modeFilterOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+                                            </select>
+                                        </label>
+                                        <label className="flex flex-col gap-1">
+                                            <span className="text-label-xs text-md-sys-on-surface/50 font-semibold">Ship</span>
+                                            <select
+                                                value={shipFilter}
+                                                onChange={(e) => setShipFilter(e.target.value)}
+                                                className="w-full px-2.5 py-1.5 rounded-control border border-md-sys-outline/20 bg-md-sys-surface text-md-sys-on-surface text-label-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary transition-colors hover:border-md-sys-outline/40"
+                                            >
+                                                <option value="">All Ships</option>
+                                                {shipFilterOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+                                            </select>
+                                        </label>
+                                        <label className="flex flex-col gap-1">
+                                            <span className="text-label-xs text-md-sys-on-surface/50 font-semibold">Hazard</span>
+                                            <select
+                                                value={hazardFilter}
+                                                onChange={(e) => setHazardFilter(e.target.value)}
+                                                className="w-full px-2.5 py-1.5 rounded-control border border-md-sys-outline/20 bg-md-sys-surface text-md-sys-on-surface text-label-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary transition-colors hover:border-md-sys-outline/40"
+                                            >
+                                                <option value="">All Hazards</option>
+                                                {hazardFilterOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+                                            </select>
+                                        </label>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
 
@@ -349,7 +463,7 @@ export const SeedsPanel: React.FC = () => {
                                 <button
                                     key={group.seed}
                                     onClick={() => setSelectedSeed(group.seed)}
-                                    className={`w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between gap-3 ${
+                                    className={`group relative w-full text-left pl-3.5 pr-3 py-3 rounded-xl border transition-all flex items-center justify-between gap-3 overflow-hidden ${
                                         isAnimDisabled ? '' : 'duration-150'
                                     } ${
                                         isSelected
@@ -357,6 +471,11 @@ export const SeedsPanel: React.FC = () => {
                                             : 'bg-md-sys-on-surface/[0.02] hover:bg-md-sys-on-surface/[0.06] border-md-sys-outline/5 text-md-sys-on-surface/80'
                                     }`}
                                 >
+                                    <span
+                                        className={`absolute left-0 top-0 bottom-0 w-[3px] rounded-r-full transition-colors ${
+                                            isSelected ? 'bg-md-sys-primary' : 'bg-transparent group-hover:bg-md-sys-outline/20'
+                                        }`}
+                                    />
                                     <div className="flex flex-col gap-1 min-w-0">
                                         <div className="flex items-center gap-2">
                                             <span className="font-mono text-label-md font-bold tracking-wider text-md-sys-primary">
@@ -371,27 +490,19 @@ export const SeedsPanel: React.FC = () => {
                                                 </span>
                                             )}
                                         </div>
-                                        <div className="flex items-center gap-2 text-label-xs text-md-sys-on-surface/50">
+                                        <div className="flex items-center gap-1.5 text-label-xs text-md-sys-on-surface/50">
                                             <span>{group.totalMatches} {group.totalMatches === 1 ? 'match' : 'matches'}</span>
-                                            <span>•</span>
+                                            <span className="opacity-50">•</span>
                                             <span>{timeAgo(group.lastPlayed)}</span>
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        <span
-                                            className={`px-2 py-0.5 rounded-pill text-label-xs font-bold ${
-                                                group.winRate >= 60
-                                                    ? 'bg-green-500/15 text-green-400 border border-green-500/25'
-                                                    : group.winRate >= 40
-                                                    ? 'bg-amber-500/15 text-amber-400 border border-amber-500/25'
-                                                    : 'bg-red-500/15 text-red-400 border border-red-500/25'
-                                            }`}
-                                        >
-                                            {group.winRate}% W
-                                        </span>
-                                        <ChevronRight size={14} className="text-md-sys-on-surface/30" />
-                                    </div>
+                                    <ChevronRight
+                                        size={14}
+                                        className={`shrink-0 transition-transform ${
+                                            isSelected ? 'text-md-sys-primary' : 'text-md-sys-on-surface/30 group-hover:translate-x-0.5'
+                                        }`}
+                                    />
                                 </button>
                             );
                         })
@@ -414,14 +525,15 @@ export const SeedsPanel: React.FC = () => {
                 ) : (
                     <div className="flex flex-col gap-6">
                         {/* Seed Header Banner */}
-                        <div className="flex items-center justify-between p-4 rounded-2xl bg-md-sys-primary/10 border border-md-sys-primary/20 backdrop-blur-sm">
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-xl bg-md-sys-primary/20 flex items-center justify-center text-md-sys-primary">
+                        <div className="relative flex items-center justify-between p-4 rounded-2xl bg-gradient-to-br from-md-sys-primary/15 via-md-sys-primary/10 to-transparent border border-md-sys-primary/20 backdrop-blur-sm overflow-hidden">
+                            <div className="absolute -right-6 -top-8 w-32 h-32 rounded-full bg-md-sys-primary/10 blur-2xl pointer-events-none" />
+                            <div className="relative flex items-center gap-4 min-w-0">
+                                <div className="w-12 h-12 rounded-xl bg-md-sys-primary/20 flex items-center justify-center text-md-sys-primary shrink-0">
                                     <Hash size={24} />
                                 </div>
-                                <div>
+                                <div className="min-w-0">
                                     <div className="flex items-center gap-2">
-                                        <h1 className="font-mono text-2xl font-black tracking-widest text-md-sys-on-surface">
+                                        <h1 className="font-mono text-2xl font-black tracking-[0.15em] text-md-sys-on-surface">
                                             {activeGroup.seed}
                                         </h1>
                                         <button
@@ -439,7 +551,7 @@ export const SeedsPanel: React.FC = () => {
                             </div>
 
                             {activeGroup.flags.length > 0 && (
-                                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-label-xs font-semibold">
+                                <div className="relative shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-label-xs font-semibold">
                                     <AlertTriangle size={14} />
                                     <span>{activeGroup.flags.join(', ')}</span>
                                 </div>
@@ -447,9 +559,9 @@ export const SeedsPanel: React.FC = () => {
                         </div>
 
                         {/* Top Stats Cards */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                            <div className="p-3.5 rounded-xl bg-md-sys-on-surface/[0.03] border border-md-sys-outline/10 flex flex-col gap-1">
-                                <span className="text-label-xs text-md-sys-on-surface/50 font-medium flex items-center gap-1">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="p-3.5 rounded-xl bg-md-sys-on-surface/[0.03] border border-md-sys-outline/10 flex flex-col gap-1 transition-colors hover:bg-md-sys-on-surface/[0.05]">
+                                <span className="text-label-xs text-md-sys-on-surface/50 font-medium flex items-center gap-1.5">
                                     <Layers size={12} /> Total Matches
                                 </span>
                                 <span className="text-title-lg font-bold text-md-sys-on-surface">
@@ -457,30 +569,17 @@ export const SeedsPanel: React.FC = () => {
                                 </span>
                             </div>
 
-                            <div className="p-3.5 rounded-xl bg-md-sys-on-surface/[0.03] border border-md-sys-outline/10 flex flex-col gap-1">
-                                <span className="text-label-xs text-md-sys-on-surface/50 font-medium flex items-center gap-1">
-                                    <TrendingUp size={12} /> Win Rate
-                                </span>
-                                <span
-                                    className={`text-title-lg font-bold ${
-                                        activeGroup.winRate >= 50 ? 'text-green-400' : 'text-red-400'
-                                    }`}
-                                >
-                                    {activeGroup.winRate}%
-                                </span>
-                            </div>
-
-                            <div className="p-3.5 rounded-xl bg-md-sys-on-surface/[0.03] border border-md-sys-outline/10 flex flex-col gap-1">
-                                <span className="text-label-xs text-md-sys-on-surface/50 font-medium flex items-center gap-1">
+                            <div className="p-3.5 rounded-xl bg-md-sys-on-surface/[0.03] border border-md-sys-outline/10 flex flex-col gap-1 transition-colors hover:bg-md-sys-on-surface/[0.05]">
+                                <span className="text-label-xs text-md-sys-on-surface/50 font-medium flex items-center gap-1.5">
                                     <Shield size={12} /> Record (W/L/D)
                                 </span>
                                 <span className="text-title-lg font-bold text-md-sys-on-surface">
-                                    {activeGroup.wins}/{activeGroup.losses}/{activeGroup.draws}
+                                    {activeGroup.wins}<span className="text-md-sys-on-surface/30 font-semibold">/</span>{activeGroup.losses}<span className="text-md-sys-on-surface/30 font-semibold">/</span>{activeGroup.draws}
                                 </span>
                             </div>
 
-                            <div className="p-3.5 rounded-xl bg-md-sys-on-surface/[0.03] border border-md-sys-outline/10 flex flex-col gap-1">
-                                <span className="text-label-xs text-md-sys-on-surface/50 font-medium flex items-center gap-1">
+                            <div className="p-3.5 rounded-xl bg-md-sys-on-surface/[0.03] border border-md-sys-outline/10 flex flex-col gap-1 transition-colors hover:bg-md-sys-on-surface/[0.05]">
+                                <span className="text-label-xs text-md-sys-on-surface/50 font-medium flex items-center gap-1.5">
                                     <MapPin size={12} /> Hazards Found
                                 </span>
                                 <span className="text-title-lg font-bold text-md-sys-on-surface">
@@ -499,24 +598,26 @@ export const SeedsPanel: React.FC = () => {
                                 {Object.keys(activeGroup.hazards).length === 0 ? (
                                     <p className="text-label-xs text-md-sys-on-surface/40">No hazards recorded for this seed.</p>
                                 ) : (
-                                    <div className="flex flex-col gap-2">
-                                        {Object.entries(activeGroup.hazards).map(([hazard, count]) => {
-                                            const pct = Math.round((count / activeGroup.totalMatches) * 100);
-                                            return (
-                                                <div key={hazard} className="flex flex-col gap-1">
-                                                    <div className="flex items-center justify-between text-label-xs">
-                                                        <span className="font-semibold text-md-sys-on-surface">{hazard}</span>
-                                                        <span className="text-md-sys-on-surface/50">{count}x ({pct}%)</span>
+                                    <div className="flex flex-col gap-2.5">
+                                        {Object.entries(activeGroup.hazards)
+                                            .sort(([, a], [, b]) => b - a)
+                                            .map(([hazard, count]) => {
+                                                const pct = Math.round((count / activeGroup.totalMatches) * 100);
+                                                return (
+                                                    <div key={hazard} className="flex flex-col gap-1">
+                                                        <div className="flex items-center justify-between text-label-xs">
+                                                            <span className="font-semibold text-md-sys-on-surface">{hazard}</span>
+                                                            <span className="text-md-sys-on-surface/50 tabular-nums">{count}x · {pct}%</span>
+                                                        </div>
+                                                        <div className="w-full h-1.5 rounded-full bg-md-sys-on-surface/10 overflow-hidden">
+                                                            <div
+                                                                className="h-full bg-md-sys-primary rounded-full transition-[width] duration-300"
+                                                                style={{ width: `${pct}%` }}
+                                                            />
+                                                        </div>
                                                     </div>
-                                                    <div className="w-full h-1.5 rounded-full bg-md-sys-on-surface/10 overflow-hidden">
-                                                        <div
-                                                            className="h-full bg-md-sys-primary rounded-full"
-                                                            style={{ width: `${pct}%` }}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
+                                                );
+                                            })}
                                     </div>
                                 )}
                             </div>
@@ -530,17 +631,19 @@ export const SeedsPanel: React.FC = () => {
                                     <p className="text-label-xs text-md-sys-on-surface/40">No ship info recorded.</p>
                                 ) : (
                                     <div className="flex flex-wrap gap-2">
-                                        {Object.entries(activeGroup.shipsUsed).map(([ship, count]) => (
-                                            <div
-                                                key={ship}
-                                                className="px-3 py-1.5 rounded-xl bg-md-sys-primary/10 border border-md-sys-primary/20 flex items-center gap-2 text-label-xs"
-                                            >
-                                                <span className="font-bold text-md-sys-on-surface">{ship}</span>
-                                                <span className="px-1.5 py-0.5 rounded-pill bg-md-sys-primary/20 text-md-sys-primary font-bold">
-                                                    {count}x
-                                                </span>
-                                            </div>
-                                        ))}
+                                        {Object.entries(activeGroup.shipsUsed)
+                                            .sort(([, a], [, b]) => b - a)
+                                            .map(([ship, count]) => (
+                                                <div
+                                                    key={ship}
+                                                    className="px-3 py-1.5 rounded-xl bg-md-sys-primary/10 border border-md-sys-primary/20 flex items-center gap-2 text-label-xs transition-colors hover:bg-md-sys-primary/15"
+                                                >
+                                                    <span className="font-bold text-md-sys-on-surface">{ship}</span>
+                                                    <span className="px-1.5 py-0.5 rounded-pill bg-md-sys-primary/20 text-md-sys-primary font-bold tabular-nums">
+                                                        {count}x
+                                                    </span>
+                                                </div>
+                                            ))}
                                     </div>
                                 )}
                             </div>
@@ -557,7 +660,9 @@ export const SeedsPanel: React.FC = () => {
                                     return (
                                         <div
                                             key={m.id}
-                                            className="p-3 rounded-xl bg-md-sys-on-surface/[0.02] border border-md-sys-outline/5 flex items-center gap-3 text-label-xs"
+                                            className={`p-3 rounded-xl bg-md-sys-on-surface/[0.02] border border-md-sys-outline/5 flex items-center gap-3 text-label-xs transition-colors hover:bg-md-sys-on-surface/[0.04] ${
+                                                isAnimDisabled ? '' : 'duration-150'
+                                            }`}
                                         >
                                             {mapSrc && (
                                                 <button
@@ -584,9 +689,9 @@ export const SeedsPanel: React.FC = () => {
                                             )}
 
                                             <div className="flex-1 min-w-0 flex items-center justify-between gap-3">
-                                                <div className="flex items-center gap-3 min-w-0">
+                                                <div className="flex items-center gap-2.5 min-w-0">
                                                     <span
-                                                        className={`px-2 py-0.5 rounded-pill font-bold uppercase text-[10px] ${
+                                                        className={`px-2 py-0.5 rounded-pill font-bold uppercase text-[10px] tracking-wide shrink-0 ${
                                                             m.result === 'Win'
                                                                 ? 'bg-green-500/15 text-green-400'
                                                                 : m.result === 'Loss'
@@ -597,7 +702,7 @@ export const SeedsPanel: React.FC = () => {
                                                         {m.result || 'Saved'}
                                                     </span>
                                                     <span className="font-semibold text-md-sys-on-surface truncate">{m.ship || 'Unknown Ship'}</span>
-                                                    <span className="text-md-sys-on-surface/40">•</span>
+                                                    <span className="text-md-sys-on-surface/30 shrink-0">•</span>
                                                     <span className="text-md-sys-on-surface/60 truncate">{m.mode}</span>
                                                 </div>
 

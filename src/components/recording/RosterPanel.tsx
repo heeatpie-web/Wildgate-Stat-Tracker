@@ -518,7 +518,7 @@ export const RosterPanel: React.FC<RosterPanelProps> = ({ workspaceToggle }) => 
                                     )}
                                     <button
                                         onClick={() => openPlayerProfile(p)}
-                                        className="recording-click-target roster-player-name text-label-sm font-semibold text-left truncate rounded-control px-1.5 py-0.5 border border-md-sys-outline/14 hover:text-md-sys-primary hover:border-md-sys-primary/35 hover:bg-md-sys-primary/10 transition-colors"
+                                        className="recording-click-target roster-player-name min-w-0 flex-1 text-label-sm font-semibold text-left truncate rounded-control px-1.5 py-0.5 border border-md-sys-outline/14 hover:text-md-sys-primary hover:border-md-sys-primary/35 hover:bg-md-sys-primary/10 transition-colors"
                                         title={`Open ${p} in Players`}
                                         aria-label={`Open ${p} in Players`}
                                     >

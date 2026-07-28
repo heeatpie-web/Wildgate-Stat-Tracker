@@ -966,6 +966,7 @@ export const Wizard: React.FC = () => {
             })).filter((team: { players: string[]; shipType: string; teamName: string }) => team.players.length > 0 || team.shipType || team.teamName);
             const nextOpponents = dedupeNames(nextOpponentTeams.flatMap((team: { players: string[] }) => team.players));
             const nextModifiers = dedupeNames((mergedData.reachModifiers || []).map((entry: any) => String(entry?.name || entry || '').trim()));
+            const nextMapType = String(mergedData.mapType || '').trim() || undefined;
             const rerunShip = String(mergedData.playerShip?.shipType || '').trim();
             const latestPending = (useAppStore.getState().pendingMatchData || pendingMatchData || {}) as Partial<Match>;
             const captainSeed = String(activeUser || latestPending.player || 'You').trim() || 'You';
@@ -1029,6 +1030,7 @@ export const Wizard: React.FC = () => {
                 opponents: nextOpponents.length > 0 ? nextOpponents : (latestPending.opponents || []),
                 opponentTeams: nextOpponentTeams.length > 0 ? nextOpponentTeams : (latestPending.opponentTeams || []),
                 reachModifiers: nextModifiers.length > 0 ? nextModifiers : (latestPending.reachModifiers || []),
+                mapType: nextMapType || latestPending.mapType,
                 ocrState: 'reviewing',
                 ocrDebug: {
                     ...(latestPending.ocrDebug || {}),

@@ -390,10 +390,7 @@ export const AnalyticsCockpit: React.FC<AnalyticsCockpitProps> = ({
             <section className={`at-hero-panel ${dense ? 'p-3' : 'p-3 md:p-4'}`}>
                 {dense ? (
                     <div className="flex flex-col gap-2">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="text-label-xs font-mono font-bold uppercase tracking-widest text-md-sys-on-surface/50">
-                                Analytics cockpit · data-dense
-                            </div>
+                        <div className="flex flex-wrap items-center justify-end gap-2">
                             <button
                                 type="button"
                                 onClick={() => onNavigate('social')}
@@ -420,10 +417,7 @@ export const AnalyticsCockpit: React.FC<AnalyticsCockpitProps> = ({
                 ) : (
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="min-w-0">
-                            <div className="text-label-xs font-mono font-bold uppercase tracking-widest text-md-sys-on-surface/42">
-                                Analytics cockpit
-                            </div>
-                            <h2 className="at-display mt-0.5 text-base font-extrabold tracking-tight text-md-sys-on-surface">
+                            <h2 className="at-display text-base font-extrabold tracking-tight text-md-sys-on-surface">
                                 See what is moving the needle
                             </h2>
                         </div>
