@@ -1,4 +1,12 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.10.1": [
+    "Match archiving in History (hide/show archived matches)",
+    "Roster archive threshold reduced 90→60 days with periodic re-sweep instead of one-time migration",
+    "Manual archive for tracked-only pilots plus bulk Archive stale action",
+    "Searchable roster name picker in OCR team assignment",
+    "Faster artifact relinking via scoped file matching",
+    "Fix black-bar color detection for near-black pixels"
+  ],
   "v3.10.0": [
     "Archive roster players unseen for 90 days, with a one-time cleanup pass",
     "Fuzzy-match roster names after re-running OCR so known pilots stay recognized",
