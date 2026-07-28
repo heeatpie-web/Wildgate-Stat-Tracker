@@ -6,8 +6,7 @@ Feature UI components and modal workflows.
 
 - `DashboardLayout.tsx`: main shell/grid
 - `RecordingView.tsx`: active match recording UI
-- `MatchRecordingPage.tsx`: match CRUD page
-- `HistoryTable.tsx`: history list + JPG export
+- `HistoryTable.tsx`: history list + JPG export + match detail/CRUD
 - `SmartCapturesPanel.tsx`: screenshot artifacts + OCR reruns
 - `SettingsModal.tsx`: preferences + cloud status
 - `DevOCRPanel.tsx`: OCR debug tooling

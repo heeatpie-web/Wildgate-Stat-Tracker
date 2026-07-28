@@ -115,8 +115,8 @@ import { LocalImage } from './LocalImage';
 | Component | What it shows |
 |-----------|---------------|
 | `SmartCapturesPanel` | Gallery grid + lightbox + telemetry viewer |
-| `MatchRecordingPage` | Gallery grid + lightbox in match detail |
 | `HistoryTable` | Inline artifact thumbnails in match detail |
+| `SeedsPanel` | Tactical map thumbnail + lightbox per match on a seed |
 
 ## Stage 5: Management
 

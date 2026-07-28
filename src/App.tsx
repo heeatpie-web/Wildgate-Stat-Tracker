@@ -120,7 +120,6 @@ const SettingsModal = React.lazy(() => import('./components/SettingsModal').then
 const ResetConfirmModal = React.lazy(() => import('./components/ResetConfirmModal').then((m) => ({ default: m.ResetConfirmModal })));
 const Wizard = React.lazy(() => import('./components/Wizard').then((m) => ({ default: m.Wizard })));
 const ReviewQueueModal = React.lazy(() => import('./components/ReviewQueueModal').then((m) => ({ default: m.ReviewQueueModal })));
-const MatchRecordingPage = React.lazy(() => import('./components/MatchRecordingPage').then(m => ({ default: m.MatchRecordingPage })));
 const VideoImportView = React.lazy(() => import('./components/VideoImport/VideoImportView').then(m => ({ default: m.VideoImportView })));
 const SeedsPanel = React.lazy(() => import('./components/SeedsPanel').then(m => ({ default: m.SeedsPanel })));
 import type { AppView } from './store/slices/createUISlice';
