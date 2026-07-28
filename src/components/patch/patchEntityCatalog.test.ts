@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getMatchEquipment, getMatchPerks, getMatchProspectorWeapons, getMatchUpdateKey } from './patchEntityCatalog';
+import { getMatchEquipment, getMatchPerks, getMatchProspectorWeapons, getMatchUpdateKey, getPerkCatalog, getPerkCatalogWithLegacyNames, getPerkNameAliasPairs, isPerkAllowedForProspector } from './patchEntityCatalog';
 import type { Match } from '../../types';
 
 const baseMatch = (overrides: Partial<Match> = {}): Match => ({
@@ -85,5 +85,38 @@ describe('getMatchUpdateKey', () => {
             timestamp: new Date(2025, 11, 31, 23, 59, 59).getTime(),
         });
         expect(getMatchUpdateKey(match)).toBe('');
+    });
+});
+
+describe('perk renames preserve history', () => {
+    it('exposes only the current name to pickers and capture-time resolution', () => {
+        const catalog = getPerkCatalog();
+        expect(catalog).toContain('Protected Pilot');
+        expect(catalog).not.toContain('Pilot');
+    });
+
+    it('still recognises the pre-rename name for already-recorded matches', () => {
+        const legacyInclusive = getPerkCatalogWithLegacyNames();
+        expect(legacyInclusive).toContain('Protected Pilot');
+        expect(legacyInclusive).toContain('Pilot');
+    });
+
+    it('maps the old name to the current one for newly recorded matches only', () => {
+        const pairs = getPerkNameAliasPairs();
+        const byAlias = new Map(pairs.map((p) => [p.alias, p.current]));
+        expect(byAlias.get('Pilot')).toBe('Protected Pilot');
+        expect(byAlias.get('Protected Pilot')).toBe('Protected Pilot');
+    });
+
+    it('does not invent aliases for perks that were never renamed', () => {
+        const pairs = getPerkNameAliasPairs();
+        const boarder = pairs.filter((p) => p.current === 'Boarder');
+        expect(boarder).toEqual([{ alias: 'Boarder', current: 'Boarder' }]);
+    });
+
+    it('applies prospector restrictions through legacy names too', () => {
+        expect(isPerkAllowedForProspector('Pilot', 'Sal')).toBe(true);
+        expect(isPerkAllowedForProspector('Sal Inventor', 'Sal')).toBe(true);
+        expect(isPerkAllowedForProspector('Sal Inventor', 'Kae')).toBe(false);
     });
 });

@@ -7,7 +7,7 @@ import { HERO_GUIDS, SHIP_GUIDS, WEAPON_GUIDS, EQUIPMENT_GUIDS, PERK_GUIDS } fro
 import { SHIPS, CHARACTERS, UNNAMED_PLAYER_PREFIX, normalizeShipName } from '../types';
 import type { Match, Loadout, TelemetryConsistency, TelemetryMatchMode } from '../types';
 import { EQUIPMENT_DB } from '../utils/equipmentDb';
-import { getPerkCatalog, getProspectorEquipmentCatalog, getProspectorWeaponCatalog, MAX_PERKS_PER_MATCH } from '../components/patch/patchEntityCatalog';
+import { getPerkCatalog, getPerkNameAliasPairs, getProspectorEquipmentCatalog, getProspectorWeaponCatalog, MAX_PERKS_PER_MATCH } from '../components/patch/patchEntityCatalog';
 import { processTelemetryEvent } from '../utils/telemetryProcessor';
 import { isNonMatchMap, isPregameLobbyMap } from '../utils/nonMatchMaps';
 import Logger from '../utils/logger';
@@ -541,6 +541,19 @@ const RAW_CHARACTER_EQUIPMENT_NAMES = EQUIPMENT_DB
     .filter(Boolean);
 const CHARACTER_EQUIPMENT_NAMES = getProspectorEquipmentCatalog(RAW_CHARACTER_EQUIPMENT_NAMES).filter(Boolean);
 const CHARACTER_PERK_NAMES = getPerkCatalog().filter(Boolean);
+// Perk renames: accept the old spelling as input but record the current name,
+// so a newly played match is stored as "Protected Pilot" even if the source
+// still says "Pilot". Already-saved matches are never re-resolved.
+const PERK_ALIAS_NAME_MAP = (() => {
+    const map = new Map<string, string>();
+    getPerkNameAliasPairs().forEach(({ alias, current }) => {
+        const key = normalizeEntityLabel(alias);
+        const cleaned = String(current || '').trim();
+        if (!key || !cleaned || map.has(key)) return;
+        map.set(key, cleaned);
+    });
+    return map;
+})();
 const PROSPECTOR_WEAPON_NAME_MAP = buildCanonicalEntityNameMap(CHARACTER_WEAPON_NAMES);
 const PROSPECTOR_WEAPON_SET = new Set(Array.from(PROSPECTOR_WEAPON_NAME_MAP.keys()));
 const PROSPECTOR_EQUIPMENT_NAME_MAP = buildCanonicalEntityNameMap(CHARACTER_EQUIPMENT_NAMES);
@@ -563,7 +576,10 @@ const toCanonicalProspectorEquipmentName = (value: unknown): string => {
 };
 const toCanonicalProspectorPerkName = (value: unknown): string => {
     const key = normalizeEntityLabel(value);
-    if (!key || !PROSPECTOR_PERK_SET.has(key)) return '';
+    if (!key) return '';
+    const aliased = PERK_ALIAS_NAME_MAP.get(key);
+    if (aliased) return aliased;
+    if (!PROSPECTOR_PERK_SET.has(key)) return '';
     return PROSPECTOR_PERK_NAME_MAP.get(key) || '';
 };
 

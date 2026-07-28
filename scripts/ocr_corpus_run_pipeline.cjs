@@ -15,18 +15,28 @@ function parseArgs(argv) {
     debugLayout: process.env.WILDGATE_OCR_DEBUG_LAYOUT === '1',
   };
 
+  // An empty value is legitimate (--active-user "" means "no active user"), so
+  // check for a missing argument rather than a falsy one. Bailing out on falsy
+  // silently dropped every flag that followed.
+  const valueFlags = {
+    '--truth': 'truth',
+    '--out': 'out',
+    '--ocr-mode': 'ocrMode',
+    '--active-user': 'activeUser',
+  };
   for (let i = 2; i < argv.length; i += 1) {
     const token = argv[i];
-    const next = argv[i + 1];
     if (token === '--debug-layout') {
       args.debugLayout = true;
       continue;
     }
-    if (!next) break;
-    if (token === '--truth') args.truth = next;
-    if (token === '--out') args.out = next;
-    if (token === '--ocr-mode') args.ocrMode = next;
-    if (token === '--active-user') args.activeUser = next;
+    const key = valueFlags[token];
+    if (!key) continue;
+    if (i + 1 >= argv.length) {
+      throw new Error(`Missing value for ${token}`);
+    }
+    args[key] = argv[i + 1];
+    i += 1;
   }
 
   return args;
@@ -91,6 +101,26 @@ function resolveSampleImagePaths(sample, truthPath) {
   ));
 }
 
+// Mirrors classifyArtifactScreenshotBucket + buildRerunOcrCallGroups in
+// src/utils/artifactScreenshotBuckets.ts. The app sends crew_hub captures ahead
+// of tactical_map ones in a single rerun batch so the merge seeds from the
+// roster-bearing screenshot; the corpus must order them the same way or it
+// stops testing the shipping path.
+function bucketRankForImagePath(imagePath) {
+  const filename = String(imagePath || '').split(/[\\/]/).pop()?.toLowerCase() || '';
+  if (filename.startsWith('capture_crew_hub_')) return 0;
+  if (filename.startsWith('capture_map_') || filename.startsWith('capture_tactical_map_')) return 1;
+  if (filename.startsWith('capture_result_')) return 2;
+  return 3;
+}
+
+function orderImagePathsLikeApp(imagePaths) {
+  return [...imagePaths]
+    .map((imagePath, index) => ({ imagePath, index, rank: bucketRankForImagePath(imagePath) }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map((entry) => entry.imagePath);
+}
+
 function installElectronMock() {
   const fakeUserData = path.join(os.tmpdir(), 'wg-ocr-corpus-runner');
   fs.mkdirSync(fakeUserData, { recursive: true });
@@ -143,7 +173,7 @@ async function main() {
 
   installElectronMock();
   const { processCapture } = require('../electron/ocrHandler.cjs');
-  const { mergeCaptures } = require('../electron/ocrMerger.cjs');
+  const { mergeRerunResults } = require('../electron/helpers/rerunOcrMerge.cjs');
 
   const predictions = [];
   const failures = [];
@@ -156,8 +186,11 @@ async function main() {
         throw new Error('No image paths found for sample');
       }
 
-      let merged = null;
-      for (const imagePath of imagePaths) {
+      // Mirror the app's rerun batch exactly: OCR each image independently,
+      // ordered crew_hub first, then hand the batch to the same merge helper
+      // the rerun-ocr-multi IPC handler uses.
+      const perFile = [];
+      for (const imagePath of orderImagePathsLikeApp(imagePaths)) {
         if (!fs.existsSync(imagePath)) {
           throw new Error(`Missing image: ${imagePath}`);
         }
@@ -171,9 +204,12 @@ async function main() {
         if (!result?.success || !result?.data) {
           throw new Error(result?.error || 'OCR returned no data');
         }
-        // Mirror the live app's multi-image flow: OCR each image independently
-        // and merge only at the corpus-runner layer.
-        merged = merged ? mergeCaptures(merged, result.data) : result.data;
+        perFile.push({ imagePath, success: true, data: result.data });
+      }
+
+      const merged = mergeRerunResults(perFile);
+      if (!merged) {
+        throw new Error('Merge produced no data');
       }
 
       predictions.push(buildPrediction(sample, merged));

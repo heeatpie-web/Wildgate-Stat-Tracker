@@ -7,7 +7,7 @@ import type { MappingEntityType } from '../types';
 import { SHIPS, CHARACTERS, WEAPONS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT } from '../types';
 import { normalizeDetectedUnknownMappings } from '../services/mappingContract';
 import Logger from '../utils/logger';
-import { getPerkCatalog, getProspectorEquipmentCatalog, getProspectorWeaponCatalog, getShipCatalog } from './patch/patchEntityCatalog';
+import { getPerkCatalogWithLegacyNames, getProspectorEquipmentCatalog, getProspectorWeaponCatalog, getShipCatalog } from './patch/patchEntityCatalog';
 import {
     getTeammateIdentityConfidence,
     getTeammateIdentityDisplayName,
@@ -35,7 +35,8 @@ const WEAPON_SET = new Set([
     ...getProspectorWeaponCatalog(CHARACTER_WEAPONS || []),
 ].map((name) => normalizeEntityLabel(name)));
 const EQUIPMENT_SET = new Set(getProspectorEquipmentCatalog(CHARACTER_EQUIPMENT || []).map((name) => normalizeEntityLabel(name)));
-const PERK_SET = new Set(getPerkCatalog().map((name) => normalizeEntityLabel(name)));
+// Legacy-inclusive so perk names from older matches are still classified as perks.
+const PERK_SET = new Set(getPerkCatalogWithLegacyNames().map((name) => normalizeEntityLabel(name)));
 const SHIP_KEYWORDS = ['drone', 'privateer', 'interceptor', 'gunship', 'fighter', 'frigate', 'raider', 'brawler', 'carrier'];
 const WEAPON_KEYWORDS = ['cannon', 'rifle', 'pistol', 'launcher', 'beam', 'turret', 'blaster', 'weapon'];
 const EQUIPMENT_KEYWORDS = ['shield', 'module', 'booster', 'utility', 'gear', 'ability', 'equipment'];

@@ -27,6 +27,7 @@ const {
   extractPlayerNameFromLine: extractCrewHubPlayerNameFromLine,
   cleanupPlayerName: cleanupCrewHubPlayerName,
   isValidPlayerName: isValidCrewHubPlayerName,
+  scoreAsPlayerName,
 } = require('./crewHubExtractor.cjs');
 const {
   extractMapScreen,
@@ -2627,9 +2628,24 @@ function cleanupLegacyTeammates(teammates, shipType, options = {}) {
       confidence: Number.isFinite(Number(teammate?.confidence)) ? Number(teammate.confidence) : 74,
       isTeammate: true,
     });
-    if (unique.length >= maxTeammates) break;
   }
-  return unique;
+
+  if (unique.length <= maxTeammates) return unique;
+
+  // Over capacity: keep the best-supported names rather than whichever happened
+  // to be extracted first. Truncating in list order let a single low-confidence
+  // false positive evict a real crew member. Survivors keep roster order.
+  const ranked = unique
+    .map((teammate, index) => ({ teammate, index }))
+    .sort((a, b) => (
+      (Number(b.teammate.confidence) || 0) - (Number(a.teammate.confidence) || 0)
+      || scoreAsPlayerName(b.teammate.name) - scoreAsPlayerName(a.teammate.name)
+      || a.index - b.index
+    ))
+    .slice(0, maxTeammates)
+    .sort((a, b) => a.index - b.index);
+
+  return ranked.map((entry) => entry.teammate);
 }
 
 function cleanupLegacyOpponentTeams(opponentTeams) {
@@ -3071,6 +3087,7 @@ module.exports = {
   __test__: {
     buildOcrGeometry,
     cleanupLegacyExtraction,
+    cleanupLegacyTeammates,
     convertCrewHubToLegacy,
     detectAspectProfile,
     deriveRuntimeAnchors,

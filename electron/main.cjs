@@ -10,6 +10,7 @@ const https = require('https');
 const fsPromises = require('fs').promises;
 const { registerOCRHandlers, captureGameWindow, captureGameWindowBuffer, processCapture, runOCR } = require('./ocrHandler.cjs');
 const { mergeCaptures, isSameMatch, pickPreferredTeammateRoster } = require('./ocrMerger.cjs');
+const { mergeRerunResults } = require('./helpers/rerunOcrMerge.cjs');
 const artifactHelpers = require('./helpers/artifactHelpers.cjs');
 const { runArtifactCanonicalMigration } = require('./helpers/artifactCanonicalMigration.cjs');
 const telemetryArchiveHelpers = require('./helpers/telemetryArchiveHelpers.cjs');
@@ -2248,45 +2249,9 @@ ipcMain.handle('rerun-ocr-multi', async (event, { imagePaths, activeUser, ocrMod
       };
     }
     _mDlog('perFile: ' + perFile.map(f => f.imagePath.split(/[\\/]/).pop() + '=' + (f.success ? (f.data?.screenshotType || 'noType') : 'FAIL')).join(', '));
-    // Phase 2: merge successful results sequentially so ocrMerger combines
-    // tactical-map data (ship types, hazards) with crew-hub data (player names).
-    let accumulatedData = null;
-    for (const entry of perFile) {
-      if (!entry.success || !entry.data) continue;
-      if (!accumulatedData) {
-        _mDlog('seed: type=' + (entry.data.screenshotType || '?') + ' oppTeams=' + (entry.data.opponentTeams?.length || 0) + ' file=' + entry.imagePath.split(/[\\/]/).pop());
-        accumulatedData = entry.data;
-        continue;
-      }
-      const _sameMatch = isSameMatch(accumulatedData, entry.data);
-      _mDlog('isSameMatch(acc.type=' + (accumulatedData.screenshotType || '?') + ' vs ' + (entry.data.screenshotType || '?') + ')=' + _sameMatch + ' file=' + entry.imagePath.split(/[\\/]/).pop());
-      if (_sameMatch) {
-        accumulatedData = mergeCaptures(accumulatedData, entry.data);
-        const _oppC = accumulatedData.opponentTeams?.length || 0;
-        const _plC = (accumulatedData.opponentTeams || []).reduce((s, t) => s + (t.players?.length || 0), 0);
-        _mDlog('merged: type=' + (accumulatedData.screenshotType || '?') + ' oppTeams=' + _oppC + ' totalPlayers=' + _plC);
-      } else {
-        // Rerun inputs are from one match's artifact list; prefer preserving aggregate
-        // fields over clobbering previously merged data when classifier disagrees.
-        _mDlog('MISMATCH forced-merge with type=' + (entry.data.screenshotType || '?') + ' file=' + entry.imagePath.split(/[\\/]/).pop());
-        accumulatedData = mergeCaptures(accumulatedData, entry.data);
-      }
-    }
-    let preferredCrewHubTeammates = [];
-    for (const entry of perFile) {
-      if (!entry.success || !entry.data || entry.data.screenshotType !== 'crew_hub') continue;
-      preferredCrewHubTeammates = pickPreferredTeammateRoster(preferredCrewHubTeammates, entry.data.teammates || []);
-    }
-    if (accumulatedData && preferredCrewHubTeammates.length > 0) {
-      const priorTeammates = Array.isArray(accumulatedData.teammates) ? accumulatedData.teammates : [];
-      const resolvedTeammates = pickPreferredTeammateRoster(priorTeammates, preferredCrewHubTeammates);
-      const priorRosterKey = priorTeammates.map((player) => (typeof player === 'string' ? player : player?.name || '')).join('|');
-      const resolvedRosterKey = resolvedTeammates.map((player) => (typeof player === 'string' ? player : player?.name || '')).join('|');
-      if (resolvedRosterKey && resolvedRosterKey !== priorRosterKey) {
-        _mDlog('teammates preferred from crew_hub=' + resolvedRosterKey);
-        accumulatedData = { ...accumulatedData, teammates: resolvedTeammates };
-      }
-    }
+    // Phase 2: merge successful results via the shared helper, which the
+    // ground-truth corpus runner also uses so benchmark and app cannot drift.
+    const accumulatedData = mergeRerunResults(perFile, { log: _mDlog });
     const _finOppC = accumulatedData?.opponentTeams?.length || 0;
     const _finPlC = (accumulatedData?.opponentTeams || []).reduce((s, t) => s + (t.players?.length || 0), 0);
     _mDlog('FINAL: type=' + (accumulatedData?.screenshotType || '?') + ' oppTeams=' + _finOppC + ' totalPlayers=' + _finPlC);

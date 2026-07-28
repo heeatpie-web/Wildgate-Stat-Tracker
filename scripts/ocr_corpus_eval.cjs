@@ -11,15 +11,26 @@ function parseArgs(argv) {
     activeUser: process.env.WG_OCR_ACTIVE_USER || process.env.ACTIVE_USER || ''
   };
 
+  // An empty value is legitimate (--active-user "" means "no active user"), so
+  // check for a missing argument rather than a falsy one. Bailing out on falsy
+  // silently dropped every flag that followed.
+  const valueFlags = {
+    '--truth': 'truth',
+    '--pred': 'pred',
+    '--predictions': 'pred',
+    '--baseline': 'baseline',
+    '--out': 'out',
+    '--active-user': 'activeUser',
+  };
   for (let i = 2; i < argv.length; i += 1) {
     const token = argv[i];
-    const next = argv[i + 1];
-    if (!next) break;
-    if (token === '--truth') args.truth = next;
-    if (token === '--pred' || token === '--predictions') args.pred = next;
-    if (token === '--baseline') args.baseline = next;
-    if (token === '--out') args.out = next;
-    if (token === '--active-user') args.activeUser = next;
+    const key = valueFlags[token];
+    if (!key) continue;
+    if (i + 1 >= argv.length) {
+      throw new Error(`Missing value for ${token}`);
+    }
+    args[key] = argv[i + 1];
+    i += 1;
   }
 
   return args;
@@ -324,6 +335,79 @@ function teamGroupingAccuracy(truthTeams, predTeams) {
   return union ? overlap / union : 0;
 }
 
+/**
+ * Partition quality, scored independently of per-name OCR accuracy.
+ *
+ * teamGroupingAccuracy above demands a whole-roster match, so a single
+ * mis-read character drops an otherwise perfectly partitioned team to zero and
+ * the aggregate reads as a grouping failure when grouping was in fact correct.
+ *
+ * This scores co-membership instead: of the players we could match between
+ * truth and prediction, does each PAIR land on the same crew in both? Name
+ * accuracy is already measured by opponent recall/precision, so unmatched
+ * names are excluded here rather than double-counted as grouping errors.
+ */
+function teamPartitionStats(truthTeams, predTeams) {
+  const truthAssignments = [];
+  safeArray(truthTeams).forEach((team, teamIndex) => {
+    for (const player of uniqueNormalizedValues(team.players || [], canonicalizeName)) {
+      truthAssignments.push({ player, teamIndex });
+    }
+  });
+  const predAssignments = [];
+  safeArray(predTeams).forEach((team, teamIndex) => {
+    for (const player of uniqueNormalizedValues(team.players || [], canonicalizeName)) {
+      predAssignments.push({ player, teamIndex });
+    }
+  });
+
+  // Greedy nearest-first pairing of truth players to predicted players, same
+  // tolerance the name metrics use, so both views agree on who was found.
+  const candidates = [];
+  for (let t = 0; t < truthAssignments.length; t += 1) {
+    for (let p = 0; p < predAssignments.length; p += 1) {
+      const distance = levenshteinDistance(truthAssignments[t].player, predAssignments[p].player);
+      if (distance <= 2) candidates.push({ t, p, distance });
+    }
+  }
+  candidates.sort((a, b) => a.distance - b.distance || a.t - b.t || a.p - b.p);
+
+  const usedTruth = new Set();
+  const usedPred = new Set();
+  const matched = [];
+  for (const candidate of candidates) {
+    if (usedTruth.has(candidate.t) || usedPred.has(candidate.p)) continue;
+    usedTruth.add(candidate.t);
+    usedPred.add(candidate.p);
+    matched.push({
+      truthTeam: truthAssignments[candidate.t].teamIndex,
+      predTeam: predAssignments[candidate.p].teamIndex
+    });
+  }
+
+  let tp = 0;
+  let fp = 0;
+  let fn = 0;
+  for (let i = 0; i < matched.length; i += 1) {
+    for (let j = i + 1; j < matched.length; j += 1) {
+      const sameTruth = matched[i].truthTeam === matched[j].truthTeam;
+      const samePred = matched[i].predTeam === matched[j].predTeam;
+      if (sameTruth && samePred) tp += 1;
+      else if (!sameTruth && samePred) fp += 1;
+      else if (sameTruth && !samePred) fn += 1;
+    }
+  }
+
+  return { tp, fp, fn, matchedPlayers: matched.length, pairs: tp + fp + fn };
+}
+
+function partitionF1(tp, fp, fn) {
+  if (tp + fp + fn === 0) return null;
+  const precision = tp + fp ? tp / (tp + fp) : 1;
+  const recall = tp + fn ? tp / (tp + fn) : 1;
+  return precision + recall ? (2 * precision * recall) / (precision + recall) : 0;
+}
+
 function teamColorAccuracy(truthTeams, predTeams) {
   const predByTeamKey = new Map();
   for (const team of safeArray(predTeams)) {
@@ -445,6 +529,7 @@ function updateReportIndex(baseOutPath, report) {
     modifierPrecision: summary.modifierPrecision ?? 0,
     modifierF1: summary.modifierF1 ?? 0,
     teamGroupingAccuracy: summary.teamGroupingAccuracy ?? 0,
+    teamPartitionF1: summary.teamPartitionF1,
     teamColorAccuracy: summary.teamColorAccuracy,
     sessionUsablePassRate: summary.sessionUsablePassRate ?? 0,
     yourShipTypeAccuracy: summary.yourShipTypeAccuracy,
@@ -481,6 +566,7 @@ function main() {
     modifier: { tp: 0, fp: 0, fn: 0, predCount: 0 },
     teamGroupingSum: 0,
     teamGroupingCount: 0,
+    partition: { tp: 0, fp: 0, fn: 0 },
     teamColorMatched: 0,
     teamColorComparable: 0,
     teamColorTruthCount: 0,
@@ -517,6 +603,8 @@ function main() {
     );
     const modifierStats = setStats(t.modifiers, p.modifiers, canonicalizeModifier);
     const grouping = teamGroupingAccuracy(t.opponentTeams, p.opponentTeams);
+    const partition = teamPartitionStats(t.opponentTeams, p.opponentTeams);
+    const partitionSampleF1 = partitionF1(partition.tp, partition.fp, partition.fn);
     const colorStats = teamColorAccuracy(t.opponentTeams, p.opponentTeams);
     const shipTypeMetrics = computeShipTypeMetrics(t, p);
     const sessionUsable = isSessionUsable(
@@ -540,6 +628,9 @@ function main() {
     totals.modifier.predCount += modifierStats.predCount;
     totals.teamGroupingSum += grouping;
     totals.teamGroupingCount += 1;
+    totals.partition.tp += partition.tp;
+    totals.partition.fp += partition.fp;
+    totals.partition.fn += partition.fn;
     totals.teamColorMatched += colorStats.matchedCount;
     totals.teamColorComparable += colorStats.comparableCount;
     totals.teamColorTruthCount += colorStats.truthColorTeamCount;
@@ -563,6 +654,9 @@ function main() {
       modifierPrecision: pct(modifierStats.precision),
       modifierF1: pct(modifierStats.f1),
       teamGroupingAccuracy: pct(grouping),
+      teamPartitionF1: partitionSampleF1 === null ? null : pct(partitionSampleF1),
+      teamPartitionPairs: partition.pairs,
+      teamPartitionMatchedPlayers: partition.matchedPlayers,
       teamColorAccuracy: colorStats.accuracy === null ? null : pct(colorStats.accuracy),
       truthColorTeams: colorStats.truthColorTeamCount,
       missingPredTeamColor: colorStats.predMissingColorCount,
@@ -597,6 +691,17 @@ function main() {
     modifierPrecision: microPrecision(totals.modifier),
     modifierF1: microF1(totals.modifier),
     teamGroupingAccuracy: pct(totals.teamGroupingSum / Math.max(1, totals.teamGroupingCount)),
+    teamPartitionF1: (() => {
+      const f1 = partitionF1(totals.partition.tp, totals.partition.fp, totals.partition.fn);
+      return f1 === null ? null : pct(f1);
+    })(),
+    teamPartitionPrecision: totals.partition.tp + totals.partition.fp
+      ? pct(totals.partition.tp / (totals.partition.tp + totals.partition.fp))
+      : null,
+    teamPartitionRecall: totals.partition.tp + totals.partition.fn
+      ? pct(totals.partition.tp / (totals.partition.tp + totals.partition.fn))
+      : null,
+    teamPartitionPairs: totals.partition.tp + totals.partition.fp + totals.partition.fn,
     teamColorAccuracy:
       totals.teamColorComparable > 0
         ? pct(totals.teamColorMatched / totals.teamColorComparable)
@@ -660,7 +765,12 @@ function main() {
   console.log(`Opponent:     ${String(summary.opponentRecall).padStart(6)}%    ${String(summary.opponentPrecision).padStart(6)}%   ${String(summary.opponentF1).padStart(6)}%`);
   console.log(`Modifier:     ${String(summary.modifierRecall).padStart(6)}%    ${String(summary.modifierPrecision).padStart(6)}%   ${String(summary.modifierF1).padStart(6)}%`);
   console.log('');
-  console.log(`Team grouping accuracy: ${summary.teamGroupingAccuracy}%`);
+  console.log(`Team grouping accuracy (exact roster): ${summary.teamGroupingAccuracy}%`);
+  console.log(
+    `Team partition F1 (name-independent): ${
+      summary.teamPartitionF1 === null ? 'n/a' : `${summary.teamPartitionF1}%`
+    } (co-membership pairs: ${summary.teamPartitionPairs})`
+  );
   console.log(
     `Team color accuracy: ${summary.teamColorAccuracy === null ? 'n/a' : `${summary.teamColorAccuracy}%`}`
   );

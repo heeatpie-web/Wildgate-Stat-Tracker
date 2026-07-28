@@ -42,6 +42,14 @@ export type UpdateKey = string;
 export interface PerkCatalogEntry {
     name: string;
     allowedProspectors?: string[];
+    /**
+     * Names this perk shipped under previously. Matches recorded before a rename
+     * store the name that was current when they were played, and those records
+     * are never rewritten — a match played under "Pilot" keeps saying "Pilot".
+     * Legacy names exist so historical values are still recognised as perks by
+     * classification and validation; only newly recorded matches use `name`.
+     */
+    legacyNames?: string[];
 }
 
 export const PERK_CATALOG: PerkCatalogEntry[] = [
@@ -60,7 +68,7 @@ export const PERK_CATALOG: PerkCatalogEntry[] = [
     { name: 'Salvager' },
     { name: 'Mad Bomber' },
     { name: 'Turbine Factory' },
-    { name: 'Pilot' },
+    { name: 'Protected Pilot', legacyNames: ['Pilot'] },
 ];
 
 const normalize = (value: unknown): string => String(value || '').trim().toLowerCase();
@@ -91,8 +99,43 @@ export const getProspectorWeaponCatalog = (baseWeapons: string[]): string[] => m
 export const getProspectorEquipmentCatalog = (baseEquipment: string[]): string[] => mergeCatalog(baseEquipment || [], PATCH_PROSPECTOR_EQUIPMENT);
 export const getPerkCatalog = (): string[] => PERK_CATALOG.map((entry) => entry.name);
 
+/**
+ * Current perk names plus every name they previously shipped under.
+ *
+ * Use this for recognising perk names on already-recorded matches. Pickers and
+ * capture-time resolution should keep using getPerkCatalog() so new matches
+ * only ever record the current name.
+ */
+export const getPerkCatalogWithLegacyNames = (): string[] => dedupeByCaseInsensitive(
+    PERK_CATALOG.flatMap((entry) => [entry.name, ...(entry.legacyNames || [])])
+);
+
+/**
+ * Every accepted spelling of a perk paired with the name to record today.
+ *
+ * Capture-time resolution uses this so a newly played match is stored under the
+ * current name even if the source still reports an old one. It is deliberately
+ * NOT applied when reading saved matches — historical records keep the name
+ * they were saved with.
+ */
+export const getPerkNameAliasPairs = (): Array<{ alias: string; current: string }> => (
+    PERK_CATALOG.flatMap((entry) => [
+        { alias: entry.name, current: entry.name },
+        ...(entry.legacyNames || []).map((legacy) => ({ alias: legacy, current: entry.name })),
+    ])
+);
+
+const findPerkEntry = (perkName: string): PerkCatalogEntry | undefined => {
+    const key = normalize(perkName);
+    if (!key) return undefined;
+    return PERK_CATALOG.find((entry) => (
+        normalize(entry.name) === key
+        || (entry.legacyNames || []).some((legacy) => normalize(legacy) === key)
+    ));
+};
+
 export const isPerkAllowedForProspector = (perkName: string, prospectorName: string | null | undefined): boolean => {
-    const perk = PERK_CATALOG.find((entry) => normalize(entry.name) === normalize(perkName));
+    const perk = findPerkEntry(perkName);
     if (!perk || !perk.allowedProspectors || perk.allowedProspectors.length === 0) return true;
     return perk.allowedProspectors.some((prospector) => normalize(prospector) === normalize(prospectorName));
 };
