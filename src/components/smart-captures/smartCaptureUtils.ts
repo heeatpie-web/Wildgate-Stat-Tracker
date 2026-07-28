@@ -68,14 +68,57 @@ export const OCR_STATE_META: Record<OcrState, { label: string; cls: string; desc
     error:      { label: 'Error',      cls: 'bg-danger-soft text-danger',   description: 'OCR processing failed' },
 };
 
+/** True when the match carries a decided Win/Loss/Draw rather than an unset result. */
+export const hasDecidedResult = (m: Pick<Match, 'result'>): boolean => (
+    m.result === 'Win' || m.result === 'Loss' || m.result === 'Draw'
+);
+
+/**
+ * True when a match has everything review needs: a decided result, a ship, and at
+ * least one player on either side. Shared so the queue status and the Win/Loss
+ * buttons agree on what "finished" means.
+ */
+export const isMatchReviewComplete = (m: Match): boolean => (
+    hasDecidedResult(m)
+    && !!m.ship
+    && ((m.teammates?.length || 0) > 0 || (m.opponents?.length || 0) > 0 || (m.opponentTeams?.length || 0) > 0)
+);
+
+/**
+ * Applies a Win/Loss/Draw to a match and, when review has everything it needs,
+ * finishes it in the same edit.
+ *
+ * Deciding the result is the last thing review is waiting on, so requiring a
+ * separate "Mark as resolved" click just left finished matches sitting in the
+ * work queue. Still gated on completeness: a result on a match with no ship or
+ * players stays in the queue rather than being silently buried.
+ */
+export const applyMatchResult = (
+    match: Match,
+    result: 'Win' | 'Loss' | 'Draw',
+    now: number = Date.now(),
+): Match => {
+    const placement = result === 'Win'
+        ? 1
+        : result === 'Loss'
+            ? (match.placement && match.placement >= 2 && match.placement <= 5 ? match.placement : 2)
+            : match.placement;
+    const next: Match = { ...match, result, placement };
+    if (!isMatchReviewComplete(next)) return next;
+    return {
+        ...next,
+        ocrReviewedAt: match.ocrReviewedAt || now,
+        ocrState: 'saved',
+    };
+};
+
 export const getQueueStatus = (m: Match): QueueStatus => {
     const hasArtifacts = (m.artifacts?.length || 0) > 0;
     const hasOcr = !!m.ocrDebug;
     const confidence = m.ocrDebug?.confidence ?? 0;
     const missingShip = !m.ship;
     const missingPlayers = (m.teammates?.length || 0) === 0 && (m.opponents?.length || 0) === 0 && (m.opponentTeams?.length || 0) === 0;
-    const hasResult = m.result === 'Win' || m.result === 'Loss' || m.result === 'Draw';
-    const isReviewComplete = hasResult && !missingShip && !missingPlayers;
+    const isReviewComplete = isMatchReviewComplete(m);
     const base = { missingShip, missingPlayers, hasArtifacts, hasOcr, confidence, ocrState: m.ocrState };
 
     // Use explicit ocrState when present (new state machine)

@@ -18,6 +18,7 @@ import {
 } from '../utils/pendingReviewUtils';
 import { isReachModifierUiPlayerNoise } from '../utils/reachModifierUiNoise';
 import { useSoundEffects } from './useSoundEffects';
+import { getOcrStageLabel, useOcrProgressListener } from './useOcrProgress';
 
 const OCR_THRESHOLDS = {
     REJECT: 0,
@@ -98,30 +99,24 @@ export const useSmartScan = () => {
     const activeScanRequestRef = useRef<number | null>(null);
     const nextScanRequestIdRef = useRef(0);
 
-    // Tick scanProgress.pct slowly while scanning to give visual feedback during the
-    // long Tesseract IPC call. Caps at 88% so real onProgress(100) always advances.
-    const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    useEffect(() => {
-        if (!isScanning) {
-            if (tickerRef.current !== null) {
-                clearInterval(tickerRef.current);
-                tickerRef.current = null;
-            }
-            return;
-        }
-        tickerRef.current = setInterval(() => {
-            setScanProgress(prev => {
-                if (prev.pct >= 88) return prev;
-                return { ...prev, pct: prev.pct + 1 };
-            });
-        }, 180);
-        return () => {
-            if (tickerRef.current !== null) {
-                clearInterval(tickerRef.current);
-                tickerRef.current = null;
-            }
-        };
-    }, [isScanning]);
+    // Real progress from the OCR pipeline in the main process. The renderer-side
+    // milestones in src/utils/scan/* cover 0-30 (capture, region localization,
+    // preprocessing) and 100 (done), so main-process stages map into 30-95.
+    // Monotonic: a late event from an earlier stage must never rewind the bar.
+    const OCR_PROGRESS_FLOOR = 30;
+    const OCR_PROGRESS_CEILING = 95;
+    useOcrProgressListener(isScanning, (payload) => {
+        if (!isScanning) return;
+        const mapped = OCR_PROGRESS_FLOOR
+            + payload.fraction * (OCR_PROGRESS_CEILING - OCR_PROGRESS_FLOOR);
+        setScanProgress(prev => {
+            if (mapped <= prev.pct) return prev;
+            const status = payload.imageCount > 1
+                ? `${getOcrStageLabel(payload.stage)} (${payload.imageIndex + 1}/${payload.imageCount})`
+                : getOcrStageLabel(payload.stage);
+            return { status, pct: mapped };
+        });
+    });
 
     const playSuccessSound = () => {
         if (!soundEnabled) return;

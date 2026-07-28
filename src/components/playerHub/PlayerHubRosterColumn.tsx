@@ -1,10 +1,9 @@
 import React, { type Dispatch, type FC, type RefObject, type SetStateAction } from 'react';
 import { Users, Search, Star, ChevronRight, ChevronLeft, Undo2, X, ScanEye } from 'lucide-react';
 import type { MergeHistoryEntry, PendingReview } from '../../store/slices/createDataSlice';
+import { ROSTER_ARCHIVE_THRESHOLD_MS, isRosterEntryArchived } from '../../store/slices/createDataSlice';
 import type { PlayerDetail, PlayerFilterMode, PlayerHubMode, SortMode } from './playerHubTypes';
 import { getPlayerStatusChips, getStatusChipClassName, normalizeNameKey } from './playerHubUtils';
-
-const ROSTER_ARCHIVE_THRESHOLD_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface PlayerHubRosterColumnProps {
     panelMode: PlayerHubMode;
@@ -250,7 +249,8 @@ export const PlayerHubRosterColumn: FC<PlayerHubRosterColumnProps> = ({
                                 {rosterVisiblePilots.map((pilot) => {
                                     const statusChips = getPlayerStatusChips(pilot);
                                     const isSelected = selectedPilot === pilot.name;
-                                    const isArchived = !pilot.isRoster && !pilot.isFavorite && pilot.lastSeen != null && (Date.now() - pilot.lastSeen) > ROSTER_ARCHIVE_THRESHOLD_MS;
+                                    const isArchived = isRosterEntryArchived(pilot.rosterMeta)
+                                        || (!pilot.isRoster && !pilot.isFavorite && pilot.lastSeen != null && (Date.now() - pilot.lastSeen) > ROSTER_ARCHIVE_THRESHOLD_MS);
                                     const teammateWr = pilot.asTeammate && pilot.asTeammate.total > 0
                                         ? Math.round((pilot.asTeammate.wins / pilot.asTeammate.total) * 100)
                                         : null;
@@ -288,7 +288,7 @@ export const PlayerHubRosterColumn: FC<PlayerHubRosterColumnProps> = ({
                                                         <span className="shrink-0 px-1.5 py-0.5 rounded-pill text-[9px] font-black uppercase tracking-wide leading-none bg-md-sys-primary/15 text-md-sys-primary border border-md-sys-primary/25" title="This is you">YOU</span>
                                                     )}
                                                     {isArchived && (
-                                                        <span className="shrink-0 px-1.5 py-0.5 rounded-pill text-[9px] font-bold uppercase tracking-wide leading-none bg-md-sys-on-surface/[0.08] text-md-sys-on-surface/45 border border-md-sys-outline/10" title="Archived — not seen in over 30 days">Archived</span>
+                                                        <span className="shrink-0 px-1.5 py-0.5 rounded-pill text-[9px] font-bold uppercase tracking-wide leading-none bg-md-sys-on-surface/[0.08] text-md-sys-on-surface/45 border border-md-sys-outline/10" title="Archived — not seen in over 90 days">Archived</span>
                                                     )}
                                                 </div>
                                                 <div className="flex items-center gap-x-2 mt-0.5 text-label-xs text-md-sys-on-surface/40 flex-wrap">

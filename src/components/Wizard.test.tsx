@@ -66,6 +66,10 @@ const appStoreState = {
     wizardCloseOnOcrApply: false,
     pendingMatchData: null as any,
     matches: [] as any[],
+    pilotRegistry: [] as string[],
+    rosterEntryMeta: {} as Record<string, any>,
+    ocrCorrections: {} as Record<string, any>,
+    ocrAliasModel: undefined as any,
     setPendingMatchData: setPendingMatchDataFromStore,
 };
 
@@ -148,6 +152,9 @@ describe('Wizard', () => {
         appStoreState.wizardCloseOnOcrApply = false;
         appStoreState.pendingMatchData = null;
         appStoreState.matches = [];
+        appStoreState.pilotRegistry = [];
+        appStoreState.rosterEntryMeta = {};
+        appStoreState.ocrCorrections = {};
         vi.clearAllMocks();
         bundleMatchArtifacts.mockResolvedValue([]);
         rerunOCRMulti.mockResolvedValue({
@@ -1028,7 +1035,13 @@ describe('Wizard', () => {
                 'TestPilot',
                 'local',
                 undefined,
-                expect.objectContaining({ forceUncached: true }),
+                // Progress framing keeps the bar continuous when a rerun is split
+                // across screenshot buckets, each of which is its own IPC call.
+                expect.objectContaining({
+                    forceUncached: true,
+                    progressBaseIndex: 0,
+                    progressTotalCount: 1,
+                }),
             );
         });
         expect(setPendingMatchDataFromStore).toHaveBeenCalledWith(expect.objectContaining({
@@ -1047,6 +1060,158 @@ describe('Wizard', () => {
         expect(uiState.pushNotification).not.toHaveBeenCalledWith(expect.objectContaining({
             message: 'Smart Capture requested from wizard.',
         }));
+    });
+
+    it('canonicalizes rerun OCR names against the roster so known pilots stay recognized', async () => {
+        // A rerun returns raw OCR strings. Without canonicalization the OCR tab
+        // showed "add to roster" for pilots already on the roster, because the
+        // board tests roster membership by exact normalized match.
+        const { Wizard } = await import('./Wizard');
+        appStoreState.pilotRegistry = ['MainGunner', 'Skywarden'];
+        gameData.pendingMatchData = {
+            id: 912,
+            ship: 'Hunter',
+            teammates: [],
+            opponents: [],
+            opponentTeams: [],
+            reachModifiers: [],
+            artifacts: ['C:\\captures\\wizard-1.png'],
+            loadout: { hero: 'Adrian', ship: 'Hunter', weapons: [], equipment: [] },
+            kills: { 'AI Legion': 0 },
+        };
+        uiState.showWizard = 'Match Result';
+        rerunOCRMulti.mockResolvedValue({
+            success: true,
+            data: {
+                screenshotType: 'crew_hub',
+                playerShip: { shipType: 'Bastion', confidence: 88, rawText: 'Bastion' },
+                reachModifiers: [],
+                enemyShips: [],
+                // Classic OCR confusions: 1-for-l and 0-for-o.
+                teammates: [{ name: 'Ma1nGunner', confidence: 86, isTeammate: true }],
+                opponentTeams: [{
+                    teamName: 'Red Team',
+                    shipType: 'Scout',
+                    color: 'red',
+                    players: [{ name: 'Skywarden', confidence: 82, isTeammate: false }],
+                    confidence: 80,
+                }],
+                overallConfidence: 86,
+                captureTimestamp: Date.now(),
+                rawText: 'sample',
+                ocrSource: 'merged',
+            },
+            perFile: [{ imagePath: 'C:\\captures\\wizard-1.png', success: true, data: undefined }],
+        });
+
+        render(<Wizard />);
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr review/i })[0]);
+        fireEvent.click(screen.getByRole('button', { name: /re-run ocr/i }));
+
+        await waitFor(() => {
+            expect(setPendingMatchDataFromStore).toHaveBeenCalledWith(expect.objectContaining({
+                teammates: ['MainGunner'],
+                opponents: ['Skywarden'],
+            }));
+        });
+    });
+
+    it('leaves rerun OCR names untouched when the roster is empty', async () => {
+        // With no roster to match against there is nothing to canonicalize, and
+        // the bundled lexicon must not be allowed to rewrite a legitimate read.
+        const { Wizard } = await import('./Wizard');
+        appStoreState.pilotRegistry = [];
+        gameData.pendingMatchData = {
+            id: 913,
+            ship: 'Hunter',
+            teammates: [],
+            opponents: [],
+            opponentTeams: [],
+            reachModifiers: [],
+            artifacts: ['C:\\captures\\wizard-1.png'],
+            loadout: { hero: 'Adrian', ship: 'Hunter', weapons: [], equipment: [] },
+            kills: { 'AI Legion': 0 },
+        };
+        uiState.showWizard = 'Match Result';
+        rerunOCRMulti.mockResolvedValue({
+            success: true,
+            data: {
+                screenshotType: 'crew_hub',
+                playerShip: { shipType: 'Bastion', confidence: 88, rawText: 'Bastion' },
+                reachModifiers: [],
+                enemyShips: [],
+                teammates: [{ name: 'Wingman', confidence: 86, isTeammate: true }],
+                // 'EnemyOne' is close to the bundled-lexicon entry 'EnemyCrew'.
+                opponentTeams: [{
+                    teamName: 'Red Team',
+                    shipType: 'Scout',
+                    color: 'red',
+                    players: [{ name: 'EnemyOne', confidence: 82, isTeammate: false }],
+                    confidence: 80,
+                }],
+                overallConfidence: 86,
+                captureTimestamp: Date.now(),
+                rawText: 'sample',
+                ocrSource: 'merged',
+            },
+            perFile: [{ imagePath: 'C:\\captures\\wizard-1.png', success: true, data: undefined }],
+        });
+
+        render(<Wizard />);
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr review/i })[0]);
+        fireEvent.click(screen.getByRole('button', { name: /re-run ocr/i }));
+
+        await waitFor(() => {
+            expect(setPendingMatchDataFromStore).toHaveBeenCalledWith(expect.objectContaining({
+                teammates: ['Wingman'],
+                opponents: ['EnemyOne'],
+            }));
+        });
+    });
+
+    it('does not roster-match reach modifiers during a rerun', async () => {
+        // dedupeNames vs dedupePlayerNames: modifiers share the dedupe path but
+        // must never be resolved against player names.
+        const { Wizard } = await import('./Wizard');
+        appStoreState.pilotRegistry = ['Ice Stone'];
+        gameData.pendingMatchData = {
+            id: 914,
+            ship: 'Hunter',
+            teammates: [],
+            opponents: [],
+            opponentTeams: [],
+            reachModifiers: [],
+            artifacts: ['C:\\captures\\wizard-1.png'],
+            loadout: { hero: 'Adrian', ship: 'Hunter', weapons: [], equipment: [] },
+            kills: { 'AI Legion': 0 },
+        };
+        uiState.showWizard = 'Match Result';
+        rerunOCRMulti.mockResolvedValue({
+            success: true,
+            data: {
+                screenshotType: 'crew_hub',
+                playerShip: { shipType: 'Bastion', confidence: 88, rawText: 'Bastion' },
+                reachModifiers: [{ name: 'Ice Storm', confidence: 84, rawText: 'ICE STORM' }],
+                enemyShips: [],
+                teammates: [],
+                opponentTeams: [],
+                overallConfidence: 86,
+                captureTimestamp: Date.now(),
+                rawText: 'sample',
+                ocrSource: 'merged',
+            },
+            perFile: [{ imagePath: 'C:\\captures\\wizard-1.png', success: true, data: undefined }],
+        });
+
+        render(<Wizard />);
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr review/i })[0]);
+        fireEvent.click(screen.getByRole('button', { name: /re-run ocr/i }));
+
+        await waitFor(() => {
+            expect(setPendingMatchDataFromStore).toHaveBeenCalledWith(expect.objectContaining({
+                reachModifiers: ['Ice Storm'],
+            }));
+        });
     });
 
     it('disables save-and-apply while OCR rerun is in flight, then re-enables it when rerun completes', async () => {

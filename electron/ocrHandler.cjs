@@ -1784,10 +1784,48 @@ function normalizeConfidence01(value) {
  * @param {string} ocrMode - OCR engine mode: 'local', 'cloud', 'both', or 'hybrid-plus'
  * @returns {Object} Processed OCR result
  */
+/**
+ * Builds an `onStage` reporter that forwards real pipeline progress to the
+ * renderer over the `ocr-progress` channel.
+ *
+ * `imageIndex`/`imageCount` fold a single image's fraction into an overall
+ * fraction, so a multi-image rerun advances smoothly instead of only stepping at
+ * image boundaries. Sends are best-effort: a destroyed window must not break OCR.
+ */
+function createOcrProgressReporter(sender, { imageIndex = 0, imageCount = 1, requestId = null } = {}) {
+  if (!sender) return null;
+  const total = Math.max(1, Number(imageCount) || 1);
+  const index = Math.max(0, Math.min(total - 1, Number(imageIndex) || 0));
+  return (stage, fraction) => {
+    try {
+      if (sender.isDestroyed && sender.isDestroyed()) return;
+      const safeFraction = Math.max(0, Math.min(1, Number(fraction) || 0));
+      sender.send('ocr-progress', {
+        stage,
+        requestId,
+        imageIndex: index,
+        imageCount: total,
+        imageFraction: safeFraction,
+        fraction: (index + safeFraction) / total,
+      });
+    } catch (_e) { /* best effort only */ }
+  };
+}
+
 async function processCapture(imageBase64, activeUser = null, existingData = null, ocrMode = 'local', options = {}) {
   await acquireOcrSlot(`processCapture:${ocrMode}`);
   const captureStart = Date.now();
   let tempOcrPath = null;
+  // Progress is advisory: a throwing or missing listener must never fail OCR.
+  // `fraction` is this image's completion in [0, 1] at the named stage.
+  let sawCompleteStage = false;
+  const emitStage = (stage, fraction) => {
+    if (typeof options?.onStage !== 'function') return;
+    if (stage === 'complete') sawCompleteStage = true;
+    try {
+      options.onStage(String(stage || ''), Math.max(0, Math.min(1, Number(fraction) || 0)));
+    } catch (_e) { /* never let a progress listener break OCR */ }
+  };
   try {
     const {
       sourceImagePath = null,
@@ -1864,6 +1902,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
 
     const imageBuffer = Buffer.from(imageBase64, 'base64');
     console.log('[OCR] Buffer created, size:', imageBuffer.length);
+    emitStage('decode', 0.05);
 
     // Check OCR cache only for non-cloud, non-reanalysis, non-forced runs.
     const imageHash = getImageHash(imageBuffer);
@@ -1875,12 +1914,14 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       const cached = getCachedResult(cacheKey);
       if (cached) {
         console.log(`[OCR] Cache hit — returning in ${Date.now() - captureStart}ms`);
+        emitStage('complete', 1);
         return cached;
       }
     }
 
     // Preprocess image
     console.log('[OCR] Preprocessing image...');
+    emitStage('preprocess', 0.1);
     const processed = await preprocessImage(imageBuffer);
     const preMeta = (processed && typeof processed.preprocessMeta === 'object') ? processed.preprocessMeta : {};
     const geometry = buildOcrGeometry(processed, geometryHints);
@@ -1924,13 +1965,17 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       fontProfile,
     };
 
-    // Run local OCR
+    // Run local OCR. Recognition dominates wall time, so it owns the widest
+    // slice of the bar (0.25 -> 0.75).
     console.log('[OCR] Running LOCAL-ONLY mode...');
+    emitStage('recognize', 0.25);
     const ocrResult = await runOCR(processed.buffer, null, { performanceMode });
+    emitStage('recognize-done', 0.75);
     console.log(`[OCR] Local OCR done, text length: ${ocrResult.text?.length || 0}`);
     console.log('[OCR] OCR complete, text length:', ocrResult.text?.length || 0);
 
     // Detect screen type
+    emitStage('classify', 0.8);
     const screenDetection = detectScreenTypeFromLines(
       ocrResult.lines,
       processed.width,
@@ -1946,6 +1991,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     }
 
     // Extract based on screen type
+    emitStage('extract', 0.85);
     let extractedData = null;
     const runtimeAnchors = deriveRuntimeAnchors(resolvedScreenType, ocrResult, processed, ocrRegions);
     const activeRegions = applyRuntimeAnchors(ocrRegions, runtimeAnchors);
@@ -2531,6 +2577,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       error: error.message || 'Unknown OCR error',
     };
   } finally {
+    // Always close out the bar so a failure does not leave it stalled mid-run.
+    if (!sawCompleteStage) emitStage('complete', 1);
     if (tempOcrPath) {
       try {
         await fsPromises.unlink(tempOcrPath);
@@ -2938,7 +2986,13 @@ function registerOCRHandlers(mainWindow) {
   // skipDebugSave: true because the caller (useSmartCapture) already saved via save-screenshot
   ipcMain.handle('ocr-process-capture', async (event, imageBase64, activeUser = null, existingData = null, ocrMode = 'both', runtimeOptions = {}) => {
     const safeOptions = (runtimeOptions && typeof runtimeOptions === 'object') ? runtimeOptions : {};
-    return await processCapture(imageBase64, activeUser, existingData, ocrMode, { ...safeOptions, skipDebugSave: true });
+    // onStage is built here, never taken from the renderer payload.
+    const { onStage: _ignoredOnStage, ...rendererOptions } = safeOptions;
+    return await processCapture(imageBase64, activeUser, existingData, ocrMode, {
+      ...rendererOptions,
+      skipDebugSave: true,
+      onStage: createOcrProgressReporter(event.sender, { imageIndex: 0, imageCount: 1 }),
+    });
   });
 
   // Save OCR debug image
@@ -3076,6 +3130,7 @@ function registerOCRHandlers(mainWindow) {
 }
 
 module.exports = {
+  createOcrProgressReporter,
   registerOCRHandlers,
   captureGameWindow,
   captureGameWindowBuffer,

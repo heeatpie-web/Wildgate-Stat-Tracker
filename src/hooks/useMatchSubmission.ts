@@ -17,6 +17,8 @@ import {
     getRosterCandidatePruneIdsForAcceptedName,
 } from '../utils/pendingReviewUtils';
 import { buildRosterAutoPopulateDecisions } from '../utils/rosterAutoPopulate';
+import type { PlayerSightingEntry } from '../store/slices/createMappingSlice';
+import type { RosterEntryMeta } from '../store/slices/createDataSlice';
 import {
     extractArtifactSourceFromOcrData,
     extractArtifactSourceFromReachModifiers,
@@ -661,12 +663,18 @@ const applyRosterAutoPopulationForSavedMatch = (match: Match) => {
     let reviewed = 0;
     let refreshed = 0;
 
+    // Registry writes are collected and flushed once at the end. Prune decisions
+    // below read `pendingReviews`, never `pilotRegistry`, so deferring the adds
+    // does not change what gets pruned — it just avoids one persist snapshot and
+    // one full re-render per decision.
+    const registryAdds: Array<{ name: string; meta?: Partial<RosterEntryMeta> }> = [];
+
     decisions.forEach((decision) => {
         const currentState = useAppStore.getState();
         switch (decision.type) {
             case 'exact': {
                 const acceptedName = decision.bestMatch || decision.name;
-                currentState.addToRegistry(acceptedName, buildDetectedMeta(decision.confidence));
+                registryAdds.push({ name: acceptedName, meta: buildDetectedMeta(decision.confidence) });
                 const pruneIds = getRosterCandidatePruneIdsForAcceptedName({
                     pendingReviews: currentState.pendingReviews,
                     acceptedName,
@@ -678,7 +686,7 @@ const applyRosterAutoPopulationForSavedMatch = (match: Match) => {
                 break;
             }
             case 'add': {
-                currentState.addToRegistry(decision.name, buildDetectedMeta(decision.confidence));
+                registryAdds.push({ name: decision.name, meta: buildDetectedMeta(decision.confidence) });
                 const pruneIds = getRosterCandidatePruneIdsForAcceptedName({
                     pendingReviews: currentState.pendingReviews,
                     acceptedName: decision.name,
@@ -696,7 +704,7 @@ const applyRosterAutoPopulationForSavedMatch = (match: Match) => {
                     context: 'matchstats',
                     confidenceWeight: Math.min(1, Math.max(0.6, Math.max(decision.confidence, decision.bestScore) / 100)),
                 });
-                currentState.addToRegistry(targetName, buildDetectedMeta(decision.confidence));
+                registryAdds.push({ name: targetName, meta: buildDetectedMeta(decision.confidence) });
                 const pruneIds = getRosterCandidatePruneIds({
                     pendingReviews: currentState.pendingReviews,
                     rawName: decision.name,
@@ -730,6 +738,10 @@ const applyRosterAutoPopulationForSavedMatch = (match: Match) => {
         }
     });
 
+    if (registryAdds.length > 0) {
+        useAppStore.getState().addManyToRegistry(registryAdds);
+    }
+
     return { added, merged, reviewed, refreshed };
 };
 
@@ -758,7 +770,7 @@ export const useMatchSubmission = () => {
         setMatchStartTime,
         setIsMatchInProgress,
         updateMatch,
-        recordPlayerSighting,
+        recordPlayerSightings,
         setTimelineEvents,
         setSessionTeams,
         setCurrentLoadout,
@@ -1381,13 +1393,23 @@ export const useMatchSubmission = () => {
             const myTeam = [activeUser, ...finalTeammates];
             const explicitOpponents = finalOpponents;
 
+            // One batched transition rather than one per player: each individual
+            // sighting replaces `playerProfiles`, which invalidates the profile
+            // lookup index and forces a full rebuild on the next call.
+            const sightingEntries: PlayerSightingEntry[] = [];
             Object.entries(sessionTeams || {}).forEach(([color, players]) => {
                 players.forEach(p => {
                     if (p === activeUser) return;
-                    const ship = sessionShipTypes[p];
-                    recordPlayerSighting(p, color, myTeam, explicitOpponents, ship);
+                    sightingEntries.push({
+                        playerId: p,
+                        teamColor: color,
+                        allTeamPlayers: myTeam,
+                        allOpponentPlayers: explicitOpponents,
+                        shipType: sessionShipTypes[p],
+                    });
                 });
             });
+            recordPlayerSightings(sightingEntries);
             clearSubmissionState();
             setIsMatchInProgress(false);
             setMatchStartTime(null);
@@ -1417,7 +1439,7 @@ export const useMatchSubmission = () => {
         } finally {
             setSubmitting(false);
         }
-    }, [submitting, addMatch, clearSubmissionState, setIsMatchInProgress, setMatchStartTime, notifyArtifactsConsumed, notifyTelemetryDraftResolved, setToast, playVictory, playDefeat, updateMatch, recordPlayerSighting, pickFirstKnown]);
+    }, [submitting, addMatch, clearSubmissionState, setIsMatchInProgress, setMatchStartTime, notifyArtifactsConsumed, notifyTelemetryDraftResolved, setToast, playVictory, playDefeat, updateMatch, recordPlayerSightings, pickFirstKnown]);
 
     const saveResultDraft = useCallback(async (subType: string) => {
         const state = useAppStore.getState();

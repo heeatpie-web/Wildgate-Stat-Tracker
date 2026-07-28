@@ -32,6 +32,13 @@ export interface OCRProcessRuntimeOptions {
   nameRerouteThreshold?: number;
   maxReroutePasses?: number;
   performanceMode?: boolean;
+  /**
+   * Progress framing for a run split across several IPC calls (the Wizard rerun
+   * issues one call per screenshot bucket). Without these the bar would restart
+   * at 0 for each call; with them every call reports one continuous fraction.
+   */
+  progressBaseIndex?: number;
+  progressTotalCount?: number;
 }
 
 export type GameUiAction =

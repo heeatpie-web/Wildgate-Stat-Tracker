@@ -32,6 +32,7 @@ const setCurrentLoadout = vi.fn();
 const addMatch = vi.fn();
 const deleteMatch = vi.fn();
 const updateMatch = vi.fn();
+const recordPlayerSightings = vi.fn();
 const dispatchEventSpy = vi.spyOn(window, 'dispatchEvent');
 const electronInvokeMock = vi.fn();
 const recordTeammateIdentityObservation = vi.fn(() => ({ assignments: {}, promotions: [] }));
@@ -62,6 +63,7 @@ vi.mock('../../providers/GameDataProvider', () => ({
     setIsMatchInProgress,
     updateMatch,
     recordPlayerSighting: vi.fn(),
+    recordPlayerSightings,
     setTimelineEvents,
     setSessionTeams,
     setCurrentLoadout,

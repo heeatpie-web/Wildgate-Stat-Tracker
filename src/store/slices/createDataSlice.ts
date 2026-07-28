@@ -166,7 +166,7 @@ const cloneProfileSnapshots = (profiles?: ProfileSnapshotMap): ProfileSnapshotMa
 };
 
 export type RosterEntryOrigin = 'manual' | 'ocr';
-export type RosterEntryStatus = 'confirmed' | 'detected';
+export type RosterEntryStatus = 'confirmed' | 'detected' | 'archived';
 
 export interface RosterEntryMeta {
   origin: RosterEntryOrigin;
@@ -175,7 +175,16 @@ export interface RosterEntryMeta {
   lastSeenAt: number;
   lastConfidence: number;
   firstSeenMatchId: string;
+  /** Set when the entry was archived; absent means it has never been archived. */
+  archivedAt?: number;
 }
+
+/** Players unseen for longer than this are eligible for archiving. */
+export const ROSTER_ARCHIVE_THRESHOLD_MS = 90 * 24 * 60 * 60 * 1000;
+
+export const isRosterEntryArchived = (meta?: Partial<RosterEntryMeta> | null): boolean => (
+  meta?.status === 'archived'
+);
 
 const isPositiveTimestamp = (value: unknown): value is number => {
   const numeric = Number(value);
@@ -198,7 +207,10 @@ const coerceRosterStatus = (
   origin: RosterEntryOrigin,
   fallback: RosterEntryStatus
 ): RosterEntryStatus => {
-  if (origin === 'manual') return 'confirmed';
+  // Archived is orthogonal to origin — a manually added pilot can go stale too,
+  // so this check has to come before the manual-origin shortcut below.
+  if (value === 'archived') return 'archived';
+  if (origin === 'manual') return fallback === 'archived' ? 'archived' : 'confirmed';
   if (value === 'detected' || value === 'confirmed') return value;
   return fallback;
 };
@@ -225,6 +237,11 @@ const createDefaultRosterEntryMeta = (
     firstSeenMatchId: typeof partial?.firstSeenMatchId === 'string'
       ? partial.firstSeenMatchId
       : '',
+    ...(status === 'archived' && isPositiveTimestamp(partial?.archivedAt)
+      ? { archivedAt: Number(partial?.archivedAt) }
+      : status === 'archived'
+        ? { archivedAt: now }
+        : {}),
   };
 };
 
@@ -274,6 +291,14 @@ const mergeRosterEntryMeta = (
     ? String(incoming.firstSeenMatchId)
     : (base.firstSeenMatchId || String(incoming.firstSeenMatchId || ''));
 
+  // Keep the original archive timestamp when an entry stays archived; drop it
+  // entirely once it is not, so "has archivedAt" never contradicts the status.
+  const archivedAt = status === 'archived'
+    ? (isPositiveTimestamp(incoming.archivedAt)
+      ? Number(incoming.archivedAt)
+      : (isPositiveTimestamp(base.archivedAt) ? Number(base.archivedAt) : now))
+    : undefined;
+
   return {
     origin,
     status,
@@ -281,7 +306,98 @@ const mergeRosterEntryMeta = (
     lastSeenAt,
     lastConfidence,
     firstSeenMatchId,
+    ...(archivedAt != null ? { archivedAt } : {}),
   };
+};
+
+/**
+ * The roster names that should seed OCR name matching. Archived pilots keep
+ * their registry entry so historical matches still resolve, but they must not
+ * pull fresh OCR reads toward a player who has not been seen in months — and
+ * dropping them keeps the fuzzy-match candidate pool small.
+ */
+export const selectActiveRosterNames = (
+  pilotRegistry?: string[] | null,
+  rosterEntryMeta?: Record<string, RosterEntryMeta> | null,
+): string[] => {
+  if (!Array.isArray(pilotRegistry) || pilotRegistry.length === 0) return [];
+  if (!rosterEntryMeta) return [...pilotRegistry];
+  return pilotRegistry.filter((entry) => {
+    const key = normalizeRosterEntryKey(entry);
+    if (!key) return false;
+    return !isRosterEntryArchived(rosterEntryMeta[key]);
+  });
+};
+
+/**
+ * One-time cleanup applied at hydration: archives every roster entry unseen for
+ * longer than `thresholdMs`. Favorites are never auto-archived — un-favoriting a
+ * stale pilot makes them eligible on a later pass.
+ *
+ * Pure so the migration can be tested without standing up the store. Returns the
+ * original map when nothing changed, so callers can skip a write.
+ *
+ * `lastSeen` is read from the roster meta first, falling back to the newest
+ * matching player profile. Entries with no timestamp anywhere have never been
+ * observed, so they are left alone rather than assumed stale.
+ */
+export const applyRosterArchiveMigration = ({
+  pilotRegistry,
+  rosterEntryMeta,
+  playerProfiles,
+  favorites,
+  thresholdMs = ROSTER_ARCHIVE_THRESHOLD_MS,
+  now = Date.now(),
+}: {
+  pilotRegistry?: string[] | null;
+  rosterEntryMeta?: Record<string, RosterEntryMeta> | null;
+  playerProfiles?: Record<string, { name?: string; lastSeen?: number }> | null;
+  favorites?: string[] | null;
+  thresholdMs?: number;
+  now?: number;
+}): { rosterEntryMeta: Record<string, RosterEntryMeta>; archivedCount: number } => {
+  const sourceMeta = rosterEntryMeta || {};
+  if (!Array.isArray(pilotRegistry) || pilotRegistry.length === 0) {
+    return { rosterEntryMeta: sourceMeta, archivedCount: 0 };
+  }
+
+  const protectedKeys = new Set<string>();
+  (favorites || []).forEach((name) => {
+    const key = normalizeRosterEntryKey(String(name || ''));
+    if (key) protectedKeys.add(key);
+  });
+
+  const profileLastSeenByKey = new Map<string, number>();
+  Object.values(playerProfiles || {}).forEach((profile) => {
+    const key = normalizeRosterEntryKey(String(profile?.name || ''));
+    if (!key) return;
+    const seen = Number(profile?.lastSeen);
+    if (!Number.isFinite(seen) || seen <= 0) return;
+    profileLastSeenByKey.set(key, Math.max(profileLastSeenByKey.get(key) || 0, seen));
+  });
+
+  const cutoff = now - thresholdMs;
+  const nextMeta: Record<string, RosterEntryMeta> = { ...sourceMeta };
+  let archivedCount = 0;
+
+  pilotRegistry.forEach((entry) => {
+    const key = normalizeRosterEntryKey(String(entry || ''));
+    if (!key || protectedKeys.has(key)) return;
+    const existing = nextMeta[key];
+    if (isRosterEntryArchived(existing)) return;
+
+    const metaLastSeen = isPositiveTimestamp(existing?.lastSeenAt) ? Number(existing?.lastSeenAt) : 0;
+    const lastSeen = Math.max(metaLastSeen, profileLastSeenByKey.get(key) || 0);
+    if (lastSeen <= 0) return;
+    if (lastSeen > cutoff) return;
+
+    nextMeta[key] = mergeRosterEntryMeta(existing, { status: 'archived', archivedAt: now }, now);
+    archivedCount += 1;
+  });
+
+  return archivedCount > 0
+    ? { rosterEntryMeta: nextMeta, archivedCount }
+    : { rosterEntryMeta: sourceMeta, archivedCount: 0 };
 };
 
 const cloneRosterEntryMetaMap = (
@@ -550,6 +666,25 @@ export interface DataSlice {
   removeFromRegistry: (name: string) => void;
   updateRosterEntryMeta: (name: string, meta: Partial<RosterEntryMeta>) => void;
   confirmRosterEntry: (name: string, origin?: RosterEntryOrigin) => void;
+  /**
+   * Batch form of `addToRegistry`, applied in a single state transition. Prefer
+   * this when adding more than one player — each individual add otherwise costs
+   * a full persist snapshot and a re-render of every game-data consumer.
+   */
+  addManyToRegistry: (entries: Array<{ name: string; meta?: Partial<RosterEntryMeta> }>) => void;
+  archiveRosterEntry: (name: string) => void;
+  unarchiveRosterEntry: (name: string) => void;
+  /**
+   * Bulk-archives every roster entry unseen for longer than `thresholdMs`.
+   * Applies the whole batch in one state transition; never loop
+   * `archiveRosterEntry` for this, it would fire one persist+render per entry.
+   */
+  archiveStaleRosterEntries: (options?: {
+    thresholdMs?: number;
+    now?: number;
+    /** Normalized keys that must never be auto-archived (favorites). */
+    protectedKeys?: Iterable<string>;
+  }) => { archivedCount: number };
   renamePilot: (oldName: string, newName: string) => void;
 
   setFavorites: (favorites: string[]) => void;
@@ -1001,6 +1136,106 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
       },
     };
   }),
+  addManyToRegistry: (entries) => set((state) => {
+    if (!Array.isArray(entries) || entries.length === 0) return {};
+    const now = Date.now();
+    const nextRegistry = [...state.pilotRegistry];
+    const nextMeta = { ...state.rosterEntryMeta };
+    // Index once so a batch of N adds stays O(N + registry) rather than O(N * registry).
+    const keyToEntry = new Map<string, string>();
+    nextRegistry.forEach((entry) => {
+      const key = normalizeRosterEntryKey(entry);
+      if (key && !keyToEntry.has(key)) keyToEntry.set(key, entry);
+    });
+
+    let changed = false;
+    entries.forEach(({ name, meta }) => {
+      const cleaned = String(name || '').trim();
+      if (!cleaned) return;
+      const key = normalizeRosterEntryKey(cleaned);
+      if (!key) return;
+      if (keyToEntry.has(key)) {
+        if (!meta && nextMeta[key]) return;
+        nextMeta[key] = mergeRosterEntryMeta(nextMeta[key], meta, now);
+        changed = true;
+        return;
+      }
+      keyToEntry.set(key, cleaned);
+      nextRegistry.push(cleaned);
+      nextMeta[key] = mergeRosterEntryMeta(undefined, meta, now);
+      changed = true;
+    });
+
+    if (!changed) return {};
+    return { pilotRegistry: nextRegistry, rosterEntryMeta: nextMeta };
+  }),
+  archiveRosterEntry: (name) => set((state) => {
+    const targetKey = normalizeRosterEntryKey(name);
+    if (!targetKey) return {};
+    const existing = state.rosterEntryMeta[targetKey];
+    const exists = state.pilotRegistry.some((entry) => normalizeRosterEntryKey(entry) === targetKey);
+    if (!exists && !existing) return {};
+    if (isRosterEntryArchived(existing)) return {};
+    const now = Date.now();
+    return {
+      rosterEntryMeta: {
+        ...state.rosterEntryMeta,
+        [targetKey]: mergeRosterEntryMeta(existing, { status: 'archived', archivedAt: now }, now),
+      },
+    };
+  }),
+  unarchiveRosterEntry: (name) => set((state) => {
+    const targetKey = normalizeRosterEntryKey(name);
+    if (!targetKey) return {};
+    const existing = state.rosterEntryMeta[targetKey];
+    if (!isRosterEntryArchived(existing)) return {};
+    const now = Date.now();
+    return {
+      rosterEntryMeta: {
+        ...state.rosterEntryMeta,
+        [targetKey]: mergeRosterEntryMeta(existing, {
+          // OCR-detected entries go back to needing review; manual ones were curated.
+          status: existing?.origin === 'ocr' ? 'detected' : 'confirmed',
+          archivedAt: undefined,
+        }, now),
+      },
+    };
+  }),
+  archiveStaleRosterEntries: (options = {}) => {
+    const thresholdMs = Number.isFinite(Number(options.thresholdMs))
+      ? Math.max(0, Number(options.thresholdMs))
+      : ROSTER_ARCHIVE_THRESHOLD_MS;
+    const now = Number.isFinite(Number(options.now)) ? Number(options.now) : Date.now();
+    const protectedKeys = new Set<string>();
+    for (const key of options.protectedKeys || []) {
+      const normalized = normalizeRosterEntryKey(key);
+      if (normalized) protectedKeys.add(normalized);
+    }
+
+    // Compute first, then write only if something changed. Returning an empty
+    // partial from `set` still produces a new state object and notifies every
+    // subscriber, which is exactly the fan-out this batching exists to avoid.
+    const state = get();
+    const cutoff = now - thresholdMs;
+    const nextMeta: Record<string, RosterEntryMeta> = { ...state.rosterEntryMeta };
+    let archivedCount = 0;
+
+    state.pilotRegistry.forEach((entry) => {
+      const key = normalizeRosterEntryKey(entry);
+      if (!key || protectedKeys.has(key)) return;
+      const existing = nextMeta[key];
+      if (isRosterEntryArchived(existing)) return;
+      // No timestamp means we have never actually observed this pilot, so we
+      // cannot claim they are stale — leave them active.
+      if (!isPositiveTimestamp(existing?.lastSeenAt)) return;
+      if (Number(existing?.lastSeenAt) > cutoff) return;
+      nextMeta[key] = mergeRosterEntryMeta(existing, { status: 'archived', archivedAt: now }, now);
+      archivedCount += 1;
+    });
+
+    if (archivedCount > 0) set({ rosterEntryMeta: nextMeta });
+    return { archivedCount };
+  },
 
   renamePilot: (oldName, newName) => set((state) => {
     const oldKey = normalizeNameKey(oldName);

@@ -29,11 +29,20 @@ export interface CreateRosterFuzzyMatcherOptions {
 }
 
 export interface RosterFuzzyMatcher {
-  /** Normalized keys for names that already exist exactly in the candidate pool. */
+  /**
+   * Normalized keys for names that already exist exactly in the candidate pool,
+   * roster and bundled lexicon combined.
+   */
   exactKeys: Set<string>;
   /**
+   * Normalized keys for roster names only. Use this to decide "is this pilot on
+   * the roster?" — `exactKeys` also contains bundled-lexicon names, which are
+   * merely known spellings and say nothing about roster membership.
+   */
+  rosterExactKeys: Set<string>;
+  /**
    * Closest fuzzy match for a name, or null when nothing is within threshold or
-   * the name already matches a candidate exactly.
+   * the name already matches a roster candidate exactly.
    */
   resolve: (name: string) => RosterFuzzyMatch | null;
 }
@@ -50,8 +59,13 @@ export const createRosterFuzzyMatcher = (
     ? buildOcrCandidatePool({ bundledSeedNames: options.bundledSeedNames })
     : [];
 
-  const exactKeys = new Set<string>();
-  [...primaryCandidates, ...fallbackCandidates].forEach((candidate) => {
+  const rosterExactKeys = new Set<string>();
+  primaryCandidates.forEach((candidate) => {
+    const key = normalizeKey(candidate);
+    if (key) rosterExactKeys.add(key);
+  });
+  const exactKeys = new Set<string>(rosterExactKeys);
+  fallbackCandidates.forEach((candidate) => {
     const key = normalizeKey(candidate);
     if (key) exactKeys.add(key);
   });
@@ -60,7 +74,11 @@ export const createRosterFuzzyMatcher = (
     const cleaned = String(name || '').trim();
     const key = normalizeKey(cleaned);
     if (!cleaned || !key) return null;
-    if (exactKeys.has(key)) return null;
+    // Only a roster hit means "nothing to suggest". A name that merely matches a
+    // bundled-lexicon spelling is still not on the roster, so it must keep its
+    // suggestion — otherwise the caller shows an "add to roster" affordance for a
+    // pilot that already has a close roster entry.
+    if (rosterExactKeys.has(key)) return null;
 
     const threshold = getAdaptiveNameDistanceThreshold(cleaned.length);
     const match = findClosestMatch(cleaned, primaryCandidates, threshold)
@@ -71,5 +89,5 @@ export const createRosterFuzzyMatcher = (
     return { match, score: similarityScore(cleaned, match) };
   };
 
-  return { exactKeys, resolve };
+  return { exactKeys, rosterExactKeys, resolve };
 };

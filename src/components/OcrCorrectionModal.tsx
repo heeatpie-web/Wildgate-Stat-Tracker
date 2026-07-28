@@ -27,6 +27,8 @@ import {
     similarityScore,
 } from '../utils/stringUtils';
 import { createRosterFuzzyMatcher } from '../utils/ocr/rosterFuzzyMatch';
+import { selectActiveRosterNames } from '../store/slices/createDataSlice';
+import { getOcrStageLabel, useOcrProgress } from '../hooks/useOcrProgress';
 import { filterRosterByQuery, foldLikelyOcrDigits } from '../utils/ocr/rosterFilter';
 import { BUNDLED_OCR_LEXICON } from '../utils/bundledOcrLexicon';
 import { OcrTeamAssignmentBoard } from './ocr/OcrTeamAssignmentBoard';
@@ -479,6 +481,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         sessionTeams,
         sessionShipTypes,
         pilotRegistry,
+        rosterEntryMeta,
         addToRegistry,
         selectedTeammates,
         setSelectedTeammates,
@@ -863,8 +866,12 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         });
         return players;
     }, [ignored, previewCorrections, sessionShipTypes, storedNameConfidenceByKey, teamDraft]);
-    const fuzzyMatchByPlayer = useMemo<Record<string, string>>(() => {
-        const matcher = createRosterFuzzyMatcher(pilotRegistry, {
+    const rerunProgress = useOcrProgress(isRerunningOcr);
+    const rerunProgressPercent = rerunProgress ? Math.round(rerunProgress.fraction * 100) : 0;
+    const { fuzzyMatchByPlayer, rosterExactKeys } = useMemo(() => {
+        // Archived pilots keep their registry entry so history still resolves, but
+        // they must not attract fresh OCR reads toward someone unseen for months.
+        const matcher = createRosterFuzzyMatcher(selectActiveRosterNames(pilotRegistry, rosterEntryMeta), {
             bundledSeedNames: BUNDLED_OCR_LEXICON,
             normalizeKey: normalizeNameKey,
         });
@@ -878,8 +885,10 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                 if (result) next[key] = result.match;
             });
         });
-        return next;
-    }, [pilotRegistry, previewTeamDraft]);
+        // Hand the board the matcher's own roster keys so the "Roster" badge and
+        // the fuzzy suggestion agree on what counts as a roster hit.
+        return { fuzzyMatchByPlayer: next, rosterExactKeys: matcher.rosterExactKeys };
+    }, [pilotRegistry, previewTeamDraft, rosterEntryMeta]);
     const inferredFriendlyTeamIndex = useMemo(() => {
         if (teamDraft.length === 0) return -1;
         const activeUserKey = normalizeNameKey(activeUser || '');
@@ -1565,7 +1574,35 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                             {isRerunningOcr ? 'Re-running...' : 'Re-run OCR'}
                                         </button>
                                         {isRerunningOcr && (
-                                            <div className="wg-indeterminate-bar mt-0.5" aria-hidden="true" />
+                                            rerunProgress ? (
+                                                <div
+                                                    className="mt-0.5"
+                                                    role="progressbar"
+                                                    aria-valuemin={0}
+                                                    aria-valuemax={100}
+                                                    aria-valuenow={rerunProgressPercent}
+                                                    aria-label="OCR re-run progress"
+                                                >
+                                                    <div className="h-1 w-full overflow-hidden rounded-pill bg-md-sys-on-surface/[0.08]">
+                                                        <div
+                                                            className="h-full rounded-pill bg-md-sys-primary transition-[width] duration-200"
+                                                            style={{ width: `${rerunProgressPercent}%` }}
+                                                        />
+                                                    </div>
+                                                    <div className="mt-1 flex items-center justify-between gap-2 text-[10px] font-semibold tabular-nums text-md-sys-on-surface/56">
+                                                        <span className="truncate">{getOcrStageLabel(rerunProgress.stage)}</span>
+                                                        <span className="shrink-0">
+                                                            {rerunProgress.imageCount > 1
+                                                                ? `${rerunProgress.imageIndex + 1}/${rerunProgress.imageCount} · ${rerunProgressPercent}%`
+                                                                : `${rerunProgressPercent}%`}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                // No events yet (or a non-Electron runtime) — fall back to
+                                                // the indeterminate bar rather than showing a stalled 0%.
+                                                <div className="wg-indeterminate-bar mt-0.5" aria-hidden="true" />
+                                            )
                                         )}
                                     </div>
                                 )}
@@ -1671,6 +1708,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                     teams={previewTeamDraft}
                                     shipOptions={SHIPS}
                                     pilotRegistry={pilotRegistry}
+                                    rosterExactKeys={rosterExactKeys}
                                     rosterSuggestionsId={pilotRegistry.length > 0 ? teamAssignmentRosterListId : undefined}
                                     friendlyTeamIndex={displayFriendlyTeamIndex}
                                     friendlyFixedPlayer={activeUserDisplayKey ? {

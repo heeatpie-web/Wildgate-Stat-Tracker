@@ -7,7 +7,8 @@ import {
 import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
 import { resolvePlayerProfileDisplayName } from '../store/slices/createMappingSlice';
-import type { PendingReview } from '../store/slices/createDataSlice';
+import type { PendingReview, RosterEntryMeta } from '../store/slices/createDataSlice';
+import { ROSTER_ARCHIVE_THRESHOLD_MS, isRosterEntryArchived } from '../store/slices/createDataSlice';
 import type { Match } from '../types';
 import { getShipColor } from '../types';
 import { buildAliasVariantMap } from '../utils/ocrNameResolver';
@@ -53,13 +54,24 @@ import {
     normalizeNameKey,
 } from './playerHub/playerHubUtils';
 
-// A player is auto-archived once unseen for longer than this window, which keeps
-// the default "Active" roster small so large (1000+) rosters stay responsive.
-// Curated roster entries and favorites are always kept active; anyone seen again
-// automatically returns to Active because their lastSeen refreshes.
-const ROSTER_ARCHIVE_THRESHOLD_MS = 30 * 24 * 60 * 60 * 1000;
-const isPilotActive = (pilot: { isRoster?: boolean; isFavorite?: boolean; lastSeen?: number | null }, now: number): boolean => {
-    if (pilot.isRoster || pilot.isFavorite) return true;
+// Archiving keeps the default "Active" list small so large (1000+) rosters stay
+// responsive. Roster entries carry a persisted `archived` status set by the
+// one-time 90-day cleanup and by the explicit Archive action; anyone seen again
+// is automatically unarchived because recordPlayerSighting clears the flag.
+// Favorites are never auto-archived — un-favoriting makes them eligible again.
+// Tracked-only pilots have no roster meta, so they fall back to the same window.
+const isPilotActive = (
+    pilot: {
+        isRoster?: boolean;
+        isFavorite?: boolean;
+        lastSeen?: number | null;
+        rosterMeta?: { status?: string } | null;
+    },
+    now: number,
+): boolean => {
+    if (isRosterEntryArchived(pilot.rosterMeta as RosterEntryMeta | null)) return false;
+    if (pilot.isFavorite) return true;
+    if (pilot.isRoster) return true;
     if (pilot.lastSeen == null) return true;
     return (now - pilot.lastSeen) <= ROSTER_ARCHIVE_THRESHOLD_MS;
 };
@@ -74,6 +86,8 @@ const PlayerHub: React.FC = () => {
         toggleFavorite,
         updatePilotNote,
         removeFromRegistry,
+        archiveRosterEntry,
+        unarchiveRosterEntry,
         renamePilot,
         mergePilots,
         mergePilotsBatch,
@@ -122,6 +136,8 @@ const PlayerHub: React.FC = () => {
         toggleFavorite: state.toggleFavorite,
         updatePilotNote: state.updatePilotNote,
         removeFromRegistry: state.removeFromRegistry,
+        archiveRosterEntry: state.archiveRosterEntry,
+        unarchiveRosterEntry: state.unarchiveRosterEntry,
         renamePilot: state.renamePilot,
         mergePilots: state.mergePilots,
         mergePilotsBatch: state.mergePilotsBatch,
@@ -1880,6 +1896,33 @@ const PlayerHub: React.FC = () => {
                                 >
                                     Back to Recording
                                 </button>
+                                {selected.isRoster && (
+                                    isRosterEntryArchived(selected.rosterMeta) ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                unarchiveRosterEntry(selected.name);
+                                                setToast({ message: `${selected.name} restored to the active roster`, type: 'success' });
+                                            }}
+                                            className="px-3 py-1.5 rounded-control text-label-sm font-bold bg-success-soft text-success"
+                                            title="Return this pilot to the active roster and OCR matching"
+                                        >
+                                            Unarchive
+                                        </button>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                archiveRosterEntry(selected.name);
+                                                setToast({ message: `${selected.name} archived`, type: 'info' });
+                                            }}
+                                            className="px-3 py-1.5 rounded-control text-label-sm font-bold bg-md-sys-on-surface/10 text-md-sys-on-surface/70"
+                                            title="Hide from the active roster and stop matching OCR reads against this pilot. Seeing them again restores them automatically."
+                                        >
+                                            Archive
+                                        </button>
+                                    )
+                                )}
                                 {selected.isRoster ? (
                                     <div className="mt-2 w-full">
                                         <button

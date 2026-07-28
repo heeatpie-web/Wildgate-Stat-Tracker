@@ -1,6 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createStore } from 'zustand/vanilla';
-import { createDataSlice, DataSlice, getPriority } from '../createDataSlice';
+import {
+  ROSTER_ARCHIVE_THRESHOLD_MS,
+  applyRosterArchiveMigration,
+  createDataSlice,
+  DataSlice,
+  getPriority,
+  isRosterEntryArchived,
+  selectActiveRosterNames,
+} from '../createDataSlice';
 import type { Match } from '../../../types';
 
 // ── Helpers ──
@@ -613,6 +621,179 @@ describe('createDataSlice', () => {
       store.getState().addTimelineEvent({ timestamp: 1, type: 'test', label: 'first' });
       store.getState().addTimelineEvent({ timestamp: 2, type: 'test', label: 'second' });
       expect(store.getState().timelineEvents[0].label).toBe('second');
+    });
+  });
+
+  describe('roster archiving', () => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const NOW = 1_800_000_000_000;
+
+    const seedRoster = (store: ReturnType<typeof makeStore>, entries: Array<[string, number]>) => {
+      store.getState().setPilotRegistry(entries.map(([name]) => name));
+      entries.forEach(([name, lastSeenAt]) => {
+        store.getState().updateRosterEntryMeta(name, { lastSeenAt });
+      });
+    };
+
+    it('archives entries past the threshold and leaves recent ones active', () => {
+      const store = makeStore();
+      seedRoster(store, [['StalePilot', NOW - 120 * DAY], ['RecentPilot', NOW - 5 * DAY]]);
+
+      const { archivedCount } = store.getState().archiveStaleRosterEntries({ now: NOW });
+
+      expect(archivedCount).toBe(1);
+      expect(isRosterEntryArchived(store.getState().rosterEntryMeta.stalepilot)).toBe(true);
+      expect(isRosterEntryArchived(store.getState().rosterEntryMeta.recentpilot)).toBe(false);
+    });
+
+    it('never auto-archives protected (favorited) entries', () => {
+      const store = makeStore();
+      seedRoster(store, [['FavPilot', NOW - 200 * DAY], ['OtherPilot', NOW - 200 * DAY]]);
+
+      const { archivedCount } = store.getState().archiveStaleRosterEntries({
+        now: NOW,
+        protectedKeys: ['FavPilot'],
+      });
+
+      expect(archivedCount).toBe(1);
+      expect(isRosterEntryArchived(store.getState().rosterEntryMeta.favpilot)).toBe(false);
+      expect(isRosterEntryArchived(store.getState().rosterEntryMeta.otherpilot)).toBe(true);
+    });
+
+    it('skips already-archived entries and applies the batch in one transition', () => {
+      const store = makeStore();
+      seedRoster(store, [['A', NOW - 200 * DAY], ['B', NOW - 200 * DAY]]);
+
+      let transitions = 0;
+      const unsubscribe = store.subscribe(() => { transitions += 1; });
+
+      const first = store.getState().archiveStaleRosterEntries({ now: NOW });
+      expect(first.archivedCount).toBe(2);
+      expect(transitions).toBe(1);
+
+      // A second pass has nothing left to do and must not write at all.
+      const second = store.getState().archiveStaleRosterEntries({ now: NOW });
+      expect(second.archivedCount).toBe(0);
+      expect(transitions).toBe(1);
+      unsubscribe();
+    });
+
+    it('round-trips archive then unarchive without losing the registry entry', () => {
+      const store = makeStore();
+      seedRoster(store, [['Pilot', NOW - 200 * DAY]]);
+
+      store.getState().archiveRosterEntry('Pilot');
+      expect(isRosterEntryArchived(store.getState().rosterEntryMeta.pilot)).toBe(true);
+      expect(store.getState().rosterEntryMeta.pilot.archivedAt).toBeGreaterThan(0);
+
+      store.getState().unarchiveRosterEntry('Pilot');
+      expect(isRosterEntryArchived(store.getState().rosterEntryMeta.pilot)).toBe(false);
+      expect(store.getState().rosterEntryMeta.pilot.archivedAt).toBeUndefined();
+      // The name must survive the round trip so historical matches still resolve.
+      expect(store.getState().pilotRegistry).toContain('Pilot');
+    });
+
+    it('excludes archived names from the OCR candidate pool but keeps them in the registry', () => {
+      const store = makeStore();
+      seedRoster(store, [['Active', NOW - DAY], ['Gone', NOW - 200 * DAY]]);
+      store.getState().archiveRosterEntry('Gone');
+
+      expect(selectActiveRosterNames(
+        store.getState().pilotRegistry,
+        store.getState().rosterEntryMeta,
+      )).toEqual(['Active']);
+      expect(store.getState().pilotRegistry).toEqual(['Active', 'Gone']);
+    });
+
+    it('addManyToRegistry adds a deduped batch in a single transition', () => {
+      const store = makeStore();
+      let transitions = 0;
+      const unsubscribe = store.subscribe(() => { transitions += 1; });
+
+      store.getState().addManyToRegistry([
+        { name: 'One' },
+        { name: 'Two' },
+        { name: 'Three' },
+        { name: 'one' }, // duplicate by normalized key
+      ]);
+
+      expect(store.getState().pilotRegistry).toEqual(['One', 'Two', 'Three']);
+      expect(transitions).toBe(1);
+      unsubscribe();
+    });
+  });
+
+  describe('applyRosterArchiveMigration', () => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const NOW = 1_800_000_000_000;
+    const meta = (lastSeenAt: number) => ({
+      origin: 'manual' as const,
+      status: 'confirmed' as const,
+      firstSeenAt: 1,
+      lastSeenAt,
+      lastConfidence: 100,
+      firstSeenMatchId: '',
+    });
+
+    it('archives only the stale, non-favorited entries', () => {
+      const result = applyRosterArchiveMigration({
+        pilotRegistry: ['Stale', 'Recent', 'Fav', 'ProfileOnly'],
+        rosterEntryMeta: {
+          stale: meta(NOW - 120 * DAY),
+          recent: meta(NOW - 2 * DAY),
+          fav: meta(NOW - 300 * DAY),
+          profileonly: meta(0),
+        },
+        // Falls back to the profile timestamp when the roster meta has none.
+        playerProfiles: { p1: { name: 'ProfileOnly', lastSeen: NOW - 400 * DAY } },
+        favorites: ['Fav'],
+        now: NOW,
+      });
+
+      expect(result.archivedCount).toBe(2);
+      expect(isRosterEntryArchived(result.rosterEntryMeta.stale)).toBe(true);
+      expect(isRosterEntryArchived(result.rosterEntryMeta.profileonly)).toBe(true);
+      expect(isRosterEntryArchived(result.rosterEntryMeta.recent)).toBe(false);
+      expect(isRosterEntryArchived(result.rosterEntryMeta.fav)).toBe(false);
+    });
+
+    it('leaves entries with no timestamp anywhere alone', () => {
+      const result = applyRosterArchiveMigration({
+        pilotRegistry: ['NeverSeen'],
+        rosterEntryMeta: { neverseen: meta(0) },
+        now: NOW,
+      });
+      expect(result.archivedCount).toBe(0);
+    });
+
+    it('is idempotent — a second run archives nothing new', () => {
+      const first = applyRosterArchiveMigration({
+        pilotRegistry: ['Stale'],
+        rosterEntryMeta: { stale: meta(NOW - 120 * DAY) },
+        now: NOW,
+      });
+      expect(first.archivedCount).toBe(1);
+
+      const second = applyRosterArchiveMigration({
+        pilotRegistry: ['Stale'],
+        rosterEntryMeta: first.rosterEntryMeta,
+        now: NOW,
+      });
+      expect(second.archivedCount).toBe(0);
+      // Unchanged input is returned by reference so callers can skip a write.
+      expect(second.rosterEntryMeta).toBe(first.rosterEntryMeta);
+    });
+
+    it('uses a 90-day threshold by default', () => {
+      const build = (lastSeenAt: number) => applyRosterArchiveMigration({
+        pilotRegistry: ['P'],
+        rosterEntryMeta: { p: meta(lastSeenAt) },
+        now: NOW,
+      });
+
+      expect(ROSTER_ARCHIVE_THRESHOLD_MS).toBe(90 * DAY);
+      expect(build(NOW - 89 * DAY).archivedCount).toBe(0);
+      expect(build(NOW - 91 * DAY).archivedCount).toBe(1);
     });
   });
 });

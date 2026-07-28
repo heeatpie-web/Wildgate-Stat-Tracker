@@ -13,6 +13,8 @@ import { isBogusTertiaryLoadoutEntry } from '../../utils/loadout';
 import { measureSyncRuntime } from '../../utils/runtimePerf';
 import { normalizeOcrName } from '../../utils/stringUtils';
 import type { DetectedUnknownMapping, MappingEntityType, Match } from '../../types';
+import type { RosterEntryMeta } from './createDataSlice';
+import { isRosterEntryArchived, normalizeRosterEntryKey } from './createDataSlice';
 import { normalizeDetectedUnknownMappings, normalizeSharedUidMappings, normalizeUidMappingName } from '../../services/mappingContract';
 import {
     OcrAliasContext,
@@ -49,6 +51,17 @@ import {
 } from '../../utils/teammateIdentity';
 
 export type PlayerRole = 'teammate' | 'opponent' | 'mixed' | 'unknown';
+
+/** One player's encounter record, as consumed by `recordPlayerSightings`. */
+export interface PlayerSightingEntry {
+    playerId: string;
+    teamColor: string;
+    allTeamPlayers: string[];
+    allOpponentPlayers: string[];
+    shipType?: string;
+    source?: 'ocr' | 'manual';
+    ocrOnly?: boolean;
+}
 
 export interface PlayerProfile {
     id: string;
@@ -138,6 +151,12 @@ export interface MappingSlice {
 
     // Profile management
     recordPlayerSighting: (playerId: string, teamColor: string, allTeamPlayers: string[], allOpponentPlayers: string[], shipType?: string, source?: 'ocr' | 'manual', ocrOnly?: boolean) => void;
+    /**
+     * Batch form of `recordPlayerSighting`. Prefer this whenever recording more
+     * than one player: it applies the whole set in a single state transition and
+     * builds the profile lookup index once, instead of once per player.
+     */
+    recordPlayerSightings: (entries: PlayerSightingEntry[]) => void;
     setPlayerName: (playerId: string, name: string) => void;
     recordTeammateIdentityObservation: (input: {
         friendlyPlayerIds: string[];
@@ -438,6 +457,66 @@ const getPlayerProfileLookupIndex = (state: MappingState): PlayerProfileLookupIn
     return builtIndex;
 };
 
+/**
+ * Clears the archived flag for any roster entry matching one of `names`.
+ * Returns null when nothing changed so callers can leave the slice untouched.
+ */
+const unarchiveRosterEntriesForNames = (
+    rosterEntryMeta: Record<string, RosterEntryMeta> | undefined,
+    names: string[],
+    now: number,
+): Record<string, RosterEntryMeta> | null => {
+    if (!rosterEntryMeta || names.length === 0) return null;
+    let next: Record<string, RosterEntryMeta> | null = null;
+    names.forEach((name) => {
+        const key = normalizeRosterEntryKey(String(name || ''));
+        if (!key) return;
+        const existing = (next || rosterEntryMeta)[key];
+        if (!isRosterEntryArchived(existing)) return;
+        if (!next) next = { ...rosterEntryMeta };
+        next[key] = {
+            ...existing,
+            // OCR-detected entries go back to needing review; manual ones were curated.
+            status: existing.origin === 'ocr' ? 'detected' : 'confirmed',
+            lastSeenAt: Math.max(Number(existing.lastSeenAt) || 0, now),
+            archivedAt: undefined,
+        };
+    });
+    return next;
+};
+
+/**
+ * Resolves encounter IDs to profile keys against a single prebuilt lookup index,
+ * memoizing within the caller's scope. Hoisted so the batch sighting path can
+ * share one index across every player instead of rebuilding it per call — the
+ * index is WeakMap-cached on `playerProfiles` identity, which a sighting
+ * replaces, so N sequential sightings previously meant N full index rebuilds.
+ */
+const createEncounterProfileKeyResolver = (
+    state: MappingState,
+    lookupIndex: PlayerProfileLookupIndex,
+): ((candidateId: string) => string) => {
+    const resolvedProfileKeys = new Map<string, string>();
+    return (candidateId: string): string => {
+        const rawCandidateId = String(candidateId || '').trim();
+        if (!rawCandidateId) return '';
+        const cacheKey = normalizeTeammatePlayerId(rawCandidateId) || rawCandidateId;
+        const cachedProfileKey = resolvedProfileKeys.get(cacheKey);
+        if (cachedProfileKey) return cachedProfileKey;
+
+        const nextProfileKey = resolvePlayerProfileKey(
+            state,
+            rawCandidateId,
+            undefined,
+            lookupIndex,
+        ).profileKey;
+        if (nextProfileKey) {
+            resolvedProfileKeys.set(cacheKey, nextProfileKey);
+        }
+        return nextProfileKey;
+    };
+};
+
 const findProfileEntryByDisplayName = (
     state: MappingState,
     displayName: string,
@@ -699,25 +778,7 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
         set((state) => measureSyncRuntime('MappingSlice', 'recordPlayerSighting', () => {
             const mappingState = state as MappingState;
             const lookupIndex = getPlayerProfileLookupIndex(mappingState);
-            const resolvedProfileKeys = new Map<string, string>();
-            const resolveEncounterProfileKey = (candidateId: string): string => {
-                const rawCandidateId = String(candidateId || '').trim();
-                if (!rawCandidateId) return '';
-                const cacheKey = normalizeTeammatePlayerId(rawCandidateId) || rawCandidateId;
-                const cachedProfileKey = resolvedProfileKeys.get(cacheKey);
-                if (cachedProfileKey) return cachedProfileKey;
-
-                const nextProfileKey = resolvePlayerProfileKey(
-                    mappingState,
-                    rawCandidateId,
-                    undefined,
-                    lookupIndex,
-                ).profileKey;
-                if (nextProfileKey) {
-                    resolvedProfileKeys.set(cacheKey, nextProfileKey);
-                }
-                return nextProfileKey;
-            };
+            const resolveEncounterProfileKey = createEncounterProfileKeyResolver(mappingState, lookupIndex);
 
             const profileKey = resolveEncounterProfileKey(playerId);
             if (!profileKey) return {};
@@ -784,12 +845,116 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
                 opponents: Object.keys(playedAgainst).length
             });
 
-            return {
-                playerProfiles: { ...state.playerProfiles, [profileKey]: updated }
-            };
+            // Seeing a pilot again means they are not stale — clear any archive
+            // flag in this same transition rather than paying a second write.
+            const nextRosterMeta = unarchiveRosterEntriesForNames(
+                (state as unknown as { rosterEntryMeta?: Record<string, RosterEntryMeta> }).rosterEntryMeta,
+                [updated.name || profileKey],
+                now,
+            );
+
+            return nextRosterMeta
+                ? {
+                    playerProfiles: { ...state.playerProfiles, [profileKey]: updated },
+                    rosterEntryMeta: nextRosterMeta,
+                }
+                : {
+                    playerProfiles: { ...state.playerProfiles, [profileKey]: updated },
+                };
         }, {
             logEvery: 100,
             sampleSize: 256,
+        }));
+    },
+
+    recordPlayerSightings: (entries) => {
+        if (!Array.isArray(entries) || entries.length === 0) return;
+        set((state) => measureSyncRuntime('MappingSlice', 'recordPlayerSightings', () => {
+            const mappingState = state as MappingState;
+            // One index and one resolver for the whole batch. This is the entire
+            // point of the batch action — see createEncounterProfileKeyResolver.
+            const lookupIndex = getPlayerProfileLookupIndex(mappingState);
+            const resolveEncounterProfileKey = createEncounterProfileKeyResolver(mappingState, lookupIndex);
+            const now = Date.now();
+
+            const nextProfiles = { ...state.playerProfiles };
+            const touchedProfileKeys = new Set<string>();
+            let changed = false;
+
+            entries.forEach((entry) => {
+                const profileKey = resolveEncounterProfileKey(entry.playerId);
+                if (!profileKey) return;
+                touchedProfileKeys.add(profileKey);
+                const source = entry.source || 'manual';
+                const ocrOnly = entry.ocrOnly === true;
+                // Read from nextProfiles so repeated players inside one batch
+                // accumulate instead of each overwriting the previous update.
+                const existing = nextProfiles[profileKey] || createEmptyProfile(profileKey);
+
+                const teamsObserved = { ...existing.teamsObserved };
+                const shipsObserved = { ...existing.shipsObserved };
+                const playedWith = { ...existing.playedWith };
+                const playedAgainst = { ...existing.playedAgainst };
+
+                if (!ocrOnly) {
+                    const teamColor = entry.teamColor;
+                    if (teamColor && teamColor !== 'Unknown' && teamColor !== 'unknown') {
+                        teamsObserved[teamColor] = (teamsObserved[teamColor] || 0) + 1;
+                    }
+                    if (entry.shipType) {
+                        shipsObserved[entry.shipType] = (shipsObserved[entry.shipType] || 0) + 1;
+                    }
+                    (entry.allTeamPlayers || []).forEach((id) => {
+                        const teammateKey = resolveEncounterProfileKey(id);
+                        if (teammateKey && teammateKey !== profileKey) {
+                            playedWith[teammateKey] = (playedWith[teammateKey] || 0) + 1;
+                        }
+                    });
+                    (entry.allOpponentPlayers || []).forEach((id) => {
+                        const opponentKey = resolveEncounterProfileKey(id);
+                        if (opponentKey) {
+                            playedAgainst[opponentKey] = (playedAgainst[opponentKey] || 0) + 1;
+                        }
+                    });
+                }
+
+                nextProfiles[profileKey] = {
+                    ...existing,
+                    sightings: ocrOnly ? existing.sightings : existing.sightings + 1,
+                    lastSeen: now,
+                    teamsObserved,
+                    playedWith,
+                    playedAgainst,
+                    shipsObserved,
+                    ocrSightings: source === 'ocr' ? (existing.ocrSightings || 0) + 1 : (existing.ocrSightings || 0),
+                    manualSightings: source === 'manual' ? (existing.manualSightings || 0) + 1 : (existing.manualSightings || 0),
+                };
+                changed = true;
+            });
+
+            if (!changed) return {};
+
+            // Seeing a pilot again is exactly the signal that they are not stale,
+            // so clear any archive flag in the same transition — no extra write.
+            const sightedNames: string[] = [];
+            touchedProfileKeys.forEach((profileKey) => {
+                const name = nextProfiles[profileKey]?.name || profileKey;
+                if (name) sightedNames.push(name);
+            });
+            const nextRosterMeta = unarchiveRosterEntriesForNames(
+                (state as unknown as { rosterEntryMeta?: Record<string, RosterEntryMeta> }).rosterEntryMeta,
+                sightedNames,
+                now,
+            );
+
+            Logger.debug('MappingSlice', `Recorded ${entries.length} sightings in one transition`);
+
+            return nextRosterMeta
+                ? { playerProfiles: nextProfiles, rosterEntryMeta: nextRosterMeta }
+                : { playerProfiles: nextProfiles };
+        }, {
+            logEvery: 20,
+            sampleSize: 64,
         }));
     },
 

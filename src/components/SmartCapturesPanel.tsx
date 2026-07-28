@@ -55,6 +55,7 @@ import {
     getQueueDisplayNumber,
     getQueueStatus,
     isMatchInSmartCaptureWorkQueue,
+    applyMatchResult,
     getStatusMeta,
     getTelemetryConsistencyWarningChips,
 } from './smart-captures/smartCaptureUtils';
@@ -3498,12 +3499,7 @@ const SmartMatchDetail: React.FC<{
         };
 
         const applyResult = useCallback((result: 'Win' | 'Loss' | 'Draw') => {
-            const placement = result === 'Win'
-                ? 1
-                : result === 'Loss'
-                    ? (match.placement && match.placement >= 2 && match.placement <= 5 ? match.placement : 2)
-                    : match.placement;
-            onUpdate({ ...match, result, placement });
+            onUpdate(applyMatchResult(match, result));
         }, [match, onUpdate]);
         const moveOpponentPlayer = useCallback((
             fromTeamIndex: number,

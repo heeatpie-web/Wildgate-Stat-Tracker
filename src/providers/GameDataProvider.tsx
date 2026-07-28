@@ -8,7 +8,7 @@ import React, { createContext, useContext, useEffect, useMemo, useRef } from 're
 import { useAppStore } from '../store/useAppStore';
 import { useShallow } from 'zustand/react/shallow';
 import { Match, DrillDownTarget, KillMap, Loadout, GameMode, type DetectedUnknownMapping } from '../types';
-import { PlayerEncounterRoleCorrection, PlayerProfile } from '../store/slices/createMappingSlice';
+import { PlayerEncounterRoleCorrection, PlayerProfile, type PlayerSightingEntry } from '../store/slices/createMappingSlice';
 import type { PendingReview, RosterEntryMeta, TimelineEvent } from '../store/slices/createDataSlice';
 import type { OcrAliasModel } from '../utils/ocrAliasEngine';
 import type { EncounterRoleCorrection } from '../utils/playerEncounterRoles';
@@ -30,6 +30,9 @@ interface GameDataContextType {
     setPilotRegistry: (pilots: string[]) => void;
     addToRegistry: (name: string, meta?: Partial<RosterEntryMeta>) => void;
     removeFromRegistry: (name: string) => void;
+    rosterEntryMeta: Record<string, RosterEntryMeta>;
+    archiveRosterEntry: (name: string) => void;
+    unarchiveRosterEntry: (name: string) => void;
     favorites: string[]; // Match IDs/Names
     setFavorites: (favs: string[]) => void;
     toggleFavorite: (id: string) => void;
@@ -130,6 +133,7 @@ interface GameDataContextType {
     setSessionShipTypes: (types: Record<string, string>, source?: 'manual' | 'telemetry' | 'ocr') => void;
     sessionStartTime: number;
     recordPlayerSighting: (playerId: string, teamColor: string, allTeamPlayers: string[], allOpponentPlayers: string[], shipType?: string, source?: 'ocr' | 'manual', ocrOnly?: boolean) => void;
+    recordPlayerSightings: (entries: PlayerSightingEntry[]) => void;
     currentLoadout: Loadout | null; // Added
     setCurrentLoadout: (l: Loadout | null) => void; // Added
     timelineEvents: TimelineEvent[];
@@ -176,6 +180,8 @@ export const GameDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         addPlayer: s.addPlayer, deletePlayer: s.deletePlayer,
         pilotRegistry: s.pilotRegistry, setPilotRegistry: s.setPilotRegistry,
         addToRegistry: s.addToRegistry, removeFromRegistry: s.removeFromRegistry,
+        rosterEntryMeta: s.rosterEntryMeta,
+        archiveRosterEntry: s.archiveRosterEntry, unarchiveRosterEntry: s.unarchiveRosterEntry,
         favorites: s.favorites, setFavorites: s.setFavorites, toggleFavorite: s.toggleFavorite,
         pilotNotes: s.pilotNotes, setPilotNotes: s.setPilotNotes, updatePilotNote: s.updatePilotNote,
         pilotAliases: s.pilotAliases, addPilotAlias: s.addPilotAlias, removePilotAlias: s.removePilotAlias,
@@ -220,6 +226,7 @@ export const GameDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         sessionShipTypes: s.sessionShipTypes, setSessionShipTypes: s.setSessionShipTypes,
         sessionStartTime: s.sessionStartTime,
         recordPlayerSighting: s.recordPlayerSighting,
+        recordPlayerSightings: s.recordPlayerSightings,
         currentLoadout: s.currentLoadout, setCurrentLoadout: s.setCurrentLoadout,
         timelineEvents: s.timelineEvents, setTimelineEvents: s.setTimelineEvents,
         addTimelineEvent: s.addTimelineEvent,

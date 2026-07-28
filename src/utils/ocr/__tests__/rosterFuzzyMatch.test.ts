@@ -38,4 +38,21 @@ describe('createRosterFuzzyMatcher', () => {
     const matcher = createRosterFuzzyMatcher(['PilotOne'], { normalizeKey: trimLower });
     expect(matcher.resolve(' pilotone ')).toBeNull();
   });
+
+  it('still suggests a roster match for a name that exactly matches the bundled lexicon', () => {
+    // Regression: bundled-lexicon names used to share the exact-key set with
+    // roster names, so `resolve` short-circuited to null for them. The caller
+    // then saw neither a fuzzy suggestion nor a roster hit, and offered "add to
+    // roster" for a pilot who already had a close roster entry.
+    const matcher = createRosterFuzzyMatcher(['PilotOne'], { bundledSeedNames: ['PliotOne'] });
+    expect(matcher.resolve('PliotOne')?.match).toBe('PilotOne');
+  });
+
+  it('separates roster keys from bundled-lexicon keys', () => {
+    const matcher = createRosterFuzzyMatcher(['PilotOne'], { bundledSeedNames: ['Falcon'] });
+    expect(matcher.rosterExactKeys.has('pilotone')).toBe(true);
+    // Knowing a spelling is not the same as having that pilot on the roster.
+    expect(matcher.rosterExactKeys.has('falcon')).toBe(false);
+    expect(matcher.exactKeys.has('falcon')).toBe(true);
+  });
 });

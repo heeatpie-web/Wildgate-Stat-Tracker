@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Match, OcrState } from '../../types';
 import {
+  applyMatchResult,
+  isMatchReviewComplete,
   classifyPracticalConfidence,
   classifySpecConfidence,
   countOpenSmartCaptureWorkQueueMatches,
@@ -259,5 +261,64 @@ describe('smartCaptureUtils', () => {
     expect(getCollapsedQueueGlyph(makeMatch({ result: 'Ongoing' }))).toBe('queued');
     expect(getCollapsedQueueGlyph(makeMatch({ result: 'Draw', ocrState: 'saved' }))).toBe('saved');
     expect(getCollapsedQueueGlyph(makeMatch({ ocrState: 'error' }))).toBe('error');
+  });
+
+  describe('applyMatchResult', () => {
+    const NOW = 1_800_000_000_000;
+
+    it('finishes and resolves a match that has everything review needs', () => {
+      const match = makeMatch({ result: 'Ongoing', ocrState: 'reviewing', ship: 'Ship', teammates: ['A'] });
+      const next = applyMatchResult(match, 'Win', NOW);
+
+      expect(next.result).toBe('Win');
+      expect(next.placement).toBe(1);
+      expect(next.ocrState).toBe('saved');
+      expect(next.ocrReviewedAt).toBe(NOW);
+      // It must drop out of the work queue without a separate "resolve" click.
+      expect(isMatchInSmartCaptureWorkQueue(next)).toBe(false);
+    });
+
+    it('does not resolve a match that is still missing a ship', () => {
+      const match = makeMatch({ result: 'Ongoing', ocrState: 'reviewing', ship: '' });
+      const next = applyMatchResult(match, 'Win', NOW);
+
+      expect(next.result).toBe('Win');
+      expect(next.ocrState).toBe('reviewing');
+      expect(next.ocrReviewedAt).toBeUndefined();
+      expect(isMatchInSmartCaptureWorkQueue(next)).toBe(true);
+    });
+
+    it('does not resolve a match that has no players on either side', () => {
+      const match = makeMatch({
+        result: 'Ongoing',
+        ocrState: 'reviewing',
+        teammates: [],
+        opponents: [],
+        opponentTeams: [],
+      });
+      const next = applyMatchResult(match, 'Loss', NOW);
+
+      expect(next.ocrState).toBe('reviewing');
+      expect(next.ocrReviewedAt).toBeUndefined();
+    });
+
+    it('preserves an existing review timestamp instead of overwriting it', () => {
+      const match = makeMatch({ result: 'Ongoing', ocrState: 'reviewing', ocrReviewedAt: 123 });
+      expect(applyMatchResult(match, 'Win', NOW).ocrReviewedAt).toBe(123);
+    });
+
+    it('keeps a plausible loss placement and defaults an implausible one', () => {
+      expect(applyMatchResult(makeMatch({ placement: 3 }), 'Loss', NOW).placement).toBe(3);
+      expect(applyMatchResult(makeMatch({ placement: 1 }), 'Loss', NOW).placement).toBe(2);
+    });
+
+    it('isMatchReviewComplete requires a decided result, a ship, and players', () => {
+      expect(isMatchReviewComplete(makeMatch({ result: 'Win' }))).toBe(true);
+      expect(isMatchReviewComplete(makeMatch({ result: 'Ongoing' }))).toBe(false);
+      expect(isMatchReviewComplete(makeMatch({ result: 'Win', ship: '' }))).toBe(false);
+      expect(isMatchReviewComplete(makeMatch({
+        result: 'Win', teammates: [], opponents: [], opponentTeams: [],
+      }))).toBe(false);
+    });
   });
 });

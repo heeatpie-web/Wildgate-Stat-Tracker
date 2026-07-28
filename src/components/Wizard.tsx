@@ -32,6 +32,12 @@ import {
     buildOcrNameSourceMap,
 } from '../utils/ocr/nameSourceHints';
 import {
+    buildAliasVariantMap,
+    buildOcrCandidatePool,
+    resolveOcrName,
+} from '../utils/ocrNameResolver';
+import { selectActiveRosterNames } from '../store/slices/createDataSlice';
+import {
     getEliminatorDisplayLabel,
     getPrimaryEliminatedByTeamValue,
     isEliminatedByTeamMatch,
@@ -868,14 +874,18 @@ export const Wizard: React.FC = () => {
             // player data with tactical-map team/ship data.
             const perFileResults: Array<{ imagePath: string; success: boolean; error?: string; data?: OCRExtractedData }> = [];
             let mergedData: OCRExtractedData | undefined;
+            // Buckets are separate IPC calls, so each one is told where it sits in
+            // the overall run. Otherwise the progress bar restarts per bucket.
+            let progressBaseIndex = 0;
             for (const bucket of buckets) {
                 const rerun = await rerunOCRMulti(
                     bucket.paths,
                     activeUser || '',
                     ocrMode,
                     ocrRegions,
-                    runtimeOptions,
+                    { ...runtimeOptions, progressBaseIndex, progressTotalCount: totalImageCount },
                 );
+                progressBaseIndex += bucket.paths.length;
                 perFileResults.push(...(rerun.perFile || []));
                 if (bucket.isPrimary && rerun.data) {
                     mergedData = rerun.data;
@@ -898,14 +908,51 @@ export const Wizard: React.FC = () => {
                 return;
             }
 
+            // A rerun returns raw OCR strings. The first-scan path canonicalizes
+            // every name against the roster before it reaches the store, so without
+            // this the OCR tab shows "add to roster" for pilots already on it.
+            const rerunState = useAppStore.getState();
+            const activeRosterNames = selectActiveRosterNames(
+                rerunState.pilotRegistry,
+                rerunState.rosterEntryMeta,
+            );
+            const rerunCandidates = buildOcrCandidatePool({ seedNames: activeRosterNames });
+            const rerunAliasVariantMap = buildAliasVariantMap(rerunState.ocrAliasModel);
+            const canonicalName = (rawName: string): string => {
+                const cleaned = String(rawName || '').trim();
+                if (!cleaned) return '';
+                // Roster candidates only — deliberately no bundled-lexicon fallback.
+                // The goal here is to make roster members recognizable as roster
+                // members; remapping onto a lexicon name that is not on the roster
+                // buys nothing and can overwrite a legitimate read with a
+                // superficially similar stock name.
+                if (rerunCandidates.length === 0) return cleaned;
+                // Never blank out a name we could not resolve — keep what OCR read.
+                return resolveOcrName({
+                    rawName: cleaned,
+                    candidates: rerunCandidates,
+                    ocrCorrections: rerunState.ocrCorrections,
+                    aliasModel: rerunState.ocrAliasModel,
+                    aliasVariantMap: rerunAliasVariantMap,
+                    variantMinScore: 55,
+                    shortThreshold: 1,
+                    longThreshold: 2,
+                }) || cleaned;
+            };
             const dedupeNames = (names: string[]): string[] => Array.from(new Set(
                 names
                     .map((entry) => String(entry || '').trim())
                     .filter(Boolean)
             ));
+            /** Dedupe for player names only — modifiers must not be roster-matched. */
+            const dedupePlayerNames = (names: string[]): string[] => Array.from(new Set(
+                names
+                    .map((entry) => canonicalName(entry))
+                    .filter(Boolean)
+            ));
             const safePlayerName = (entry: unknown): string =>
                 typeof entry === 'string' ? entry : (entry as { name?: string })?.name || '';
-            const nextTeammates = dedupeNames(
+            const nextTeammates = dedupePlayerNames(
                 (mergedData.teammates || []).map(safePlayerName).filter((name) => {
                     const n = String(name || '').toLowerCase().trim();
                     return n && !UNKNOWN_PLAYER_LABELS.has(n);
@@ -915,7 +962,7 @@ export const Wizard: React.FC = () => {
                 teamName: String(team.teamName || `Enemy Team ${index + 1}`).trim() || `Enemy Team ${index + 1}`,
                 shipType: String(team.shipType || '').trim(),
                 color: String(team.color || 'unknown').trim() || 'unknown',
-                players: dedupeNames((team.players || []).map(safePlayerName)),
+                players: dedupePlayerNames((team.players || []).map(safePlayerName)),
             })).filter((team: { players: string[]; shipType: string; teamName: string }) => team.players.length > 0 || team.shipType || team.teamName);
             const nextOpponents = dedupeNames(nextOpponentTeams.flatMap((team: { players: string[] }) => team.players));
             const nextModifiers = dedupeNames((mergedData.reachModifiers || []).map((entry: any) => String(entry?.name || entry || '').trim()));

@@ -8,7 +8,12 @@
  */
 import { create } from 'zustand';
 import { persist, PersistStorage } from 'zustand/middleware';
-import { DataSlice, createDataSlice, normalizeRosterEntryMetaMap } from './slices/createDataSlice';
+import {
+  DataSlice,
+  applyRosterArchiveMigration,
+  createDataSlice,
+  normalizeRosterEntryMetaMap,
+} from './slices/createDataSlice';
 import {
   SettingsSlice,
   createDefaultOcrRegions,
@@ -24,6 +29,7 @@ import { FormSlice, createFormSlice } from './slices/createFormSlice';
 import { MappingSlice, createMappingSlice } from './slices/createMappingSlice';
 import { SmartCapturesUIState, createSmartCapturesSlice } from './slices/createSmartCapturesSlice';
 import { VideoImportSlice, createVideoImportSlice } from './slices/createVideoImportSlice';
+import { skipEmptyUpdates } from './middleware/skipEmptyUpdates';
 import { StorageService } from '../utils/storage';
 import {
   compactAliasModel,
@@ -288,6 +294,9 @@ const buildStorageDataFromState = (state: AppState) => ({
     telemetryDefaultsVersion: Number.isFinite(state.telemetryDefaultsVersion)
       ? Math.max(1, Math.floor(Number(state.telemetryDefaultsVersion)))
       : 1,
+    rosterArchiveVersion: Number.isFinite(state.rosterArchiveVersion)
+      ? Math.max(0, Math.floor(Number(state.rosterArchiveVersion)))
+      : 0,
     autoBackup: state.enableAutoBackup,
     startupSmartPreloadEnabled: state.startupSmartPreloadEnabled,
     alwaysOnTop: state.isAlwaysOnTop,
@@ -419,6 +428,27 @@ const customStorage: PersistStorage<AppState> = {
         : 0;
       const shouldApplyTelemetryBaselineV1 = persistedTelemetryDefaultsVersion < 1;
 
+      // One-time roster archive cleanup. Runs here because hydration already has
+      // the whole persisted payload in hand, so it costs no extra pass.
+      const persistedRosterArchiveVersionRaw = Number(settings.rosterArchiveVersion ?? 0);
+      const persistedRosterArchiveVersion = Number.isFinite(persistedRosterArchiveVersionRaw)
+        ? Math.max(0, Math.floor(persistedRosterArchiveVersionRaw))
+        : 0;
+      const normalizedRosterEntryMeta = normalizeRosterEntryMetaMap(data.pilotRegistry || [], data.rosterEntryMeta);
+      const rosterArchiveResult = persistedRosterArchiveVersion < 1
+        ? applyRosterArchiveMigration({
+          pilotRegistry: data.pilotRegistry || [],
+          rosterEntryMeta: normalizedRosterEntryMeta,
+          playerProfiles: data.playerProfiles || {},
+          favorites: data.favorites || [],
+        })
+        : { rosterEntryMeta: normalizedRosterEntryMeta, archivedCount: 0 };
+      if (rosterArchiveResult.archivedCount > 0) {
+        console.info(
+          `[store] Roster archive cleanup: archived ${rosterArchiveResult.archivedCount} player(s) unseen for 90+ days.`
+        );
+      }
+
       const hydratedState = {
         state: {
           // Data
@@ -426,7 +456,7 @@ const customStorage: PersistStorage<AppState> = {
           nextCanonicalMatchNumber,
           players,
           pilotRegistry: data.pilotRegistry || [],
-          rosterEntryMeta: normalizeRosterEntryMetaMap(data.pilotRegistry || [], data.rosterEntryMeta),
+          rosterEntryMeta: rosterArchiveResult.rosterEntryMeta,
           favorites: data.favorites || [],
           pilotNotes: data.pilotNotes || {},
           pilotAliases: data.pilotAliases || {},
@@ -474,6 +504,7 @@ const customStorage: PersistStorage<AppState> = {
             ? false
             : (settings.adaptiveTelemetryPollingEnabled ?? false),
           telemetryDefaultsVersion: Math.max(1, persistedTelemetryDefaultsVersion),
+          rosterArchiveVersion: Math.max(1, persistedRosterArchiveVersion),
           enableAutoBackup: settings.autoBackup ?? true,
           startupSmartPreloadEnabled: settings.startupSmartPreloadEnabled ?? true,
           isAlwaysOnTop: settings.alwaysOnTop ?? false,
@@ -621,7 +652,10 @@ const customStorage: PersistStorage<AppState> = {
 
 export const useAppStore = create<AppState>()(
   persist(
-    (...a) => ({
+    // Inside persist so it only guards slice-action writes: a slice returning an
+    // empty partial means "nothing changed" and must not notify subscribers or
+    // queue a database write.
+    skipEmptyUpdates((...a) => ({
       ...createDataSlice(...a),
       ...createSettingsSlice(...a),
       ...createUISlice(...a),
@@ -629,7 +663,7 @@ export const useAppStore = create<AppState>()(
       ...createFormSlice(...a),
       ...createMappingSlice(...a),
       ...createVideoImportSlice(...a),
-    }),
+    })),
     {
       name: 'wg_db',
       storage: customStorage,
@@ -667,6 +701,7 @@ export const useAppStore = create<AppState>()(
         telemetryPerformanceProfile: state.telemetryPerformanceProfile,
         adaptiveTelemetryPollingEnabled: state.adaptiveTelemetryPollingEnabled,
         telemetryDefaultsVersion: state.telemetryDefaultsVersion,
+        rosterArchiveVersion: state.rosterArchiveVersion,
         enableAutoBackup: state.enableAutoBackup,
         startupSmartPreloadEnabled: state.startupSmartPreloadEnabled,
         isAlwaysOnTop: state.isAlwaysOnTop,

@@ -606,6 +606,95 @@ describe('createMappingSlice', () => {
       expect(store.getState().knownMappings['p1']).toBe('Alice');
     });
   });
+
+  describe('recordPlayerSightings (batch)', () => {
+    it('records every player in a single state transition', () => {
+      let transitions = 0;
+      const unsubscribe = store.subscribe(() => { transitions += 1; });
+
+      store.getState().recordPlayerSightings([
+        { playerId: 'p1', teamColor: 'Red', allTeamPlayers: ['p1', 'p2'], allOpponentPlayers: ['p3'], shipType: 'Hunter' },
+        { playerId: 'p2', teamColor: 'Red', allTeamPlayers: ['p1', 'p2'], allOpponentPlayers: ['p3'], shipType: 'Hunter' },
+        { playerId: 'p3', teamColor: 'Blue', allTeamPlayers: ['p3'], allOpponentPlayers: ['p1', 'p2'], shipType: 'Raider' },
+      ]);
+
+      // The whole point: one write, not one per player. Each individual write
+      // replaces playerProfiles and invalidates the profile lookup index.
+      expect(transitions).toBe(1);
+      unsubscribe();
+
+      const profiles = store.getState().playerProfiles;
+      expect(profiles['p1'].sightings).toBe(1);
+      expect(profiles['p2'].sightings).toBe(1);
+      expect(profiles['p3'].sightings).toBe(1);
+      expect(profiles['p1'].teamsObserved['Red']).toBe(1);
+      expect(profiles['p3'].shipsObserved['Raider']).toBe(1);
+    });
+
+    it('produces the same profiles as the equivalent one-at-a-time calls', () => {
+      const entries = [
+        { playerId: 'p1', teamColor: 'Red', allTeamPlayers: ['p1', 'p2'], allOpponentPlayers: ['p3'], shipType: 'Hunter' },
+        { playerId: 'p2', teamColor: 'Red', allTeamPlayers: ['p1', 'p2'], allOpponentPlayers: ['p3'], shipType: 'Hunter' },
+      ];
+
+      const sequential = makeStore();
+      entries.forEach((e) => sequential.getState().recordPlayerSighting(
+        e.playerId, e.teamColor, e.allTeamPlayers, e.allOpponentPlayers, e.shipType,
+      ));
+      store.getState().recordPlayerSightings(entries);
+
+      // Timestamps are wall-clock and can differ by a millisecond between the
+      // two stores; everything else must match exactly.
+      const strip = (profiles: Record<string, { lastSeen: number; firstSeen: number }>) => Object.fromEntries(
+        Object.entries(profiles).map(([key, value]) => [key, { ...value, lastSeen: 0, firstSeen: 0 }]),
+      );
+      expect(strip(store.getState().playerProfiles)).toEqual(strip(sequential.getState().playerProfiles));
+    });
+
+    it('accumulates when the same player appears twice in one batch', () => {
+      store.getState().recordPlayerSightings([
+        { playerId: 'p1', teamColor: 'Red', allTeamPlayers: [], allOpponentPlayers: [] },
+        { playerId: 'p1', teamColor: 'Red', allTeamPlayers: [], allOpponentPlayers: [] },
+      ]);
+
+      expect(store.getState().playerProfiles['p1'].sightings).toBe(2);
+      expect(store.getState().playerProfiles['p1'].teamsObserved['Red']).toBe(2);
+    });
+
+    it('does not write for an empty batch', () => {
+      let transitions = 0;
+      const unsubscribe = store.subscribe(() => { transitions += 1; });
+      store.getState().recordPlayerSightings([]);
+      expect(transitions).toBe(0);
+      unsubscribe();
+    });
+
+    it('unarchives a roster entry when that pilot is sighted again', () => {
+      store.setState({
+        rosterEntryMeta: {
+          p1: {
+            origin: 'manual',
+            status: 'archived',
+            firstSeenAt: 1,
+            lastSeenAt: 1,
+            lastConfidence: 100,
+            firstSeenMatchId: '',
+            archivedAt: 1,
+          },
+        },
+      } as Partial<MappingSlice>);
+
+      store.getState().recordPlayerSightings([
+        { playerId: 'p1', teamColor: 'Red', allTeamPlayers: [], allOpponentPlayers: [] },
+      ]);
+
+      const meta = (store.getState() as unknown as {
+        rosterEntryMeta: Record<string, { status: string; archivedAt?: number }>;
+      }).rosterEntryMeta;
+      expect(meta.p1.status).toBe('confirmed');
+      expect(meta.p1.archivedAt).toBeUndefined();
+    });
+  });
 });
 
 

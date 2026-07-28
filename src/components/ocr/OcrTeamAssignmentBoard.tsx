@@ -33,6 +33,12 @@ interface OcrTeamAssignmentBoardProps {
     allowTeamAddRemove?: boolean;
     fuzzyMatches?: Record<string, string>;
     pilotRegistry?: string[];
+    /**
+     * Normalized roster keys used for the "Roster" badge. Pass the matcher's
+     * `rosterExactKeys` when one is already built; otherwise it is derived from
+     * `pilotRegistry`.
+     */
+    rosterExactKeys?: Set<string>;
     ocrDetectedTeamIndices?: Set<number>;
     friendlyFixedPlayer?: FriendlyFixedPlayer | null;
     onTeamNameChange?: (teamIndex: number, value: string) => void;
@@ -138,6 +144,7 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
     allowTeamAddRemove = false,
     fuzzyMatches = {},
     pilotRegistry = [],
+    rosterExactKeys,
     ocrDetectedTeamIndices,
     friendlyFixedPlayer = null,
     onTeamNameChange,
@@ -169,6 +176,18 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
         });
         return list;
     }, [shipOptions]);
+
+    // Precomputed so the roster badge is a Set lookup per row instead of a scan of
+    // the whole registry per row, which was O(players x roster) on every render.
+    const rosterKeys = useMemo(() => {
+        if (rosterExactKeys) return rosterExactKeys;
+        const keys = new Set<string>();
+        pilotRegistry.forEach((entry) => {
+            const key = normalizePlayerKey(entry);
+            if (key) keys.add(key);
+        });
+        return keys;
+    }, [pilotRegistry, rosterExactKeys]);
 
     const resolveDraggedPlayer = (event: React.DragEvent<HTMLElement>): DraggedPlayerPayload | null => {
         if (draggedPlayer) return draggedPlayer;
@@ -379,7 +398,7 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                                         const fuzzyMatch = fuzzyMatches[normalizePlayerKey(displayName)] || '';
                                         const showFuzzyBadge = fuzzyMatch
                                             && fuzzyMatch.trim().toLowerCase() !== rawDisplayKey;
-                                        const isRosterMatch = pilotRegistry.length > 0 && pilotRegistry.some(p => normalizePlayerKey(p) === normalizePlayerKey(displayName));
+                                        const isRosterMatch = rosterKeys.size > 0 && rosterKeys.has(normalizePlayerKey(displayName));
                                         return (
                                             <div
                                                 key={`${teamIndex}-${playerIndex}`}

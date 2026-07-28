@@ -115,4 +115,49 @@ describe('OcrTeamAssignmentBoard', () => {
     expect(goldDot).toBeInTheDocument();
     expect(magentaDot).toBeInTheDocument();
   });
+
+  describe('roster membership badge', () => {
+    const renderBoard = (props: Record<string, unknown> = {}) => render(
+      <OcrTeamAssignmentBoard
+        teams={[{
+          key: 'friendly:Friendly Team',
+          color: 'friendly',
+          teamName: 'Friendly Team',
+          shipType: 'Hunter',
+          players: ['Combat Barbie'],
+        }]}
+        shipOptions={['Hunter']}
+        friendlyTeamIndex={0}
+        onTeamShipChange={vi.fn()}
+        onPlayerChange={vi.fn()}
+        onPlayerRemove={vi.fn()}
+        onPlayerAdd={vi.fn()}
+        onPlayerMove={vi.fn()}
+        onAddToRoster={vi.fn()}
+        {...props}
+      />
+    );
+
+    it('shows the Roster badge and no add button for a pilot already on the roster', () => {
+      renderBoard({ pilotRegistry: ['Combat Barbie'] });
+
+      expect(screen.getByTitle('Matched to roster')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /add combat barbie to roster/i })).not.toBeInTheDocument();
+    });
+
+    it('offers the add button for a pilot who is not on the roster', () => {
+      renderBoard({ pilotRegistry: ['SomeoneElse'] });
+
+      expect(screen.queryByTitle('Matched to roster')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /add combat barbie to roster/i })).toBeInTheDocument();
+    });
+
+    it('prefers an explicit rosterExactKeys set over pilotRegistry', () => {
+      // The OCR modal builds the matcher once and hands down its own roster
+      // keys, so the badge and the fuzzy suggestion cannot disagree.
+      renderBoard({ pilotRegistry: [], rosterExactKeys: new Set(['combat barbie']) });
+
+      expect(screen.getByTitle('Matched to roster')).toBeInTheDocument();
+    });
+  });
 });

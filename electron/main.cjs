@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const http = require('http');
 const https = require('https');
 const fsPromises = require('fs').promises;
-const { registerOCRHandlers, captureGameWindow, captureGameWindowBuffer, processCapture, runOCR } = require('./ocrHandler.cjs');
+const { registerOCRHandlers, captureGameWindow, captureGameWindowBuffer, createOcrProgressReporter, processCapture, runOCR } = require('./ocrHandler.cjs');
 const { mergeCaptures, isSameMatch, pickPreferredTeammateRoster } = require('./ocrMerger.cjs');
 const { mergeRerunResults } = require('./helpers/rerunOcrMerge.cjs');
 const artifactHelpers = require('./helpers/artifactHelpers.cjs');
@@ -2188,6 +2188,16 @@ ipcMain.handle('rerun-ocr-multi', async (event, { imagePaths, activeUser, ocrMod
       ? runtimeOptions
       : {};
     const perFile = [];
+    // Progress spans the whole set, so the bar advances within each image rather
+    // than only stepping when one finishes. When the caller splits a run across
+    // several calls (the Wizard reruns one bucket at a time) it passes the base
+    // index and grand total so the bar stays continuous instead of restarting.
+    const progressBaseIndex = Math.max(0, Number(safeRuntimeOptions.progressBaseIndex) || 0);
+    const totalImageCount = Math.max(
+      imagePaths.length,
+      Number(safeRuntimeOptions.progressTotalCount) || 0,
+    );
+    let processedImageIndex = 0;
     // Phase 1: process every image independently (no existingData chaining).
     // Passing the previous result as existingData would let its screenshotType
     // leak into the next image's PSM hint, causing the crew hub to be OCR'd with
@@ -2197,6 +2207,7 @@ ipcMain.handle('rerun-ocr-multi', async (event, { imagePaths, activeUser, ocrMod
       if (!pathCheck.success) {
         recordSecurityBlock('rerun-ocr-multi', pathCheck.code || IpcErrorCode.PATH_NOT_ALLOWED, pathCheck.message || 'Path not allowed');
         perFile.push({ imagePath, success: false, error: pathCheck.message || 'Path not allowed' });
+        processedImageIndex += 1;
         continue;
       }
       const fullPath = pathCheck.data.resolved;
@@ -2204,10 +2215,12 @@ ipcMain.handle('rerun-ocr-multi', async (event, { imagePaths, activeUser, ocrMod
       if (!extCheck.success) {
         recordSecurityBlock('rerun-ocr-multi', extCheck.code, extCheck.message);
         perFile.push({ imagePath: fullPath, success: false, error: extCheck.message });
+        processedImageIndex += 1;
         continue;
       }
       if (!fs.existsSync(fullPath)) {
         perFile.push({ imagePath: fullPath, success: false, error: 'File not found' });
+        processedImageIndex += 1;
         continue;
       }
       try {
@@ -2217,6 +2230,10 @@ ipcMain.handle('rerun-ocr-multi', async (event, { imagePaths, activeUser, ocrMod
           sourceImagePath: fullPath,
           ocrRegions: ocrRegions || null,
           ...safeRuntimeOptions,
+          onStage: createOcrProgressReporter(event.sender, {
+            imageIndex: progressBaseIndex + processedImageIndex,
+            imageCount: totalImageCount,
+          }),
         });
         if (result && result.success && result.data) {
           perFile.push({ imagePath: fullPath, success: true, data: result.data });
@@ -2227,6 +2244,7 @@ ipcMain.handle('rerun-ocr-multi', async (event, { imagePaths, activeUser, ocrMod
         console.error('[rerun-ocr-multi] Error processing', fullPath, ':', e.message);
         perFile.push({ imagePath: fullPath, success: false, error: e.message || 'Processing failed' });
       }
+      processedImageIndex += 1;
     }
     const successCount = perFile.filter(f => f.success).length;
     const _mDlogPath = require('path').join(require('os').tmpdir(), 'wildgate-ocr.log');

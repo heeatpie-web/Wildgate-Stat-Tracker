@@ -73,6 +73,7 @@ const RECEIVE_CHANNELS = [
   'result-flash-detected', 'result-flash-resolved', 'result-flash-debug',
   'result-text-detected', 'result-text-debug',
   'video-import-progress',
+  'ocr-progress',
   'tactical-map-detected',
   'game-process-status',
 ];

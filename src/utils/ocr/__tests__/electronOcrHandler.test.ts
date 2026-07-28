@@ -37,7 +37,14 @@ if (!Module.__wgElectronMockInstalled) {
   Module.__wgElectronMockInstalled = true;
 }
 
-const { __test__ } = require('../../../../electron/ocrHandler.cjs') as {
+const ocrHandlerModule = require('../../../../electron/ocrHandler.cjs');
+const { createOcrProgressReporter } = ocrHandlerModule as {
+  createOcrProgressReporter: (
+    sender: unknown,
+    opts?: { imageIndex?: number; imageCount?: number; requestId?: string | null },
+  ) => ((stage: string, fraction: number) => void) | null;
+};
+const { __test__ } = ocrHandlerModule as {
   __test__: {
     cleanupLegacyExtraction: (input: Record<string, any>) => Record<string, any>;
     convertCrewHubToLegacy: (crewHubData: Record<string, any>, rawText: string) => Record<string, any>;
@@ -231,5 +238,64 @@ describe('electron/ocrHandler crew-hub teammate cleanup', () => {
 
     expect(anchors?.mapScreen?.enemyShipsHeaderY).toBeCloseTo(78 / 1080, 4);
     expect(anchors?.mapScreen?.hazardsHeaderY).toBeCloseTo(341 / 1080, 4);
+  });
+});
+
+describe('electron/ocrHandler createOcrProgressReporter', () => {
+  const makeSender = () => {
+    const sent: Array<{ channel: string; payload: Record<string, any> }> = [];
+    return {
+      sent,
+      isDestroyed: () => false,
+      send: (channel: string, payload: Record<string, any>) => { sent.push({ channel, payload }); },
+    };
+  };
+
+  it('sends stage progress on the ocr-progress channel', () => {
+    const sender = makeSender();
+    const report = createOcrProgressReporter(sender);
+
+    report?.('recognize', 0.5);
+
+    expect(sender.sent).toHaveLength(1);
+    expect(sender.sent[0].channel).toBe('ocr-progress');
+    expect(sender.sent[0].payload).toMatchObject({
+      stage: 'recognize',
+      imageFraction: 0.5,
+      fraction: 0.5,
+      imageIndex: 0,
+      imageCount: 1,
+    });
+  });
+
+  it('folds per-image progress into an overall fraction across a multi-image run', () => {
+    const sender = makeSender();
+
+    // Halfway through the second of four images is 37.5% overall, not 50%.
+    createOcrProgressReporter(sender, { imageIndex: 1, imageCount: 4 })?.('recognize', 0.5);
+
+    expect(sender.sent[0].payload.fraction).toBeCloseTo(0.375, 5);
+    expect(sender.sent[0].payload.imageFraction).toBeCloseTo(0.5, 5);
+  });
+
+  it('clamps fractions into 0-1', () => {
+    const sender = makeSender();
+    const report = createOcrProgressReporter(sender);
+
+    report?.('extract', 5);
+    report?.('decode', -3);
+
+    expect(sender.sent[0].payload.fraction).toBe(1);
+    expect(sender.sent[1].payload.fraction).toBe(0);
+  });
+
+  it('returns null without a sender and never throws on a destroyed one', () => {
+    expect(createOcrProgressReporter(null)).toBeNull();
+
+    const destroyed = {
+      isDestroyed: () => true,
+      send: () => { throw new Error('window is gone'); },
+    };
+    expect(() => createOcrProgressReporter(destroyed)?.('recognize', 0.5)).not.toThrow();
   });
 });
