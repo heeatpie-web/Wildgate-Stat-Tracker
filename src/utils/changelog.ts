@@ -1,4 +1,11 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.10.0": [
+    "Archive roster players unseen for 90 days, with a one-time cleanup pass",
+    "Fuzzy-match roster names after re-running OCR so known pilots stay recognized",
+    "Show real OCR processing progress instead of an estimated bar",
+    "Cut UI stalls when saving matches and adding players to the roster",
+    "Marking a match Win/Loss now finishes and resolves it"
+  ],
   "v3.9.1": [
     "Improvement: Removed the leftover Match Log page. Match screenshot review lives in Smart Captures, and match history detail lives in the History tab.",
     "Fix: The v3.9.0 changelog entry no longer splits one note across two lines."
