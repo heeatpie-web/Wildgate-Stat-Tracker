@@ -1,4 +1,8 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.9.1": [
+    "Improvement: Removed the leftover Match Log page. Match screenshot review lives in Smart Captures, and match history detail lives in the History tab.",
+    "Fix: The v3.9.0 changelog entry no longer splits one note across two lines."
+  ],
   "v3.9.0": [
     "Feature: The Seeds tab now shows the tactical map screenshot captured for each match on a seed - click any thumbnail to view it full size.",
     "Improvement: Removed the duplicate Match Log tab from History. Use Smart Captures for per-match screenshot review.",
