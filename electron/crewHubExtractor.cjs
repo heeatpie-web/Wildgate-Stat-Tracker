@@ -61,6 +61,17 @@ function circularMeanHue(hues) {
 // together and stays merged.
 const NAMED_SPLIT_MIN_HUE_SEPARATION = 6;
 const NAMED_SPLIT_MIN_CONFIDENCE = 55;
+
+// The enemy panel background is near-black, so a card with no team bar beneath
+// it (stray text below the last crew, or a mis-detected line) samples the
+// background and reports a confident 'black'. A real black team still renders
+// its name bar, so require a captured label before trusting a lone black card
+// as its own team.
+function isUncorroboratedBlackCard(card, capturedTeamNames) {
+  if (!card || card.color !== 'black') return false;
+  if (String(card.textTeamName || '').trim()) return false;
+  return !String(capturedTeamNames?.get?.('black') || '').trim();
+}
 function splitHueClusterByNamedColor(cluster) {
   const byName = new Map();
   const unnamed = [];
@@ -1119,6 +1130,9 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
   const capturedTeamNames = new Map(); // color → cleanest team name seen
   const spectatorCardYs = []; // Y positions of skipped spectator cards
   const skippedSpectatorNameKeys = new Set();
+  // Cards rejected during grouping as background bleed. Salvage must honour
+  // these too, otherwise it re-attaches them to the nearest real crew.
+  const rejectedCardNameKeys = new Set();
 
   // Helper: extract the raw team name text from a line's word list
   // (used when the line is identified as a team-name bar, not a player name)
@@ -1229,6 +1243,14 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     if (!curName || !isValidOpponentName(curName)) continue;
     const nxtBar = extractRawTeamNameFromLine(nxt.words);
     if (!nxtBar) continue;
+    // The player-name scan rejects UI chrome, but this pre-pass reads the bar
+    // line directly. Without the same filter, footer text (e.g. "CHANGE VOICE
+    // OPTIONS") becomes a team name and can promote a stray card into its own
+    // phantom team.
+    if (containsUiNoisePhrase(nxtBar)) {
+      dlog('[CrewHub] SKIP ui-noise team-name bar: "' + nxtBar + '" y=' + Math.round(nxt.y));
+      continue;
+    }
     playerYToTextTeamName.set(Math.round(cur.y), nxtBar);
   }
 
@@ -1545,6 +1567,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
   for (const tLine of groupedLines) {
     const rawTeamName = extractRawTeamNameFromLine(tLine.words);
     if (!rawTeamName) continue;
+    if (containsUiNoisePhrase(rawTeamName)) continue;
     if (!isTeamName(rawTeamName) && !/^[A-Z0-9]+(-[A-Z0-9]+)+$/.test(rawTeamName)) continue;
     // Find the nearest known-color card above OR below this line
     let bestCard = null, bestDist = Infinity;
@@ -1659,6 +1682,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
   for (const tLine of groupedLines) {
     const rawTeamName = extractRawTeamNameFromLine(tLine.words);
     if (!rawTeamName) continue;
+    if (containsUiNoisePhrase(rawTeamName)) continue;
     if (!isTeamName(rawTeamName) && !/^[A-Z0-9]+(-[A-Z0-9]+)+$/.test(rawTeamName)) continue;
     // Skip badge lines whose Y falls within the bar zone of a skipped spectator card.
     const isSpectatorBadge = spectatorCardYs.some(sy => {
@@ -1681,6 +1705,13 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
   const badgeGroups = new Map(); // key -> { key, badgeName, cards[], minY, maxY, confidence, colorHints[] }
   const assignedCardIds = new Set();
   const sortedCardsByY = [...uniqueCards].sort((a, b) => a.y - b.y);
+
+  // Pair each card with the badge line below it, then reject pairings whose gap
+  // is far off the consensus. Card→badge spacing is uniform within a screenshot,
+  // so when a card's own badge line fails OCR the next crew's badge sits at a
+  // wildly larger gap; without this the card gets stolen by the wrong crew.
+  const badgeMatches = new Map();
+  const matchedGaps = [];
   for (const card of sortedCardsByY) {
     let best = null;
     for (const cand of badgeLineCandidates) {
@@ -1692,6 +1723,24 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
       }
     }
     if (!best) continue;
+    badgeMatches.set(card, best);
+    matchedGaps.push(best.gap);
+  }
+  let maxConsensusGap = Infinity;
+  if (matchedGaps.length >= 3) {
+    const sortedGaps = [...matchedGaps].sort((a, b) => a - b);
+    const medianGap = sortedGaps[Math.floor(sortedGaps.length / 2)];
+    if (medianGap > 0) maxConsensusGap = Math.max(medianGap * 1.8, medianGap + minBadgeGap);
+  }
+
+  for (const card of sortedCardsByY) {
+    const best = badgeMatches.get(card);
+    if (!best) continue;
+    if (best.gap > maxConsensusGap) {
+      dlog('[CrewHub] Step4a reject far badge for "' + card.name + '" gap=' + Math.round(best.gap)
+        + ' > consensus ' + Math.round(maxConsensusGap) + ' (badge="' + best.raw + '")');
+      continue;
+    }
     // Keep only repeated badge labels; one-off labels are usually OCR noise.
     const freq = badgeFreq.get(best.key) || 0;
     if (freq < 2) continue;
@@ -1743,6 +1792,15 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     // Assign ungrouped cards to nearest badge group by Y distance.
     const unassigned = uniqueCards.filter(c => !assignedCardIds.has(c));
     for (const card of unassigned) {
+      // Badge grouping is active, so team bars are reading reliably in this
+      // image. A card with no badge, no team-name text, and a "black" bar read
+      // is the panel background showing through — drop it rather than letting
+      // it spawn a phantom team or pollute the nearest real roster.
+      if (isUncorroboratedBlackCard(card, capturedTeamNames)) {
+        rejectedCardNameKeys.add(normalizeNameKey(card.name));
+        dlog('[CrewHub] Step4a drop uncorroborated black card "' + card.name + '" (no team bar below it)');
+        continue;
+      }
       const singletonBadgeName = getDistinctTextTeamSingletonName(
         card,
         knownGroups.map((group) => getGroupDisplayName(group)).filter(Boolean),
@@ -1796,16 +1854,31 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
         }
       }
 
+      const distanceToGroup = (g) => (
+        card.y < g.minY ? g.minY - card.y
+          : card.y > g.maxY ? card.y - g.maxY
+            : 0
+      );
+      // A confidently-read bar colour identifies the crew more reliably than Y
+      // proximity: a card whose own badge line was missed can sit closer to the
+      // next crew than to its own. Prefer a group of the same colour when one
+      // exists, and only fall back to nearest-by-distance otherwise.
+      const colorPeerGroups = (card.color && card.color !== 'unknown' && (card.confidence || 0) >= 55)
+        ? knownGroups.filter(g => g.color === card.color)
+        : [];
+      const searchGroups = colorPeerGroups.length > 0 ? colorPeerGroups : knownGroups;
       let bestGroup = null;
       let bestDist = Infinity;
-      for (const g of knownGroups) {
-        const dist = card.y < g.minY ? g.minY - card.y
-          : card.y > g.maxY ? card.y - g.maxY
-            : 0;
+      for (const g of searchGroups) {
+        const dist = distanceToGroup(g);
         if (dist < bestDist) {
           bestDist = dist;
           bestGroup = g;
         }
+      }
+      if (colorPeerGroups.length > 0 && bestGroup) {
+        dlog('[CrewHub] Step4a color-preferred assign "' + card.name + '" -> ' + bestGroup.color
+          + ' (dist=' + Math.round(bestDist) + 'px)');
       }
       // Use a wider gap tolerance for unknown-color cards to handle spectator-card
       // gaps (only where skipped spectator cards were actually detected), so
@@ -1938,6 +2011,11 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     // Cards with a known achromatic color (currently black) should still form a
     // named team group even though hue-based clustering cannot place them.
     for (const card of achromaticNamedCards) {
+      if (isUncorroboratedBlackCard(card, capturedTeamNames)) {
+        rejectedCardNameKeys.add(normalizeNameKey(card.name));
+        dlog('[CrewHub] Step4b drop uncorroborated black card "' + card.name + '" (no team bar below it)');
+        continue;
+      }
       knownGroups.push({
         color: card.color,
         cards: [card],
@@ -1999,7 +2077,8 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     for (const tLine of groupedLines) {
       const rawTeamName = extractRawTeamNameFromLine(tLine.words);
       if (!rawTeamName) continue;
-      if (!isTeamName(rawTeamName) && !/^[A-Z0-9]+(-[A-Z0-9]+)+$/.test(rawTeamName)) continue;
+      if (containsUiNoisePhrase(rawTeamName)) continue;
+    if (!isTeamName(rawTeamName) && !/^[A-Z0-9]+(-[A-Z0-9]+)+$/.test(rawTeamName)) continue;
       let bestCard = null, bestDist = Infinity;
       for (const c of allCards) {
         const dist = Math.abs(tLine.y - c.y);
@@ -2215,6 +2294,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
         const key = normalizeNameKey(name);
         if (!key || existingNames.has(key)) return null;
         if (skippedSpectatorNameKeys.has(key) || isSkippedSpectatorRow(line.y)) return null;
+        if (rejectedCardNameKeys.has(key)) return null;
         if (inBarZone) {
           if ((salvageNameCounts.get(key) || 0) > 1) return null;
           if (isTeamName(name)) return null;
@@ -3340,5 +3420,7 @@ module.exports = {
     getDistinctTextTeamSingletonName,
     shouldSkipSalvageCandidateForKnownTeamLabel,
     splitHueClusterByNamedColor,
+    containsUiNoisePhrase,
+    isUncorroboratedBlackCard,
   },
 };

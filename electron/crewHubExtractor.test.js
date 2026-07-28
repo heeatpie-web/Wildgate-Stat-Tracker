@@ -158,3 +158,51 @@ describe('splitHueClusterByNamedColor', () => {
     expect(orangePart.map(p => p.name).sort()).toEqual(['B', 'D']);
   });
 });
+
+describe('UI-noise team-name filtering', () => {
+  it('rejects voice-options footer chrome as a team name', () => {
+    // match117 regression: the footer row "CHANGE VOICE OPTIONS" was captured as
+    // a team name and promoted a stray card into a phantom 4th enemy team.
+    expect(__test__.containsUiNoisePhrase('CHANGEVOICEOPTIONS')).toBe(true);
+    expect(__test__.containsUiNoisePhrase('CHANGE VOICE OPTIONS')).toBe(true);
+    expect(__test__.containsUiNoisePhrase('SWITCHVOICECHANNEL')).toBe(true);
+    expect(__test__.containsUiNoisePhrase('ENEMYCREWS')).toBe(true);
+  });
+
+  it('keeps real team names that merely contain noise-adjacent words', () => {
+    expect(__test__.containsUiNoisePhrase('FANCY GOOSE')).toBe(false);
+    expect(__test__.containsUiNoisePhrase('DIGGY DIGGY BAM BAM')).toBe(false);
+    expect(__test__.containsUiNoisePhrase('SHIPPY MCSHIPFACE')).toBe(false);
+    expect(__test__.containsUiNoisePhrase('ATTACK-O-LANTERN')).toBe(false);
+  });
+});
+
+describe('uncorroborated black card rejection', () => {
+  const noNames = new Map();
+  it('treats a lone black card with no team bar as background bleed', () => {
+    // match117 regression: a stray line below the last crew samples the dark
+    // panel background and reports a confident "black" team.
+    expect(__test__.isUncorroboratedBlackCard(
+      { color: 'black', textTeamName: '', confidence: 80 }, noNames
+    )).toBe(true);
+  });
+
+  it('keeps a black card that has its own team-name bar', () => {
+    expect(__test__.isUncorroboratedBlackCard(
+      { color: 'black', textTeamName: 'NIGHT SHIFT', confidence: 80 }, noNames
+    )).toBe(false);
+  });
+
+  it('keeps black cards when a black team name was captured elsewhere', () => {
+    expect(__test__.isUncorroboratedBlackCard(
+      { color: 'black', textTeamName: '', confidence: 80 },
+      new Map([['black', 'NIGHT SHIFT']])
+    )).toBe(false);
+  });
+
+  it('never rejects chromatic cards', () => {
+    for (const color of ['red', 'orange', 'goldenrod', 'skyBlue', 'unknown']) {
+      expect(__test__.isUncorroboratedBlackCard({ color, textTeamName: '' }, noNames)).toBe(false);
+    }
+  });
+});
