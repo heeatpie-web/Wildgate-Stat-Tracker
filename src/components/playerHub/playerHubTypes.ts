@@ -3,13 +3,15 @@ import type { Match } from '../../types';
 
 export type SortMode = 'alpha' | 'favorites' | 'recent' | 'encounters';
 export type PlayerFilterMode = 'active' | 'all' | 'roster' | 'tracked-only' | 'needs-review' | 'archived';
-export type PlayerHubMode = 'roster' | 'ocr-work';
+export type PlayerHubMode = 'roster' | 'ocr-work' | 'merges';
 
 export interface PlayerDetail {
     name: string;
     isFavorite: boolean;
     isRoster: boolean;
     isTrackedOnly: boolean;
+    /** Manual archive override for tracked-only pilots (see archivedTrackedPilotKeys). */
+    isManuallyArchived: boolean;
     isDetected: boolean;
     needsReview: boolean;
     rosterMeta: RosterEntryMeta | null;

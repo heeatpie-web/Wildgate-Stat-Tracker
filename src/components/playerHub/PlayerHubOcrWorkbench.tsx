@@ -1,13 +1,10 @@
 import React, { useState, useDeferredValue, useMemo, useCallback, type Dispatch, type FC, type SetStateAction } from 'react';
-import { Search, ScanEye, X, Image as ImageIcon, ChevronRight, Users, Merge, AlertTriangle, RefreshCw, CheckCheck, XCircle, Minus, Plus } from 'lucide-react';
+import { Search, ScanEye, X, Image as ImageIcon, ChevronRight, Users, AlertTriangle, RefreshCw, CheckCheck, XCircle, Minus, Plus } from 'lucide-react';
 import type {
-    AutoMergeApplicationRecord,
-    AutoMergeDismissalRecord,
     PendingReview,
 } from '../../store/slices/createDataSlice';
 import { normalizeOcrName } from '../../utils/stringUtils';
 import { ConfidenceMeter } from '../ConfidenceMeter';
-import type { RosterMergeSuggestionGroup } from '../../utils/rosterMergeSuggestions';
 import type { RosterFuzzyMatch } from '../../utils/ocr/rosterFuzzyMatch';
 import { filterRosterByQuery } from '../../utils/ocr/rosterFilter';
 import {
@@ -27,15 +24,6 @@ export interface PlayerHubOcrWorkbenchProps {
     onOpenMatchInSmartCaptures: (matchId: number) => void;
     activeTab: WorkbenchTab;
     onActiveTabChange: (tab: WorkbenchTab) => void;
-    possibleMergeGroups: RosterMergeSuggestionGroup[];
-    activeMergeNotification: { sourceName: string; targetName: string } | null;
-    onUndoLastMerge: () => boolean;
-    recentAutoMergeApplications: AutoMergeApplicationRecord[];
-    recentAutoMergeDismissals: AutoMergeDismissalRecord[];
-    onUndoAutoMergeApplication: (id: string) => void;
-    onRestoreAutoMergeDismissal: (id: string) => void;
-    onMergeSuggestionGroup: (group: RosterMergeSuggestionGroup) => void;
-    onDismissMergeSuggestionGroup: (group: RosterMergeSuggestionGroup) => void;
     ocrSearchTerm: string;
     setOcrSearchTerm: (value: string) => void;
     pendingRosterCandidates: PendingReview[];
@@ -67,7 +55,7 @@ export interface PlayerHubOcrWorkbenchProps {
     isRerunningOcr?: boolean;
 }
 
-export type WorkbenchTab = 'candidates' | 'conflicts' | 'merges' | 'auto-merges';
+export type WorkbenchTab = 'candidates' | 'conflicts';
 
 const pillStyle = (active: boolean, color?: 'danger' | 'warning') => {
     if (active) {
@@ -333,15 +321,6 @@ export const PlayerHubOcrWorkbench: FC<PlayerHubOcrWorkbenchProps> = ({
     onOpenMatchInSmartCaptures,
     activeTab,
     onActiveTabChange,
-    possibleMergeGroups,
-    activeMergeNotification,
-    onUndoLastMerge,
-    recentAutoMergeApplications,
-    recentAutoMergeDismissals,
-    onUndoAutoMergeApplication,
-    onRestoreAutoMergeDismissal,
-    onMergeSuggestionGroup,
-    onDismissMergeSuggestionGroup,
     ocrSearchTerm,
     setOcrSearchTerm,
     pendingRosterCandidates,
@@ -387,23 +366,9 @@ export const PlayerHubOcrWorkbench: FC<PlayerHubOcrWorkbenchProps> = ({
         '--ocr-threshold-progress': `${batchThresholdProgress}%`,
     } as React.CSSProperties;
 
-    // Partition merge groups by confidence tier. 'review' groups need the user to
-    // confirm; 'auto' groups are high-confidence (>= the auto-merge threshold) and
-    // get their own tab so the user can review/undo what auto-merging would apply.
-    const reviewMergeGroups = useMemo(
-        () => possibleMergeGroups.filter((group) => group.tier !== 'auto'),
-        [possibleMergeGroups]
-    );
-    const autoMergeGroups = useMemo(
-        () => possibleMergeGroups.filter((group) => group.tier === 'auto'),
-        [possibleMergeGroups]
-    );
-
     const tabs: { id: WorkbenchTab; label: string; count: number; color?: 'danger' | 'warning' }[] = [
         { id: 'candidates', label: 'Candidates', count: pendingRosterCandidates.length },
         { id: 'conflicts', label: 'Conflicts', count: roleConflictWorkbenchItems.length, color: 'danger' },
-        { id: 'merges', label: 'Merge Suggestions', count: reviewMergeGroups.length, color: 'warning' },
-        { id: 'auto-merges', label: 'Auto-merge', count: autoMergeGroups.length },
     ];
 
     return (
@@ -657,255 +622,6 @@ export const PlayerHubOcrWorkbench: FC<PlayerHubOcrWorkbenchProps> = ({
                                         </div>
                                     </div>
                                 ))}
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Merge suggestions tab */}
-                {activeTab === 'merges' && (
-                    <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
-                        {reviewMergeGroups.length === 0 ? (
-                            <div className="h-full flex flex-col items-center justify-center text-md-sys-on-surface/40">
-                                <Merge size={28} className="mb-2 opacity-40" />
-                                <span className="text-label-sm font-semibold">No merge suggestions</span>
-                                <span className="text-label-xs mt-1 opacity-70">No roster entries look like duplicates</span>
-                            </div>
-                        ) : (
-                            <div className="p-4 space-y-3">
-                                <p className="text-label-xs text-md-sys-on-surface/50">
-                                    These roster entries may represent the same player. Review and merge duplicates to consolidate encounter history.
-                                </p>
-                                {reviewMergeGroups.map((group) => (
-                                    <div key={group.pairKeys.join('|')} className="rounded-card border border-md-sys-outline/10 overflow-hidden" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
-                                        <div className="px-4 py-3 border-b border-md-sys-outline/[0.06]">
-                                            <div className="flex items-start justify-between gap-2">
-                                                <div className="min-w-0">
-                                                    <div className="text-label-sm font-semibold text-md-sys-on-surface truncate">
-                                                        Keep &ldquo;{group.canonicalDisplayName}&rdquo;
-                                                    </div>
-                                                    <div className="text-label-xs text-md-sys-on-surface/50 mt-0.5">
-                                                        {group.variants.length + 1} names · {Math.round(group.score)}% similarity
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="mt-2 flex flex-wrap gap-1.5">
-                                                {group.variants.map((variant) => (
-                                                    <span
-                                                        key={`${group.canonicalName}-${variant.name}`}
-                                                        className="px-2 py-1 rounded-control text-label-xs font-medium border border-md-sys-outline/[0.08] text-md-sys-on-surface/65"
-                                                        style={{ background: 'var(--md-sys-color-surface-container)' }}
-                                                    >
-                                                        {variant.displayName}
-                                                        <span className="ml-1 opacity-50">{Math.round(variant.score)}%</span>
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        </div>
-                                        <div className="px-4 py-3 flex gap-1.5">
-                                            <button
-                                                type="button"
-                                                onClick={() => onMergeSuggestionGroup(group)}
-                                                className="flex-1 h-8 rounded-control text-label-xs font-semibold border border-warning/30 bg-warning/10 text-warning hover:bg-warning/15 transition-colors"
-                                                aria-label={`Merge into ${group.canonicalDisplayName}`}
-                                            >
-                                                Merge
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => onDismissMergeSuggestionGroup(group)}
-                                                className="flex-1 h-8 rounded-control text-label-xs font-semibold border border-md-sys-outline/10 text-md-sys-on-surface/55 hover:bg-md-sys-on-surface/[0.06] transition-colors"
-                                                style={{ background: 'var(--md-sys-color-surface-container)' }}
-                                                aria-label={`Dismiss merge suggestion for ${group.canonicalDisplayName}`}
-                                            >
-                                                Dismiss
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Auto-merge tab — high-confidence groups (>= the auto-merge threshold).
-                    Surfaced here so near-identical names are never silently lost and the
-                    user can review / apply / undo them. */}
-                {activeTab === 'auto-merges' && (
-                    <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
-                        {autoMergeGroups.length === 0
-                            && recentAutoMergeApplications.length === 0
-                            && recentAutoMergeDismissals.length === 0
-                            && !activeMergeNotification ? (
-                            <div className="h-full flex flex-col items-center justify-center text-md-sys-on-surface/40">
-                                <Merge size={28} className="mb-2 opacity-40" />
-                                <span className="text-label-sm font-semibold">No high-confidence merges</span>
-                                <span className="text-label-xs mt-1 opacity-70">Nothing scored above the auto-merge threshold</span>
-                            </div>
-                        ) : (
-                            <div className="p-4 space-y-4">
-                                {activeMergeNotification && (
-                                    <div
-                                        className="rounded-card border border-md-sys-primary/25 bg-md-sys-primary/10 px-3 py-2 flex items-center justify-between gap-3"
-                                        data-testid="auto-merge-active-notification"
-                                    >
-                                        <div className="min-w-0 text-label-xs text-md-sys-on-surface/65">
-                                            Auto-merged &ldquo;{activeMergeNotification.sourceName}&rdquo; into &ldquo;{activeMergeNotification.targetName}&rdquo;.
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={onUndoLastMerge}
-                                            className="h-7 px-3 rounded-control text-label-xs font-semibold border border-md-sys-primary/30 text-md-sys-primary hover:bg-md-sys-primary/15 shrink-0 transition-colors"
-                                            aria-label="Undo auto-merge"
-                                        >
-                                            Undo
-                                        </button>
-                                    </div>
-                                )}
-
-                                {autoMergeGroups.length > 0 && (
-                                    <div className="space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <h3 className="text-label-xs font-semibold uppercase tracking-wide text-md-sys-on-surface/55">
-                                                Pending suggestions
-                                            </h3>
-                                            <span className="text-label-xs text-md-sys-on-surface/45">
-                                                {autoMergeGroups.length}
-                                            </span>
-                                        </div>
-                                        <p className="text-label-xs text-md-sys-on-surface/50">
-                                            These roster entries are near-identical (at or above the auto-merge threshold). Apply to consolidate, or dismiss to keep them separate.
-                                        </p>
-                                        {autoMergeGroups.map((group) => (
-                                            <div
-                                                key={group.pairKeys.join('|')}
-                                                data-testid={`auto-merge-pending-${group.canonicalName}`}
-                                                className="rounded-card border border-md-sys-primary/25 overflow-hidden"
-                                                style={{ background: 'var(--md-sys-color-surface-container-high)' }}
-                                            >
-                                                <div className="px-4 py-3 border-b border-md-sys-outline/[0.06]">
-                                                    <div className="flex items-start justify-between gap-2">
-                                                        <div className="min-w-0">
-                                                            <div className="text-label-sm font-semibold text-md-sys-on-surface truncate">
-                                                                Keep &ldquo;{group.canonicalDisplayName}&rdquo;
-                                                            </div>
-                                                            <div className="text-label-xs text-md-sys-on-surface/50 mt-0.5">
-                                                                {group.variants.length + 1} names · {Math.round(group.score)}% similarity · high confidence
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="mt-2 flex flex-wrap gap-1.5">
-                                                        {group.variants.map((variant) => (
-                                                            <span
-                                                                key={`${group.canonicalName}-${variant.name}`}
-                                                                className="px-2 py-1 rounded-control text-label-xs font-medium border border-md-sys-outline/[0.08] text-md-sys-on-surface/65"
-                                                                style={{ background: 'var(--md-sys-color-surface-container)' }}
-                                                            >
-                                                                {variant.displayName}
-                                                                <span className="ml-1 opacity-50">{Math.round(variant.score)}%</span>
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                                <div className="px-4 py-3 flex gap-1.5">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => onMergeSuggestionGroup(group)}
-                                                        className="flex-1 h-8 rounded-control text-label-xs font-semibold border border-md-sys-primary/30 bg-md-sys-primary/10 text-md-sys-primary hover:bg-md-sys-primary/15 transition-colors"
-                                                        aria-label={`Apply merge into ${group.canonicalDisplayName}`}
-                                                    >
-                                                        Apply
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => onDismissMergeSuggestionGroup(group)}
-                                                        className="flex-1 h-8 rounded-control text-label-xs font-semibold border border-md-sys-outline/10 text-md-sys-on-surface/55 hover:bg-md-sys-on-surface/[0.06] transition-colors"
-                                                        style={{ background: 'var(--md-sys-color-surface-container)' }}
-                                                        aria-label={`Dismiss merge suggestion for ${group.canonicalDisplayName}`}
-                                                    >
-                                                        Dismiss
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {recentAutoMergeApplications.length > 0 && (
-                                    <div className="space-y-2" data-testid="auto-merge-applied-section">
-                                        <div className="flex items-center justify-between">
-                                            <h3 className="text-label-xs font-semibold uppercase tracking-wide text-md-sys-on-surface/55">
-                                                Recently applied
-                                            </h3>
-                                            <span className="text-label-xs text-md-sys-on-surface/45">
-                                                {recentAutoMergeApplications.length}
-                                            </span>
-                                        </div>
-                                        {recentAutoMergeApplications.map((entry) => (
-                                            <div
-                                                key={entry.id}
-                                                data-testid={`auto-merge-applied-${entry.targetName}`}
-                                                className="rounded-card border border-md-sys-primary/15 px-3 py-2 flex items-center justify-between gap-3"
-                                                style={{ background: 'var(--md-sys-color-surface-container)' }}
-                                            >
-                                                <div className="min-w-0 text-label-xs text-md-sys-on-surface/65">
-                                                    <div className="font-semibold text-md-sys-on-surface truncate">
-                                                        Merged into &ldquo;{entry.targetDisplayName}&rdquo;
-                                                    </div>
-                                                    <div className="opacity-70 truncate">
-                                                        From: {entry.sourceDisplayNames.join(', ')}
-                                                    </div>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => onUndoAutoMergeApplication(entry.id)}
-                                                    className="h-7 px-3 rounded-control text-label-xs font-semibold border border-md-sys-primary/30 text-md-sys-primary hover:bg-md-sys-primary/15 shrink-0 transition-colors"
-                                                    aria-label={`Undo auto-merge into ${entry.targetDisplayName}`}
-                                                >
-                                                    Undo
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {recentAutoMergeDismissals.length > 0 && (
-                                    <div className="space-y-2" data-testid="auto-merge-dismissed-section">
-                                        <div className="flex items-center justify-between">
-                                            <h3 className="text-label-xs font-semibold uppercase tracking-wide text-md-sys-on-surface/55">
-                                                Recently dismissed
-                                            </h3>
-                                            <span className="text-label-xs text-md-sys-on-surface/45">
-                                                {recentAutoMergeDismissals.length}
-                                            </span>
-                                        </div>
-                                        {recentAutoMergeDismissals.map((entry) => (
-                                            <div
-                                                key={entry.id}
-                                                data-testid={`auto-merge-dismissed-${entry.canonicalName}`}
-                                                className="rounded-card border border-md-sys-outline/15 px-3 py-2 flex items-center justify-between gap-3"
-                                                style={{ background: 'var(--md-sys-color-surface-container)' }}
-                                            >
-                                                <div className="min-w-0 text-label-xs text-md-sys-on-surface/65">
-                                                    <div className="font-semibold text-md-sys-on-surface truncate">
-                                                        Kept &ldquo;{entry.canonicalDisplayName}&rdquo; separate
-                                                    </div>
-                                                    <div className="opacity-70 truncate">
-                                                        From: {entry.variantDisplayNames.join(', ')}
-                                                    </div>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => onRestoreAutoMergeDismissal(entry.id)}
-                                                    className="h-7 px-3 rounded-control text-label-xs font-semibold border border-md-sys-outline/20 text-md-sys-on-surface/70 hover:bg-md-sys-on-surface/[0.06] shrink-0 transition-colors"
-                                                    aria-label={`Restore dismissed merge suggestion for ${entry.canonicalDisplayName}`}
-                                                >
-                                                    Restore
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
                             </div>
                         )}
                     </div>

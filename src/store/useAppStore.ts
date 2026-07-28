@@ -254,6 +254,7 @@ const buildStorageDataFromState = (state: AppState) => ({
   players: state.players,
   pilotRegistry: state.pilotRegistry,
   rosterEntryMeta: state.rosterEntryMeta,
+  archivedTrackedPilotKeys: state.archivedTrackedPilotKeys,
   favorites: state.favorites,
   pilotNotes: state.pilotNotes,
   pilotAliases: state.pilotAliases,
@@ -296,6 +297,9 @@ const buildStorageDataFromState = (state: AppState) => ({
       : 1,
     rosterArchiveVersion: Number.isFinite(state.rosterArchiveVersion)
       ? Math.max(0, Math.floor(Number(state.rosterArchiveVersion)))
+      : 0,
+    rosterArchiveSweptAt: Number.isFinite(state.rosterArchiveSweptAt)
+      ? Math.max(0, Math.floor(Number(state.rosterArchiveSweptAt)))
       : 0,
     autoBackup: state.enableAutoBackup,
     startupSmartPreloadEnabled: state.startupSmartPreloadEnabled,
@@ -428,24 +432,29 @@ const customStorage: PersistStorage<AppState> = {
         : 0;
       const shouldApplyTelemetryBaselineV1 = persistedTelemetryDefaultsVersion < 1;
 
-      // One-time roster archive cleanup. Runs here because hydration already has
-      // the whole persisted payload in hand, so it costs no extra pass.
+      // Roster archive cleanup. Runs on every hydration (not just once) so that
+      // players who go stale later still get swept — `rosterArchiveVersion` is
+      // kept around only for persisted-schema back-compat, it no longer gates
+      // this. The migration is idempotent/cheap: it no-ops for an already-clean
+      // roster, so re-running it on every launch costs nothing.
       const persistedRosterArchiveVersionRaw = Number(settings.rosterArchiveVersion ?? 0);
       const persistedRosterArchiveVersion = Number.isFinite(persistedRosterArchiveVersionRaw)
         ? Math.max(0, Math.floor(persistedRosterArchiveVersionRaw))
         : 0;
+      const persistedRosterArchiveSweptAtRaw = Number(settings.rosterArchiveSweptAt ?? 0);
+      const persistedRosterArchiveSweptAt = Number.isFinite(persistedRosterArchiveSweptAtRaw)
+        ? Math.max(0, Math.floor(persistedRosterArchiveSweptAtRaw))
+        : 0;
       const normalizedRosterEntryMeta = normalizeRosterEntryMetaMap(data.pilotRegistry || [], data.rosterEntryMeta);
-      const rosterArchiveResult = persistedRosterArchiveVersion < 1
-        ? applyRosterArchiveMigration({
-          pilotRegistry: data.pilotRegistry || [],
-          rosterEntryMeta: normalizedRosterEntryMeta,
-          playerProfiles: data.playerProfiles || {},
-          favorites: data.favorites || [],
-        })
-        : { rosterEntryMeta: normalizedRosterEntryMeta, archivedCount: 0 };
+      const rosterArchiveResult = applyRosterArchiveMigration({
+        pilotRegistry: data.pilotRegistry || [],
+        rosterEntryMeta: normalizedRosterEntryMeta,
+        playerProfiles: data.playerProfiles || {},
+        favorites: data.favorites || [],
+      });
       if (rosterArchiveResult.archivedCount > 0) {
         console.info(
-          `[store] Roster archive cleanup: archived ${rosterArchiveResult.archivedCount} player(s) unseen for 90+ days.`
+          `[store] Roster archive cleanup: archived ${rosterArchiveResult.archivedCount} player(s) unseen for 60+ days.`
         );
       }
 
@@ -457,6 +466,7 @@ const customStorage: PersistStorage<AppState> = {
           players,
           pilotRegistry: data.pilotRegistry || [],
           rosterEntryMeta: rosterArchiveResult.rosterEntryMeta,
+          archivedTrackedPilotKeys: Array.isArray(data.archivedTrackedPilotKeys) ? data.archivedTrackedPilotKeys : [],
           favorites: data.favorites || [],
           pilotNotes: data.pilotNotes || {},
           pilotAliases: data.pilotAliases || {},
@@ -505,6 +515,7 @@ const customStorage: PersistStorage<AppState> = {
             : (settings.adaptiveTelemetryPollingEnabled ?? false),
           telemetryDefaultsVersion: Math.max(1, persistedTelemetryDefaultsVersion),
           rosterArchiveVersion: Math.max(1, persistedRosterArchiveVersion),
+          rosterArchiveSweptAt: persistedRosterArchiveSweptAt,
           enableAutoBackup: settings.autoBackup ?? true,
           startupSmartPreloadEnabled: settings.startupSmartPreloadEnabled ?? true,
           isAlwaysOnTop: settings.alwaysOnTop ?? false,
@@ -673,6 +684,7 @@ export const useAppStore = create<AppState>()(
         players: state.players,
         pilotRegistry: state.pilotRegistry,
         rosterEntryMeta: state.rosterEntryMeta,
+        archivedTrackedPilotKeys: state.archivedTrackedPilotKeys,
         favorites: state.favorites,
         pilotNotes: state.pilotNotes,
         playerIdMap: state.playerIdMap,

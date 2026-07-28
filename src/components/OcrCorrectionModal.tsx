@@ -542,7 +542,6 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     const initialPendingDraftRef = useRef<Partial<Match> | null>(null);
     const initialSessionShipTypesRef = useRef<Record<string, string>>({});
     const [dropdownAnchor, setDropdownAnchor] = useState<DropdownAnchor | null>(null);
-    const teamAssignmentRosterListId = useId();
     const dialogTitleId = useId();
     const dialogDescriptionId = useId();
     const evidenceSectionRef = useRef<HTMLElement | null>(null);
@@ -868,10 +867,15 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     }, [ignored, previewCorrections, sessionShipTypes, storedNameConfidenceByKey, teamDraft]);
     const rerunProgress = useOcrProgress(isRerunningOcr);
     const rerunProgressPercent = rerunProgress ? Math.round(rerunProgress.fraction * 100) : 0;
+    // Archived pilots keep their registry entry so history still resolves, but they
+    // must not attract fresh OCR reads/roster-picker suggestions toward someone
+    // unseen for months.
+    const activeRosterNames = useMemo(
+        () => selectActiveRosterNames(pilotRegistry, rosterEntryMeta),
+        [pilotRegistry, rosterEntryMeta]
+    );
     const { fuzzyMatchByPlayer, rosterExactKeys } = useMemo(() => {
-        // Archived pilots keep their registry entry so history still resolves, but
-        // they must not attract fresh OCR reads toward someone unseen for months.
-        const matcher = createRosterFuzzyMatcher(selectActiveRosterNames(pilotRegistry, rosterEntryMeta), {
+        const matcher = createRosterFuzzyMatcher(activeRosterNames, {
             bundledSeedNames: BUNDLED_OCR_LEXICON,
             normalizeKey: normalizeNameKey,
         });
@@ -888,7 +892,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         // Hand the board the matcher's own roster keys so the "Roster" badge and
         // the fuzzy suggestion agree on what counts as a roster hit.
         return { fuzzyMatchByPlayer: next, rosterExactKeys: matcher.rosterExactKeys };
-    }, [pilotRegistry, previewTeamDraft, rosterEntryMeta]);
+    }, [activeRosterNames, previewTeamDraft]);
     const inferredFriendlyTeamIndex = useMemo(() => {
         if (teamDraft.length === 0) return -1;
         const activeUserKey = normalizeNameKey(activeUser || '');
@@ -1697,19 +1701,12 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                         Drag players between cards, then apply to learn.
                                     </span>
                                 </div>
-                                {pilotRegistry.length > 0 && (
-                                    <datalist id={teamAssignmentRosterListId}>
-                                        {pilotRegistry.map((pilot) => (
-                                            <option key={`team-assignment-${pilot}`} value={pilot} />
-                                        ))}
-                                    </datalist>
-                                )}
                                 <OcrTeamAssignmentBoard
                                     teams={previewTeamDraft}
                                     shipOptions={SHIPS}
                                     pilotRegistry={pilotRegistry}
                                     rosterExactKeys={rosterExactKeys}
-                                    rosterSuggestionsId={pilotRegistry.length > 0 ? teamAssignmentRosterListId : undefined}
+                                    rosterNames={activeRosterNames}
                                     friendlyTeamIndex={displayFriendlyTeamIndex}
                                     friendlyFixedPlayer={activeUserDisplayKey ? {
                                         canonicalName: activeUser || String(pendingMatchData?.player || '').trim() || 'You',

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Match, Language, DrillDownTarget } from '../types';
 import { TRANSLATIONS } from '../utils/translations';
-import { Trash2, Edit2, Pin, Clock, Image as ImageIcon, Download, ArrowUpDown, Swords, X, FileText, Save, Ghost, Trophy, TrendingUp, Flame, Search, ChevronLeft, ChevronRight, Zap, ScanEye, AlertTriangle, RefreshCw, Filter, ChevronDown, Check, Crosshair, LogIn } from 'lucide-react';
+import { Trash2, Edit2, Pin, Clock, Image as ImageIcon, Download, ArrowUpDown, Swords, X, FileText, Save, Ghost, Trophy, TrendingUp, Flame, Search, ChevronLeft, ChevronRight, Zap, ScanEye, AlertTriangle, RefreshCw, Filter, ChevronDown, Check, Crosshair, LogIn, Archive, ArchiveRestore } from 'lucide-react';
 import { EditMatchModal } from './EditMatchModal';
 import { exportMatchesAsImage } from './history/historyExport';
 import { timeAgo, formatDayHeader, getRowBg } from './history/historyUtils';
@@ -25,7 +25,7 @@ interface HistoryTableProps {
 }
 
 const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
-    const { matches, deleteMatch: onDelete, updateMatch: onEdit, toggleMatchPin: onPin, setDrillDownTarget } = useGameData();
+    const { matches, deleteMatch: onDelete, updateMatch: onEdit, toggleMatchPin: onPin, toggleMatchArchive: onArchive, setDrillDownTarget } = useGameData();
     const { language } = useUserPreferences();
     const { setActiveView, setSmartCapturesFocusMatchId, activeUser, pushNotification } = useUIState();
     const ocrMode = useAppStore((state) => state.ocrMode);
@@ -75,6 +75,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
     const [filterArtifact, setFilterArtifact] = useState<string>('all');
     const [filterDateFrom, setFilterDateFrom] = useState<string>('');
     const [filterDateTo, setFilterDateTo] = useState<string>('');
+    const [showArchived, setShowArchived] = useState(false);
 
     const uniqueShips = useMemo(() => {
         const set = new Set<string>();
@@ -109,8 +110,9 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
         if (filterArtifact !== 'all') c++;
         if (filterDateFrom) c++;
         if (filterDateTo) c++;
+        if (showArchived) c++;
         return c;
-    }, [filterResult, filterShip, filterModifier, filterHazard, filterArtifact, filterDateFrom, filterDateTo]);
+    }, [filterResult, filterShip, filterModifier, filterHazard, filterArtifact, filterDateFrom, filterDateTo, showArchived]);
 
     const clearAllFilters = () => {
         setFilterResult('all');
@@ -120,6 +122,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
         setFilterArtifact('all');
         setFilterDateFrom('');
         setFilterDateTo('');
+        setShowArchived(false);
     };
 
     useEffect(() => {
@@ -144,6 +147,10 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
         const toTs = filterDateTo ? new Date(filterDateTo + 'T23:59:59').getTime() : Infinity;
 
         return matches.filter(m => {
+            // Archived matches drop out of the default view, same as the roster's
+            // Active/Archived scope filter — a match that's both pinned and
+            // archived is excluded here too (archive wins).
+            if (!showArchived && m.archived) return false;
             if (filterResult !== 'all' && m.result !== filterResult) return false;
             if (filterShip !== 'all' && m.ship !== filterShip) return false;
             if (filterModifier !== 'all' && !(m.reachModifiers || []).includes(filterModifier)) return false;
@@ -166,7 +173,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                 (m.reachModifiers || []).some(r => r.toLowerCase().includes(term))
             );
         });
-    }, [matches, searchTerm, filterResult, filterShip, filterModifier, filterHazard, filterArtifact, filterDateFrom, filterDateTo]);
+    }, [matches, searchTerm, filterResult, filterShip, filterModifier, filterHazard, filterArtifact, filterDateFrom, filterDateTo, showArchived]);
 
     const sortedMatches = useMemo(() => {
         const sortFn = (a: Match, b: Match) => {
@@ -611,6 +618,20 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                                     style={{ background: 'var(--md-sys-color-surface-container-high)' }}
                                 />
                             </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="text-label-xs font-bold uppercase tracking-wider text-md-sys-on-surface/40">Archived</label>
+                                <button
+                                    onClick={() => setShowArchived(v => !v)}
+                                    className={`px-2.5 py-1.5 rounded-lg text-label-sm font-bold transition-all inline-flex items-center gap-1.5 ${
+                                        showArchived
+                                            ? 'bg-md-sys-primary/15 text-md-sys-primary border border-md-sys-primary/30'
+                                            : 'text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/[0.06] border border-transparent'
+                                    }`}
+                                >
+                                    <Archive size={12} />
+                                    {showArchived ? 'Showing' : 'Hidden'}
+                                </button>
+                            </div>
                             {activeFilterCount > 0 && (
                                 <button
                                     onClick={clearAllFilters}
@@ -931,6 +952,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                                                             <button onClick={() => setEditingMatch(m)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-md-sys-on-surface/[0.08] transition-colors text-md-sys-on-surface/60 hover:text-md-sys-on-surface" title="Edit"><Edit2 size={13} /></button>
                                                             <button onClick={() => handleOpenNote(m)} className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${m.notes ? 'text-md-sys-primary bg-md-sys-primary/10' : 'text-md-sys-on-surface/60 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/[0.08]'}`} title="Notes"><FileText size={13} /></button>
                                                             <button onClick={() => onPin(m.id)} className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${m.isPinned ? 'text-warning bg-warning/10' : 'text-md-sys-on-surface/60 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/[0.08]'}`} title="Pin"><Pin size={13} className={m.isPinned ? 'fill-current' : ''} /></button>
+                                                            <button onClick={() => onArchive(m.id)} className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${m.archived ? 'text-md-sys-primary bg-md-sys-primary/10' : 'text-md-sys-on-surface/60 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/[0.08]'}`} title={m.archived ? 'Unarchive' : 'Archive'}>{m.archived ? <ArchiveRestore size={13} /> : <Archive size={13} />}</button>
                                                             <button onClick={() => navigateToSmartCaptures(m.id)} className="w-7 h-7 rounded-lg flex items-center justify-center text-md-sys-on-surface/60 hover:text-md-sys-primary hover:bg-md-sys-primary/10 transition-colors" title="View in Smart Captures"><ScanEye size={13} /></button>
                                                             <button onClick={() => handleDelete(m.id)} className="w-7 h-7 rounded-lg flex items-center justify-center text-md-sys-on-surface/60 hover:text-danger hover:bg-danger/10 transition-colors" title="Delete"><Trash2 size={13} /></button>
                                                         </div>

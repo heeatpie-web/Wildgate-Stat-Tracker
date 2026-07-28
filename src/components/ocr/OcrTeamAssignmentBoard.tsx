@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { GripVertical, Plus, Shield, Trash2, UserPlus, Wand2, X } from 'lucide-react';
 import { normalizeOcrName } from '../../utils/stringUtils';
+import { RosterSearchInput } from './RosterSearchInput';
 
 export interface OcrTeamAssignmentTeam {
     key: string;
@@ -24,7 +25,8 @@ interface DraggedPlayerPayload {
 interface OcrTeamAssignmentBoardProps {
     teams: OcrTeamAssignmentTeam[];
     shipOptions: string[];
-    rosterSuggestionsId?: string;
+    /** Active (non-archived) roster names used to power the filtered/ranked name picker. */
+    rosterNames?: string[];
     compact?: boolean;
     className?: string;
     dataTestId?: string;
@@ -135,7 +137,7 @@ const nextTeamColor = (current: string): string => {
 export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
     teams,
     shipOptions,
-    rosterSuggestionsId,
+    rosterNames = [],
     compact = false,
     className = '',
     dataTestId = 'ocr-team-assignment-board',
@@ -423,13 +425,12 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                                                 >
                                                     <GripVertical size={12} />
                                                 </button>
-                                                <input
-                                                    type="text"
+                                                <RosterSearchInput
                                                     value={displayName}
-                                                    onChange={(event) => onPlayerChange(teamIndex, playerIndex, event.target.value)}
+                                                    onChange={(value) => onPlayerChange(teamIndex, playerIndex, value)}
                                                     onDragOver={(event) => allowDrop(event, teamIndex)}
                                                     onDrop={(event) => dropPlayer(event, teamIndex, playerIndex)}
-                                                    list={rosterSuggestionsId}
+                                                    rosterNames={rosterNames}
                                                     className="md3-textfield ocr-assignment-player-input"
                                                     aria-label={`${team.teamName || `team ${teamIndex + 1}`} player ${playerIndex + 1} name`}
                                                 />
@@ -497,17 +498,11 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                             </div>
 
                             <div className="ocr-assignment-add-row">
-                                <input
-                                    type="text"
+                                <RosterSearchInput
                                     value={draftPlayers[teamIndex] || ''}
-                                    onChange={(event) => setDraftPlayers((prev) => ({ ...prev, [teamIndex]: event.target.value }))}
-                                    onKeyDown={(event) => {
-                                        if (event.key === 'Enter') {
-                                            event.preventDefault();
-                                            addPlayer(teamIndex);
-                                        }
-                                    }}
-                                    list={rosterSuggestionsId}
+                                    onChange={(value) => setDraftPlayers((prev) => ({ ...prev, [teamIndex]: value }))}
+                                    onEnter={() => addPlayer(teamIndex)}
+                                    rosterNames={rosterNames}
                                     className="md3-textfield ocr-assignment-add-input"
                                     placeholder="Add player..."
                                     aria-label={`Add player to ${team.teamName || `team ${teamIndex + 1}`}`}

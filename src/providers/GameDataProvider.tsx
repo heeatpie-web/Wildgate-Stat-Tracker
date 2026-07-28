@@ -22,6 +22,7 @@ interface GameDataContextType {
     updateMatch: (updatedMatch: Match) => void;
     deleteMatch: (id: number) => void;
     toggleMatchPin: (id: number) => void;
+    toggleMatchArchive: (id: number) => void;
     players: string[];
     setPlayers: (players: string[]) => void;
     addPlayer: (name: string) => void;
@@ -33,6 +34,10 @@ interface GameDataContextType {
     rosterEntryMeta: Record<string, RosterEntryMeta>;
     archiveRosterEntry: (name: string) => void;
     unarchiveRosterEntry: (name: string) => void;
+    archivedTrackedPilotKeys: string[];
+    archiveTrackedPilot: (name: string) => void;
+    unarchiveTrackedPilot: (name: string) => void;
+    archiveTrackedPilotsBatch: (names: string[]) => { archivedCount: number };
     favorites: string[]; // Match IDs/Names
     setFavorites: (favs: string[]) => void;
     toggleFavorite: (id: string) => void;
@@ -175,13 +180,16 @@ export const GameDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const store = useAppStore(useShallow(s => ({
         matches: s.matches, setMatches: s.setMatches,
         addMatch: s.addMatch, updateMatch: s.updateMatch,
-        deleteMatch: s.deleteMatch, toggleMatchPin: s.toggleMatchPin,
+        deleteMatch: s.deleteMatch, toggleMatchPin: s.toggleMatchPin, toggleMatchArchive: s.toggleMatchArchive,
         players: s.players, setPlayers: s.setPlayers,
         addPlayer: s.addPlayer, deletePlayer: s.deletePlayer,
         pilotRegistry: s.pilotRegistry, setPilotRegistry: s.setPilotRegistry,
         addToRegistry: s.addToRegistry, removeFromRegistry: s.removeFromRegistry,
         rosterEntryMeta: s.rosterEntryMeta,
         archiveRosterEntry: s.archiveRosterEntry, unarchiveRosterEntry: s.unarchiveRosterEntry,
+        archivedTrackedPilotKeys: s.archivedTrackedPilotKeys,
+        archiveTrackedPilot: s.archiveTrackedPilot, unarchiveTrackedPilot: s.unarchiveTrackedPilot,
+        archiveTrackedPilotsBatch: s.archiveTrackedPilotsBatch,
         favorites: s.favorites, setFavorites: s.setFavorites, toggleFavorite: s.toggleFavorite,
         pilotNotes: s.pilotNotes, setPilotNotes: s.setPilotNotes, updatePilotNote: s.updatePilotNote,
         pilotAliases: s.pilotAliases, addPilotAlias: s.addPilotAlias, removePilotAlias: s.removePilotAlias,

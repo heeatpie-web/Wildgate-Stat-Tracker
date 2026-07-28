@@ -28,6 +28,7 @@ const gameData = {
   deleteMatch: vi.fn(),
   updateMatch: vi.fn(),
   toggleMatchPin: vi.fn(),
+  toggleMatchArchive: vi.fn(),
   setDrillDownTarget: vi.fn(),
 };
 

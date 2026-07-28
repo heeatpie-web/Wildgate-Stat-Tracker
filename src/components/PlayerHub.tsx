@@ -30,6 +30,7 @@ import {
     WEAPON_NAME_SET,
 } from './playerHub/playerHubConstants';
 import { PlayerHubOcrWorkbench } from './playerHub/PlayerHubOcrWorkbench';
+import { PlayerHubMergesPanel } from './playerHub/PlayerHubMergesPanel';
 import { PlayerHubRosterColumn } from './playerHub/PlayerHubRosterColumn';
 import type {
     AliasInsight,
@@ -56,20 +57,23 @@ import {
 
 // Archiving keeps the default "Active" list small so large (1000+) rosters stay
 // responsive. Roster entries carry a persisted `archived` status set by the
-// one-time 90-day cleanup and by the explicit Archive action; anyone seen again
-// is automatically unarchived because recordPlayerSighting clears the flag.
-// Favorites are never auto-archived — un-favoriting makes them eligible again.
-// Tracked-only pilots have no roster meta, so they fall back to the same window.
+// recurring 60-day sweep (see App.tsx) and by the explicit Archive action;
+// anyone seen again is automatically unarchived because recordPlayerSighting
+// clears the flag. Favorites are never auto-archived — un-favoriting makes
+// them eligible again. Tracked-only pilots have no roster meta, so they fall
+// back to the same window, plus their own manual archive override.
 const isPilotActive = (
     pilot: {
         isRoster?: boolean;
         isFavorite?: boolean;
+        isManuallyArchived?: boolean;
         lastSeen?: number | null;
         rosterMeta?: { status?: string } | null;
     },
     now: number,
 ): boolean => {
     if (isRosterEntryArchived(pilot.rosterMeta as RosterEntryMeta | null)) return false;
+    if (!pilot.isRoster && pilot.isManuallyArchived) return false;
     if (pilot.isFavorite) return true;
     if (pilot.isRoster) return true;
     if (pilot.lastSeen == null) return true;
@@ -88,6 +92,11 @@ const PlayerHub: React.FC = () => {
         removeFromRegistry,
         archiveRosterEntry,
         unarchiveRosterEntry,
+        archivedTrackedPilotKeys,
+        archiveTrackedPilot,
+        unarchiveTrackedPilot,
+        archiveTrackedPilotsBatch,
+        archiveStaleRosterEntries,
         renamePilot,
         mergePilots,
         mergePilotsBatch,
@@ -138,6 +147,11 @@ const PlayerHub: React.FC = () => {
         removeFromRegistry: state.removeFromRegistry,
         archiveRosterEntry: state.archiveRosterEntry,
         unarchiveRosterEntry: state.unarchiveRosterEntry,
+        archivedTrackedPilotKeys: state.archivedTrackedPilotKeys,
+        archiveTrackedPilot: state.archiveTrackedPilot,
+        unarchiveTrackedPilot: state.unarchiveTrackedPilot,
+        archiveTrackedPilotsBatch: state.archiveTrackedPilotsBatch,
+        archiveStaleRosterEntries: state.archiveStaleRosterEntries,
         renamePilot: state.renamePilot,
         mergePilots: state.mergePilots,
         mergePilotsBatch: state.mergePilotsBatch,
@@ -208,7 +222,7 @@ const PlayerHub: React.FC = () => {
     const [pendingCandidateEdits, setPendingCandidateEdits] = useState<Record<string, string>>({});
     const [sourcePreview, setSourcePreview] = useState<{ src: string; label: string } | null>(null);
     const [possibleMergesExpanded, setPossibleMergesExpanded] = useState(false);
-    const [ocrWorkbenchActiveTab, setOcrWorkbenchActiveTab] = useState<'candidates' | 'conflicts' | 'merges' | 'auto-merges'>('candidates');
+    const [ocrWorkbenchActiveTab, setOcrWorkbenchActiveTab] = useState<'candidates' | 'conflicts'>('candidates');
     const [rosterPage, setRosterPage] = useState(0);
     const hadPossibleMergesRef = useRef(false);
     const mergeKeepNameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -439,7 +453,7 @@ const PlayerHub: React.FC = () => {
         return lookup;
     }, [panelMode, pendingRosterCandidates, rosterCandidateMatchMap, uniquePilotRegistry]);
     const possibleMergeGroups = useMemo(() => {
-        if (panelMode !== 'ocr-work' || (ocrWorkbenchActiveTab !== 'merges' && ocrWorkbenchActiveTab !== 'auto-merges')) return [] as RosterMergeSuggestionGroup[];
+        if (panelMode !== 'merges') return [] as RosterMergeSuggestionGroup[];
         const startedAt = performance.now();
         const groups = buildRosterMergeSuggestionGroups({
             pilotRegistry: deferredPilotRegistry,
@@ -457,7 +471,7 @@ const PlayerHub: React.FC = () => {
             });
         }
         return groups;
-    }, [dismissedRosterMergePairKeys, ocrAutoApplyMinScore, ocrWorkbenchActiveTab, panelMode, pendingReviews, pilotAliases, deferredPilotRegistry]);
+    }, [dismissedRosterMergePairKeys, ocrAutoApplyMinScore, panelMode, pendingReviews, pilotAliases, deferredPilotRegistry]);
 
     const findRosterMatch = useCallback((value: string): string | null => {
         const normalizedValue = normalizeNameKey(value);
@@ -748,6 +762,7 @@ const PlayerHub: React.FC = () => {
                 isFavorite: false,
                 isRoster,
                 isTrackedOnly,
+                isManuallyArchived: false,
                 isDetected,
                 needsReview: isDetected || isTrackedOnly || roleConflictMatchIds.length > 0,
                 rosterMeta,
@@ -785,15 +800,20 @@ const PlayerHub: React.FC = () => {
         rosterNameSet,
         trackedProfilesByPilot,
     ]);
+    const archivedTrackedKeys = useMemo(
+        () => new Set((archivedTrackedPilotKeys || []).map((key) => normalizeNameKey(key))),
+        [archivedTrackedPilotKeys]
+    );
     // Cheap overlay: apply favorite + note state without recomputing the heavy
-    // per-pilot aggregation above. Only roster pilots can be favorited / noted.
+    // per-pilot aggregation above. Only roster pilots can be favorited / noted;
+    // tracked-only pilots instead get the manual archive override applied here.
     const enrichedPilots = useMemo(() => (
         rosterModel.enrichedPilots.map((pilot) => (
             pilot.isRoster
                 ? { ...pilot, isFavorite: favoritePilotNames.has(pilot.name), note: pilotNotes[pilot.name] || '' }
-                : pilot
+                : { ...pilot, isManuallyArchived: archivedTrackedKeys.has(normalizeNameKey(pilot.name)) }
         ))
-    ), [rosterModel.enrichedPilots, favoritePilotNames, pilotNotes]);
+    ), [rosterModel.enrichedPilots, favoritePilotNames, pilotNotes, archivedTrackedKeys]);
     const enrichedPilotsByName = useMemo(
         () => new Map(enrichedPilots.map((pilot) => [pilot.name, pilot])),
         [enrichedPilots]
@@ -1215,6 +1235,51 @@ const PlayerHub: React.FC = () => {
         removeOcrAliasCorrection(alias, pilotName);
     };
 
+    // Tracked-only (non-roster) pilots have no rosterEntryMeta entry to carry an
+    // archived status, so they use the separate archivedTrackedPilotKeys override
+    // instead of promoting them into the formal roster as a side effect.
+    const handleArchivePilot = (pilot: PlayerDetail) => {
+        if (pilot.isRoster) {
+            archiveRosterEntry(pilot.name);
+        } else {
+            archiveTrackedPilot(pilot.name);
+        }
+        setToast({ message: `${pilot.name} archived`, type: 'info' });
+    };
+
+    const handleUnarchivePilot = (pilot: PlayerDetail) => {
+        if (pilot.isRoster) {
+            unarchiveRosterEntry(pilot.name);
+        } else {
+            unarchiveTrackedPilot(pilot.name);
+        }
+        setToast({ message: `${pilot.name} restored to the active roster`, type: 'success' });
+    };
+
+    // Bulk sweep: roster entries use the store's own threshold-based sweep;
+    // tracked-only pilots have no rosterEntryMeta entry to sweep, so they're
+    // matched here (by the same lastSeen threshold) and archived in one batch.
+    const handleArchiveStale = () => {
+        const rosterResult = archiveStaleRosterEntries({ protectedKeys: favorites });
+        const now = Date.now();
+        const staleTrackedNames = enrichedPilots
+            .filter((pilot) => (
+                !pilot.isRoster
+                && !pilot.isManuallyArchived
+                && pilot.lastSeen != null
+                && (now - pilot.lastSeen) > ROSTER_ARCHIVE_THRESHOLD_MS
+            ))
+            .map((pilot) => pilot.name);
+        const trackedResult = archiveTrackedPilotsBatch(staleTrackedNames);
+        const total = rosterResult.archivedCount + trackedResult.archivedCount;
+        setToast({
+            message: total > 0
+                ? `Archived ${total} stale player${total === 1 ? '' : 's'}`
+                : 'No stale players to archive',
+            type: total > 0 ? 'success' : 'info',
+        });
+    };
+
     const handleMerge = () => {
         if (!selectedPilot || !mergeTarget || !mergeKeepName) return;
         const removeName = mergeKeepName === selectedPilot ? mergeTarget : selectedPilot;
@@ -1520,15 +1585,6 @@ const PlayerHub: React.FC = () => {
         onOpenMatchInSmartCaptures: handleOpenMatchInSmartCaptures,
         activeTab: ocrWorkbenchActiveTab,
         onActiveTabChange: setOcrWorkbenchActiveTab,
-        possibleMergeGroups,
-        activeMergeNotification,
-        onUndoLastMerge: undoLastMerge,
-        recentAutoMergeApplications,
-        recentAutoMergeDismissals,
-        onUndoAutoMergeApplication: handleUndoAutoMergeApplication,
-        onRestoreAutoMergeDismissal: handleRestoreAutoMergeDismissal,
-        onMergeSuggestionGroup: handleMergeSuggestionGroup,
-        onDismissMergeSuggestionGroup: handleDismissMergeSuggestionGroup,
         ocrSearchTerm,
         setOcrSearchTerm,
         pendingRosterCandidates,
@@ -1566,6 +1622,7 @@ const PlayerHub: React.FC = () => {
                 setSortMode={setSortMode}
                 playerFilterMode={playerFilterMode}
                 setPlayerFilterMode={setPlayerFilterMode}
+                onArchiveStale={handleArchiveStale}
                 enrichedPilots={enrichedPilots}
                 needsReviewPlayerCount={needsReviewPlayerCount}
                 activeMergeNotification={activeMergeNotification}
@@ -1595,16 +1652,20 @@ const PlayerHub: React.FC = () => {
                             <h2 className="text-lg font-bold tracking-tight text-md-sys-on-surface truncate">
                                 {panelMode === 'ocr-work'
                                     ? 'OCR Workbench'
-                                    : selected
-                                        ? selected.name
-                                        : 'Player Details'}
+                                    : panelMode === 'merges'
+                                        ? 'Possible Merges'
+                                        : selected
+                                            ? selected.name
+                                            : 'Player Details'}
                             </h2>
                             <p className="text-label-sm text-md-sys-on-surface/40 font-medium truncate">
                                 {panelMode === 'ocr-work'
                                     ? `${pendingRosterCandidates.length} candidate${pendingRosterCandidates.length !== 1 ? 's' : ''} to review`
-                                    : selected
-                                        ? `${selected.totalEncounters} encounter${selected.totalEncounters !== 1 ? 's' : ''}${selected.lastSeen ? ` · ${timeAgo(selected.lastSeen)}` : ''}`
-                                        : 'Select a player to view their profile'}
+                                    : panelMode === 'merges'
+                                        ? `${possibleMergeGroups.length} possible duplicate${possibleMergeGroups.length !== 1 ? 's' : ''} to review`
+                                        : selected
+                                            ? `${selected.totalEncounters} encounter${selected.totalEncounters !== 1 ? 's' : ''}${selected.lastSeen ? ` · ${timeAgo(selected.lastSeen)}` : ''}`
+                                            : 'Select a player to view their profile'}
                             </p>
                         </div>
                         <div className="flex gap-1 shrink-0">
@@ -1639,6 +1700,25 @@ const PlayerHub: React.FC = () => {
                                     </span>
                                 )}
                             </button>
+                            <button
+                                type="button"
+                                onClick={() => setPanelMode('merges')}
+                                className={`h-8 px-3 rounded-control text-label-xs font-semibold transition-all border inline-flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning/35 ${
+                                    panelMode === 'merges'
+                                        ? 'border-warning/30 bg-warning/10 text-warning'
+                                        : 'border-md-sys-outline/10 text-md-sys-on-surface/55 hover:bg-md-sys-on-surface/[0.06]'
+                                }`}
+                                style={panelMode !== 'merges' ? { background: 'var(--md-sys-color-surface-container-high)' } : undefined}
+                            >
+                                Merges
+                                {possibleMergeGroups.length > 0 && (
+                                    <span className={`px-1.5 py-0.5 rounded-pill text-[10px] font-bold leading-none ${
+                                        panelMode === 'merges' ? 'bg-warning/20 text-warning' : 'bg-warning/15 text-warning'
+                                    }`}>
+                                        {possibleMergeGroups.length}
+                                    </span>
+                                )}
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1646,6 +1726,21 @@ const PlayerHub: React.FC = () => {
                 {panelMode === 'ocr-work' ? (
                     <div className="flex-1 min-h-0">
                         <PlayerHubOcrWorkbench {...ocrWorkbenchSharedProps} containerClassName="h-full min-h-0" />
+                    </div>
+                ) : panelMode === 'merges' ? (
+                    <div className="flex-1 min-h-0">
+                        <PlayerHubMergesPanel
+                            containerClassName="h-full min-h-0"
+                            possibleMergeGroups={possibleMergeGroups}
+                            activeMergeNotification={activeMergeNotification}
+                            onUndoLastMerge={undoLastMerge}
+                            recentAutoMergeApplications={recentAutoMergeApplications}
+                            recentAutoMergeDismissals={recentAutoMergeDismissals}
+                            onUndoAutoMergeApplication={handleUndoAutoMergeApplication}
+                            onRestoreAutoMergeDismissal={handleRestoreAutoMergeDismissal}
+                            onMergeSuggestionGroup={handleMergeSuggestionGroup}
+                            onDismissMergeSuggestionGroup={handleDismissMergeSuggestionGroup}
+                        />
                     </div>
                 ) : !selected ? (
                     <div className="flex-1 flex flex-col gap-4">
@@ -1896,32 +1991,24 @@ const PlayerHub: React.FC = () => {
                                 >
                                     Back to Recording
                                 </button>
-                                {selected.isRoster && (
-                                    isRosterEntryArchived(selected.rosterMeta) ? (
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                unarchiveRosterEntry(selected.name);
-                                                setToast({ message: `${selected.name} restored to the active roster`, type: 'success' });
-                                            }}
-                                            className="px-3 py-1.5 rounded-control text-label-sm font-bold bg-success-soft text-success"
-                                            title="Return this pilot to the active roster and OCR matching"
-                                        >
-                                            Unarchive
-                                        </button>
-                                    ) : (
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                archiveRosterEntry(selected.name);
-                                                setToast({ message: `${selected.name} archived`, type: 'info' });
-                                            }}
-                                            className="px-3 py-1.5 rounded-control text-label-sm font-bold bg-md-sys-on-surface/10 text-md-sys-on-surface/70"
-                                            title="Hide from the active roster and stop matching OCR reads against this pilot. Seeing them again restores them automatically."
-                                        >
-                                            Archive
-                                        </button>
-                                    )
+                                {(isRosterEntryArchived(selected.rosterMeta) || selected.isManuallyArchived) ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleUnarchivePilot(selected)}
+                                        className="px-3 py-1.5 rounded-control text-label-sm font-bold bg-success-soft text-success"
+                                        title="Return this pilot to the active roster and OCR matching"
+                                    >
+                                        Unarchive
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleArchivePilot(selected)}
+                                        className="px-3 py-1.5 rounded-control text-label-sm font-bold bg-md-sys-on-surface/10 text-md-sys-on-surface/70"
+                                        title="Hide from the active roster and stop matching OCR reads against this pilot. Seeing them again restores them automatically."
+                                    >
+                                        Archive
+                                    </button>
                                 )}
                                 {selected.isRoster ? (
                                     <div className="mt-2 w-full">
@@ -2147,6 +2234,11 @@ const PlayerHub: React.FC = () => {
                                             {mergeTarget}
                                         </button>
                                     </div>
+                                )}
+                                {mergeKeepName && mergeTarget !== selected.name && (
+                                    <p className="mt-3 text-label-sm text-md-sys-on-surface/60">
+                                        "{mergeKeepName === selected.name ? mergeTarget : selected.name}" will be kept as a former name / alias of "{mergeKeepName}"
+                                    </p>
                                 )}
                                 <div className="mt-3 flex gap-2">
                                     <button

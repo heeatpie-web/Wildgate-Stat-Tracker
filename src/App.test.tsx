@@ -128,6 +128,9 @@ const appStoreState = {
     appStoreState.fullAutoEnabled = enabled;
   }),
   isLoading: false,
+  rosterArchiveSweptAt: Date.now(),
+  favorites: [] as string[],
+  archiveStaleRosterEntries: vi.fn(() => ({ archivedCount: 0 })),
   activeUser: 'Pilot',
   sessionStartTime: Date.now() - 1_000,
   startupSmartPreloadEnabled: false,

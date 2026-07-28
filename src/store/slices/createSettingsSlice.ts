@@ -305,8 +305,10 @@ export interface SettingsSlice {
   telemetryPerformanceProfile: TelemetryPerformanceProfile;
   adaptiveTelemetryPollingEnabled: boolean;
   telemetryDefaultsVersion: number;
-  /** Bumped once the 90-day roster archive cleanup has run. */
+  /** Bumped once the legacy one-time roster archive cleanup has run. */
   rosterArchiveVersion: number;
+  /** Timestamp of the last periodic stale-roster sweep (see App.tsx); 0 means never. */
+  rosterArchiveSweptAt: number;
   enableAutoBackup: boolean;
   startupSmartPreloadEnabled: boolean;
   overlayStyle: OverlayStyle;
@@ -473,6 +475,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   adaptiveTelemetryPollingEnabled: false,
   telemetryDefaultsVersion: 1,
   rosterArchiveVersion: 0,
+  rosterArchiveSweptAt: 0,
   enableAutoBackup: true,
   startupSmartPreloadEnabled: true,
   overlayStyle: 'compact',

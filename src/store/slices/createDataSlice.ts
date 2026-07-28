@@ -180,7 +180,7 @@ export interface RosterEntryMeta {
 }
 
 /** Players unseen for longer than this are eligible for archiving. */
-export const ROSTER_ARCHIVE_THRESHOLD_MS = 90 * 24 * 60 * 60 * 1000;
+export const ROSTER_ARCHIVE_THRESHOLD_MS = 60 * 24 * 60 * 60 * 1000;
 
 export const isRosterEntryArchived = (meta?: Partial<RosterEntryMeta> | null): boolean => (
   meta?.status === 'archived'
@@ -656,6 +656,7 @@ export interface DataSlice {
   updateMatch: (updatedMatch: Match) => void;
   deleteMatch: (id: number) => void;
   toggleMatchPin: (id: number) => void;
+  toggleMatchArchive: (id: number) => void;
 
   setPlayers: (players: string[]) => void;
   addPlayer: (name: string) => void;
@@ -674,6 +675,16 @@ export interface DataSlice {
   addManyToRegistry: (entries: Array<{ name: string; meta?: Partial<RosterEntryMeta> }>) => void;
   archiveRosterEntry: (name: string) => void;
   unarchiveRosterEntry: (name: string) => void;
+  /**
+   * Manual archive override for tracked-only (non-roster) pilots, which have no
+   * `rosterEntryMeta` entry of their own to carry an archived status. Stores
+   * normalized name keys rather than promoting the pilot into the formal roster.
+   */
+  archivedTrackedPilotKeys: string[];
+  archiveTrackedPilot: (name: string) => void;
+  unarchiveTrackedPilot: (name: string) => void;
+  /** Batch form of `archiveTrackedPilot`, applied in a single state transition. */
+  archiveTrackedPilotsBatch: (names: string[]) => { archivedCount: number };
   /**
    * Bulk-archives every roster entry unseen for longer than `thresholdMs`.
    * Applies the whole batch in one state transition; never loop
@@ -1052,6 +1063,10 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
     matches: state.matches.map(m => m.id === id ? { ...m, isPinned: !m.isPinned } : m),
     lastActivity: Date.now()
   })),
+  toggleMatchArchive: (id) => set((state) => ({
+    matches: state.matches.map(m => m.id === id ? { ...m, archived: !m.archived } : m),
+    lastActivity: Date.now()
+  })),
 
   setPlayers: (players) => set({ players }),
   addPlayer: (name) => set((state) => ({
@@ -1201,6 +1216,30 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
       },
     };
   }),
+  archivedTrackedPilotKeys: [],
+  archiveTrackedPilot: (name) => set((state) => {
+    const key = normalizeRosterEntryKey(name);
+    if (!key || (state.archivedTrackedPilotKeys || []).includes(key)) return {};
+    return { archivedTrackedPilotKeys: [...(state.archivedTrackedPilotKeys || []), key] };
+  }),
+  unarchiveTrackedPilot: (name) => set((state) => {
+    const key = normalizeRosterEntryKey(name);
+    if (!key || !(state.archivedTrackedPilotKeys || []).includes(key)) return {};
+    return { archivedTrackedPilotKeys: (state.archivedTrackedPilotKeys || []).filter((existing) => existing !== key) };
+  }),
+  archiveTrackedPilotsBatch: (names) => {
+    const state = get();
+    const existing = new Set(state.archivedTrackedPilotKeys || []);
+    let archivedCount = 0;
+    (names || []).forEach((name) => {
+      const key = normalizeRosterEntryKey(name);
+      if (!key || existing.has(key)) return;
+      existing.add(key);
+      archivedCount += 1;
+    });
+    if (archivedCount > 0) set({ archivedTrackedPilotKeys: Array.from(existing) });
+    return { archivedCount };
+  },
   archiveStaleRosterEntries: (options = {}) => {
     const thresholdMs = Number.isFinite(Number(options.thresholdMs))
       ? Math.max(0, Number(options.thresholdMs))

@@ -180,10 +180,27 @@ function walkFiles(rootPath) {
   return result;
 }
 
-function collectCandidates(userData, mappingContext = {}) {
+function collectCandidates(userData, mappingContext = {}, scope = null) {
   const matchArtifactsRoot = path.join(userData, 'match_artifacts');
+
+  // buildRepairPlan already hard-discards any match_artifacts candidate whose
+  // containing folder doesn't match scope.matchId (folder-derived id always
+  // wins over content), so when a matchId scope is given, only that match's
+  // own subfolder(s) need walking instead of the entire match_artifacts tree.
+  // Folder naming has varied historically (raw match id vs canonical match
+  // number), so both are checked.
+  let matchArtifactsRoots;
+  if (scope?.matchId) {
+    const folderNames = new Set([String(scope.matchId)]);
+    const canonical = mappingContext.idToCanonical?.get(scope.matchId);
+    if (canonical != null) folderNames.add(String(canonical));
+    matchArtifactsRoots = Array.from(folderNames, (name) => path.join(matchArtifactsRoot, name));
+  } else {
+    matchArtifactsRoots = [matchArtifactsRoot];
+  }
+
   const sources = [
-    { kind: 'match_artifacts', root: matchArtifactsRoot },
+    ...matchArtifactsRoots.map((root) => ({ kind: 'match_artifacts', root })),
     { kind: 'screenshots', root: path.join(userData, 'screenshots') },
     { kind: 'ocr-debug', root: path.join(userData, 'ocr-debug') },
   ];
@@ -194,12 +211,28 @@ function collectCandidates(userData, mappingContext = {}) {
     for (const filePath of files) {
       if (!isImageFile(filePath)) continue;
       if (source.kind === 'match_artifacts' && isRelinkedAutoCaptureArtifact(filePath)) continue;
+
+      // The shared screenshots/ocr-debug pools have no per-match subfolders to
+      // scope by directory, so when a time-bounded scope is given, skip the
+      // fs.statSync call entirely for files clearly outside the window using
+      // the filename timestamp (zero I/O). Files with no parseable filename
+      // timestamp keep the stat-based fallback below.
+      let filenameTimestampMs = null;
+      if (source.kind !== 'match_artifacts' && (scope?.startTimeMs || scope?.endTimeMs)) {
+        filenameTimestampMs = parseCaptureTimestampMs(path.basename(filePath));
+        if (filenameTimestampMs != null) {
+          if (scope.startTimeMs && filenameTimestampMs < scope.startTimeMs) continue;
+          if (scope.endTimeMs && filenameTimestampMs > scope.endTimeMs) continue;
+        }
+      }
+
       const stat = safeStat(filePath);
       if (!stat || !stat.isFile()) continue;
       const key = toPathKey(filePath);
       if (dedup.has(key)) continue;
 
-      const timestampMs = parseCaptureTimestampMs(path.basename(filePath))
+      const timestampMs = filenameTimestampMs
+        || parseCaptureTimestampMs(path.basename(filePath))
         || Number(stat.birthtimeMs || stat.mtimeMs || 0)
         || null;
 
@@ -360,7 +393,8 @@ function buildRepairPlan(db, userData, scopeOptions) {
   const candidates = collectCandidates(userData, {
     matchIdSet: new Set(Array.from(byId.keys())),
     canonicalToId: canonicalMaps.canonicalToId,
-  });
+    idToCanonical: canonicalMaps.idToCanonical,
+  }, scope);
   const plansByKey = new Map();
 
   for (const candidate of candidates) {

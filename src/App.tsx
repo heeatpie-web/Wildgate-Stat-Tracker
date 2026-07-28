@@ -1146,6 +1146,27 @@ const App: React.FC = () => {
         hardwareAccelerationSyncedRef.current = true;
         getElectronAPI()?.send('set-hardware-acceleration-disabled', disableHardwareAccelerationSetting);
     }, [isStoreLoading, disableHardwareAccelerationSetting]);
+    // Recurring stale-roster sweep: the hydration-time migration only catches
+    // players who were already stale when the app launched. Long-running sessions
+    // need a periodic re-check so anyone who goes stale mid-session still gets
+    // archived. Throttled via rosterArchiveSweptAt (checked, not blindly stamped
+    // on every tick) so this costs nothing on the many checks that are no-ops.
+    useEffect(() => {
+        if (isStoreLoading) return;
+        const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
+        const SWEEP_THROTTLE_MS = 24 * 60 * 60 * 1000;
+        const runSweepIfDue = () => {
+            const { rosterArchiveSweptAt: sweptAt, favorites: favs, archiveStaleRosterEntries: sweep } = useAppStore.getState();
+            if (Date.now() - sweptAt < SWEEP_THROTTLE_MS) return;
+            sweep({ protectedKeys: favs });
+            // Separate setState so stamping the sweep time never gets skipped by the
+            // action's own "only set() if something actually changed" optimization.
+            useAppStore.setState({ rosterArchiveSweptAt: Date.now() });
+        };
+        runSweepIfDue();
+        const intervalId = window.setInterval(runSweepIfDue, CHECK_INTERVAL_MS);
+        return () => window.clearInterval(intervalId);
+    }, [isStoreLoading]);
     const {
         discardTelemetryDraft,
         autoFinalizeResultScreenCapture,

@@ -1036,7 +1036,7 @@ describe('PlayerHub', () => {
 
         render(<PlayerHub />);
 
-        fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
+        fireEvent.click(screen.getAllByRole('button', { name: /^merges/i })[0]);
         fireEvent.click(screen.getByRole('button', { name: /merge suggestions/i }));
 
         expect(screen.getByText(/82% similarity/i)).toBeInTheDocument();
@@ -1054,7 +1054,7 @@ describe('PlayerHub', () => {
 
         render(<PlayerHub />);
 
-        fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
+        fireEvent.click(screen.getAllByRole('button', { name: /^merges/i })[0]);
         fireEvent.click(screen.getByRole('button', { name: /merge suggestions/i }));
 
         expect(screen.getByRole('button', { name: /merge into ace pilot/i })).toBeInTheDocument();
@@ -1077,7 +1077,7 @@ describe('PlayerHub', () => {
 
         render(<PlayerHub />);
 
-        fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
+        fireEvent.click(screen.getAllByRole('button', { name: /^merges/i })[0]);
         fireEvent.click(screen.getByRole('button', { name: /auto-merge/i }));
 
         expect(screen.getByRole('button', { name: /undo auto-merge/i })).toBeInTheDocument();
@@ -1095,7 +1095,7 @@ describe('PlayerHub', () => {
 
         render(<PlayerHub />);
 
-        fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
+        fireEvent.click(screen.getAllByRole('button', { name: /^merges/i })[0]);
         fireEvent.click(screen.getByRole('button', { name: /auto-merge/i }));
 
         const applyButton = screen.getByRole('button', { name: /apply merge into alixerr/i });
@@ -1118,7 +1118,7 @@ describe('PlayerHub', () => {
 
         render(<PlayerHub />);
 
-        fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
+        fireEvent.click(screen.getAllByRole('button', { name: /^merges/i })[0]);
         fireEvent.click(screen.getByRole('button', { name: /auto-merge/i }));
         fireEvent.click(screen.getByRole('button', { name: /apply merge into alixerr/i }));
 
@@ -1137,7 +1137,7 @@ describe('PlayerHub', () => {
 
         render(<PlayerHub />);
 
-        fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
+        fireEvent.click(screen.getAllByRole('button', { name: /^merges/i })[0]);
         fireEvent.click(screen.getByRole('button', { name: /auto-merge/i }));
         fireEvent.click(screen.getByRole('button', { name: /dismiss merge suggestion for alixerr/i }));
 
@@ -1157,7 +1157,7 @@ describe('PlayerHub', () => {
 
         render(<PlayerHub />);
 
-        fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
+        fireEvent.click(screen.getAllByRole('button', { name: /^merges/i })[0]);
         fireEvent.click(screen.getByRole('button', { name: /merge suggestions/i }));
         fireEvent.click(screen.getByRole('button', { name: /merge into ace pilot/i }));
 
@@ -1182,7 +1182,7 @@ describe('PlayerHub', () => {
 
         render(<PlayerHub />);
 
-        fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
+        fireEvent.click(screen.getAllByRole('button', { name: /^merges/i })[0]);
         fireEvent.click(screen.getByRole('button', { name: /auto-merge/i }));
 
         expect(screen.getByTestId('auto-merge-applied-section')).toBeInTheDocument();
@@ -1207,7 +1207,7 @@ describe('PlayerHub', () => {
 
         render(<PlayerHub />);
 
-        fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
+        fireEvent.click(screen.getAllByRole('button', { name: /^merges/i })[0]);
         fireEvent.click(screen.getByRole('button', { name: /auto-merge/i }));
         fireEvent.click(screen.getByRole('button', { name: /undo auto-merge into alixer/i }));
 
@@ -1229,7 +1229,7 @@ describe('PlayerHub', () => {
 
         render(<PlayerHub />);
 
-        fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
+        fireEvent.click(screen.getAllByRole('button', { name: /^merges/i })[0]);
         fireEvent.click(screen.getByRole('button', { name: /auto-merge/i }));
 
         expect(screen.getByTestId('auto-merge-dismissed-section')).toBeInTheDocument();
@@ -1266,7 +1266,7 @@ describe('PlayerHub', () => {
         fireEvent.click(screen.getAllByRole('button', { name: /ocr work/i })[0]);
         expect(mergeSuggestionsSpy).not.toHaveBeenCalled();
 
-        fireEvent.click(screen.getByRole('button', { name: /merge suggestions/i }));
+        fireEvent.click(screen.getAllByRole('button', { name: /^merges/i })[0]);
 
         expect(mergeSuggestionsSpy).toHaveBeenCalled();
     });

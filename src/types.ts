@@ -201,6 +201,7 @@ export interface Match {
   opponentTeams?: OpponentTeam[];
   eliminatedByTeam?: string;
   isPinned?: boolean;
+  archived?: boolean;
   notes?: string;
   timelineEvents?: any[]; // New field for match chronology
   artifacts?: string[]; // New field for bundled screenshots

@@ -69,6 +69,7 @@ export interface StorageData {
   players: string[];
   pilotRegistry: string[];
   rosterEntryMeta?: Record<string, RosterEntryMeta>;
+  archivedTrackedPilotKeys?: string[];
   favorites: string[];
   pilotNotes: Record<string, string>;
   pilotAliases?: Record<string, string[]>;

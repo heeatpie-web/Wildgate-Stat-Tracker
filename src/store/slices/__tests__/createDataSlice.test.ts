@@ -784,16 +784,16 @@ describe('createDataSlice', () => {
       expect(second.rosterEntryMeta).toBe(first.rosterEntryMeta);
     });
 
-    it('uses a 90-day threshold by default', () => {
+    it('uses a 60-day threshold by default', () => {
       const build = (lastSeenAt: number) => applyRosterArchiveMigration({
         pilotRegistry: ['P'],
         rosterEntryMeta: { p: meta(lastSeenAt) },
         now: NOW,
       });
 
-      expect(ROSTER_ARCHIVE_THRESHOLD_MS).toBe(90 * DAY);
-      expect(build(NOW - 89 * DAY).archivedCount).toBe(0);
-      expect(build(NOW - 91 * DAY).archivedCount).toBe(1);
+      expect(ROSTER_ARCHIVE_THRESHOLD_MS).toBe(60 * DAY);
+      expect(build(NOW - 59 * DAY).archivedCount).toBe(0);
+      expect(build(NOW - 61 * DAY).archivedCount).toBe(1);
     });
   });
 });

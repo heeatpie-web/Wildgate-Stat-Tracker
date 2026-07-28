@@ -5005,7 +5005,7 @@ const SmartMatchDetail: React.FC<{
                                     teams={assignmentBoardTeams}
                                     shipOptions={SHIPS}
                                     pilotRegistry={pilotRegistry}
-                                    rosterSuggestionsId={pilotRegistry.length > 0 ? rosterSuggestionsId : undefined}
+                                    rosterNames={pilotRegistry}
                                     friendlyTeamIndex={0}
                                     friendlyFixedPlayer={activeUserReference ? {
                                         canonicalName: activeUserReference,
