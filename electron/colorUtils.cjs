@@ -860,7 +860,12 @@ function majorityDark(data, channels, darknessThreshold = 32, majorityFraction =
   let darkCount = 0;
   for (let i = 0; i < data.length; i += ch) {
     const { l, s } = rgbToHsl(data[i], data[i + 1], data[i + 2]);
-    if (l < darknessThreshold && s < saturationThreshold) darkCount++;
+    // Below ~10% lightness, HSL saturation is numerically unstable: tiny
+    // absolute RGB differences (compression noise) produce large relative
+    // saturation values even for pixels that are visually just black. Treat
+    // anything this dark as dark regardless of its saturation reading.
+    const isVeryDark = l < 10;
+    if (l < darknessThreshold && (isVeryDark || s < saturationThreshold)) darkCount++;
   }
   return darkCount / totalPixels >= majorityFraction;
 }
