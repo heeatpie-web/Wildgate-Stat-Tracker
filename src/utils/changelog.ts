@@ -1,4 +1,12 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.9.0": [
+    "Feature: The Seeds tab now shows the tactical map screenshot captured for each match on a seed - click any thumbnail to view it full size.",
+    "Improvement: Removed the duplicate Match Log tab from History",
+    "use Smart Captures for per-match screenshot review.",
+    "Improvement: Less background work while idle, plus a hardware acceleration toggle in Settings.",
+    "Fix: OCR no longer mistakes UI text for team names, and cards no longer get grouped into the wrong crew.",
+    "Fix: Crew grouping no longer depends on player names, so app and test results stay in sync, and renamed perks keep their history."
+  ],
   "v3.8.10": [
     "Fix automated release publication in GitHub Actions",
     "Add Seeds tab and map seed analytics"
