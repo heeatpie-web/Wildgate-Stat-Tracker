@@ -425,10 +425,10 @@ export const normalizeRosterEntryMetaMap = (
     if (!cleaned || !key || nextMeta[key]) return;
     const rawValue = sourceMeta[key] ?? sourceMeta[cleaned];
     nextMeta[key] = mergeRosterEntryMeta(
-      undefined,
       rawValue && typeof rawValue === 'object'
         ? rawValue as Partial<RosterEntryMeta>
         : undefined,
+      undefined,
       now
     );
   });
