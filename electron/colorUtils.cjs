@@ -505,7 +505,13 @@ function classifyColorRegionData(data, channels) {
     const b = data[i + 2];
     const hsl = rgbToHsl(r, g, b);
 
-    if (hsl.s < 15 || hsl.l > 90) continue;
+    // 25% floor (was 15%): anti-aliased edge pixels around white text on a
+    // black/spectator badge blend toward the colorful background behind it,
+    // landing around 18-19% saturation — enough to slip past a 15% floor and
+    // form a fake dominant hue cluster. Every real Wildgate team color sits
+    // at 42%+ saturation (see WILDGATE_COLORS), so 25% still keeps a wide
+    // margin below any genuine badge color.
+    if (hsl.s < 25 || hsl.l > 90) continue;
     const weight = (hsl.s / 100) * lightnessBellCurve(hsl.l);
     if (!Number.isFinite(weight) || weight < 0.08) continue;
 
@@ -549,8 +555,9 @@ function classifyColorRegionData(data, channels) {
   };
 }
 
-function resolveBadgeSampleConsensus(chromaticSamples = [], bestBlackResult = null, primarySample = null) {
+function resolveBadgeSampleConsensus(chromaticSamples = [], bestBlackResult = null, primarySample = null, bestTrustedBlackResult = null) {
   let resolvedChromatic = null;
+  let resolvedClusterItems = null;
 
   if (Array.isArray(chromaticSamples) && chromaticSamples.length > 0) {
     const dominantCluster = selectDominantHueCluster(
@@ -563,6 +570,10 @@ function resolveBadgeSampleConsensus(chromaticSamples = [], bestBlackResult = nu
     const resolvedCluster = dominantCluster
       ? resolveBadgeColorFromCluster(chromaticSamples, dominantCluster)
       : null;
+
+    if (dominantCluster && resolvedCluster) {
+      resolvedClusterItems = resolvedCluster.clusterItems;
+    }
 
     if (dominantCluster && resolvedCluster) {
       const { centroid, nearest, color: snappedColor, clusterItems } = resolvedCluster;
@@ -604,6 +615,25 @@ function resolveBadgeSampleConsensus(chromaticSamples = [], bestBlackResult = nu
         color: 'black',
         confidence: blackConfidence,
         rgb: primarySample?.rgb || bestBlackResult?.rgb || { r: 0, g: 0, b: 0 },
+        rawHue: null,
+      };
+    }
+  }
+
+  // Guard: real black/near-black evidence from a trustworthy probe (left-biased
+  // or OCR x0) should not be overridden by a chromatic reading whose entire
+  // dominant cluster comes from the right-step probe — that probe is known to
+  // drift into background art on short/dark badges (see the rightStep comment
+  // in detectTeamColorBarBelow). Without this, a single stray background-hue
+  // sample can hijack an otherwise-clear black badge (e.g. spectator cards).
+  if (bestTrustedBlackResult && bestTrustedBlackResult.confidence >= 65 && resolvedChromatic && resolvedClusterItems) {
+    const allRisky = resolvedClusterItems.every((item) => item.risky);
+    if (allRisky) {
+      dlog2(`[ColorUtils] Trusted black (conf=${bestTrustedBlackResult.confidence}) overrides risky-only chromatic cluster (would have been ${resolvedChromatic.color})`);
+      return {
+        color: 'black',
+        confidence: bestTrustedBlackResult.confidence,
+        rgb: bestTrustedBlackResult.rgb,
         rawHue: null,
       };
     }
@@ -801,24 +831,36 @@ function circularHueMean(data, channels, lightnessThreshold = 20, minChromFracti
 }
 
 /**
- * Returns true if ≥ 70% of pixels in the buffer have lightness < 25%.
- * Used as a pre-check to detect black/spectator team bars before the
- * most-saturated-pixel search runs — prevents a stray bright border pixel
- * from winning the saturation race on an otherwise-black bar.
+ * Returns true if ≥ 70% of pixels in the buffer are dark AND low-saturation
+ * (neutral gray/black, not just dim). Used as a pre-check to detect
+ * black/spectator team bars before the most-saturated-pixel search runs —
+ * prevents a stray bright border pixel from winning the saturation race on
+ * an otherwise-black bar.
+ *
+ * Measured against a real spectator badge (crew-hub "MACBETH II" chip):
+ * fill pixels sample at RGB(68,68,68) — lightness ≈27%, saturation 0%. The
+ * old 25% lightness cutoff sat just below that real value, so a spectator
+ * badge's own fill pixels routinely failed this check and fell through to
+ * hue-cluster classification, where background bleed got misread as a real
+ * team color. 32% covers that with margin. A saturation gate is required
+ * alongside the raised threshold — several genuine Wildgate team colors are
+ * this dark (e.g. "plum" l≈33% s≈61%, "greenPea" l≈24% s≈51%) but are all
+ * clearly saturated, unlike a neutral black/gray badge.
  *
  * @param {Uint8Array} data - Raw pixel buffer
  * @param {number} channels - Bytes per pixel
- * @param {number} [darknessThreshold=25] - Lightness % below which a pixel is "dark"
+ * @param {number} [darknessThreshold=32] - Lightness % below which a pixel is "dark"
  * @param {number} [majorityFraction=0.70] - Fraction of dark pixels required
+ * @param {number} [saturationThreshold=25] - Saturation % below which a pixel counts as neutral
  */
-function majorityDark(data, channels, darknessThreshold = 25, majorityFraction = 0.70) {
+function majorityDark(data, channels, darknessThreshold = 32, majorityFraction = 0.70, saturationThreshold = 25) {
   const ch = Math.max(1, channels);
   const totalPixels = data.length / ch;
   if (totalPixels === 0) return false;
   let darkCount = 0;
   for (let i = 0; i < data.length; i += ch) {
-    const { l } = rgbToHsl(data[i], data[i + 1], data[i + 2]);
-    if (l < darknessThreshold) darkCount++;
+    const { l, s } = rgbToHsl(data[i], data[i + 1], data[i + 2]);
+    if (l < darknessThreshold && s < saturationThreshold) darkCount++;
   }
   return darkCount / totalPixels >= majorityFraction;
 }
@@ -929,10 +971,13 @@ async function detectTeamColorBarBelow(imageBuffer, bbox, scale = 1, sharpModule
   const rightStep = Math.max(sampleWidth * 0.65, textHeight * 2.5);
   const leftBias = Math.max(4, Math.round(sampleWidth * 0.12));
   const verticalStep = Math.max(2, sampleHeight * 0.4);
+  // The right-step probe position — tracked explicitly (not by array index) so
+  // samples from it can be flagged "risky" even if Set dedup shuffles indices.
+  const riskyX = Math.max(0, Math.floor(origBbox.x0 + rightStep));
   const xPositions = [...new Set([
     Math.max(0, Math.floor(origBbox.x0 - leftBias)),
     Math.max(0, Math.floor(origBbox.x0)),
-    Math.max(0, Math.floor(origBbox.x0 + rightStep)),
+    riskyX,
   ])];
   const yOffsets = [
     0,
@@ -947,9 +992,11 @@ async function detectTeamColorBarBelow(imageBuffer, bbox, scale = 1, sharpModule
   // trusting a single high-saturation outlier from adjacent art or UI chrome.
   const chromaticSamples = [];
   let bestBlackResult = null;
+  let bestTrustedBlackResult = null;
   let primarySample = null;
 
   for (const xBase of xPositions) {
+    const risky = xBase === riskyX;
     for (const yOff of yOffsets) {
       const region = {
         x: xBase,
@@ -968,6 +1015,9 @@ async function detectTeamColorBarBelow(imageBuffer, bbox, scale = 1, sharpModule
           if (!bestBlackResult || result.confidence > bestBlackResult.confidence) {
             bestBlackResult = { ...result, xBase, yOff };
           }
+          if (!risky && (!bestTrustedBlackResult || result.confidence > bestTrustedBlackResult.confidence)) {
+            bestTrustedBlackResult = { ...result, xBase, yOff };
+          }
           continue;
         }
 
@@ -979,6 +1029,7 @@ async function detectTeamColorBarBelow(imageBuffer, bbox, scale = 1, sharpModule
           chromaticSamples.push({
             color: result.color,
             confidence: result.confidence,
+            risky,
             rawHue: result.rawHue,
             rgb: result.rgb,
             hsl: sampleHsl,
@@ -993,7 +1044,7 @@ async function detectTeamColorBarBelow(imageBuffer, bbox, scale = 1, sharpModule
     }
   }
 
-  const resolved = resolveBadgeSampleConsensus(chromaticSamples, bestBlackResult, primarySample);
+  const resolved = resolveBadgeSampleConsensus(chromaticSamples, bestBlackResult, primarySample, bestTrustedBlackResult);
   if (resolved.color !== 'unknown') {
     return resolved;
   }

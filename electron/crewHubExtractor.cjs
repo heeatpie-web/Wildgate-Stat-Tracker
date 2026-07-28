@@ -72,6 +72,41 @@ function isUncorroboratedBlackCard(card, capturedTeamNames) {
   if (String(card.textTeamName || '').trim()) return false;
   return !String(capturedTeamNames?.get?.('black') || '').trim();
 }
+
+/**
+ * Up to 6 spectators render as black cards in the Enemy Crews panel, always
+ * grouped above every real team. Their badge shows the ship they're currently
+ * watching, not a crew name — structurally identical to a real team's badge,
+ * so color/text alone can't tell them apart. Position can: a black group
+ * whose cards sit above every real (non-black, non-unknown) team is the
+ * spectator block. A real black-colored crew is technically possible but rare
+ * enough (and never top-positioned above other teams) to ignore.
+ *
+ * Pure so the rule can be tested without image/OCR fixtures. Returns the
+ * original array when nothing is dropped.
+ */
+function dropSpectatorClusters(knownGroups) {
+  const groups = Array.isArray(knownGroups) ? knownGroups : [];
+  const nonBlackKnownMinY = Math.min(
+    ...groups
+      .filter(g => g && g.color && g.color !== 'unknown' && g.color !== 'black')
+      .map(g => (Number.isFinite(g.minY) ? g.minY : g.maxY))
+  );
+  if (!Number.isFinite(nonBlackKnownMinY)) {
+    return { groups, dropped: [] };
+  }
+
+  const dropped = [];
+  const kept = groups.filter((group) => {
+    if (!group || group.color !== 'black') return true;
+    const groupY = Number.isFinite(group.minY) ? group.minY : group.maxY;
+    if (!(groupY < nonBlackKnownMinY)) return true;
+    dropped.push(group);
+    return false;
+  });
+
+  return { groups: dropped.length > 0 ? kept : groups, dropped };
+}
 function splitHueClusterByNamedColor(cluster) {
   const byName = new Map();
   const unnamed = [];
@@ -2152,6 +2187,20 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     dlog('[CrewHub] Step5f promoted repeated card label "' + group.badgeName + '" for color=' + group.color);
   }
 
+  // ── Step 5g: Drop the spectator cluster ─────────────────────────────────────
+  {
+    const { groups: keptGroups, dropped } = dropSpectatorClusters(knownGroups);
+    knownGroups = keptGroups;
+    for (const group of dropped) {
+      dlog('[CrewHub] Step5g drop spectator cluster (black, top of panel): '
+        + (group.cards || []).map(c => c.name).join(', '));
+      for (const card of (group.cards || [])) {
+        spectatorCardYs.push(card.y);
+        skippedSpectatorNameKeys.add(normalizeNameKey(card.name));
+      }
+    }
+  }
+
   // ── Build output ─────────────────────────────────────────────────────────────
   let teamCounter = 1;
   const enemyTeams = [];
@@ -3422,5 +3471,6 @@ module.exports = {
     splitHueClusterByNamedColor,
     containsUiNoisePhrase,
     isUncorroboratedBlackCard,
+    dropSpectatorClusters,
   },
 };

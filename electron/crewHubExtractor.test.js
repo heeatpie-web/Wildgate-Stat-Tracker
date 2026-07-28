@@ -75,6 +75,65 @@ describe('crewHubExtractor singleton team preservation', () => {
   });
 });
 
+describe('dropSpectatorClusters', () => {
+  const card = (name, y) => ({ name, color: 'black', y, confidence: 80 });
+
+  it('drops a black cluster positioned above every real team (Dogepus/MACBETH II regression)', () => {
+    // Real capture: match_artifacts/845/capture_crew_hub_2026-07-19T21-07-04-736Z.png
+    // "Dogepus" rendered as a solo black card reading "MACBETH II", above the
+    // real FAR STAR/COSMIC SANS/OF CORPSE NOT teams. Spectator badges are
+    // structurally identical to a real team's badge, so this must be caught by
+    // position (topmost, above every real color), not by color/text alone.
+    const knownGroups = [
+      { color: 'black', cards: [card('Dogepus', 539)], minY: 539, maxY: 539 },
+      { color: 'red', cards: [card('JohnSplatoon', 689), card('ChaoTech', 842)], minY: 689, maxY: 842 },
+      { color: 'orange', cards: [card('dedxanoed', 993), card('Sonic_Chan', 1146)], minY: 993, maxY: 1146 },
+      { color: 'goldenrod', cards: [card('chrismario', 1296), card('Talespinner', 1449)], minY: 1296, maxY: 1449 },
+    ];
+
+    const { groups, dropped } = __test__.dropSpectatorClusters(knownGroups);
+    expect(dropped).toHaveLength(1);
+    expect(dropped[0].cards.map(c => c.name)).toEqual(['Dogepus']);
+    expect(groups.map(g => g.color)).toEqual(['red', 'orange', 'goldenrod']);
+  });
+
+  it('drops up to 6 spectators grouped as one top cluster', () => {
+    const spectators = [539, 592, 645, 698, 751, 804].map((y, i) => card('Spectator' + i, y));
+    const knownGroups = [
+      { color: 'black', cards: spectators, minY: 539, maxY: 804 },
+      { color: 'red', cards: [card('RealPlayer', 900)], minY: 900, maxY: 900 },
+    ];
+
+    const { groups, dropped } = __test__.dropSpectatorClusters(knownGroups);
+    expect(dropped).toHaveLength(1);
+    expect(dropped[0].cards).toHaveLength(6);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].color).toBe('red');
+  });
+
+  it('keeps a black cluster that is not positioned above every real team', () => {
+    // The rare-but-possible genuine black-colored crew: not top-positioned.
+    const knownGroups = [
+      { color: 'red', cards: [card('RealPlayer', 539)], minY: 539, maxY: 539 },
+      { color: 'black', cards: [card('BlackCrewPlayer', 900)], minY: 900, maxY: 900 },
+    ];
+
+    const { groups, dropped } = __test__.dropSpectatorClusters(knownGroups);
+    expect(dropped).toHaveLength(0);
+    expect(groups).toEqual(knownGroups);
+  });
+
+  it('leaves an all-black capture untouched (nothing to compare position against)', () => {
+    const knownGroups = [
+      { color: 'black', cards: [card('Dogepus', 539)], minY: 539, maxY: 539 },
+    ];
+
+    const { groups, dropped } = __test__.dropSpectatorClusters(knownGroups);
+    expect(dropped).toHaveLength(0);
+    expect(groups).toEqual(knownGroups);
+  });
+});
+
 describe('clusterByHue grouping', () => {
   it('clusterByHue groups a custom-color all-unknown lobby into separate teams', () => {
     // Simulate two teams with custom colors: pink (~330°) and green (~90°)
