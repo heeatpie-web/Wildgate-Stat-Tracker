@@ -1,0 +1,13 @@
+{
+  "projectId": "fbeb5510-0e24-4c34-abaf-24679183a8fe",
+  "shape": "package",
+  "pkg": "wildgate-stat-tracker",
+  "globalName": "WildgateStatTracker",
+  "srcDir": "../../src/components",
+  "tsconfig": "../../tsconfig.json",
+  "cssEntry": "dist.css",
+  "overrides": {
+    "Section": { "cardMode": "column" }
+  },
+  "readmeHeader": ".design-sync/conventions.md"
+}

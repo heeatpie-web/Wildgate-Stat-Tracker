@@ -12,9 +12,16 @@ dist
 dist-electron
 dist-ssr
 *.local
-_savepoint_*  
+_savepoint_*
 .visual/
 .worktrees/
+
+# design-sync (claude.ai/design)
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
 
 # Editor directories and files
 .vscode/
