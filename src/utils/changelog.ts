@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.11.1": [
+    "Redesigned the Map Seeds panel as a sortable, filterable data table with hazard/category tags and inline match history",
+    "fixed a duplicate ConfidenceMeter export that could break the build",
+    "rewrote the README for clarity"
+  ],
   "v3.11.0": [
     "Enemy intel now identifies threatening players instead of ship types",
     "Map names no longer misread as ship or team names in OCR",
