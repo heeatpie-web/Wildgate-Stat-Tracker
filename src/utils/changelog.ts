@@ -1,4 +1,11 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.11.2": [
+    "Add saved categories",
+    "improve category input lag",
+    "autosave + Save button",
+    "increment-on-submit",
+    "tests"
+  ],
   "v3.11.1": [
     "Redesigned the Map Seeds panel as a sortable, filterable data table with hazard/category tags and inline match history",
     "fixed a duplicate ConfidenceMeter export that could break the build",
