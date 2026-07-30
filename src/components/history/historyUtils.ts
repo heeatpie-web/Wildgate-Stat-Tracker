@@ -30,8 +30,8 @@ export const formatDayHeader = (timestamp: number): string => {
 
 /** Row background shading by match outcome (Step 20.5: full row width, at-a-glance win/loss) */
 export const getRowBg = (m: Match): string => {
-    if (m.result === 'Win') return 'bg-success/10 hover:bg-success/20';
-    if (m.result === 'Loss') return 'bg-danger/10 hover:bg-danger/20';
-    if (m.result === 'Ongoing') return 'bg-info/10 hover:bg-info/20';
-    return 'bg-neutral/10 hover:bg-neutral/20';
+    if (m.result === 'Win') return 'bg-success/15 hover:bg-success/20';
+    if (m.result === 'Loss') return 'bg-danger/15 hover:bg-danger/20';
+    if (m.result === 'Ongoing') return 'bg-info/15 hover:bg-info/20';
+    return 'bg-neutral/15 hover:bg-neutral/20';
 };

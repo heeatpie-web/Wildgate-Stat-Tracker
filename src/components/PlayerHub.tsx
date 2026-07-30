@@ -9,6 +9,7 @@ import { useAppStore } from '../store/useAppStore';
 import { resolvePlayerProfileDisplayName } from '../store/slices/createMappingSlice';
 import type { PendingReview, RosterEntryMeta } from '../store/slices/createDataSlice';
 import { ROSTER_ARCHIVE_THRESHOLD_MS, isRosterEntryArchived } from '../store/slices/createDataSlice';
+import { selectActiveRosterNames } from '../store/slices/createDataSlice';
 import type { Match } from '../types';
 import { getShipColor } from '../types';
 import { buildAliasVariantMap } from '../utils/ocrNameResolver';
@@ -229,6 +230,10 @@ const PlayerHub: React.FC = () => {
     const rosterScrollRef = useRef<HTMLDivElement | null>(null);
     const uniquePilotRegistry = useMemo(() => Array.from(new Set(pilotRegistry || [])), [pilotRegistry]);
     const rosterNameSet = useMemo(() => new Set(uniquePilotRegistry), [uniquePilotRegistry]);
+    const activePilotRegistry = useMemo(
+        () => selectActiveRosterNames(uniquePilotRegistry, rosterEntryMeta),
+        [rosterEntryMeta, uniquePilotRegistry]
+    );
     const aliasVariantMap = useMemo(() => buildAliasVariantMap(ocrAliasModel), [ocrAliasModel]);
     // Reverse index: normalized variant key -> canonical name(s). Built once so
     // resolveTrackedProfileRosterName can do an O(1) lookup instead of scanning
@@ -422,7 +427,7 @@ const PlayerHub: React.FC = () => {
         return (mergeHistory || []).find((entry) => entry.id === activeMergeNotificationId) || null;
     }, [activeMergeNotificationId, mergeHistory]);
 
-    const deferredPilotRegistry = useDeferredValue(uniquePilotRegistry);
+    const deferredPilotRegistry = useDeferredValue(activePilotRegistry);
     const favoritePilotNames = useMemo(() => (
         new Set((favorites || []).map((entry) => String(entry || '').trim()).filter(Boolean))
     ), [favorites]);

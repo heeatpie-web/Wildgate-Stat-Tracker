@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Match, Language, DrillDownTarget } from '../types';
 import { TRANSLATIONS } from '../utils/translations';
-import { Trash2, Edit2, Pin, Clock, Image as ImageIcon, Download, ArrowUpDown, Swords, X, FileText, Save, Ghost, Trophy, TrendingUp, Flame, Search, ChevronLeft, ChevronRight, Zap, ScanEye, AlertTriangle, RefreshCw, Filter, ChevronDown, Check, Crosshair, LogIn, Archive, ArchiveRestore } from 'lucide-react';
+import { Trash2, Edit2, Pin, Clock, Image as ImageIcon, Download, ArrowUpDown, Swords, X, FileText, Save, Ghost, Trophy, TrendingUp, Flame, Search, ChevronLeft, ChevronRight, Zap, ScanEye, AlertTriangle, RefreshCw, Filter, ChevronDown, ChevronUp, Check, Crosshair, LogIn, Archive, ArchiveRestore, Hash, ClipboardCopy } from 'lucide-react';
 import { EditMatchModal } from './EditMatchModal';
 import { exportMatchesAsImage } from './history/historyExport';
 import { timeAgo, formatDayHeader, getRowBg } from './history/historyUtils';
@@ -19,6 +19,367 @@ import { runtimeConfig } from '../config/runtimeConfig';
 import { useAppStore } from '../store/useAppStore';
 import { Button } from './ui';
 import { removeMatchArtifactsThenDelete, buildSilentBackgroundOcrMatch } from '../hooks/useMatchSubmission';
+import { getElectronAPI } from '../utils/electronAPI';
+import { classifyArtifactScreenshotBucket } from '../utils/artifactScreenshotBuckets';
+import { getUpdateForTimestamp } from '../data/gamePatches';
+import { Eye } from 'lucide-react';
+
+const resultPillClass = (result?: string): string => (
+    result === 'Win' ? 'bg-success/15 text-success'
+        : result === 'Loss' ? 'bg-danger/15 text-danger'
+            : 'bg-info/15 text-info'
+);
+
+interface MatchHistoryRowProps {
+    match: Match;
+    isSelected: boolean;
+    isExpanded: boolean;
+    mapSrc: string | null | undefined;
+    mapResolved: boolean;
+    timeAgoLabel: string;
+    matchNumberLabel: string;
+    teamCountLabel: string;
+    seedLabel: string;
+    eraLabel: string;
+    combinedHazards: string[];
+    onSelect: () => void;
+    onOpenDetails: () => void;
+    onToggleExpanded: () => void;
+    onNavigateToSmartCaptures: () => void;
+    onEdit: () => void;
+    onOpenNote: () => void;
+    onPin: () => void;
+    onArchive: () => void;
+    onDelete: () => void;
+    onCopySeed: () => void;
+    onCopyMapImage: (path: string) => void;
+    onDrillDown: (name: string, type: DrillDownTarget['type']) => void;
+    formatPlayerForDisplay: (name: string) => string;
+}
+
+const MatchHistoryRow: React.FC<MatchHistoryRowProps> = ({
+    match,
+    isSelected,
+    isExpanded,
+    mapSrc,
+    mapResolved,
+    timeAgoLabel,
+    matchNumberLabel,
+    teamCountLabel,
+    seedLabel,
+    eraLabel,
+    combinedHazards,
+    onSelect,
+    onOpenDetails,
+    onToggleExpanded,
+    onNavigateToSmartCaptures,
+    onEdit,
+    onOpenNote,
+    onPin,
+    onArchive,
+    onDelete,
+    onCopySeed,
+    onCopyMapImage,
+    onDrillDown,
+    formatPlayerForDisplay,
+}) => {
+    const isWin = match.result === 'Win';
+    const isLoss = match.result === 'Loss';
+    const isOngoing = match.result === 'Ongoing';
+
+    return (
+        <React.Fragment>
+            <tr
+                onClick={onSelect}
+                onDoubleClick={onOpenDetails}
+                className={`border-b border-md-sys-outline/5 transition-all duration-200 group cursor-pointer ${isSelected ? 'bg-md-sys-primary/10' : getRowBg(match)} active:bg-md-sys-on-surface/[0.07]`}
+                title="Click to select. Double-click to open details."
+            >
+                <td className="w-[72px] p-0 relative px-2 py-3.5 align-middle">
+                    <div className={`absolute inset-y-0 left-0 w-[5px] rounded-r-full transition-all ${
+                        isWin ? 'bg-success'
+                            : isLoss ? 'bg-danger'
+                                : isOngoing ? 'bg-info'
+                                    : 'bg-neutral'
+                    } opacity-70 group-hover:opacity-100`} />
+                    <div className="relative flex flex-col gap-1 pl-2">
+                        <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onNavigateToSmartCaptures(); }}
+                            className="inline-flex items-center gap-1 text-label-sm font-black tracking-wide text-md-sys-on-surface hover:text-md-sys-primary transition-colors"
+                            title="Open in Smart Captures"
+                        >
+                            <Hash size={11} />
+                            {matchNumberLabel}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onToggleExpanded(); }}
+                            className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md border transition-colors ${
+                                isExpanded
+                                    ? 'border-md-sys-primary/25 bg-md-sys-primary/10 text-md-sys-primary'
+                                    : 'border-md-sys-outline/10 text-md-sys-on-surface/55 hover:bg-md-sys-on-surface/[0.06]'
+                            }`}
+                            title={isExpanded ? 'Collapse match' : 'Expand match'}
+                        >
+                            <ChevronDown size={10} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                            {isExpanded ? 'Less' : 'More'}
+                        </button>
+                    </div>
+                </td>
+                <td className="px-3 py-4">
+                    <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onNavigateToSmartCaptures(); }}
+                        className="inline-flex items-center gap-1.5 rounded-pill border border-md-sys-primary/20 bg-md-sys-primary/10 px-2.5 py-1 text-label-sm font-bold text-md-sys-primary hover:bg-md-sys-primary/15 transition-colors"
+                        title="Open in Smart Captures"
+                    >
+                        Match {matchNumberLabel}
+                    </button>
+                </td>
+                <td className="px-3 py-4">
+                    <div className="text-body font-bold text-md-sys-on-surface/75">{teamCountLabel}</div>
+                    <div className="text-label-xs uppercase tracking-wide text-md-sys-on-surface/35">teams</div>
+                </td>
+                <td className="px-3 py-4">
+                    <div className="flex items-center gap-2.5">
+                        <div className={`w-8 h-8 rounded-control flex items-center justify-center ${
+                            isWin ? 'bg-success/15'
+                                : isLoss ? 'bg-danger/15'
+                                    : isOngoing ? 'bg-info/15'
+                                        : 'bg-neutral/15'
+                        }`}>
+                            {isWin
+                                ? <Trophy size={14} className="text-success" />
+                                : isLoss
+                                    ? <X size={14} className="text-danger" />
+                                    : isOngoing
+                                        ? <Clock size={14} className="text-info" />
+                                        : <TrendingUp size={14} className="text-md-sys-on-surface/70" />
+                            }
+                        </div>
+                        <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                                <span className={`text-body font-bold ${
+                                    isWin ? 'text-success'
+                                        : isLoss ? 'text-danger'
+                                            : isOngoing ? 'text-info'
+                                                : 'text-md-sys-on-surface/70'
+                                }`}>
+                                    {match.result}
+                                </span>
+                                {seedLabel ? (
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); onCopySeed(); }}
+                                        className="inline-flex items-center gap-1 rounded-pill border border-md-sys-outline/10 bg-md-sys-on-surface/[0.05] px-2 py-0.5 text-label-xs font-semibold text-md-sys-on-surface/75 hover:bg-md-sys-on-surface/[0.08] transition-colors"
+                                        title="Click to copy seed"
+                                    >
+                                        <ClipboardCopy size={10} />
+                                        {seedLabel}
+                                    </button>
+                                ) : null}
+                                {eraLabel ? (
+                                    <span className="rounded-pill border border-md-sys-outline/10 bg-md-sys-on-surface/[0.05] px-2 py-0.5 text-label-xs font-semibold text-md-sys-on-surface/55">
+                                        {eraLabel}
+                                    </span>
+                                ) : null}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1.5 text-label-sm text-md-sys-on-surface/40 font-medium mt-0.5">
+                                <span>{match.subType || 'Combat'}</span>
+                                <MatchCategoryBadge category={match.matchCategory} compact />
+                                {match.isPracticeRange === true ? (
+                                    <span aria-label="Practice Range" title="Practice Range" className="inline-flex items-center justify-center rounded-full border border-info/25 bg-info/10 p-1 text-info/80">
+                                        <Crosshair size={10} />
+                                    </span>
+                                ) : null}
+                                {match.isBackfill === true ? (
+                                    <span aria-label="Backfill — joined mid-match" title="Backfill — joined mid-match, pregame skipped" className="inline-flex items-center justify-center rounded-full border border-warning/25 bg-warning/10 p-1 text-warning/80">
+                                        <LogIn size={10} />
+                                    </span>
+                                ) : null}
+                            </div>
+                        </div>
+                    </div>
+                </td>
+                <td className="px-3 py-4">
+                    <div className="text-body font-semibold text-md-sys-on-surface/60">{timeAgoLabel}</div>
+                    <div className="text-label-sm text-md-sys-on-surface/40 font-medium mt-0.5">{new Date(match.timestamp).toLocaleDateString()}</div>
+                </td>
+                <td className="px-3 py-4">
+                    <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-control bg-gradient-to-br from-md-sys-primary/10 to-md-sys-tertiary/10 border border-md-sys-outline/[0.06] flex items-center justify-center text-label-sm font-bold text-md-sys-primary/60">
+                            {(match.ship || 'U')[0]}
+                        </div>
+                        <div>
+                            <div className="text-body font-bold">{(match.ship || 'Unknown').split('(')[0]}</div>
+                            <div className="text-label-sm text-md-sys-on-surface/40 font-medium">{match.hero || 'Unknown'}</div>
+                        </div>
+                    </div>
+                </td>
+                <td className="px-3 py-4">
+                    <span className="font-mono tabular-nums text-base tracking-wider text-md-sys-on-surface/70 bg-md-sys-on-surface/[0.04] px-3 py-1.5 rounded-lg">{match.time || '--:--'}</span>
+                </td>
+                <td className="px-3 py-4 max-w-[280px]">
+                    <div className="flex flex-wrap gap-1.5">
+                        {match.mapType ? (
+                            <span className="px-2 py-0.5 rounded-md bg-info/10 text-info/80 text-label-sm font-medium inline-flex items-center gap-1">
+                                <ScanEye size={9} />{match.mapType}
+                            </span>
+                        ) : null}
+                        {match.artifactSource ? (
+                            <span className="px-2 py-0.5 rounded-md bg-warning/10 text-warning/80 text-label-sm font-medium inline-flex items-center gap-1">
+                                <ImageIcon size={9} />{match.artifactSource}
+                            </span>
+                        ) : null}
+                        {combinedHazards.slice(0, 2).map((hazard) => (
+                            <span key={hazard} className="px-2 py-0.5 rounded-md bg-warning/10 text-warning/80 text-label-sm font-medium inline-flex items-center gap-1">
+                                <Zap size={9} />{hazard}
+                            </span>
+                        ))}
+                        {combinedHazards.length > 2 && (
+                            <span className="text-label-sm text-md-sys-on-surface/40 font-medium">+{combinedHazards.length - 2}</span>
+                        )}
+                        {combinedHazards.length === 0 && !match.mapType && !match.artifactSource && (
+                            <span className="text-md-sys-on-surface/40 italic text-label-sm">--</span>
+                        )}
+                    </div>
+                </td>
+                <td className="px-3 py-4 text-body max-w-40">
+                    <div className="flex flex-wrap gap-1">
+                        {(match.teammates && match.teammates.length > 0) ? match.teammates.map((teammate, index) => (
+                            <span key={index} onClick={(e) => { e.stopPropagation(); onDrillDown(teammate, 'Teammate'); }} className="px-2 py-0.5 rounded-md bg-info/8 text-info/80 hover:bg-info/15 cursor-pointer transition-colors text-label-sm font-medium">
+                                {formatPlayerForDisplay(teammate)}
+                            </span>
+                        )) : <span className="text-md-sys-on-surface/40 italic text-label-sm">None</span>}
+                    </div>
+                </td>
+                <td className="px-3 py-4 text-body max-w-40">
+                    <div className="flex flex-wrap gap-1">
+                        {(match.opponents && match.opponents.length > 0) ? (
+                            <>
+                                {match.opponents.slice(0, 5).map((opponent, index) => (
+                                    <span key={index} onClick={(e) => { e.stopPropagation(); onDrillDown(opponent, 'Opponent'); }} className="px-2 py-0.5 rounded-md bg-danger/8 text-danger/80 hover:bg-danger/15 cursor-pointer transition-colors text-label-sm font-medium">
+                                        {opponent}
+                                    </span>
+                                ))}
+                                {match.opponents.length > 5 && (
+                                    <span className="px-2 py-0.5 rounded-md bg-danger/10 text-danger/70 text-label-sm font-semibold">
+                                        +{match.opponents.length - 5}
+                                    </span>
+                                )}
+                            </>
+                        ) : <span className="text-md-sys-on-surface/40 italic text-label-sm">None</span>}
+                    </div>
+                </td>
+                <td className="px-3 py-4 text-right">
+                    <div className="flex justify-end items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200" onClick={e => e.stopPropagation()}>
+                        <button onClick={onEdit} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-md-sys-on-surface/[0.08] transition-colors text-md-sys-on-surface/60 hover:text-md-sys-on-surface" title="Edit"><Edit2 size={13} /></button>
+                        <button onClick={onOpenNote} className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${match.notes ? 'text-md-sys-primary bg-md-sys-primary/10' : 'text-md-sys-on-surface/60 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/[0.08]'}`} title="Notes"><FileText size={13} /></button>
+                        <button onClick={onPin} className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${match.isPinned ? 'text-warning bg-warning/10' : 'text-md-sys-on-surface/60 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/[0.08]'}`} title="Pin"><Pin size={13} className={match.isPinned ? 'fill-current' : ''} /></button>
+                        <button onClick={onArchive} className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${match.archived ? 'text-md-sys-primary bg-md-sys-primary/10' : 'text-md-sys-on-surface/60 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/[0.08]'}`} title={match.archived ? 'Unarchive' : 'Archive'}>{match.archived ? <ArchiveRestore size={13} /> : <Archive size={13} />}</button>
+                        <button onClick={onNavigateToSmartCaptures} className="w-7 h-7 rounded-lg flex items-center justify-center text-md-sys-on-surface/60 hover:text-md-sys-primary hover:bg-md-sys-primary/10 transition-colors" title="View in Smart Captures"><ScanEye size={13} /></button>
+                        <button onClick={onDelete} className="w-7 h-7 rounded-lg flex items-center justify-center text-md-sys-on-surface/60 hover:text-danger hover:bg-danger/10 transition-colors" title="Delete"><Trash2 size={13} /></button>
+                    </div>
+                </td>
+                <td className="pr-5 py-4 pl-2 text-right" onClick={e => e.stopPropagation()}>
+                    <button
+                        type="button"
+                        onClick={onSelect}
+                        aria-label={isSelected ? 'Deselect match' : 'Select match'}
+                        title={isSelected ? 'Deselect match' : 'Select match'}
+                        className={`h-6 w-6 rounded-md border inline-flex items-center justify-center transition-all ${
+                            isSelected
+                                ? 'opacity-100 border-md-sys-primary/55 bg-md-sys-primary/14 text-md-sys-primary'
+                                : 'invisible opacity-0 pointer-events-none group-hover:visible group-hover:opacity-100 group-hover:pointer-events-auto border-md-sys-outline/32 bg-transparent text-md-sys-on-surface/60 hover:text-md-sys-primary hover:border-md-sys-primary/45'
+                        }`}
+                    >
+                        {isSelected ? <Check size={12} /> : null}
+                    </button>
+                </td>
+            </tr>
+            {isExpanded && (
+                <tr className="border-b border-md-sys-outline/5">
+                    <td colSpan={12} className="px-4 pb-4 pt-0">
+                        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.85fr)] gap-4 rounded-card border border-md-sys-outline/10 overflow-hidden" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
+                            <div className="p-4 border-b lg:border-b-0 lg:border-r border-md-sys-outline/[0.06]">
+                                <div className="flex items-center justify-between gap-2 mb-3">
+                                    <div>
+                                        <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/40">Map Screen</div>
+                                        <div className="text-label-sm text-md-sys-on-surface/55 mt-0.5">Click to open details · double-click to copy the image</div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); onToggleExpanded(); }}
+                                        className="px-2.5 py-1.5 rounded-control text-label-xs font-semibold border border-md-sys-outline/10 text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/[0.06] transition-colors"
+                                    >
+                                        Collapse
+                                    </button>
+                                </div>
+                                {mapSrc === undefined ? (
+                                    <div role="status" aria-label="Loading tactical map preview" className="min-h-56 rounded-card border border-md-sys-outline/10 flex items-center justify-center text-md-sys-on-surface/40" style={{ background: 'var(--md-sys-color-surface-container)' }}>
+                                        <RefreshCw size={18} className="animate-spin" />
+                                    </div>
+                                ) : mapSrc ? (
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); onOpenDetails(); }}
+                                        onDoubleClick={(e) => { e.stopPropagation(); onCopyMapImage(mapSrc); }}
+                                        className="w-full overflow-hidden rounded-card border border-md-sys-outline/10 group relative"
+                                        title="Click to open details · double-click to copy image"
+                                    >
+                                        <LocalImage src={mapSrc} alt="Tactical map capture" className="w-full max-h-72 object-cover" fallback={<div className="w-full h-72 bg-md-sys-on-surface/[0.06]" />} />
+                                        <div className="absolute inset-0 bg-scrim-40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-on-scrim transition-opacity">
+                                            <Eye size={18} />
+                                        </div>
+                                    </button>
+                                ) : (
+                                    <div className="min-h-56 rounded-card border border-md-sys-outline/10 flex items-center justify-center text-md-sys-on-surface/40" style={{ background: 'var(--md-sys-color-surface-container)' }}>
+                                        No tactical map capture found
+                                    </div>
+                                )}
+                            </div>
+                            <div className="p-4 space-y-4">
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="rounded-card border border-md-sys-outline/10 px-3 py-2" style={{ background: 'var(--md-sys-color-surface-container)' }}>
+                                        <div className="text-label-xs uppercase tracking-wide text-md-sys-on-surface/40">Seed</div>
+                                        <button type="button" onClick={(e) => { e.stopPropagation(); onCopySeed(); }} className="mt-1 inline-flex items-center gap-1 text-label-sm font-bold text-md-sys-primary hover:text-md-sys-primary/80 transition-colors">
+                                            <ClipboardCopy size={11} />
+                                            {seedLabel || '--'}
+                                        </button>
+                                    </div>
+                                    <div className="rounded-card border border-md-sys-outline/10 px-3 py-2" style={{ background: 'var(--md-sys-color-surface-container)' }}>
+                                        <div className="text-label-xs uppercase tracking-wide text-md-sys-on-surface/40">Era</div>
+                                        <div className="mt-1 text-label-sm font-semibold text-md-sys-on-surface/70">{eraLabel || '--'}</div>
+                                    </div>
+                                    <div className="rounded-card border border-md-sys-outline/10 px-3 py-2 col-span-2" style={{ background: 'var(--md-sys-color-surface-container)' }}>
+                                        <div className="text-label-xs uppercase tracking-wide text-md-sys-on-surface/40">Map / Artifact</div>
+                                        <div className="mt-1 flex flex-wrap gap-1.5 text-label-sm font-semibold text-md-sys-on-surface/70">
+                                            <span>{match.mapType || 'Unknown map'}</span>
+                                            <span className="opacity-35">·</span>
+                                            <span>{match.artifactSource || 'Unknown artifact'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/40 mb-2">All Hazards</div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {combinedHazards.length > 0 ? combinedHazards.map((hazard) => (
+                                            <span key={hazard} className="px-2 py-0.5 rounded-md bg-warning/10 text-warning/80 text-label-sm font-medium inline-flex items-center gap-1">
+                                                <Zap size={9} />
+                                                {hazard}
+                                            </span>
+                                        )) : <span className="text-md-sys-on-surface/40 italic text-label-sm">None</span>}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            )}
+        </React.Fragment>
+    );
+};
 
 interface HistoryTableProps {
     isActive?: boolean;
@@ -70,12 +431,16 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
     const [filtersOpen, setFiltersOpen] = useState(false);
     const [filterResult, setFilterResult] = useState<'all' | 'Win' | 'Loss' | 'Draw' | 'Ongoing'>('all');
     const [filterShip, setFilterShip] = useState<string>('all');
-    const [filterModifier, setFilterModifier] = useState<string>('all');
-    const [filterHazard, setFilterHazard] = useState<string>('all');
     const [filterArtifact, setFilterArtifact] = useState<string>('all');
     const [filterDateFrom, setFilterDateFrom] = useState<string>('');
     const [filterDateTo, setFilterDateTo] = useState<string>('');
     const [showArchived, setShowArchived] = useState(false);
+    const [hazardDropdownOpen, setHazardDropdownOpen] = useState(false);
+    const [hazardSearch, setHazardSearch] = useState('');
+    const [selectedHazards, setSelectedHazards] = useState<string[]>([]);
+    const [expandedMatches, setExpandedMatches] = useState<Set<number>>(new Set());
+    const [matchMapPaths, setMatchMapPaths] = useState<Record<number, string | null>>({});
+    const hazardDropdownRef = useRef<HTMLDivElement | null>(null);
 
     const uniqueShips = useMemo(() => {
         const set = new Set<string>();
@@ -95,6 +460,21 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
         return Array.from(set).sort();
     }, [matches]);
 
+    const combinedHazardOptions = useMemo(() => {
+        const set = new Set<string>();
+        [...uniqueModifiers, ...uniqueHazards].forEach((value) => {
+            const cleaned = String(value || '').trim();
+            if (cleaned) set.add(cleaned);
+        });
+        return Array.from(set).sort();
+    }, [uniqueHazards, uniqueModifiers]);
+
+    const hazardOptions = useMemo(() => {
+        const query = hazardSearch.trim().toLowerCase();
+        if (!query) return combinedHazardOptions;
+        return combinedHazardOptions.filter((value) => value.toLowerCase().includes(query));
+    }, [combinedHazardOptions, hazardSearch]);
+
     const uniqueArtifacts = useMemo(() => {
         const set = new Set<string>();
         matches.forEach(m => { const a = String(m.artifactSource || '').trim(); if (a) set.add(a); });
@@ -105,25 +485,138 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
         let c = 0;
         if (filterResult !== 'all') c++;
         if (filterShip !== 'all') c++;
-        if (filterModifier !== 'all') c++;
-        if (filterHazard !== 'all') c++;
+        if (selectedHazards.length > 0) c++;
         if (filterArtifact !== 'all') c++;
         if (filterDateFrom) c++;
         if (filterDateTo) c++;
         if (showArchived) c++;
         return c;
-    }, [filterResult, filterShip, filterModifier, filterHazard, filterArtifact, filterDateFrom, filterDateTo, showArchived]);
+    }, [filterResult, filterShip, selectedHazards.length, filterArtifact, filterDateFrom, filterDateTo, showArchived]);
 
     const clearAllFilters = () => {
         setFilterResult('all');
         setFilterShip('all');
-        setFilterModifier('all');
-        setFilterHazard('all');
+        setSelectedHazards([]);
         setFilterArtifact('all');
         setFilterDateFrom('');
         setFilterDateTo('');
         setShowArchived(false);
+        setHazardSearch('');
     };
+
+    const getMatchSeed = useCallback((match: Match): string => {
+        const directSeed = String(match.mapSeed || '').trim();
+        if (directSeed) return directSeed;
+        const rawText = String(match.ocrDebug?.rawText || '').toUpperCase().replace(/\s+/g, ' ').trim();
+        const parsed = rawText.match(/MAP\s*SEED\s*:?\s*([0-9A-FOIL]{4,12})/i);
+        if (!parsed) return '';
+        return String(parsed[1] || '').toUpperCase().replace(/[OIL]/g, (ch) => ({ O: '0', I: '1', L: '1' }[ch as 'O' | 'I' | 'L'] || ch));
+    }, []);
+
+    const getEraLabel = useCallback((match: Match) => getUpdateForTimestamp(match.timestamp)?.label || '', []);
+
+    const getMatchNumber = useCallback((match: Match) => {
+        const canonical = Number(match.canonicalMatchNumber);
+        return Number.isFinite(canonical) && canonical > 0 ? canonical : match.id;
+    }, []);
+
+    const getTeamCount = useCallback((match: Match) => {
+        const opponentTeams = Array.isArray(match.opponentTeams) ? match.opponentTeams.length : 0;
+        if (opponentTeams > 0) return opponentTeams + 1;
+        if ((match.opponents || []).length > 0) return 2;
+        return (match.teammates || []).length > 0 ? 1 : 0;
+    }, []);
+
+    const copySeedToClipboard = useCallback(async (seed: string) => {
+        if (!seed) return;
+        await navigator.clipboard.writeText(seed);
+        pushNotification({
+            message: `Copied seed ${seed}`,
+            type: 'success',
+            source: 'history',
+            deepLink: { type: 'openView', view: 'history' },
+        });
+    }, [pushNotification]);
+
+    const copyImageToClipboard = useCallback(async (path: string): Promise<boolean> => {
+        const api = getElectronAPI();
+        if (!api) return false;
+        try {
+            const base64 = await api.invoke('read-file-base64', path) as string | null;
+            if (!base64) return false;
+            const ext = path.split('.').pop()?.toLowerCase() || 'png';
+            const mime = ext === 'jpg' || ext === 'jpeg'
+                ? 'image/jpeg'
+                : ext === 'webp'
+                    ? 'image/webp'
+                    : ext === 'bmp'
+                        ? 'image/bmp'
+                        : 'image/png';
+            const response = await fetch(`data:${mime};base64,${base64}`);
+            const blob = await response.blob();
+            await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+            return true;
+        } catch {
+            return false;
+        }
+    }, []);
+
+    const resolveTacticalMapPath = useCallback(async (match: Match): Promise<string | null> => {
+        const fallback = (match.artifacts || []).find(
+            (path) => classifyArtifactScreenshotBucket(String(path || '')) === 'tactical_map'
+        );
+
+        try {
+            const structured = await getMatchArtifactsStructured(match.id, match.artifacts || []);
+            const images = structured.images || [];
+            for (let i = 0; i < images.length; i += 1) {
+                const bucket = classifyArtifactScreenshotBucket(images[i], structured.imageFiles?.[i] || null);
+                if (bucket === 'tactical_map') {
+                    const cleaned = String(images[i] || '').trim();
+                    if (cleaned) return cleaned;
+                }
+            }
+        } catch {
+            // fall back to the filename-based guess below
+        }
+
+        return fallback ? String(fallback).trim() || null : null;
+    }, []);
+
+    const toggleHazardFilter = useCallback((value: string) => {
+        const cleaned = String(value || '').trim();
+        if (!cleaned) return;
+        setSelectedHazards((prev) => (
+            prev.includes(cleaned)
+                ? prev.filter((item) => item !== cleaned)
+                : [...prev, cleaned]
+        ));
+    }, []);
+
+    const toggleExpandedMatch = useCallback((matchId: number) => {
+        setExpandedMatches((prev) => {
+            const next = new Set(prev);
+            if (next.has(matchId)) next.delete(matchId);
+            else next.add(matchId);
+            return next;
+        });
+    }, []);
+
+    const navigateToSmartCaptures = useCallback((matchId: number) => {
+        setSmartCapturesFocusMatchId(matchId);
+        setActiveView('smart-captures');
+    }, [setActiveView, setSmartCapturesFocusMatchId]);
+
+    useEffect(() => {
+        if (!hazardDropdownOpen) return;
+        const handleOutsideClick = (event: MouseEvent) => {
+            const target = event.target as Node | null;
+            if (target && hazardDropdownRef.current?.contains(target)) return;
+            setHazardDropdownOpen(false);
+        };
+        window.addEventListener('mousedown', handleOutsideClick);
+        return () => window.removeEventListener('mousedown', handleOutsideClick);
+    }, [hazardDropdownOpen]);
 
     useEffect(() => {
         const t = setTimeout(() => setSearchTerm(searchInput.trim()), runtimeConfig.history.searchDebounceMs);
@@ -153,8 +646,13 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
             if (!showArchived && m.archived) return false;
             if (filterResult !== 'all' && m.result !== filterResult) return false;
             if (filterShip !== 'all' && m.ship !== filterShip) return false;
-            if (filterModifier !== 'all' && !(m.reachModifiers || []).includes(filterModifier)) return false;
-            if (filterHazard !== 'all' && !((m.ocrDebug?.hazards) || []).includes(filterHazard)) return false;
+            if (selectedHazards.length > 0) {
+                const hazards = new Set([
+                    ...(m.reachModifiers || []),
+                    ...((m.ocrDebug?.hazards) || []),
+                ].map((value) => String(value || '').trim()).filter(Boolean));
+                if (!selectedHazards.some((value) => hazards.has(value))) return false;
+            }
             if (filterArtifact !== 'all' && String(m.artifactSource || '').trim() !== filterArtifact) return false;
             if (m.timestamp < fromTs || m.timestamp > toTs) return false;
 
@@ -173,7 +671,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                 (m.reachModifiers || []).some(r => r.toLowerCase().includes(term))
             );
         });
-    }, [matches, searchTerm, filterResult, filterShip, filterModifier, filterHazard, filterArtifact, filterDateFrom, filterDateTo, showArchived]);
+    }, [matches, searchTerm, filterResult, filterShip, selectedHazards, filterArtifact, filterDateFrom, filterDateTo, showArchived]);
 
     const sortedMatches = useMemo(() => {
         const sortFn = (a: Match, b: Match) => {
@@ -379,11 +877,6 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
         }
     };
 
-    const navigateToSmartCaptures = (matchId: number) => {
-        setSmartCapturesFocusMatchId(matchId);
-        setActiveView('smart-captures');
-    };
-
     const handleExportPng = async () => {
         if (selectedMatches.length === 0) return;
         const selectedIdSet = new Set(selectedMatches);
@@ -441,6 +934,30 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
     }, [completedMatches]);
 
     const totalPages = itemsPerPage === 'Infinity' ? 1 : Math.ceil(sortedMatches.length / (itemsPerPage as number)) || 1;
+
+    useEffect(() => {
+        const pendingIds = Array.from(expandedMatches).filter((matchId) => matchMapPaths[matchId] === undefined);
+        if (pendingIds.length === 0) return;
+
+        let cancelled = false;
+        pendingIds.forEach((matchId) => {
+            const match = matches.find((entry) => entry.id === matchId);
+            if (!match) return;
+            void (async () => {
+                const path = await resolveTacticalMapPath(match);
+                if (cancelled) return;
+                setMatchMapPaths((prev) => (
+                    prev[matchId] === path
+                        ? prev
+                        : { ...prev, [matchId]: path }
+                ));
+            })();
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [expandedMatches, matchMapPaths, matches, resolveTacticalMapPath]);
 
     return (
         <div data-tour="view-history" className="twilight-solid-scope twilight-soft-shadows w-full min-h-full pr-1 flex flex-col gap-4 animate-slide-up">
@@ -558,32 +1075,91 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                                     {uniqueShips.map(s => <option key={s} value={s}>{s.replace(/ \(\d Player\)/, '')}</option>)}
                                 </select>
                             </div>
-                            <div className="flex flex-col gap-1">
-                                <label className="text-label-xs font-bold uppercase tracking-wider text-md-sys-on-surface/40">Modifier</label>
-                                <select
-                                    value={filterModifier}
-                                    onChange={e => setFilterModifier(e.target.value)}
-                                    className="px-2.5 py-1.5 rounded-lg text-label-sm font-semibold outline-none cursor-pointer border border-md-sys-outline/10 text-md-sys-on-surface"
-                                    style={{ background: 'var(--md-sys-color-surface-container-high)' }}
+                            <div ref={hazardDropdownRef} className="flex flex-col gap-1 min-w-[18rem] relative">
+                                <label className="text-label-xs font-bold uppercase tracking-wider text-md-sys-on-surface/40">Hazards & Modifiers</label>
+                                <button
+                                    type="button"
+                                    onClick={() => setHazardDropdownOpen(v => !v)}
+                                    className={`px-3 py-2.5 rounded-lg text-label-sm font-semibold outline-none cursor-pointer border inline-flex items-center justify-between gap-3 ${
+                                        selectedHazards.length > 0
+                                            ? 'border-md-sys-primary/30 text-md-sys-primary bg-md-sys-primary/10'
+                                            : 'border-md-sys-outline/10 text-md-sys-on-surface'
+                                    }`}
+                                    style={selectedHazards.length === 0 ? { background: 'var(--md-sys-color-surface-container-high)' } : undefined}
                                 >
-                                    <option value="all">All Modifiers</option>
-                                    {uniqueModifiers.map(m => <option key={m} value={m}>{m}</option>)}
-                                </select>
+                                    <span className="truncate text-left">
+                                        {selectedHazards.length > 0
+                                            ? `${selectedHazards.length} selected`
+                                            : 'Select hazards or modifiers'}
+                                    </span>
+                                    <ChevronDown size={12} className={`shrink-0 transition-transform ${hazardDropdownOpen ? 'rotate-180' : ''}`} />
+                                </button>
+                                {selectedHazards.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {selectedHazards.slice(0, 3).map((item) => (
+                                            <button
+                                                key={item}
+                                                type="button"
+                                                onClick={() => toggleHazardFilter(item)}
+                                                className="px-2 py-0.5 rounded-md bg-md-sys-primary/10 text-md-sys-primary text-label-xs font-semibold inline-flex items-center gap-1"
+                                                title={`Remove ${item}`}
+                                            >
+                                                {item}
+                                                <X size={10} />
+                                            </button>
+                                        ))}
+                                        {selectedHazards.length > 3 && (
+                                            <span className="px-2 py-0.5 rounded-md bg-md-sys-on-surface/[0.06] text-md-sys-on-surface/55 text-label-xs font-semibold">
+                                                +{selectedHazards.length - 3}
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+                                {hazardDropdownOpen && (
+                                    <div className="absolute top-full left-0 mt-2 z-20 w-full rounded-card border border-md-sys-outline/10 shadow-2xl p-3" style={{ background: 'var(--md-sys-color-surface-container-highest)' }}>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <Search size={12} className="text-md-sys-on-surface/40" />
+                                            <input
+                                                value={hazardSearch}
+                                                onChange={(e) => setHazardSearch(e.target.value)}
+                                                placeholder="Search hazards or modifiers"
+                                                className="w-full bg-transparent outline-none text-label-sm text-md-sys-on-surface placeholder:text-md-sys-on-surface/35"
+                                            />
+                                            {selectedHazards.length > 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedHazards([])}
+                                                    className="text-label-xs font-semibold text-md-sys-on-surface/55 hover:text-md-sys-on-surface"
+                                                >
+                                                    Clear
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div className="max-h-52 overflow-y-auto custom-scrollbar space-y-1 pr-1">
+                                            {hazardOptions.length > 0 ? hazardOptions.map((item) => {
+                                                const active = selectedHazards.includes(item);
+                                                return (
+                                                    <button
+                                                        key={item}
+                                                        type="button"
+                                                        onClick={() => toggleHazardFilter(item)}
+                                                        className={`w-full px-2.5 py-2 rounded-lg text-left text-label-sm font-medium inline-flex items-center justify-between gap-2 transition-colors border ${
+                                                            active
+                                                                ? 'border-md-sys-primary/25 bg-md-sys-primary/10 text-md-sys-primary'
+                                                                : 'border-transparent text-md-sys-on-surface/70 hover:bg-md-sys-on-surface/[0.06]'
+                                                        }`}
+                                                    >
+                                                        <span className="truncate">{item}</span>
+                                                        {active ? <Check size={12} /> : null}
+                                                    </button>
+                                                );
+                                            }) : (
+                                                <div className="px-2 py-4 text-center text-label-sm text-md-sys-on-surface/40">No hazards or modifiers found</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                            {uniqueHazards.length > 0 && (
-                                <div className="flex flex-col gap-1">
-                                    <label className="text-label-xs font-bold uppercase tracking-wider text-md-sys-on-surface/40">Hazard</label>
-                                    <select
-                                        value={filterHazard}
-                                        onChange={e => setFilterHazard(e.target.value)}
-                                        className="px-2.5 py-1.5 rounded-lg text-label-sm font-semibold outline-none cursor-pointer border border-md-sys-outline/10 text-md-sys-on-surface"
-                                        style={{ background: 'var(--md-sys-color-surface-container-high)' }}
-                                    >
-                                        <option value="all">All Hazards</option>
-                                        {uniqueHazards.map(h => <option key={h} value={h}>{h}</option>)}
-                                    </select>
-                                </div>
-                            )}
                             {uniqueArtifacts.length > 0 && (
                                 <div className="flex flex-col gap-1">
                                     <label className="text-label-xs font-bold uppercase tracking-wider text-md-sys-on-surface/40">Artifact</label>
@@ -744,9 +1320,11 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                     <table className="w-full text-left border-collapse history-table">
                         <thead className="sticky top-0 z-10">
                             <tr className="text-label-sm font-bold uppercase tracking-wide-10 text-md-sys-on-surface/60 border-b border-md-sys-outline/10 bg-md-sys-surface-container">
-                                <th className="w-[5px] p-0"></th>
+                                <th className="w-[72px] p-0"></th>
+                                <th className="px-3 py-3.5 whitespace-nowrap">Match #</th>
+                                <th className="px-3 py-3.5 whitespace-nowrap">Teams</th>
                                 <th className="px-3 py-3.5 cursor-pointer hover:text-md-sys-primary transition-colors select-none" onClick={() => handleSort('result')}>
-                                    <span className="inline-flex items-center gap-1.5">Outcome <ArrowUpDown size={10} className="opacity-40" /></span>
+                                    <span className="inline-flex items-center gap-1.5">Outcome / Seed / Era <ArrowUpDown size={10} className="opacity-40" /></span>
                                 </th>
                                 <th className="px-3 py-3.5 cursor-pointer hover:text-md-sys-primary transition-colors select-none" onClick={() => handleSort('timeAgo')}>
                                     <span className="inline-flex items-center gap-1.5">When <ArrowUpDown size={10} className="opacity-40" /></span>
@@ -757,7 +1335,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                                 <th className="px-3 py-3.5 cursor-pointer hover:text-md-sys-primary transition-colors select-none" onClick={() => handleSort('time')}>
                                     <span className="inline-flex items-center gap-1.5">Duration <ArrowUpDown size={10} className="opacity-40" /></span>
                                 </th>
-                                <th className="px-3 py-3.5">Hazards</th>
+                                <th className="px-3 py-3.5 whitespace-nowrap">Map / Hazards</th>
                                 <th className="px-3 py-3.5">Teammates</th>
                                 <th className="px-3 py-3.5">Opponents</th>
                                 <th className="px-3 py-3.5 text-right">Actions</th>
@@ -774,7 +1352,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                         <tbody className="text-body font-medium text-md-sys-on-surface">
                             {sortedMatches.length === 0 ? (
                                 <tr>
-                                    <td colSpan={11}>
+                                    <td colSpan={12}>
                                         <div className="flex flex-col items-center justify-center py-28 gap-4">
                                             <div className="w-20 h-20 rounded-card bg-gradient-to-br from-md-sys-primary/15 to-md-sys-tertiary/15 border border-md-sys-outline/10 flex items-center justify-center">
                                                 <Ghost size={36} className="text-md-sys-primary/60" />
@@ -791,190 +1369,58 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                                     <React.Fragment key={group.label}>
                                         {/* ── Day separator ── */}
                                         <tr>
-                                            <td colSpan={11} className="px-5 py-2.5 border-b border-md-sys-outline/5" style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface-variant), transparent 60%)' }}>
+                                            <td colSpan={12} className="px-5 py-2.5 border-b border-md-sys-outline/5" style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface-variant), transparent 60%)' }}>
                                                 <span className="text-label-sm font-bold uppercase tracking-wide-14 text-md-sys-on-surface/40">{group.label}</span>
                                             </td>
                                         </tr>
-                                        {group.matches.map(m => {
-                                            const isWin = m.result === 'Win';
-                                            const isLoss = m.result === 'Loss';
-                                            const isOngoing = m.result === 'Ongoing';
-                                            const hazards = m.reachModifiers || [];
+                                        {group.matches.map((m) => {
+                                            const seedLabel = getMatchSeed(m);
+                                            const combinedHazards = Array.from(new Set([
+                                                ...(m.reachModifiers || []),
+                                                ...((m.ocrDebug?.hazards) || []),
+                                            ].map((value) => String(value || '').trim()).filter(Boolean)));
+                                            const matchNumber = String(getMatchNumber(m));
+                                            const teamCount = getTeamCount(m);
+                                            const teamCountLabel = teamCount > 0 ? `${teamCount}` : '--';
                                             const isSelected = selectedMatches.includes(m.id);
+                                            const isExpanded = expandedMatches.has(m.id);
 
                                             return (
-                                                <tr
+                                                <MatchHistoryRow
                                                     key={m.id}
-                                                    onClick={() => selectMatch(m.id)}
-                                                    onDoubleClick={() => setSelectedMatchForDetails(m)}
-                                                    className={`border-b border-md-sys-outline/5 transition-all duration-200 group cursor-pointer ${isSelected ? 'bg-md-sys-primary/10' : getRowBg(m)} active:bg-md-sys-on-surface/[0.07]`}
-                                                    title="Click to select. Double-click to open details."
-                                                >
-                                                    {/* left accent bar */}
-                                                    <td className="w-[5px] p-0 relative">
-                                                        <div className={`absolute inset-y-0 left-0 w-[5px] rounded-r-full transition-all ${
-                                                            isWin ? 'bg-success'
-                                                                : isLoss ? 'bg-danger'
-                                                                    : isOngoing ? 'bg-info'
-                                                                        : 'bg-neutral'
-                                                        } opacity-70 group-hover:opacity-100`} />
-                                                    </td>
-
-                                                    {/* outcome */}
-                                                    <td className="px-3 py-4">
-                                                        <div className="flex items-center gap-2.5">
-                                                            <div className={`w-8 h-8 rounded-control flex items-center justify-center ${
-                                                                isWin ? 'bg-success/15'
-                                                                    : isLoss ? 'bg-danger/15'
-                                                                        : isOngoing ? 'bg-info/15'
-                                                                            : 'bg-neutral/15'
-                                                            }`}>
-                                                                {isWin
-                                                                    ? <Trophy size={14} className="text-success" />
-                                                                    : isLoss
-                                                                        ? <X size={14} className="text-danger" />
-                                                                        : isOngoing
-                                                                            ? <Clock size={14} className="text-info" />
-                                                                            : <TrendingUp size={14} className="text-md-sys-on-surface/70" />
-                                                                }
-                                                            </div>
-                                                            <div>
-                                                                <span className={`text-body font-bold ${
-                                                                    isWin ? 'text-success'
-                                                                        : isLoss ? 'text-danger'
-                                                                            : isOngoing ? 'text-info'
-                                                                                : 'text-md-sys-on-surface/70'
-                                                                }`}>
-                                                                    {m.result}
-                                                                </span>
-                                                                <div className="flex flex-wrap items-center gap-1.5 text-label-sm text-md-sys-on-surface/40 font-medium">
-                                                                    <span>{m.subType || 'Combat'}</span>
-                                                                    <MatchCategoryBadge category={m.matchCategory} compact />
-                                                                    {m.isPracticeRange === true ? (
-                                                                        <span
-                                                                            aria-label="Practice Range"
-                                                                            title="Practice Range"
-                                                                            className="inline-flex items-center justify-center rounded-full border border-info/25 bg-info/10 p-1 text-info/80"
-                                                                        >
-                                                                            <Crosshair size={10} />
-                                                                        </span>
-                                                                    ) : null}
-                                                                    {m.isBackfill === true ? (
-                                                                        <span
-                                                                            aria-label="Backfill — joined mid-match"
-                                                                            title="Backfill — joined mid-match, pregame skipped"
-                                                                            className="inline-flex items-center justify-center rounded-full border border-warning/25 bg-warning/10 p-1 text-warning/80"
-                                                                        >
-                                                                            <LogIn size={10} />
-                                                                        </span>
-                                                                    ) : null}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-
-                                                    {/* time */}
-                                                    <td className="px-3 py-4">
-                                                        <div className="text-body font-semibold text-md-sys-on-surface/60">{timeAgoMap.get(m.id) || ''}</div>
-                                                        <div className="text-label-sm text-md-sys-on-surface/40 font-medium mt-0.5">{new Date(m.timestamp).toLocaleDateString()}</div>
-                                                    </td>
-
-                                                    {/* ship / hero */}
-                                                    <td className="px-3 py-4">
-                                                        <div className="flex items-center gap-2.5">
-                                                            <div className="w-8 h-8 rounded-control bg-gradient-to-br from-md-sys-primary/10 to-md-sys-tertiary/10 border border-md-sys-outline/[0.06] flex items-center justify-center text-label-sm font-bold text-md-sys-primary/60">
-                                                                {(m.ship || 'U')[0]}
-                                                            </div>
-                                                            <div>
-                                                                <div className="text-body font-bold">{(m.ship || 'Unknown').split('(')[0]}</div>
-                                                                <div className="text-label-sm text-md-sys-on-surface/40 font-medium">{m.hero || 'Unknown'}</div>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-
-                                                    {/* duration */}
-                                                    <td className="px-3 py-4">
-                                                        <span className="font-mono tabular-nums text-base tracking-wider text-md-sys-on-surface/70 bg-md-sys-on-surface/[0.04] px-3 py-1.5 rounded-lg">{m.time || '--:--'}</span>
-                                                    </td>
-
-                                                    {/* hazards */}
-                                                    <td className="px-3 py-4 max-w-140px">
-                                                        {hazards.length > 0 ? (
-                                                            <div className="flex flex-wrap gap-1">
-                                                                {hazards.slice(0, 2).map((h, i) => (
-                                                                    <span key={i} className="px-2 py-0.5 rounded-md bg-warning/10 text-warning/80 text-label-sm font-medium inline-flex items-center gap-1">
-                                                                        <Zap size={9} />{h}
-                                                                    </span>
-                                                                ))}
-                                                                {hazards.length > 2 && (
-                                                                    <span className="text-label-sm text-md-sys-on-surface/40 font-medium">+{hazards.length - 2}</span>
-                                                                )}
-                                                            </div>
-                                                        ) : (
-                                                            <span className="text-md-sys-on-surface/40 italic text-label-sm">--</span>
-                                                        )}
-                                                    </td>
-
-                                                    {/* teammates */}
-                                                    <td className="px-3 py-4 text-body max-w-40">
-                                                        <div className="flex flex-wrap gap-1">
-                                                            {(m.teammates && m.teammates.length > 0) ? m.teammates.map((t, i) => (
-                                                                <span key={i} onClick={(e) => { e.stopPropagation(); onDrillDown?.(t, 'Teammate'); }} className="px-2 py-0.5 rounded-md bg-info/8 text-info/80 hover:bg-info/15 cursor-pointer transition-colors text-label-sm font-medium">
-                                                                    {formatPlayerForDisplay(t)}
-                                                                </span>
-                                                            )) : <span className="text-md-sys-on-surface/40 italic text-label-sm">None</span>}
-                                                        </div>
-                                                    </td>
-
-                                                    {/* opponents */}
-                                                    <td className="px-3 py-4 text-body max-w-40">
-                                                        <div className="flex flex-wrap gap-1">
-                                                            {(m.opponents && m.opponents.length > 0) ? (
-                                                                <>
-                                                                    {m.opponents.slice(0, 5).map((o, i) => (
-                                                                        <span key={i} onClick={(e) => { e.stopPropagation(); onDrillDown?.(o, 'Opponent'); }} className="px-2 py-0.5 rounded-md bg-danger/8 text-danger/80 hover:bg-danger/15 cursor-pointer transition-colors text-label-sm font-medium">
-                                                                            {o}
-                                                                        </span>
-                                                                    ))}
-                                                                    {m.opponents.length > 5 && (
-                                                                        <span className="px-2 py-0.5 rounded-md bg-danger/10 text-danger/70 text-label-sm font-semibold">
-                                                                            +{m.opponents.length - 5}
-                                                                        </span>
-                                                                    )}
-                                                                </>
-                                                            ) : <span className="text-md-sys-on-surface/40 italic text-label-sm">None</span>}
-                                                        </div>
-                                                    </td>
-
-                                                    {/* actions */}
-                                                    <td className="px-3 py-4 text-right">
-                                                        <div className="flex justify-end items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200" onClick={e => e.stopPropagation()}>
-                                                            <button onClick={() => setEditingMatch(m)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-md-sys-on-surface/[0.08] transition-colors text-md-sys-on-surface/60 hover:text-md-sys-on-surface" title="Edit"><Edit2 size={13} /></button>
-                                                            <button onClick={() => handleOpenNote(m)} className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${m.notes ? 'text-md-sys-primary bg-md-sys-primary/10' : 'text-md-sys-on-surface/60 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/[0.08]'}`} title="Notes"><FileText size={13} /></button>
-                                                            <button onClick={() => onPin(m.id)} className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${m.isPinned ? 'text-warning bg-warning/10' : 'text-md-sys-on-surface/60 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/[0.08]'}`} title="Pin"><Pin size={13} className={m.isPinned ? 'fill-current' : ''} /></button>
-                                                            <button onClick={() => onArchive(m.id)} className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${m.archived ? 'text-md-sys-primary bg-md-sys-primary/10' : 'text-md-sys-on-surface/60 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/[0.08]'}`} title={m.archived ? 'Unarchive' : 'Archive'}>{m.archived ? <ArchiveRestore size={13} /> : <Archive size={13} />}</button>
-                                                            <button onClick={() => navigateToSmartCaptures(m.id)} className="w-7 h-7 rounded-lg flex items-center justify-center text-md-sys-on-surface/60 hover:text-md-sys-primary hover:bg-md-sys-primary/10 transition-colors" title="View in Smart Captures"><ScanEye size={13} /></button>
-                                                            <button onClick={() => handleDelete(m.id)} className="w-7 h-7 rounded-lg flex items-center justify-center text-md-sys-on-surface/60 hover:text-danger hover:bg-danger/10 transition-colors" title="Delete"><Trash2 size={13} /></button>
-                                                        </div>
-                                                    </td>
-
-                                                    {/* checkbox */}
-                                                    <td className="pr-5 py-4 pl-2 text-right" onClick={e => e.stopPropagation()}>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => toggleSelection(m.id)}
-                                                            aria-label={isSelected ? 'Deselect match' : 'Select match'}
-                                                            title={isSelected ? 'Deselect match' : 'Select match'}
-                                                            className={`h-6 w-6 rounded-md border inline-flex items-center justify-center transition-all ${
-                                                                isSelected
-                                                                    ? 'opacity-100 border-md-sys-primary/55 bg-md-sys-primary/14 text-md-sys-primary'
-                                                                    : 'invisible opacity-0 pointer-events-none group-hover:visible group-hover:opacity-100 group-hover:pointer-events-auto border-md-sys-outline/32 bg-transparent text-md-sys-on-surface/60 hover:text-md-sys-primary hover:border-md-sys-primary/45'
-                                                            }`}
-                                                        >
-                                                            {isSelected ? <Check size={12} /> : null}
-                                                        </button>
-                                                    </td>
-                                                </tr>
+                                                    match={m}
+                                                    isSelected={isSelected}
+                                                    isExpanded={isExpanded}
+                                                    mapSrc={isExpanded ? matchMapPaths[m.id] : undefined}
+                                                    mapResolved={Object.prototype.hasOwnProperty.call(matchMapPaths, m.id)}
+                                                    timeAgoLabel={timeAgoMap.get(m.id) || ''}
+                                                    matchNumberLabel={matchNumber}
+                                                    teamCountLabel={teamCountLabel}
+                                                    seedLabel={seedLabel}
+                                                    eraLabel={getEraLabel(m)}
+                                                    combinedHazards={combinedHazards}
+                                                    onSelect={() => toggleSelection(m.id)}
+                                                    onOpenDetails={() => setSelectedMatchForDetails(m)}
+                                                    onToggleExpanded={() => toggleExpandedMatch(m.id)}
+                                                    onNavigateToSmartCaptures={() => navigateToSmartCaptures(m.id)}
+                                                    onEdit={() => setEditingMatch(m)}
+                                                    onOpenNote={() => handleOpenNote(m)}
+                                                    onPin={() => onPin(m.id)}
+                                                    onArchive={() => onArchive(m.id)}
+                                                    onDelete={() => handleDelete(m.id)}
+                                                    onCopySeed={() => void copySeedToClipboard(seedLabel)}
+                                                    onCopyMapImage={async (path) => {
+                                                        const ok = await copyImageToClipboard(path);
+                                                        pushNotification({
+                                                            message: ok ? 'Copied tactical map image' : 'Could not copy tactical map image',
+                                                            type: ok ? 'success' : 'warning',
+                                                            source: 'history',
+                                                            deepLink: { type: 'openView', view: 'history' },
+                                                        });
+                                                    }}
+                                                    onDrillDown={onDrillDown}
+                                                    formatPlayerForDisplay={formatPlayerForDisplay}
+                                                />
                                             );
                                         })}
                                     </React.Fragment>

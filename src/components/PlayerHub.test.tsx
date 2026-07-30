@@ -1270,4 +1270,20 @@ describe('PlayerHub', () => {
 
         expect(mergeSuggestionsSpy).toHaveBeenCalled();
     });
+
+    it('keeps archived roster names out of merge suggestion input', () => {
+        const mergeSuggestionsSpy = vi.mocked(buildRosterMergeSuggestionGroups);
+        gameDataState.pilotRegistry = ['Active Pilot', 'Archived Pilot'];
+        gameDataState.rosterEntryMeta = {
+            'active pilot': { status: 'confirmed' },
+            'archived pilot': { status: 'archived' },
+        };
+
+        render(<PlayerHub />);
+
+        fireEvent.click(screen.getAllByRole('button', { name: /^merges/i })[0]);
+
+        const latestCall = mergeSuggestionsSpy.mock.calls.at(-1);
+        expect(latestCall?.[0]?.pilotRegistry).toEqual(['Active Pilot']);
+    });
 });

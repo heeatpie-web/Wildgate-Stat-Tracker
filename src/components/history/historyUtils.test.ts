@@ -59,10 +59,10 @@ describe('historyUtils', () => {
       subType: '',
     } as Match;
 
-    expect(getRowBg({ ...baseMatch, result: 'Win' })).toContain('bg-success/10');
-    expect(getRowBg({ ...baseMatch, result: 'Loss' })).toContain('bg-danger/10');
-    expect(getRowBg({ ...baseMatch, result: 'Draw' })).toContain('bg-neutral/10');
-    expect(getRowBg({ ...baseMatch, result: 'Ongoing' })).toContain('bg-info/10');
+    expect(getRowBg({ ...baseMatch, result: 'Win' })).toContain('bg-success/15');
+    expect(getRowBg({ ...baseMatch, result: 'Loss' })).toContain('bg-danger/15');
+    expect(getRowBg({ ...baseMatch, result: 'Draw' })).toContain('bg-neutral/15');
+    expect(getRowBg({ ...baseMatch, result: 'Ongoing' })).toContain('bg-info/15');
   });
 });
 

@@ -12,7 +12,7 @@ const MAX_NOTIFICATION_HISTORY = 200;
 const DEFAULT_NOTIFICATION_DURATION_MS = runtimeConfig.ui.toastDurationMs;
 const DUPLICATE_NOTIFICATION_WINDOW_MS = 8_000;
 
-export type AppView = 'recording' | 'analytics' | 'smart-captures' | 'players' | 'id-mapper' | 'seeds' | 'history' | 'dev-ocr' | 'video-import';
+export type AppView = 'recording' | 'analytics' | 'smart-captures' | 'players' | 'id-mapper' | 'history' | 'dev-ocr' | 'video-import';
 export type NotificationKind = 'info' | 'warning' | 'error' | 'success' | 'tip';
 export type NotificationSource =
     | 'system'

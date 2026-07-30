@@ -121,11 +121,10 @@ const ResetConfirmModal = React.lazy(() => import('./components/ResetConfirmModa
 const Wizard = React.lazy(() => import('./components/Wizard').then((m) => ({ default: m.Wizard })));
 const ReviewQueueModal = React.lazy(() => import('./components/ReviewQueueModal').then((m) => ({ default: m.ReviewQueueModal })));
 const VideoImportView = React.lazy(() => import('./components/VideoImport/VideoImportView').then(m => ({ default: m.VideoImportView })));
-const SeedsPanel = React.lazy(() => import('./components/SeedsPanel').then(m => ({ default: m.SeedsPanel })));
 import type { AppView } from './store/slices/createUISlice';
 const APP_VIEW_ORDER: AppView[] = IS_DEV_BUILD
-    ? ['recording', 'analytics', 'history', 'smart-captures', 'players', 'id-mapper', 'seeds', 'video-import', 'dev-ocr']
-    : ['recording', 'analytics', 'history', 'smart-captures', 'players', 'id-mapper', 'seeds', 'video-import'];
+    ? ['recording', 'analytics', 'history', 'smart-captures', 'players', 'id-mapper', 'video-import', 'dev-ocr']
+    : ['recording', 'analytics', 'history', 'smart-captures', 'players', 'id-mapper', 'video-import'];
 import type { OCRExtractedData } from './utils/ocr/ocrTypes';
 import { useAppStore } from './store/useAppStore';
 import { getElectronAPI } from './utils/electronAPI';
@@ -681,7 +680,6 @@ const App: React.FC = () => {
         'smart-captures': activeView === 'smart-captures',
         players: activeView === 'players',
         'id-mapper': activeView === 'id-mapper',
-        seeds: activeView === 'seeds',
         'dev-ocr': activeView === 'dev-ocr',
         'video-import': activeView === 'video-import',
     }));
@@ -2004,7 +2002,6 @@ const App: React.FC = () => {
             || rawActiveView === 'recording'
             || rawActiveView === 'history'
             || rawActiveView === 'id-mapper'
-            || rawActiveView === 'seeds'
         )
             ? (rawActiveView as RestoreSessionPayload['activeView'])
             : 'recording';
@@ -4726,12 +4723,6 @@ const App: React.FC = () => {
                 return (
                     <div className="h-full min-h-0 overflow-y-auto custom-scrollbar p-3">
                         <IdMapper />
-                    </div>
-                );
-            case 'seeds':
-                return (
-                    <div className="h-full min-h-0 overflow-hidden p-3">
-                        <SeedsPanel />
                     </div>
                 );
             case 'video-import':
