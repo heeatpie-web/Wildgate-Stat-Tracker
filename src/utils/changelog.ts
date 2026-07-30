@@ -1,4 +1,12 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.11.0": [
+    "Enemy intel now identifies threatening players instead of ship types",
+    "Map names no longer misread as ship or team names in OCR",
+    "New match categories dimension in Analytics, with an editable Category field",
+    "Kill-popup timeout is now configurable (10-120 seconds, or off)",
+    "Added a master volume control for sound effects",
+    "Faster OCR name-correction confirms and a real per-image progress bar"
+  ],
   "v3.10.2": [
     "Toast feedback for Check for Updates",
     "Seeds tab filters by mode/ship/hazard instead of meaningless win rate",
