@@ -12,7 +12,7 @@ const BAR_CLASS: Record<string, string> = {
   danger: 'bg-danger',
 };
 
-export const ConfidenceMeter: React.FC<ConfidenceMeterProps> = ({ percent, className = '' }) => {
+export const SmartCaptureConfidenceMeter: React.FC<ConfidenceMeterProps> = ({ percent, className = '' }) => {
   const clamped = Math.max(0, Math.min(100, Number.isFinite(percent) ? percent : 0));
   const spec = classifySpecConfidence(clamped);
   const visibleWidth = clamped > 0 ? Math.max(6, clamped) : 0;
@@ -30,5 +30,5 @@ export const ConfidenceMeter: React.FC<ConfidenceMeterProps> = ({ percent, class
   );
 };
 
-export default ConfidenceMeter;
+export default SmartCaptureConfidenceMeter;
 

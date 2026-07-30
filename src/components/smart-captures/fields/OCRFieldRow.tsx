@@ -1,6 +1,6 @@
 import React from 'react';
 import { ConfidenceBadge } from '../primitives/ConfidenceBadge';
-import { ConfidenceMeter } from '../primitives/ConfidenceMeter';
+import { SmartCaptureConfidenceMeter } from '../primitives/ConfidenceMeter';
 
 interface OCRFieldRowProps {
   label: string;
@@ -17,7 +17,7 @@ export const OCRFieldRow: React.FC<OCRFieldRowProps> = ({ label, value, confiden
         {typeof confidence === 'number' ? <ConfidenceBadge percent={confidence} /> : null}
       </div>
       <div>{value}</div>
-      {typeof confidence === 'number' ? <ConfidenceMeter percent={confidence} /> : null}
+      {typeof confidence === 'number' ? <SmartCaptureConfidenceMeter percent={confidence} /> : null}
     </div>
   );
 };

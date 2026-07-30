@@ -2542,3 +2542,4 @@ const PlayerHub: React.FC = () => {
 };
 
 export default PlayerHub;
+export { PlayerHub };

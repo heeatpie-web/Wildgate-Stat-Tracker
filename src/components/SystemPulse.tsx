@@ -182,3 +182,4 @@ const SystemPulse: React.FC = () => {
 };
 
 export default SystemPulse;
+export { SystemPulse };

@@ -333,4 +333,5 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
 };
 
 export default Tutorial;
+export { Tutorial };
 

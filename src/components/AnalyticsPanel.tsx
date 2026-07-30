@@ -14,4 +14,5 @@ const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ isActive = true }) => {
 };
 
 export default AnalyticsPanel;
+export { AnalyticsPanel };
 

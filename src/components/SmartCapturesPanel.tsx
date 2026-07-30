@@ -5680,6 +5680,7 @@ const SmartMatchDetail: React.FC<{
     };
 
 export default SmartCapturesPanel;
+export { SmartCapturesPanel };
 
 
 

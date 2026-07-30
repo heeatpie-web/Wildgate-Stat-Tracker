@@ -53,3 +53,4 @@ const DevOCRPanel: React.FC = () => {
 };
 
 export default DevOCRPanel;
+export { DevOCRPanel };

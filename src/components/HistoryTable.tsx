@@ -1300,3 +1300,4 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
 };
 
 export default HistoryTable;
+export { HistoryTable };

@@ -329,4 +329,5 @@ const SimulatorPanel: React.FC = () => {
 };
 
 export default SimulatorPanel;
+export { SimulatorPanel };
 
