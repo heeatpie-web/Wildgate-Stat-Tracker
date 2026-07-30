@@ -9,6 +9,7 @@ import { EQUIPMENT_DB } from '../../utils/equipmentDb';
 import Logger from '../../utils/logger';
 import { measureSyncRuntime } from '../../utils/runtimePerf';
 import { normalizeMatchCategory } from '../../utils/matchCategory';
+import { loadSavedCategories, addOrIncrementCategory, incrementCategoryUse } from '../../utils/savedCategories';
 import { MatchCategoryBadge } from '../MatchCategoryBadge';
 import {
     getPerkCatalog,
@@ -83,6 +84,10 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
     const isTransparent = variant === 'transparent';
     const [isScanning, setIsScanning] = useState(false);
     const [showCategoryEditor, setShowCategoryEditor] = useState(false);
+    // Local input state to avoid writing every keystroke to global store (reduces lag)
+    const [categoryInput, setCategoryInput] = useState('');
+    const [suggestions, setSuggestions] = useState<Array<{ key: string; label: string; count: number }>>([]);
+    const [suggestionsVisible, setSuggestionsVisible] = useState(false);
 
     // Accordion state - track which section is expanded (null = all collapsed in accordion mode)
     const [expandedSection, setExpandedSection] = useState<SectionId | null>('stats');
@@ -214,7 +219,9 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
         if (normalizedMatchCategory) {
             setShowCategoryEditor(true);
         }
-    }, [normalizedMatchCategory]);
+        // Sync local input when global category changes externally
+        setCategoryInput(currentMatchCategory || '');
+    }, [normalizedMatchCategory, currentMatchCategory]);
 
     useEffect(() => {
         const activeUserKey = String(activeUser || '').trim().toLowerCase();
@@ -749,14 +756,74 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                     </div>
 
                     {(showCategoryEditor || Boolean(normalizedMatchCategory)) ? (
-                        <input
-                            type="text"
-                            value={currentMatchCategory}
-                            onChange={(e) => setCurrentMatchCategory(e.target.value)}
-                            placeholder="Tournament, Scrim, League..."
-                            maxLength={48}
-                            className="w-full md3-textfield--outlined rounded-control px-3 py-2 text-body outline-none placeholder:text-md-sys-on-surface/40 focus:ring-2 focus:ring-md-sys-primary/40"
-                        />
+                        <div className="relative w-full">
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    value={categoryInput}
+                                    onChange={(e) => {
+                                        setCategoryInput(e.target.value);
+                                        // update suggestions (simple, synchronous - cheap)
+                                        const all = loadSavedCategories();
+                                        const q = String(e.target.value || '').trim().toLowerCase();
+                                        const filtered = q
+                                            ? all.filter((c) => c.label.toLowerCase().includes(q) || c.key.includes(q))
+                                            : all;
+                                        setSuggestions(filtered.slice(0, 12));
+                                        setSuggestionsVisible(true);
+                                    }}
+                                    onFocus={() => {
+                                        const all = loadSavedCategories();
+                                        setSuggestions(all.slice(0, 12));
+                                        setSuggestionsVisible(true);
+                                    }}
+                                    onBlur={() => {
+                                        // hide suggestions slightly later to allow click
+                                        setTimeout(() => setSuggestionsVisible(false), 150);
+                                    }}
+                                    placeholder="Tournament, Scrim, League..."
+                                    maxLength={48}
+                                    className="w-full md3-textfield--outlined rounded-control px-3 py-2 text-body outline-none placeholder:text-md-sys-on-surface/40 focus:ring-2 focus:ring-md-sys-primary/40"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const key = addOrIncrementCategory(categoryInput || currentMatchCategory || '');
+                                        if (key) {
+                                            // set global category to normalized key
+                                            setCurrentMatchCategory(key as string);
+                                            setSuggestionsVisible(false);
+                                        }
+                                    }}
+                                    className="inline-flex items-center gap-1 px-3 py-2 rounded-pill bg-md-sys-primary text-white font-semibold"
+                                >
+                                    Save
+                                </button>
+                            </div>
+                            {suggestionsVisible && suggestions && suggestions.length > 0 ? (
+                                <div className="absolute left-0 right-0 mt-1 bg-white border rounded-card shadow-md z-50 max-h-60 overflow-auto">
+                                    {suggestions.map((s) => (
+                                        <button
+                                            key={s.key}
+                                            type="button"
+                                            onMouseDown={(ev) => { ev.preventDefault(); }}
+                                            onClick={() => {
+                                                incrementCategoryUse(s.key);
+                                                setCurrentMatchCategory(s.key);
+                                                setCategoryInput(s.label);
+                                                setSuggestionsVisible(false);
+                                            }}
+                                            className="w-full text-left px-3 py-2 hover:bg-md-sys-on-surface/8"
+                                        >
+                                            <div className="flex justify-between items-center">
+                                                <span className="truncate">{s.label}</span>
+                                                <span className="text-label-xs opacity-60">{s.count}</span>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            ) : null}
+                        </div>
                     ) : null}
                 </div>
 

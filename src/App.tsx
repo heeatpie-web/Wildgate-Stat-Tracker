@@ -330,7 +330,7 @@ type FullAutoSaveReason = FullAutoDetectionMethod | 'background' | 'manual';
 
 const IMAGE_ARTIFACT_PATTERN = /\.(png|jpe?g|webp|bmp|gif)$/i;
 const TELEMETRY_AUTO_CAPTURE_ARTIFACT_TARGET = 3;
-const PREGAME_LOBBY_MACRO_DELAY_MS = 5_000;
+const PREGAME_LOBBY_MACRO_DELAY_MS = 2_000;
 // The detectors already enforce their own hold timing, so once either path
 // signals a result state we capture immediately.
 const POST_FLASH_CAPTURE_BUFFER_MS = 0;

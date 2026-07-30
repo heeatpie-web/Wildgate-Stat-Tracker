@@ -1251,7 +1251,7 @@ describe('App', () => {
     expect(startAutoCaptureMock).not.toHaveBeenCalled();
 
     await act(async () => {
-      vi.advanceTimersByTime(4_999);
+      vi.advanceTimersByTime(1_999);
       await Promise.resolve();
     });
     expect(startAutoCaptureMock).not.toHaveBeenCalled();

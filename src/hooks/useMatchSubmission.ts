@@ -33,6 +33,7 @@ import {
     type TeammateIdentitySource,
 } from '../utils/teammateIdentity';
 import { normalizeMatchCategory } from '../utils/matchCategory';
+import { incrementCategoryUse } from '../utils/savedCategories';
 import { buildPregameAdviceSnapshotForMatch } from '../utils/pregameAdvice/matchAdvice';
 
 const DEFAULT_ARTIFACT_LOOKBACK_MS = 10 * 60 * 1000;
@@ -1303,6 +1304,10 @@ export const useMatchSubmission = () => {
                     || baseMatch.pregameAdvice,
             };
             const submittedResult = newMatch.result;
+            // Record category usage frequency when a match is finalized
+            if (finalMatchCategory) {
+                try { incrementCategoryUse(finalMatchCategory); } catch {}
+            }
             if (existingMatch) {
                 updateMatch(newMatch);
             } else {
@@ -1616,6 +1621,10 @@ export const useMatchSubmission = () => {
                     || baseSavedMatch.pregameAdvice,
             };
 
+            // Record category usage on draft save as well
+            if (finalMatchCategory) {
+                try { incrementCategoryUse(finalMatchCategory); } catch {}
+            }
             if (existingMatch) {
                 updateMatch(savedMatch);
             } else {

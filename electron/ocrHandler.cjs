@@ -15,7 +15,6 @@ const fs = require('fs');
 const fsPromises = require('fs').promises;
 const crypto = require('crypto');
 const os = require('os');
-const { requirePackagedModule } = require('./helpers/packagedModuleLoader.cjs');
 const { pruneOcrDebugFiles } = require('./helpers/ocrDebugRetention.cjs');
 const HAZARD_CATALOG = require('./hazardCatalog.json');
 
@@ -41,8 +40,8 @@ const { mergeCaptures, isSameMatch } = require('./ocrMerger.cjs');
 const { paddleOcrBuffer, initPaddleOCR } = require('./paddleOcrHandler.cjs');
 
 // Dynamic imports (loaded when needed)
-let screenshot = null;
 let sharp = null;
+let nodeScreenshots = null;
 
 // Debug directory for saving OCR images
 const DEBUG_DIR = path.join(app.getPath('userData'), 'ocr-debug');
@@ -556,14 +555,26 @@ async function archiveOcrSample(buffer, ocrText, metadata = {}) {
 
 /**
  * Capture the game window (primary display)
+ *
+ * Uses node-screenshots' in-process DXGI-backed capture (same library the
+ * result-flash monitor already relies on for fast polling) instead of
+ * screenshot-desktop, which shells out to a fresh cmd.exe + bundled exe per
+ * call and round-trips a temp file to disk. That subprocess-spawn overhead
+ * (compounded by AV scanning each new process) was adding seconds per capture.
  */
 async function captureGameWindowBuffer() {
-  if (!screenshot) {
-    screenshot = requirePackagedModule('screenshot-desktop');
+  if (!nodeScreenshots) {
+    nodeScreenshots = require('node-screenshots');
   }
 
   console.log('[OCR] Capturing screen...');
-  const imgBuffer = await screenshot({ format: 'png' });
+  const monitors = nodeScreenshots.Monitor.all();
+  if (!monitors.length) {
+    throw new Error('No monitors available for screen capture');
+  }
+  const monitor = monitors.find((m) => m.isPrimary()) || monitors[0];
+  const image = await monitor.captureImage();
+  const imgBuffer = await image.toPng();
   console.log('[OCR] Screen captured, size:', imgBuffer.length);
   return imgBuffer;
 }
