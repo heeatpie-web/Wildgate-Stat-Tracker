@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.11.3": [
+    "Redesigned the History tab with combined rows, inline map seed copy, and expandable map preview",
+    "Merged the Seeds tab into History",
+    "Fixed archived roster names leaking into merge suggestions"
+  ],
   "v3.11.2": [
     "Add saved categories",
     "improve category input lag",
