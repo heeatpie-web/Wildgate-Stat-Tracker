@@ -231,7 +231,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
         <div className="flex-1 min-w-0 flex flex-col gap-1.5 pl-4 pr-3 py-3">
           <div className="flex items-center justify-between min-w-0">
             <div className="flex items-center gap-2 min-w-0">
-              <span className={`sc-queue-item__title text-label-md font-black ${isSelected ? '' : 'opacity-70'}`}>#{displayNumber}</span>
+              <span className={`sc-queue-item__title font-black ${isSelected ? '' : 'opacity-70'}`}>#{displayNumber}</span>
               <span className="text-label-sm font-bold truncate">
                 {match.ship || 'Unknown'} <span className="opacity-40 font-normal">|</span> {match.hero || 'Unknown'}
               </span>

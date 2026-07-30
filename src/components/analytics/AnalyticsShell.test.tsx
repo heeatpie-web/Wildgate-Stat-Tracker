@@ -150,6 +150,7 @@ vi.mock('../patch/patchEntityCatalog', () => ({
   getMatchPerks: vi.fn(() => []),
   getMatchProspectorWeapons: vi.fn(() => []),
   getMatchShip: vi.fn(() => 'Hunter'),
+  getKnownMatchCategories: vi.fn(() => []),
 }));
 
 describe('AnalyticsShell', () => {

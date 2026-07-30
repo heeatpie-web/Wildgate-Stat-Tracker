@@ -63,6 +63,17 @@ export interface PlayerSightingEntry {
     ocrOnly?: boolean;
 }
 
+/** One corrected OCR name, as consumed by `applyOcrCorrections`. */
+export interface OcrCorrectionEntry {
+    /** Raw OCR-detected text, also used as the player id for the mapping/profile update. */
+    ocrName: string;
+    correctedName: string;
+    context?: OcrAliasContext;
+    source?: OcrAliasSource;
+    confidenceWeight?: number;
+    decisionId?: string;
+}
+
 export interface PlayerProfile {
     id: string;
     name?: string;                              // User-assigned name
@@ -158,6 +169,13 @@ export interface MappingSlice {
      */
     recordPlayerSightings: (entries: PlayerSightingEntry[]) => void;
     setPlayerName: (playerId: string, name: string) => void;
+    /**
+     * Batch form of "record an OCR alias correction, then set the player name"
+     * (the pair every OCR-confirm call site otherwise performs per corrected
+     * name). Applies the whole set as one alias-model update and one
+     * mappings/profiles update, instead of 2N+ separate `set()` commits.
+     */
+    applyOcrCorrections: (entries: OcrCorrectionEntry[]) => void;
     recordTeammateIdentityObservation: (input: {
         friendlyPlayerIds: string[];
         observedNames: ObservedTeammateName[];
@@ -999,6 +1017,99 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
                 teammateIdentityRecords: nextRecords,
             };
         });
+    },
+
+    applyOcrCorrections: (entries) => {
+        if (!Array.isArray(entries) || entries.length === 0) return;
+        set((state) => measureSyncRuntime('MappingSlice', 'applyOcrCorrections', () => {
+            // --- 1. Alias model: fold every correction through one running
+            // accumulator so the whole batch costs a single `set()` write,
+            // instead of one alias-model commit per corrected name. ---
+            let nextAliasModel = state.ocrAliasModel;
+            entries.forEach((entry) => {
+                nextAliasModel = recordAliasCorrection(nextAliasModel, {
+                    ocrText: entry.ocrName,
+                    correctedTo: entry.correctedName,
+                    source: entry.source || 'manual_correction',
+                    context: entry.context || 'unknown',
+                    confidenceWeight: entry.confidenceWeight,
+                    decisionId: entry.decisionId,
+                });
+            });
+
+            // --- 2. Mappings/profiles: replay `setPlayerName`'s per-item logic
+            // against a running accumulator (mirroring `recordPlayerSightings`
+            // above) so the batch resolves identically to N sequential
+            // `setPlayerName` calls, but commits once. ---
+            let nextKnownMappings = state.knownMappings;
+            let nextUidMappings = state.uidMappings;
+            let nextPlayerProfiles = state.playerProfiles;
+            let nextDetectedUnknowns = state.detectedUnknowns;
+            let nextPlayerIdMap = (state as MappingSlice & { playerIdMap?: Record<string, string> }).playerIdMap || {};
+            const nextTeammateRecords = { ...(state.teammateIdentityRecords || {}) };
+            let mappingsChanged = false;
+
+            entries.forEach((entry) => {
+                const normalizedId = normalizeTeammatePlayerId(entry.ocrName);
+                const resolvedId = normalizedId || String(entry.ocrName || '').trim();
+                const name = entry.correctedName;
+                if (!resolvedId || !String(name || '').trim()) return;
+
+                const runningState = {
+                    ...state,
+                    knownMappings: nextKnownMappings,
+                    uidMappings: nextUidMappings,
+                    playerProfiles: nextPlayerProfiles,
+                    detectedUnknowns: nextDetectedUnknowns,
+                    playerIdMap: nextPlayerIdMap,
+                } as MappingSlice & { playerIdMap?: Record<string, string> };
+
+                const { profileKey } = resolvePlayerProfileKey(runningState, resolvedId, name);
+                const existing = nextPlayerProfiles[profileKey] || createEmptyProfile(profileKey);
+
+                confirmTeammateIdentityRecord(nextTeammateRecords, resolvedId, name, {
+                    source: 'manual',
+                    lockedByUser: true,
+                });
+
+                const layerUpdates = applyResolvedPlayerLayers(runningState, resolvedId, name);
+                const layerProfiles = (layerUpdates.playerProfiles as Record<string, PlayerProfile> | undefined)
+                    || nextPlayerProfiles;
+
+                nextKnownMappings = (layerUpdates.knownMappings as Record<string, string> | undefined) || nextKnownMappings;
+                nextUidMappings = (layerUpdates.uidMappings as UidMappings | undefined) || nextUidMappings;
+                nextDetectedUnknowns = (layerUpdates.detectedUnknowns as Record<string, DetectedUnknownMapping> | undefined) || nextDetectedUnknowns;
+                nextPlayerIdMap = layerUpdates.playerIdMap || nextPlayerIdMap;
+                nextPlayerProfiles = {
+                    ...layerProfiles,
+                    [profileKey]: {
+                        ...(layerProfiles[profileKey] || existing),
+                        id: profileKey,
+                        name,
+                    },
+                };
+                mappingsChanged = true;
+            });
+
+            Logger.info('MappingSlice', `Applied ${entries.length} OCR corrections in one transition`);
+
+            if (!mappingsChanged) {
+                return { ocrAliasModel: nextAliasModel };
+            }
+
+            return {
+                ocrAliasModel: nextAliasModel,
+                knownMappings: nextKnownMappings,
+                uidMappings: nextUidMappings,
+                playerProfiles: nextPlayerProfiles,
+                detectedUnknowns: nextDetectedUnknowns,
+                playerIdMap: nextPlayerIdMap,
+                teammateIdentityRecords: nextTeammateRecords,
+            } as Partial<MappingSlice> & { playerIdMap?: Record<string, string> };
+        }, {
+            logEvery: 20,
+            sampleSize: 64,
+        }));
     },
 
     recordTeammateIdentityObservation: ({ friendlyPlayerIds, observedNames, activeUser, pilotRegistry, matchId }) => {

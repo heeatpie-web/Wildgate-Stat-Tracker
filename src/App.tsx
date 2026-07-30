@@ -5106,6 +5106,7 @@ const ShipKillPopupWrapper: React.FC = () => {
     const dismissShipKillPopup = useAppStore(s => s.dismissShipKillPopup);
     const updateMatch = useAppStore(s => s.updateMatch);
     const matches = useAppStore(s => s.matches);
+    const shipKillPopupAutoDismissMs = useAppStore(s => s.shipKillPopupAutoDismissMs);
 
     if (!shipKillPopup) return null;
 
@@ -5113,6 +5114,7 @@ const ShipKillPopupWrapper: React.FC = () => {
         <ShipKillPopup
             matchId={shipKillPopup.matchId}
             onDismiss={dismissShipKillPopup}
+            autoDismissMs={shipKillPopupAutoDismissMs}
             onSave={(matchId, kills) => {
                 const match = matches.find(m => m.id === matchId);
                 if (match) {

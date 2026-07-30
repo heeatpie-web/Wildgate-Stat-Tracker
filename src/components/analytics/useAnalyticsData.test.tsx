@@ -149,6 +149,7 @@ describe('useAnalyticsData', () => {
             equipment: [] as string[],
             perk: [] as string[],
             update: [] as string[],
+            category: [] as string[],
           },
         },
       }
@@ -164,6 +165,7 @@ describe('useAnalyticsData', () => {
         equipment: [],
         perk: [],
         update: [],
+        category: [],
       },
     });
 
@@ -177,6 +179,7 @@ describe('useAnalyticsData', () => {
         equipment: ['Repulsor'],
         perk: [],
         update: [],
+        category: [],
       },
     });
 
@@ -478,7 +481,7 @@ describe('useAnalyticsData', () => {
       'custom',
       20,
       undefined,
-      { ship: [], prospectorWeapon: [], equipment: [], perk: [], update: [] },
+      { ship: [], prospectorWeapon: [], equipment: [], perk: [], update: [], category: [] },
       { from: start, to: start + 5 * dayMs },
     ));
 
@@ -548,7 +551,7 @@ describe('useAnalyticsData', () => {
       'all',
       20,
       'pro',
-      { ship: ['Hunter'], prospectorWeapon: [], equipment: [], perk: [], update: [] },
+      { ship: ['Hunter'], prospectorWeapon: [], equipment: [], perk: [], update: [], category: [] },
     ));
 
     const loadout = result.current.entityAnalytics.comparisons.selectedLoadoutVsGlobal;
@@ -558,5 +561,37 @@ describe('useAnalyticsData', () => {
     expect(loadout.selectedSample).toBe(10);
     expect(loadout.baselineSample).toBe(20);
     expect(loadout.absoluteDelta).not.toBeNull();
+  });
+
+  it('groups case-variant match categories into a single Analytics row', async () => {
+    const now = Date.now();
+    // "Ranked" / "ranked" / "RANKED" must be one row, not three — otherwise
+    // the category dimension fragments the same tag across casing variants.
+    const categoriesByIndex = ['Ranked', 'Ranked', 'ranked', 'ranked', 'RANKED', 'RANKED', 'Ranked', 'ranked'];
+    gameDataState.matches = categoriesByIndex.map((matchCategory, index) => ({
+      id: index + 1,
+      timestamp: now - (categoriesByIndex.length - index) * 60_000,
+      date: '2026-03-16',
+      mode: 'Fleet Battle',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      reachModifiers: [],
+      kills: {},
+      result: index % 2 === 0 ? 'Win' : 'Loss',
+      subType: 'Combat',
+      matchCategory,
+    }));
+
+    const { useAnalyticsData } = await import('./useAnalyticsData');
+    const { result } = renderHook(() => useAnalyticsData('all', 20, 'pro'));
+
+    const categoryRows = result.current.entityAnalytics.dimensions.category;
+    expect(categoryRows).toHaveLength(1);
+    expect(categoryRows[0].sampleCount).toBe(8);
+    // Display casing is whatever was first seen — not forced to lowercase.
+    expect(categoryRows[0].label).toBe('Ranked');
   });
 });

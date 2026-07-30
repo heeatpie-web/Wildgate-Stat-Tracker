@@ -335,7 +335,9 @@ describe('createFormSlice', () => {
       expect(store.getState().poiMedium).toBe(0);
       expect(store.getState().poiEpic).toBe(0);
       expect(store.getState().currentNote).toBe('');
-      expect(store.getState().currentMatchCategory).toBe('Weekly Cup');
+      // Regression: the category draft must NOT carry over into the next
+      // match — it is a per-match tag, not a session default.
+      expect(store.getState().currentMatchCategory).toBe('');
     });
   });
 
@@ -422,8 +424,34 @@ describe('createFormSlice', () => {
         'Repair Drone': 1,
       });
       expect(store.getState().currentNote).toBe('');
-      expect(store.getState().currentMatchCategory).toBe('Scrim Block');
+      // Regression: discardMatch() runs after every submit/discard path
+      // (via clearSubmissionState) — the category draft must reset so the
+      // next match doesn't silently inherit this one's tag.
+      expect(store.getState().currentMatchCategory).toBe('');
       expect(store.getState().selectedTeammates).toEqual([]);
+    });
+  });
+
+  describe('category carry-over regression', () => {
+    it('does not leak a tagged category into the next match after discardMatch', () => {
+      store.getState().setCurrentMatchCategory('Ranked');
+      expect(store.getState().currentMatchCategory).toBe('Ranked');
+
+      // Match A submitted/discarded — every save path funnels through
+      // clearSubmissionState(), which calls discardMatch().
+      store.getState().discardMatch();
+
+      // Match B begins untouched — must not inherit "Ranked".
+      expect(store.getState().currentMatchCategory).toBe('');
+    });
+
+    it('does not leak a tagged category into the next match after resetMatchTrackingForNewMatch', () => {
+      store.getState().setCurrentMatchCategory('Ranked');
+
+      // "Start Fresh Match" path.
+      store.getState().resetMatchTrackingForNewMatch();
+
+      expect(store.getState().currentMatchCategory).toBe('');
     });
   });
 });

@@ -3,6 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import type { Match } from '../types';
+import { buildAnalyticsIdentityResolver } from '../utils/analyticsIdentity';
+import {
+  buildPregameAdviceContextFromMatch,
+  computePregameAdviceForMatch,
+} from '../utils/pregameAdvice/matchAdvice';
 
 let nextId = 1;
 
@@ -78,6 +83,73 @@ describe('PregameAdvicePanel', () => {
     expect(screen.getByText(/enemy teams/i)).toBeInTheDocument();
     expect(screen.getByText('Wing1')).toBeInTheDocument();
     expect(screen.getByText('Raiders')).toBeInTheDocument();
-    expect(screen.getByText(/Enemy1/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Enemy1/).length).toBeGreaterThan(0);
+  });
+});
+
+// ── Identity canonicalisation boundary regressions ──────────────────────────
+// RecordingView.tsx canonicalises `activeDraftMatch` and `allMatches` through
+// buildAnalyticsIdentityResolver before handing them to this panel. These tests replicate that
+// boundary directly (rather than through RecordingView) to prove: (a) alias-drifted teammate
+// names across sessions resolve to shared history, and (b) duplicate alias variants of one
+// opponent collapse into a single INTEL entry — and that both regress to the old broken
+// behaviour when canonicalisation is skipped, confirming the assertions actually exercise the
+// fix rather than passing trivially.
+describe('PregameAdvicePanel — identity canonicalisation boundary', () => {
+  it('resolves shared squad history across alias-drifted teammate names once canonicalised', () => {
+    const resolver = buildAnalyticsIdentityResolver({
+      pilotAliases: { 'Wing One': ['Wing1', 'WingOne'] },
+    });
+
+    // This session's lobby OCR read the teammate as "WingOne"; history was recorded as "Wing1".
+    const activeDraftMatchRaw = makeMatch({
+      id: 900,
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      teammates: ['WingOne'],
+    });
+    const historyRaw = [
+      makeMatch({ teammates: ['Wing1'], result: 'Win' }),
+      makeMatch({ teammates: ['Wing1'], result: 'Win' }),
+      makeMatch({ teammates: ['Wing1'], result: 'Loss' }),
+    ];
+
+    const canonicalDraft = resolver.canonicalizeMatch(activeDraftMatchRaw);
+    const canonicalHistory = resolver.canonicalizeMatches(historyRaw);
+
+    const advice = computePregameAdviceForMatch(canonicalDraft, canonicalHistory);
+    const synergyFactor = advice?.factors.find((f) => f.kind === 'teammate-synergy');
+    expect(synergyFactor).toBeDefined();
+    expect(synergyFactor?.sampleSize).toBe(3);
+
+    // Without the canonicalisation boundary the alias variants never line up — this is the
+    // "no history with my squad" bug the fix closes.
+    const uncanonicalAdvice = computePregameAdviceForMatch(activeDraftMatchRaw, historyRaw);
+    expect(uncanonicalAdvice?.factors.find((f) => f.kind === 'teammate-synergy')).toBeUndefined();
+  });
+
+  it('collapses duplicate alias variants of one opponent into a single INTEL entry once canonicalised', () => {
+    const resolver = buildAnalyticsIdentityResolver({
+      pilotAliases: { Nemesis: ['NemesisX', 'Nemesys'] },
+    });
+
+    // Two OCR reads of the same opponent inside one lobby capture, drifted into separate strings.
+    const activeDraftMatchRaw = makeMatch({
+      id: 901,
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      telemetryDraftState: 'active',
+      opponentTeams: [{ teamName: 'Raiders', shipType: 'Scout', color: 'red', players: ['Nemesis', 'NemesisX'] }],
+      opponents: ['Nemesis', 'NemesisX'],
+    });
+
+    const canonicalContext = buildPregameAdviceContextFromMatch(resolver.canonicalizeMatch(activeDraftMatchRaw));
+    expect(canonicalContext?.opponentTeams[0].players).toEqual(['Nemesis']);
+
+    // Without canonicalisation the two alias variants are treated as two different opponents —
+    // this is the "aliases split into separate INTEL entries" bug the fix closes.
+    const uncanonicalContext = buildPregameAdviceContextFromMatch(activeDraftMatchRaw);
+    expect(uncanonicalContext?.opponentTeams[0].players).toEqual(['Nemesis', 'NemesisX']);
   });
 });

@@ -85,4 +85,21 @@ describe('SquadronPanel', () => {
 
     expect(screen.queryByTestId('recording-telemetry-summary')).not.toBeInTheDocument();
   });
+
+  it('reads 0/3 when telemetry is dead despite a match being in progress, and lists what is missing', () => {
+    // Regression coverage for the "stuck at 1/3" bug: isMatchInProgress alone must not fake a
+    // signal, so a live match with no detected ship/hero and no recent telemetry event should
+    // read 0/3, not 1/3 -- and the badge should still surface (so the user can tell something is
+    // actually wrong) rather than being hidden the way idle-with-no-match is.
+    gameData.telemetryDetectedShip = undefined as unknown as string;
+    gameData.telemetryDetectedHero = undefined as unknown as string;
+    gameData.isMatchInProgress = true;
+    uiState.telemetryStatus = { exists: true, lastEventAt: Date.now() - 120_000 };
+
+    render(<SquadronPanel />);
+
+    const badge = screen.getByTestId('recording-telemetry-summary');
+    expect(badge).toHaveTextContent('Telemetry Signals 0/3');
+    expect(badge).toHaveAttribute('title', expect.stringContaining('Missing: ship, prospector, match telemetry reception'));
+  });
 });

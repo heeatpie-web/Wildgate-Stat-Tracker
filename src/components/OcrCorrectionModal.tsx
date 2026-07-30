@@ -28,6 +28,7 @@ import {
 } from '../utils/stringUtils';
 import { createRosterFuzzyMatcher } from '../utils/ocr/rosterFuzzyMatch';
 import { selectActiveRosterNames } from '../store/slices/createDataSlice';
+import type { OcrCorrectionEntry } from '../store/slices/createMappingSlice';
 import { getOcrStageLabel, useOcrProgress } from '../hooks/useOcrProgress';
 import { filterRosterByQuery, foldLikelyOcrDigits } from '../utils/ocr/rosterFilter';
 import { BUNDLED_OCR_LEXICON } from '../utils/bundledOcrLexicon';
@@ -494,9 +495,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     } = useGameData();
     const { activeUser, setToast } = useUIState();
     const {
-        setPlayerName,
-        recordOcrCorrection,
-        recordOcrAliasCorrection,
+        applyOcrCorrections,
         recordTeamIdentityCorrection,
         resolveTeamIdentity,
         ocrCorrections,
@@ -1047,6 +1046,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
             effectiveCorrections[ocrName] = normalized;
         });
 
+        const ocrCorrectionEntries: OcrCorrectionEntry[] = [];
         Object.entries(effectiveCorrections).forEach(([ocrName, correctedName]) => {
             if (ignored.has(ocrName)) return;
             const normalizedOcrName = String(ocrName || '').trim().toLowerCase();
@@ -1067,14 +1067,15 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
             });
 
             if (ocrName !== correctedName) {
-                // Record correction for future matching
-                recordOcrAliasCorrection?.(ocrName, correctedName, {
+                // Collect for a single batched alias-model + mappings commit below,
+                // instead of committing to the store once per corrected name.
+                ocrCorrectionEntries.push({
+                    ocrName,
+                    correctedName,
                     source: 'review_modal',
                     context: correctionContext,
                     confidenceWeight: 1,
                 });
-                recordOcrCorrection?.(ocrName, correctedName);
-                setPlayerName(ocrName, correctedName);
                 corrected++;
                 Logger.info('OcrCorrection', `Linked "${ocrName}" -> "${correctedName}"`);
             } else {
@@ -1082,6 +1083,9 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                 added++;
             }
         });
+        if (ocrCorrectionEntries.length > 0) {
+            applyOcrCorrections(ocrCorrectionEntries);
+        }
         const pendingPruneIds = new Set<string>();
         Object.entries(effectiveCorrections).forEach(([ocrName, correctedName]) => {
             if (ignored.has(ocrName)) return;

@@ -23,9 +23,7 @@ const gameData = {
 };
 
 const appStoreState = {
-    setPlayerName: vi.fn(),
-    recordOcrCorrection: vi.fn(),
-    recordOcrAliasCorrection: vi.fn(),
+    applyOcrCorrections: vi.fn(),
     recordTeamIdentityCorrection: vi.fn(),
     resolveTeamIdentity: vi.fn((teamName: string, color?: string) => ({
         teamName,

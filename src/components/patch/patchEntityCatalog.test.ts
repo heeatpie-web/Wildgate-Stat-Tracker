@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getMatchEquipment, getMatchPerks, getMatchProspectorWeapons, getMatchUpdateKey, getPerkCatalog, getPerkCatalogWithLegacyNames, getPerkNameAliasPairs, isPerkAllowedForProspector } from './patchEntityCatalog';
+import { getKnownMatchCategories, getMatchCategory, getMatchEquipment, getMatchPerks, getMatchProspectorWeapons, getMatchUpdateKey, getPerkCatalog, getPerkCatalogWithLegacyNames, getPerkNameAliasPairs, isPerkAllowedForProspector } from './patchEntityCatalog';
 import type { Match } from '../../types';
 
 const baseMatch = (overrides: Partial<Match> = {}): Match => ({
@@ -85,6 +85,30 @@ describe('getMatchUpdateKey', () => {
             timestamp: new Date(2025, 11, 31, 23, 59, 59).getTime(),
         });
         expect(getMatchUpdateKey(match)).toBe('');
+    });
+});
+
+describe('getMatchCategory', () => {
+    it('preserves the stored casing for display', () => {
+        const match = baseMatch({ matchCategory: 'Ranked' });
+        expect(getMatchCategory(match)).toBe('Ranked');
+    });
+
+    it('returns an empty string when no category is set', () => {
+        expect(getMatchCategory(baseMatch())).toBe('');
+    });
+});
+
+describe('getKnownMatchCategories', () => {
+    it('dedupes case-insensitively, keeping the first-seen casing', () => {
+        const matches = [
+            baseMatch({ id: 1, matchCategory: 'Ranked' }),
+            baseMatch({ id: 2, matchCategory: 'ranked' }),
+            baseMatch({ id: 3, matchCategory: 'RANKED' }),
+            baseMatch({ id: 4, matchCategory: 'Scrim' }),
+            baseMatch({ id: 5, matchCategory: undefined }),
+        ];
+        expect(getKnownMatchCategories(matches)).toEqual(['Ranked', 'Scrim']);
     });
 });
 

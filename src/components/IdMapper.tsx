@@ -6,6 +6,7 @@ import { PlayerRole } from '../store/slices/createMappingSlice';
 import type { MappingEntityType } from '../types';
 import { SHIPS, CHARACTERS, WEAPONS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT } from '../types';
 import { normalizeDetectedUnknownMappings } from '../services/mappingContract';
+import { isKnownMapName } from '../utils/constants';
 import Logger from '../utils/logger';
 import { getPerkCatalogWithLegacyNames, getProspectorEquipmentCatalog, getProspectorWeaponCatalog, getShipCatalog } from './patch/patchEntityCatalog';
 import {
@@ -73,8 +74,16 @@ const looksLikeShipEntity = (value: unknown): boolean => {
     return SHIP_TYPE_HINTS.some((hint) => compact.includes(hint));
 };
 
-const inferDomainFromName = (name: string): MappingDomain | null => {
+// Future-proofing: today's map names (Deadworlds / Cryon Rift / Gloaming Expanse) don't collide
+// with SHIP_KEYWORDS, but a future map name (e.g. "Raider's Rest") could. Guard both inference
+// helpers below so a known map name is never misrouted into the 'ships' domain/tag.
+export const looksLikeMapEntity = (value: unknown): boolean => {
+    return isKnownMapName(value);
+};
+
+export const inferDomainFromName = (name: string): MappingDomain | null => {
     if (!name) return null;
+    if (looksLikeMapEntity(name)) return null;
     if (hasAliasMatch(name, SHIP_SET)) return 'ships';
     if (hasAliasMatch(name, WEAPON_SET)) return 'weapons';
     if (hasAliasMatch(name, EQUIPMENT_SET)) return 'equipment';
@@ -87,8 +96,9 @@ const inferDomainFromName = (name: string): MappingDomain | null => {
     return null;
 };
 
-const inferTagFromName = (name: string): MappingTag | null => {
+export const inferTagFromName = (name: string): MappingTag | null => {
     if (!name) return null;
+    if (looksLikeMapEntity(name)) return null;
     if (hasAliasMatch(name, SHIP_SET)) return 'ship';
     if (hasAliasMatch(name, PROSPECTOR_SET)) return 'prospector';
     if (hasAliasMatch(name, WEAPON_SET)) return 'weapon';

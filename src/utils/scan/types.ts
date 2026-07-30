@@ -69,6 +69,7 @@ export interface SmartScanResult {
     mode: 'Lobby' | 'Tactical' | 'MatchStats' | 'Social' | 'Unknown';
     lobbyData?: { players: LobbyScanResult[], modifiers: string[] };
     matchData?: ScanResult;
+    mapType?: string | null;
 }
 
 export interface OCRLine {

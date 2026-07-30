@@ -448,7 +448,17 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     const backgroundOcrInFlightRef = React.useRef(false);
     const processingPercent = React.useMemo(() => {
         if (!processingProgress || processingProgress.total <= 0) return null;
-        const pct = Math.round((processingProgress.current / processingProgress.total) * 100);
+        // Blend the in-flight fraction of the image currently being OCR'd into the
+        // whole-image count, so a single-screenshot run animates smoothly instead of
+        // jumping 0% -> 100%. `imageFraction` is absent when no stage events have
+        // arrived (non-Electron, or an older main process), in which case this
+        // degrades to the previous whole-image-only behaviour.
+        const inFlight = Math.max(0, Math.min(1, processingProgress.imageFraction ?? 0));
+        const combined = Math.min(
+            processingProgress.total,
+            processingProgress.current + inFlight,
+        );
+        const pct = Math.round((combined / processingProgress.total) * 100);
         return Math.max(0, Math.min(100, pct));
     }, [processingProgress]);
     React.useEffect(() => {

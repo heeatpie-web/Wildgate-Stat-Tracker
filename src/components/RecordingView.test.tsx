@@ -10,6 +10,11 @@ const uiState = {
 
 const gameDataState = {
   matches: [] as any[],
+  pilotRegistry: [] as string[],
+  pilotAliases: {} as Record<string, string[]>,
+  knownMappings: {} as Record<string, string>,
+  playerProfiles: {} as Record<string, unknown>,
+  ocrAliasModel: undefined as unknown,
 };
 
 const appStoreState = {
@@ -96,6 +101,11 @@ describe('RecordingView', () => {
     uiState.telemetryLifecycleStage = 'idle';
     uiState.telemetryAutomationStatus = null;
     gameDataState.matches = [];
+    gameDataState.pilotRegistry = [];
+    gameDataState.pilotAliases = {};
+    gameDataState.knownMappings = {};
+    gameDataState.playerProfiles = {};
+    gameDataState.ocrAliasModel = undefined;
     appStoreState.activeUser = 'Pilot';
     appStoreState.sessionStartTime = 1_700_000_000_000;
     appStoreState.pregameAdviceEnabled = true;
@@ -207,5 +217,25 @@ describe('RecordingView', () => {
     expect(screen.queryByTestId('PregameAdvicePanel')).toBeNull();
     expect(screen.getByTestId('ActionPanel')).toBeInTheDocument();
     expect(screen.getByTestId('SquadronPanel')).toBeInTheDocument();
+  });
+
+  // Regression: RecordingView must canonicalise `allMatches`/`activeDraftMatch` through the
+  // identity resolver before handing them to PregameAdvicePanel — otherwise alias-drifted
+  // teammate names never line up with history (see PregameAdvicePanel.test.tsx for the
+  // engine-level consequence of skipping this step).
+  it('canonicalises alias-drifted names before handing matches to PregameAdvicePanel', async () => {
+    gameDataState.pilotAliases = { 'Wing One': ['WingOne'] };
+    gameDataState.matches = [
+      makeActiveDraftMatch({ teammates: ['WingOne'] }),
+      { id: 1, mode: 'Artifact Brawl', result: 'Win', teammates: ['Wing One'], opponents: [] },
+    ];
+    const { RecordingView } = await import('./RecordingView');
+
+    render(<RecordingView />);
+    fireEvent.click(within(screen.getByTestId('RosterPanel')).getByRole('tab', { name: /intel/i }));
+
+    const props = JSON.parse(screen.getByTestId('PregameAdvicePanel').getAttribute('data-props') || '{}');
+    expect(props.activeDraftMatch.teammates).toEqual(['Wing One']);
+    expect(props.allMatches.find((m: any) => m.id === 1).teammates).toEqual(['Wing One']);
   });
 });

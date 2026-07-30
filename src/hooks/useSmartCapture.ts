@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { captureGameWindow, ocrProcessCapture, saveScreenshot, isElectron } from '../utils/electronBridge';
 import type { OCRProcessRuntimeOptions } from '../utils/electronBridge';
 import { rerunOCROnArtifact, type RerunOcrResult } from '../utils/artifactService';
+import { useOcrProgressListener, type OcrProgressPayload } from './useOcrProgress';
 import type { OCRExtractedData, ScreenshotType } from '../utils/ocr/ocrTypes';
 import { mergeOCRData, calculateOverallConfidence } from '../utils/ocr/ocrParser';
 import { useAppStore } from '../store/useAppStore';
@@ -34,6 +35,7 @@ import {
   buildPregameAdviceSnapshotForMatch,
   isPregameAdviceSnapshotEqual,
 } from '../utils/pregameAdvice/matchAdvice';
+import { SHIPS, SHIP_NAME_ALIASES, isKnownMapName } from '../utils/constants';
 
 const IMAGE_PATH_PATTERN = /\.(png|jpe?g|webp|bmp|gif)$/i;
 
@@ -59,7 +61,16 @@ export interface SmartCaptureState {
   }>;
   queueDepth: number;
   savedCaptures: SavedCapture[];
-  processingProgress: { current: number; total: number } | null;
+  /**
+   * Whole-screenshot progress for a batch OCR run. `current`/`total` count fully
+   * completed images. `imageFraction` (0-1, optional) is the in-flight completion
+   * of the image currently being processed, blended in by consumers as
+   * `(current + imageFraction) / total` for a smooth bar instead of only
+   * stepping at image boundaries. Absent when no stage events have arrived yet
+   * (e.g. non-Electron runtime, older main process) — consumers should treat
+   * that the same as `imageFraction: 0`.
+   */
+  processingProgress: { current: number; total: number; imageFraction?: number } | null;
   qualityHint: { level: 'good' | 'fair' | 'poor'; message: string } | null;
 }
 
@@ -141,8 +152,36 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   const capturedScreenshotsRef = useRef<Array<{ type: ScreenshotType; data: OCRExtractedData; timestamp: number }>>([]);
   const [queueDepth, setQueueDepth] = useState(0);
   const [savedCaptures, setSavedCaptures] = useState<SavedCapture[]>([]);
-  const [processingProgress, setProcessingProgress] = useState<{ current: number; total: number } | null>(null);
+  const [processingProgress, setProcessingProgress] = useState<{ current: number; total: number; imageFraction?: number } | null>(null);
   const [qualityHint, setQualityHint] = useState<{ level: 'good' | 'fair' | 'poor'; message: string } | null>(null);
+  // Mirrors the whole-image count of the in-flight batch (processAllStored /
+  // processQueuedAutoOcrScope) so the ocr-progress listener below can blend a
+  // per-stage fraction into processingProgress without needing to be recreated
+  // per-loop-iteration. Null whenever no batch is running, which the listener
+  // uses to ignore stray events from unrelated OCR calls (e.g. a single
+  // processStoredImage rerun, or another concurrently-open OCR modal).
+  const batchOcrProgressRef = useRef<{ completed: number; total: number } | null>(null);
+
+  const handleOcrStageProgress = useCallback((payload: OcrProgressPayload) => {
+    const batch = batchOcrProgressRef.current;
+    if (!batch) return;
+    const imageFraction = Math.max(0, Math.min(1, payload.imageFraction));
+    setProcessingProgress(prev => {
+      if (!prev) return prev;
+      // Monotonic guard: never let a stage event move the reported bar backwards.
+      const prevCombined = prev.current + Math.max(0, Math.min(1, prev.imageFraction ?? 0));
+      const nextCombined = Math.min(prev.total, batch.completed + imageFraction);
+      if (nextCombined < prevCombined) return prev;
+      return { current: batch.completed, total: prev.total, imageFraction };
+    });
+  }, []);
+
+  // Always subscribed (cheap no-op via the ref guard above when no batch is
+  // active) rather than gated on isProcessing — isProcessing also covers
+  // single-image codepaths (processSingleCapture, processStoredImage) that
+  // don't track processingProgress at all, so gating on it would add
+  // complexity without changing behavior.
+  useOcrProgressListener(true, handleOcrStageProgress);
   const aliasVariantMap = useMemo(() => buildAliasVariantMap(ocrAliasModel), [ocrAliasModel]);
   const backgroundOcrCandidates = useMemo(() => buildOcrCandidatePool({
     seedNames: [
@@ -764,6 +803,13 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     const cleaned = normalizeOcrName(teamName || '');
     if (!cleaned) return '';
     if (/^(team|enemy|unknown)\b/i.test(cleaned)) return '';
+    // Lobby OCR sometimes puts the ship-class line (e.g. "Hunter") or a map name into the
+    // team-name field. Neither is a meaningful team identity — reject both like the other
+    // placeholder patterns above.
+    const compactKey = cleaned.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const isKnownShip = [...SHIPS, ...Object.keys(SHIP_NAME_ALIASES), ...Object.values(SHIP_NAME_ALIASES)]
+      .some((name) => String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '') === compactKey);
+    if (isKnownShip || isKnownMapName(cleaned)) return '';
     return cleaned;
   }, []);
 
@@ -1309,6 +1355,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
 
     setVisionStatus('processing');
     setError(null);
+    batchOcrProgressRef.current = { completed: 0, total: unprocessed.length };
     setProcessingProgress({ current: 0, total: unprocessed.length });
     setProcessingStatus({ phase: 'prepare', message: `Preparing OCR queue (${unprocessed.length} files)...` });
 
@@ -1333,6 +1380,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
           const result = await rerunOCROnArtifact(next.filePath, activeUser || '', ocrMode, ocrRegions, ocrRuntimeOptions);
           completed += 1;
           processedByWorker += 1;
+          batchOcrProgressRef.current = { completed, total: unprocessed.length };
           setProcessingProgress({ current: completed, total: unprocessed.length });
           results.push({ filePath: next.filePath, result });
 
@@ -1385,6 +1433,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       playSoundError();
     } finally {
       setVisionStatus('idle');
+      batchOcrProgressRef.current = null;
       setProcessingProgress(null);
     }
   }, [
@@ -1733,7 +1782,3 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
 
   return [state, actions];
 }
-
-
-
-

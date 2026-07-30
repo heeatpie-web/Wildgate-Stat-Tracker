@@ -160,8 +160,9 @@ describe('computePregameAdvice — opponent pressure', () => {
     const result = computePregameAdvice(ctx, pool);
     const pressureFactor = result.factors.find((f) => f.kind === 'opponent-pressure');
     expect(pressureFactor).toBeDefined();
-    // Should flag the high-pressure team in copy
-    expect(pressureFactor?.copy).toContain('Alpha');
+    // Team Alpha has per-player encounter data (Alice), so the copy should name the
+    // top-pressure player rather than the (often OCR-misread) team label.
+    expect(pressureFactor?.copy).toContain('Alice');
   });
 
   it('falls back to ship-type performance when all opponent players are unknown', () => {
@@ -200,6 +201,61 @@ describe('computePregameAdvice — opponent pressure', () => {
     });
     const result = computePregameAdvice(ctx, pool);
     expect(result.factors.find((f) => f.kind === 'opponent-pressure')).toBeUndefined();
+  });
+
+  // Regression: lobbyScan.ts sometimes assigns the ship-class OCR line to `teamName`, so
+  // `team.teamName === team.shipType` (both literally "Hunter"). The threat copy must still
+  // name the actual player when per-player encounter data exists, not the ship-derived label.
+  it('does not name the threat after the ship when teamName === shipType but a player is known', () => {
+    const pool: Match[] = [
+      ...Array.from({ length: 2 }, () =>
+        makeMatch({ opponents: ['Nemesis'], result: 'Win' })
+      ),
+      ...Array.from({ length: 6 }, () =>
+        makeMatch({ opponents: ['Nemesis'], result: 'Loss' })
+      ),
+      ...makePool(5, 5),
+    ];
+
+    const ctx = makeContext({
+      opponentTeams: [{ teamName: 'Hunter', shipType: 'Hunter', players: ['Nemesis'] }],
+    });
+
+    const result = computePregameAdvice(ctx, pool);
+    const pressureFactor = result.factors.find((f) => f.kind === 'opponent-pressure');
+    expect(pressureFactor).toBeDefined();
+    expect(pressureFactor?.copy).toContain('Nemesis');
+    expect(pressureFactor?.copy).not.toContain('Hunter');
+    expect(result.topActions.some((a) => a.includes('Nemesis'))).toBe(true);
+    expect(result.topActions.some((a) => a.includes('Hunter'))).toBe(false);
+  });
+
+  it('still falls back to the team/ship label when teamName === shipType and no player data exists', () => {
+    const pool: Match[] = [
+      ...Array.from({ length: 3 }, () =>
+        makeMatch({
+          opponentTeams: [{ teamName: 'Hunter', shipType: 'Hunter', color: 'red', players: [] }],
+          result: 'Win',
+        })
+      ),
+      ...Array.from({ length: 5 }, () =>
+        makeMatch({
+          opponentTeams: [{ teamName: 'Hunter', shipType: 'Hunter', color: 'red', players: [] }],
+          result: 'Loss',
+        })
+      ),
+      ...makePool(5, 5),
+    ];
+
+    const ctx = makeContext({
+      opponentTeams: [{ teamName: 'Hunter', shipType: 'Hunter', players: [] }],
+    });
+
+    const result = computePregameAdvice(ctx, pool);
+    const pressureFactor = result.factors.find((f) => f.kind === 'opponent-pressure');
+    expect(pressureFactor).toBeDefined();
+    // No player-level signal exists here, so the ship/team fallback label is expected and fine.
+    expect(pressureFactor?.copy).toContain('Hunter');
   });
 });
 
@@ -487,7 +543,8 @@ describe('computePregameAdvice — topActions', () => {
     });
 
     const result = computePregameAdvice(ctx, pool);
-    expect(result.topActions.some((a) => a.toLowerCase().includes('bosssquad'))).toBe(true);
+    // "Boss" has per-player encounter data, so the action names the player, not the team label.
+    expect(result.topActions.some((a) => a.toLowerCase().includes('boss'))).toBe(true);
   });
 
   it('includes POI target action when best bucket is identified', () => {

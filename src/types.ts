@@ -324,7 +324,7 @@ export const normalizeShipName = (ship: string | null | undefined): string => {
 
 /** Target for the analytics drill-down overlay — clicking a chart element sets this. */
 export type DrillDownTarget = {
-  type: 'Ship' | 'Hero' | 'Weapon' | 'Equipment' | 'Perk' | 'Teammate' | 'Opponent' | 'AnyPlayer' | 'Artifact' | 'Modifier' | 'Date' | 'Week' | 'Month' | 'KPI';
+  type: 'Ship' | 'Hero' | 'Weapon' | 'Equipment' | 'Perk' | 'Category' | 'Teammate' | 'Opponent' | 'AnyPlayer' | 'Artifact' | 'Modifier' | 'Date' | 'Week' | 'Month' | 'KPI';
   name: string;
   matchIds?: number[];
   encounterScope?: 'all';
@@ -495,7 +495,7 @@ export interface MomentumData {
   trend: 'rising' | 'falling' | 'stable';
 }
 
-export type EntityDimensionKey = 'ship' | 'prospectorWeapon' | 'equipment' | 'perk' | 'update';
+export type EntityDimensionKey = 'ship' | 'prospectorWeapon' | 'equipment' | 'perk' | 'update' | 'category';
 
 export interface UpdatePatchNote {
   version: string;
@@ -517,6 +517,7 @@ export interface EntityAnalyticsFilters {
   equipment: string[];
   perk: string[];
   update: string[];
+  category: string[];
 }
 
 export interface EntityMetricRow {

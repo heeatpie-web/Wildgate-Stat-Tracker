@@ -2167,6 +2167,10 @@ ipcMain.handle('rerun-ocr-on-artifact', async (event, { imagePath, activeUser, o
       sourceImagePath: fullPath,
       ocrRegions: ocrRegions || null,
       ...safeRuntimeOptions,
+      onStage: createOcrProgressReporter(event.sender, {
+        imageIndex: 0,
+        imageCount: 1,
+      }),
     });
     return result;
   } catch (e) {

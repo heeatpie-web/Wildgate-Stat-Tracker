@@ -1,5 +1,6 @@
 import type { Match } from '../../types';
 import { getUpdateForTimestamp } from '../../data/gamePatches';
+import { normalizeMatchCategory } from '../../utils/matchCategory';
 
 export const PATCH_PROSPECTOR_WEAPONS = [
     'Foam Gun',
@@ -164,6 +165,25 @@ export const getMatchShip = (match: Match): string => {
     const loadout = getLoadout(match);
     return String(match?.ship || loadout.ship || '').trim();
 };
+
+/**
+ * Match category ("tag") for a single match, display-cased (never
+ * lowercased). Case-insensitive grouping for the Analytics dimension is
+ * handled generically downstream (buildEntityRows keys rows off
+ * `label.toLowerCase()`, same as every other entity dimension here).
+ */
+export const getMatchCategory = (match: Match): string => normalizeMatchCategory(match?.matchCategory);
+
+/**
+ * Every distinct category used across the given matches, case-insensitively
+ * deduped (first-seen casing wins) — the vocabulary source for category
+ * autocomplete/datalist UI.
+ */
+export const getKnownMatchCategories = (matches: Match[]): string[] => (
+    dedupeByCaseInsensitive(
+        (matches || []).map((match) => getMatchCategory(match)).filter(Boolean)
+    )
+);
 
 export const getMatchPerks = (match: Match): string[] => {
     const loadout = getLoadout(match);

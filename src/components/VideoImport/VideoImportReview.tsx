@@ -14,7 +14,7 @@ export const VideoImportReview: React.FC = () => {
         <div className="flex flex-col gap-4 p-4">
             <div className="flex items-center justify-between">
                 <div>
-                    <div className="text-title-md font-bold text-md-sys-on-surface">
+                    <div className="text-title font-bold text-md-sys-on-surface">
                         {matches.length} Match{matches.length !== 1 ? 'es' : ''} Found
                     </div>
                     <div className="text-label-sm text-md-sys-on-surface/50 truncate max-w-xs mt-0.5">{fileName}</div>

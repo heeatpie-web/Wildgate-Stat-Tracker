@@ -113,3 +113,127 @@ describe('SeedsPanel tactical map previews', () => {
         await waitFor(() => expect(screen.queryByAltText('Tactical map preview')).not.toBeInTheDocument());
     });
 });
+
+describe('SeedsPanel aria-pressed states', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        appStoreState.matches = [];
+        appStoreState.performanceMode = false;
+        appStoreState.disableAnimations = false;
+        getMatchArtifactsStructured.mockResolvedValue({
+            images: [],
+            imageFiles: [],
+            telemetry: [],
+            missingImages: [],
+            resolvedFromDisk: true,
+        });
+    });
+
+    it('reflects the active Sort toggle option via aria-pressed', async () => {
+        appStoreState.matches = [buildMatch()];
+        render(<SeedsPanel />);
+
+        const recentButton = await screen.findByRole('button', { name: 'Recent' });
+        const countButton = screen.getByRole('button', { name: 'Count' });
+
+        expect(recentButton).toHaveAttribute('aria-pressed', 'true');
+        expect(countButton).toHaveAttribute('aria-pressed', 'false');
+
+        fireEvent.click(countButton);
+
+        expect(countButton).toHaveAttribute('aria-pressed', 'true');
+        expect(recentButton).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('exposes an accessible label for the seed search input', async () => {
+        appStoreState.matches = [buildMatch()];
+        render(<SeedsPanel />);
+
+        expect(await screen.findByRole('textbox', { name: 'Filter seeds' })).toBeInTheDocument();
+    });
+
+    it('marks the selected seed row with aria-pressed and updates it on selection', async () => {
+        appStoreState.matches = [
+            buildMatch({ id: 1, mapSeed: 'AAAA1111', timestamp: Date.now() }),
+            buildMatch({ id: 2, mapSeed: 'BBBB2222', timestamp: Date.now() - 1000 }),
+        ];
+        render(<SeedsPanel />);
+
+        const firstRow = (await screen.findAllByText('AAAA1111'))
+            .map((el) => el.closest('button'))
+            .find((el): el is HTMLButtonElement => el !== null);
+        const secondRow = screen.getAllByText('BBBB2222')
+            .map((el) => el.closest('button'))
+            .find((el): el is HTMLButtonElement => el !== null);
+        expect(firstRow).not.toBeNull();
+        expect(secondRow).not.toBeNull();
+
+        // Most-recent match sorts first by default, so it starts selected/pressed.
+        expect(firstRow).toHaveAttribute('aria-pressed', 'true');
+        expect(secondRow).toHaveAttribute('aria-pressed', 'false');
+
+        fireEvent.click(secondRow as HTMLButtonElement);
+
+        expect(secondRow).toHaveAttribute('aria-pressed', 'true');
+        expect(firstRow).toHaveAttribute('aria-pressed', 'false');
+    });
+});
+
+describe('SeedsPanel tactical map loading affordance', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        appStoreState.matches = [];
+        appStoreState.performanceMode = false;
+        appStoreState.disableAnimations = false;
+    });
+
+    it('shows a loading status while the tactical map lookup is in flight, then resolves', async () => {
+        let resolveArtifacts: (value: unknown) => void = () => {};
+        const pending = new Promise((resolve) => { resolveArtifacts = resolve; });
+        getMatchArtifactsStructured.mockReturnValue(pending);
+
+        appStoreState.matches = [buildMatch()];
+        render(<SeedsPanel />);
+
+        expect(await screen.findByRole('status', { name: 'Loading tactical map preview' })).toBeInTheDocument();
+
+        resolveArtifacts({
+            images: ['C:/caps/capture_map_1.png'],
+            imageFiles: [
+                { artifactId: 'b', filename: 'capture_map_1.png', path: 'C:/caps/capture_map_1.png', screenshotType: 'tactical_map' },
+            ],
+            telemetry: [],
+            missingImages: [],
+            resolvedFromDisk: true,
+        });
+
+        await waitFor(() =>
+            expect(screen.queryByRole('status', { name: 'Loading tactical map preview' })).not.toBeInTheDocument()
+        );
+        expect(await screen.findByAltText('Tactical map capture')).toBeInTheDocument();
+    });
+
+    it('does not show a loading status once resolution finds no capture', async () => {
+        let resolveArtifacts: (value: unknown) => void = () => {};
+        const pending = new Promise((resolve) => { resolveArtifacts = resolve; });
+        getMatchArtifactsStructured.mockReturnValue(pending);
+
+        appStoreState.matches = [buildMatch()];
+        render(<SeedsPanel />);
+
+        expect(await screen.findByRole('status', { name: 'Loading tactical map preview' })).toBeInTheDocument();
+
+        resolveArtifacts({
+            images: [],
+            imageFiles: [],
+            telemetry: [],
+            missingImages: [],
+            resolvedFromDisk: true,
+        });
+
+        await waitFor(() =>
+            expect(screen.queryByRole('status', { name: 'Loading tactical map preview' })).not.toBeInTheDocument()
+        );
+        expect(screen.queryByAltText('Tactical map capture')).not.toBeInTheDocument();
+    });
+});

@@ -22,6 +22,7 @@ import { capTeammatePlayers } from '../teamLimits';
 import { deduplicatePlayersByLikelyName } from './playerNameMatching';
 import { normalizePipeSpacerPlayerName } from '../stringUtils';
 import { isReachModifierUiPlayerNoise } from '../reachModifierUiNoise';
+import { isKnownMapName } from '../constants';
 
 function distance(a: string, b: string): number {
   const matrix: number[][] = [];
@@ -85,12 +86,28 @@ const isUnknownTeamColor = (value?: TeamColor | string): boolean => {
   return !normalized || normalized === 'unknown';
 };
 
-const isPlaceholderTeamName = (value?: string): boolean => {
+// Lobby OCR sometimes assigns the ship-class line (e.g. "Hunter") to the team-name field
+// instead of a real team label. Known ships and known map names are never meaningful team
+// identities, so they get treated as placeholders alongside "Team 1" / "Unknown" etc.
+const KNOWN_SHIP_TEAM_NAME_KEYS: ReadonlySet<string> = new Set(
+  [...Object.keys(SHIP_MAP), ...Object.values(SHIP_MAP)]
+    .map((name) => normalizeKey(String(name || '')))
+    .filter(Boolean)
+);
+
+const isKnownShipTeamName = (value?: string): boolean => {
+  const key = normalizeKey(String(value || ''));
+  return Boolean(key) && KNOWN_SHIP_TEAM_NAME_KEYS.has(key);
+};
+
+export const isPlaceholderTeamName = (value?: string): boolean => {
   const normalized = String(value || '').trim().toLowerCase();
   if (!normalized) return true;
   if (/^team\s*\d*$/.test(normalized)) return true;
   if (/^enemy\s*team\s*\d*$/.test(normalized)) return true;
   if (/^unknown(\s*team)?$/.test(normalized)) return true;
+  if (isKnownShipTeamName(normalized)) return true;
+  if (isKnownMapName(normalized)) return true;
   return false;
 };
 

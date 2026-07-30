@@ -1,9 +1,12 @@
-import React, { useId, useState } from 'react';
+import React, { useId, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Match, SHIPS, WEAPONS, SYSTEMS } from '../types';
-import { X, Save, Trash2, AlertCircle, Skull, Crosshair, Plus, Zap } from 'lucide-react';
+import { X, Save, Trash2, AlertCircle, Skull, Crosshair, Plus, Zap, Tag } from 'lucide-react';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { useGameData } from '../providers/GameDataProvider';
+import { normalizeMatchCategory } from '../utils/matchCategory';
+import { getKnownMatchCategories } from './patch/patchEntityCatalog';
 
 interface EditMatchModalProps {
   match: Match;
@@ -17,14 +20,25 @@ export const EditMatchModal: React.FC<EditMatchModalProps> = ({ match, onSave, o
   const [newOpponent, setNewOpponent] = useState("");
   const dialogTitleId = useId();
   const dialogDescriptionId = useId();
+  const categoryFieldId = useId();
+  const categoryListId = useId();
   const focusTrapRef = useFocusTrap<HTMLDivElement>(true);
+  const { matches } = useGameData();
+
+  // Vocabulary for the category autocomplete, derived from every category
+  // ever recorded (case-insensitively deduped so "Ranked"/"ranked" don't
+  // both show up as separate suggestions).
+  const knownCategories = useMemo(() => getKnownMatchCategories(matches), [matches]);
 
   useKeyboardShortcuts([
     { key: 'Escape', handler: () => onClose() },
   ], true);
 
   const handleSave = () => {
-    onSave(editedMatch);
+    onSave({
+      ...editedMatch,
+      matchCategory: normalizeMatchCategory(editedMatch.matchCategory) || undefined,
+    });
   };
 
   const removeTeammate = (index: number) => {
@@ -144,6 +158,25 @@ export const EditMatchModal: React.FC<EditMatchModalProps> = ({ match, onSave, o
 
         {/* Arrays: Teammates, Opponents, Modifiers */}
         <div className="space-y-4">
+          <div className="md3-card p-4 rounded-card">
+            <label htmlFor={categoryFieldId} className="text-label-sm font-bold uppercase opacity-60 mb-2 flex items-center gap-2">
+              <Tag size={14} /> Category
+            </label>
+            <input
+              id={categoryFieldId}
+              type="text"
+              list={categoryListId}
+              value={editedMatch.matchCategory || ''}
+              onChange={e => setEditedMatch({ ...editedMatch, matchCategory: e.target.value })}
+              placeholder="Tournament, Scrim, League..."
+              maxLength={48}
+              className="w-full md3-textfield--outlined p-3 rounded-control font-bold outline-none"
+            />
+            <datalist id={categoryListId}>
+              {knownCategories.map((category) => <option key={category} value={category} />)}
+            </datalist>
+          </div>
+
           <div className="md3-card p-4 rounded-card">
             <label className="text-label-sm font-bold uppercase opacity-60 mb-2 block">Teammates</label>
             <div className="flex flex-wrap gap-2 mb-3">

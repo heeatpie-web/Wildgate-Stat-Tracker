@@ -6,6 +6,32 @@ import { cropImageDataUrl, preprocessImage } from './imageUtils';
 import { groupWordsIntoLines, runNativeOCR, detectModifiers } from './ocrUtils';
 import { getElectronAPI } from '../electronAPI';
 import { normalizeOcrName, normalizePipeSpacerPlayerName } from '../stringUtils';
+import { isKnownMapName } from '../constants';
+
+const DEFAULT_TEAM_NAME = 'Unknown Ship';
+
+/**
+ * True when `candidate` looks like a ship class/name (e.g. "Hunter", "Battle Scout") rather than
+ * an actual team name. Mirrors the ship-detection already used elsewhere in this file (classLine
+ * lookup, single-line branch) so the team-name guard below stays consistent with how ship lines
+ * are recognized throughout processLobbyScreenshot.
+ */
+const isKnownShipCandidate = (candidate: string): boolean => {
+    const upper = String(candidate || '').toUpperCase();
+    if (!upper) return false;
+    return SHIP_TYPES.some(st => upper.includes(st)) || SHIP_NAME_KEYWORDS.some(k => upper.includes(k));
+};
+
+/**
+ * Rejects OCR-derived team/ship-name candidates that are actually map names (e.g. "GLOAMING
+ * EXPANSE" bleeding into the roster area) or ship class names (e.g. "Hunter"). Falls back to
+ * DEFAULT_TEAM_NAME when rejected.
+ */
+export const resolveTeamNameCandidate = (candidate: string): string => {
+    if (isKnownMapName(candidate)) return DEFAULT_TEAM_NAME;
+    if (isKnownShipCandidate(candidate)) return DEFAULT_TEAM_NAME;
+    return candidate;
+};
 
 export const processLobbyScreenshot = async (
     imageDataUrl: string,
@@ -193,7 +219,7 @@ export const processLobbyScreenshot = async (
             const teamColor = metadataLine ? metadataLine.color : 'Unknown';
 
             let playerName = "Unknown";
-            let teamName = "Unknown Ship";
+            let teamName = DEFAULT_TEAM_NAME;
             let shipType = undefined;
 
             const validLines = lines.filter((l: any) => {
@@ -205,7 +231,7 @@ export const processLobbyScreenshot = async (
 
             if (validLines.length >= 2) {
                 playerName = validLines[0].cleanName;
-                teamName = validLines[1].cleanName;
+                teamName = resolveTeamNameCandidate(validLines[1].cleanName);
 
                 if (validLines.length > 2) {
                     const classLine = validLines.find((l: any) => SHIP_TYPES.some(st => l.text.toUpperCase().includes(st)));

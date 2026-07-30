@@ -12,6 +12,7 @@ const data: EntityAnalyticsData = {
         equipment: [],
         perk: [],
         update: [],
+        category: [],
     },
     filteredCount: 12,
     thresholds: {
@@ -57,6 +58,15 @@ const data: EntityAnalyticsData = {
             lowSample: false,
         }],
         update: [],
+        category: [{
+            key: 'ranked',
+            label: 'Ranked',
+            sampleCount: 7,
+            usageRate: 58.3,
+            winRate: 57.1,
+            placementDistribution: {},
+            lowSample: false,
+        }],
     },
     comparisons: {
         periodVsPrevious: {
@@ -99,8 +109,10 @@ describe('EntityAnalyticsView', () => {
 
         fireEvent.click(screen.getByRole('button', { name: /hunter/i }));
         fireEvent.click(screen.getByRole('button', { name: /foam gun/i }));
+        fireEvent.click(screen.getByRole('button', { name: /^ranked/i }));
 
         expect(onDrillDown).toHaveBeenNthCalledWith(1, 'Hunter', 'Ship');
         expect(onDrillDown).toHaveBeenNthCalledWith(2, 'Foam Gun', 'Weapon');
+        expect(onDrillDown).toHaveBeenNthCalledWith(3, 'Ranked', 'Category');
     });
 });

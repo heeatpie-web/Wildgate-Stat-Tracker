@@ -2,6 +2,7 @@ import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
+import { inferDomainFromName, inferTagFromName, looksLikeMapEntity } from './IdMapper';
 
 const setUidMapping = vi.fn();
 const setActiveShip = vi.fn();
@@ -191,5 +192,36 @@ describe('IdMapper ship mapping behavior', () => {
         const rows = screen.getAllByText(/samples/i);
         expect(rows.length).toBeGreaterThan(0);
         expect(screen.getAllByText(/Wingmate|Prospecta/)[0]).toHaveTextContent('Wingmate');
+    });
+});
+
+describe('map-name guard (looksLikeMapEntity / inferDomainFromName / inferTagFromName)', () => {
+    it('recognizes known map names via looksLikeMapEntity', () => {
+        expect(looksLikeMapEntity('Deadworlds')).toBe(true);
+        expect(looksLikeMapEntity('DEADWORLDS')).toBe(true);
+        expect(looksLikeMapEntity('Cryon Rift')).toBe(true);
+        expect(looksLikeMapEntity('Gloaming Expanse')).toBe(true);
+        expect(looksLikeMapEntity('Hunter')).toBe(false);
+    });
+
+    it('never routes a known map name into the ships domain', () => {
+        expect(inferDomainFromName('Deadworlds')).not.toBe('ships');
+        expect(inferDomainFromName('Cryon Rift')).not.toBe('ships');
+        expect(inferDomainFromName('Gloaming Expanse')).not.toBe('ships');
+        expect(inferDomainFromName('Deadworlds')).toBeNull();
+        expect(inferDomainFromName('Cryon Rift')).toBeNull();
+        expect(inferDomainFromName('Gloaming Expanse')).toBeNull();
+    });
+
+    it('never tags a known map name as a ship', () => {
+        expect(inferTagFromName('Deadworlds')).not.toBe('ship');
+        expect(inferTagFromName('Cryon Rift')).not.toBe('ship');
+        expect(inferTagFromName('Gloaming Expanse')).not.toBe('ship');
+        expect(inferTagFromName('Deadworlds')).toBeNull();
+    });
+
+    it('still routes real ship names into the ships domain/tag', () => {
+        expect(inferDomainFromName('Hunter')).toBe('ships');
+        expect(inferTagFromName('Hunter')).toBe('ship');
     });
 });

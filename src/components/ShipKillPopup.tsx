@@ -2,32 +2,46 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Minus, Plus } from 'lucide-react';
 import { SHIPS } from '../utils/constants';
+import { SHIP_KILL_POPUP_AUTO_DISMISS_DEFAULT_MS } from '../store/slices/createSettingsSlice';
 import type { KillMap } from '../types';
 
 const ALL_SHIP_TYPES = [...SHIPS, 'AI Legion'];
-const AUTO_DISMISS_MS = 30_000;
 
 interface ShipKillPopupProps {
     matchId: number;
     onSave: (matchId: number, kills: KillMap) => void;
     onDismiss: () => void;
+    /**
+     * Auto-dismiss duration in ms. `0` (or any non-positive value) disables
+     * auto-dismiss entirely — the popup stays open until the user saves or
+     * manually closes it. Defaults to the app-wide default (30s).
+     */
+    autoDismissMs?: number;
 }
 
-export const ShipKillPopup: React.FC<ShipKillPopupProps> = ({ matchId, onSave, onDismiss }) => {
+export const ShipKillPopup: React.FC<ShipKillPopupProps> = ({
+    matchId,
+    onSave,
+    onDismiss,
+    autoDismissMs = SHIP_KILL_POPUP_AUTO_DISMISS_DEFAULT_MS,
+}) => {
     const [kills, setKills] = useState<KillMap>(() => {
         const initial: KillMap = {};
         ALL_SHIP_TYPES.forEach(s => { initial[s] = 0; });
         return initial;
     });
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const interactedRef = useRef(false);
 
+    // Restarts (rather than permanently cancels) the auto-dismiss countdown.
+    // Any interaction with the popup — including +/- clicks — pushes the
+    // dismissal back out by the full duration instead of disabling it.
     const resetTimer = useCallback(() => {
         if (timerRef.current) clearTimeout(timerRef.current);
+        if (!autoDismissMs || autoDismissMs <= 0) return; // 0 = never auto-dismiss
         timerRef.current = setTimeout(() => {
-            if (!interactedRef.current) onDismiss();
-        }, AUTO_DISMISS_MS);
-    }, [onDismiss]);
+            onDismiss();
+        }, autoDismissMs);
+    }, [autoDismissMs, onDismiss]);
 
     useEffect(() => {
         resetTimer();
@@ -35,8 +49,7 @@ export const ShipKillPopup: React.FC<ShipKillPopupProps> = ({ matchId, onSave, o
     }, [resetTimer]);
 
     const adjust = (ship: string, delta: number) => {
-        interactedRef.current = true;
-        if (timerRef.current) clearTimeout(timerRef.current);
+        resetTimer();
         setKills(prev => ({
             ...prev,
             [ship]: Math.max(0, (prev[ship] || 0) + delta),

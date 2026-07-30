@@ -184,26 +184,28 @@ export function computePregameAdvice(
   }
 
   // ── Factor: Opponent Pressure ────────────────────────────────────────────
-  type TeamPressure = { teamName: string; score: number; n: number };
+  type TeamPressure = { teamName: string; threatLabel: string; score: number; n: number };
   const teamPressures: TeamPressure[] = [];
 
   for (const team of context.opponentTeams || []) {
-    const players = (team.players || []).map(normName).filter(Boolean);
+    const playerEntries = (team.players || [])
+      .map((raw) => ({ raw: String(raw || '').trim(), key: normName(raw) }))
+      .filter((entry) => entry.key);
     const ship = normName(team.shipType);
 
     // Per-player encounter win rates (our win rate when facing them)
-    const playerWRs: Array<{ wr: number; n: number }> = [];
-    for (const pName of players) {
+    const playerWRs: Array<{ name: string; wr: number; n: number }> = [];
+    for (const { raw, key } of playerEntries) {
       const vs = pool.filter(
         (m) =>
-          (m.opponents || []).some((op) => normName(op) === pName) ||
+          (m.opponents || []).some((op) => normName(op) === key) ||
           (m.opponentTeams || []).some((ot) =>
-            ot.players.some((p) => normName(p) === pName)
+            ot.players.some((p) => normName(p) === key)
           )
       );
       if (vs.length < 3) continue; // unknown player — skip individual
       const wins = vs.filter((m) => m.result === 'Win').length;
-      playerWRs.push({ wr: smoothedWR(wins, vs.length), n: vs.length });
+      playerWRs.push({ name: raw, wr: smoothedWR(wins, vs.length), n: vs.length });
     }
 
     // Ship-type win rate
@@ -239,7 +241,16 @@ export function computePregameAdvice(
       continue; // no data for this team
     }
 
-    teamPressures.push({ teamName: team.teamName || 'Unknown Team', score, n });
+    // Prefer naming the actual top-pressure player in the threat copy — a "team name" is
+    // frequently an OCR misread of the ship class (see lobbyScan.ts), never a real identity.
+    // Only fall back to the team name when there's no player-level signal to draw from.
+    const topPlayer = playerWRs.length > 0
+      ? [...playerWRs].sort((a, b) => a.wr - b.wr || b.n - a.n)[0]
+      : null;
+    const teamName = team.teamName || 'Unknown Team';
+    const threatLabel = topPlayer?.name || teamName;
+
+    teamPressures.push({ teamName, threatLabel, score, n });
   }
 
   if (teamPressures.length > 0) {
@@ -256,7 +267,7 @@ export function computePregameAdvice(
         delta,
         confidence: conf,
         sampleSize: top.n,
-        copy: makeCopy('opponent-pressure', 'negative', conf, top.teamName),
+        copy: makeCopy('opponent-pressure', 'negative', conf, top.threatLabel),
       });
     }
   }
@@ -440,8 +451,8 @@ export function computePregameAdvice(
     if (conf) {
       topActions.push(
         conf === 'low'
-          ? `Lean toward eliminating ${top.teamName} early`
-          : `Best early target: ${top.teamName}`
+          ? `Lean toward eliminating ${top.threatLabel} early`
+          : `Best early target: ${top.threatLabel}`
       );
     }
   }

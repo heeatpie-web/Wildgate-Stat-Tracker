@@ -394,6 +394,10 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
         poiEpic: 0,
         elims: "",
         currentNote: "",
+        // The category draft is a per-match tag, not a session default — leaving
+        // it set would silently stamp the previous match's category onto this
+        // one unless the user explicitly re-tags it.
+        currentMatchCategory: "",
     }),
 
     resetForm: () => set((state) => {
@@ -445,6 +449,10 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
             telemetryDetectedShip: undefined,
             elims: "",
             currentNote: "",
+            // Reset here (not just the MissionPanel "Clear" button) so the next
+            // match — whether started fresh or via a submitted/discarded one —
+            // never silently inherits the previous match's category tag.
+            currentMatchCategory: "",
             activeWeapons: restoredWeapons,
             // Full discard: clear teammates, opponents, pending data, timer
             selectedTeammates: [],

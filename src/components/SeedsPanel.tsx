@@ -17,6 +17,7 @@ import {
     Eye,
     X,
     Filter,
+    RefreshCw,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import type { Match } from '../types';
@@ -109,6 +110,7 @@ export const SeedsPanel: React.FC = () => {
     const filterPopoverRef = useRef<HTMLDivElement>(null);
 
     const lightboxTitleId = useId();
+    const seedSearchInputId = useId();
     const lightboxFocusTrapRef = useFocusTrap<HTMLDivElement>(Boolean(lightboxSrc));
     useKeyboardShortcuts([
         { key: 'Escape', handler: () => setLightboxSrc(null) },
@@ -320,7 +322,7 @@ export const SeedsPanel: React.FC = () => {
     return (
         <div className="w-full flex-1 h-full min-h-0 flex flex-col lg:grid lg:grid-cols-[minmax(22rem,28rem)_minmax(0,1fr)] gap-4 overflow-visible rounded-2xl p-1">
             {/* Column 1: Seeds List */}
-            <div className="flex flex-col h-full min-h-0 rounded-card bg-md-sys-surface border border-md-sys-outline/10 p-3.5 gap-3 shadow-sm">
+            <div className="flex flex-col h-full min-h-0 rounded-card mg-surface-high p-3.5 gap-3">
                 {/* Search & Header */}
                 <div className="flex flex-col gap-2 shrink-0">
                     <div className="flex items-center justify-between">
@@ -341,6 +343,7 @@ export const SeedsPanel: React.FC = () => {
                             <div className="flex items-center gap-1 bg-md-sys-on-surface/[0.04] p-1 rounded-lg border border-md-sys-outline/10">
                                 <button
                                     onClick={() => setSortMode('recent')}
+                                    aria-pressed={sortMode === 'recent'}
                                     className={`px-2 py-1 rounded text-label-xs font-semibold ${
                                         sortMode === 'recent'
                                             ? 'bg-md-sys-primary/15 text-md-sys-primary'
@@ -352,6 +355,7 @@ export const SeedsPanel: React.FC = () => {
                                 </button>
                                 <button
                                     onClick={() => setSortMode('count')}
+                                    aria-pressed={sortMode === 'count'}
                                     className={`px-2 py-1 rounded text-label-xs font-semibold ${
                                         sortMode === 'count'
                                             ? 'bg-md-sys-primary/15 text-md-sys-primary'
@@ -435,19 +439,21 @@ export const SeedsPanel: React.FC = () => {
 
                     {/* Search Input */}
                     <div className="relative w-full">
+                        <label htmlFor={seedSearchInputId} className="a11y-sr-only">Filter seeds</label>
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-md-sys-on-surface/40" />
                         <input
+                            id={seedSearchInputId}
                             type="text"
                             placeholder="Filter seeds (e.g. A1B2)..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-md-sys-on-surface/[0.04] text-label-sm text-md-sys-on-surface placeholder:text-md-sys-on-surface/40 border border-md-sys-outline/10 focus:outline-none focus:border-md-sys-primary/50 transition-colors"
+                            className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-md-sys-on-surface/[0.04] text-label-sm text-md-sys-on-surface placeholder:text-md-sys-on-surface/40 border border-md-sys-outline/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary transition-colors hover:border-md-sys-outline/40"
                         />
                     </div>
                 </div>
 
                 {/* Seed List */}
-                <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar flex flex-col gap-1.5 pr-1">
+                <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar flex flex-col gap-1 pr-1">
                     {filteredSeeds.length === 0 ? (
                         <div className="h-full flex flex-col items-center justify-center text-center p-6 text-md-sys-on-surface/50 gap-2">
                             <Hash size={32} className="opacity-30" />
@@ -463,7 +469,8 @@ export const SeedsPanel: React.FC = () => {
                                 <button
                                     key={group.seed}
                                     onClick={() => setSelectedSeed(group.seed)}
-                                    className={`group relative w-full text-left pl-3.5 pr-3 py-3 rounded-xl border transition-all flex items-center justify-between gap-3 overflow-hidden ${
+                                    aria-pressed={isSelected}
+                                    className={`group relative w-full shrink-0 text-left pl-4 pr-3 py-2 rounded-xl border transition-all flex items-center gap-3 overflow-hidden ${
                                         isAnimDisabled ? '' : 'duration-150'
                                     } ${
                                         isSelected
@@ -476,33 +483,42 @@ export const SeedsPanel: React.FC = () => {
                                             isSelected ? 'bg-md-sys-primary' : 'bg-transparent group-hover:bg-md-sys-outline/20'
                                         }`}
                                     />
-                                    <div className="flex flex-col gap-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-mono text-label-md font-bold tracking-wider text-md-sys-primary">
+
+                                    <div className="flex flex-col min-w-0 flex-1 gap-0.5">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                            <span className="font-mono text-body font-bold tracking-wide text-md-sys-primary truncate leading-none">
                                                 {group.seed}
                                             </span>
                                             {group.flags.length > 0 && (
                                                 <span
-                                                    className="text-amber-400"
+                                                    className="text-warning shrink-0"
                                                     title={`OCR flags: ${group.flags.join(', ')}`}
                                                 >
-                                                    <AlertTriangle size={12} />
+                                                    <AlertTriangle size={11} />
                                                 </span>
                                             )}
                                         </div>
-                                        <div className="flex items-center gap-1.5 text-label-xs text-md-sys-on-surface/50">
-                                            <span>{group.totalMatches} {group.totalMatches === 1 ? 'match' : 'matches'}</span>
-                                            <span className="opacity-50">•</span>
-                                            <span>{timeAgo(group.lastPlayed)}</span>
-                                        </div>
+                                        <span className="text-label-xs text-md-sys-on-surface/45 leading-none">
+                                            {timeAgo(group.lastPlayed)}
+                                        </span>
                                     </div>
 
-                                    <ChevronRight
-                                        size={14}
-                                        className={`shrink-0 transition-transform ${
-                                            isSelected ? 'text-md-sys-primary' : 'text-md-sys-on-surface/30 group-hover:translate-x-0.5'
-                                        }`}
-                                    />
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        {group.totalMatches > 1 && (
+                                            <span
+                                                className="min-w-[1.25rem] px-1.5 h-[18px] rounded-pill bg-md-sys-primary/20 border border-md-sys-primary/30 text-md-sys-primary text-label-xs font-bold tabular-nums flex items-center justify-center"
+                                                title={`${group.totalMatches} matches played on this seed`}
+                                            >
+                                                {group.totalMatches}
+                                            </span>
+                                        )}
+                                        <ChevronRight
+                                            size={14}
+                                            className={`shrink-0 transition-transform ${
+                                                isSelected ? 'text-md-sys-primary' : 'text-md-sys-on-surface/30 group-hover:translate-x-0.5'
+                                            }`}
+                                        />
+                                    </div>
                                 </button>
                             );
                         })
@@ -511,7 +527,7 @@ export const SeedsPanel: React.FC = () => {
             </div>
 
             {/* Column 2: Seed Detail */}
-            <div className="flex flex-col h-full min-h-0 rounded-card bg-md-sys-surface border border-md-sys-outline/10 p-5 overflow-y-auto custom-scrollbar shadow-sm">
+            <div className="flex flex-col h-full min-h-0 rounded-card mg-surface-high p-5 overflow-y-auto custom-scrollbar">
                 {!activeGroup ? (
                     <div className="h-full flex flex-col items-center justify-center text-center p-8 text-md-sys-on-surface/40 gap-3">
                         <div className="w-16 h-16 rounded-2xl bg-md-sys-on-surface/[0.04] flex items-center justify-center text-md-sys-on-surface/30">
@@ -541,7 +557,7 @@ export const SeedsPanel: React.FC = () => {
                                             className="p-1.5 rounded-lg bg-md-sys-on-surface/[0.06] hover:bg-md-sys-on-surface/10 text-md-sys-on-surface/70 hover:text-md-sys-on-surface transition-colors"
                                             title="Copy seed hex"
                                         >
-                                            {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+                                            {copied ? <Check size={14} className="text-success" /> : <Copy size={14} />}
                                         </button>
                                     </div>
                                     <p className="text-label-xs text-md-sys-on-surface/60 mt-0.5">
@@ -551,7 +567,7 @@ export const SeedsPanel: React.FC = () => {
                             </div>
 
                             {activeGroup.flags.length > 0 && (
-                                <div className="relative shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-label-xs font-semibold">
+                                <div className="relative shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-warning/15 border border-warning/30 text-warning text-label-xs font-semibold">
                                     <AlertTriangle size={14} />
                                     <span>{activeGroup.flags.join(', ')}</span>
                                 </div>
@@ -564,7 +580,7 @@ export const SeedsPanel: React.FC = () => {
                                 <span className="text-label-xs text-md-sys-on-surface/50 font-medium flex items-center gap-1.5">
                                     <Layers size={12} /> Total Matches
                                 </span>
-                                <span className="text-title-lg font-bold text-md-sys-on-surface">
+                                <span className="text-title font-bold text-md-sys-on-surface">
                                     {activeGroup.totalMatches}
                                 </span>
                             </div>
@@ -573,7 +589,7 @@ export const SeedsPanel: React.FC = () => {
                                 <span className="text-label-xs text-md-sys-on-surface/50 font-medium flex items-center gap-1.5">
                                     <Shield size={12} /> Record (W/L/D)
                                 </span>
-                                <span className="text-title-lg font-bold text-md-sys-on-surface">
+                                <span className="text-title font-bold text-md-sys-on-surface">
                                     {activeGroup.wins}<span className="text-md-sys-on-surface/30 font-semibold">/</span>{activeGroup.losses}<span className="text-md-sys-on-surface/30 font-semibold">/</span>{activeGroup.draws}
                                 </span>
                             </div>
@@ -582,7 +598,7 @@ export const SeedsPanel: React.FC = () => {
                                 <span className="text-label-xs text-md-sys-on-surface/50 font-medium flex items-center gap-1.5">
                                     <MapPin size={12} /> Hazards Found
                                 </span>
-                                <span className="text-title-lg font-bold text-md-sys-on-surface">
+                                <span className="text-title font-bold text-md-sys-on-surface">
                                     {Object.keys(activeGroup.hazards).length}
                                 </span>
                             </div>
@@ -657,6 +673,7 @@ export const SeedsPanel: React.FC = () => {
                             <div className="flex flex-col gap-2">
                                 {activeGroup.matches.map((m) => {
                                     const mapSrc = tacticalMaps[m.id];
+                                    const mapResolved = Object.prototype.hasOwnProperty.call(tacticalMaps, m.id);
                                     return (
                                         <div
                                             key={m.id}
@@ -664,7 +681,7 @@ export const SeedsPanel: React.FC = () => {
                                                 isAnimDisabled ? '' : 'duration-150'
                                             }`}
                                         >
-                                            {mapSrc && (
+                                            {mapSrc ? (
                                                 <button
                                                     type="button"
                                                     onClick={() => setLightboxSrc(mapSrc)}
@@ -686,17 +703,25 @@ export const SeedsPanel: React.FC = () => {
                                                         <Eye size={16} />
                                                     </div>
                                                 </button>
-                                            )}
+                                            ) : !mapResolved ? (
+                                                <div
+                                                    role="status"
+                                                    aria-label="Loading tactical map preview"
+                                                    className="relative shrink-0 w-28 aspect-video rounded-lg overflow-hidden bg-md-sys-on-surface/[0.06] border border-md-sys-outline/10 flex items-center justify-center text-md-sys-on-surface/40"
+                                                >
+                                                    <RefreshCw size={16} className={isAnimDisabled ? '' : 'animate-spin'} aria-hidden="true" />
+                                                </div>
+                                            ) : null}
 
                                             <div className="flex-1 min-w-0 flex items-center justify-between gap-3">
                                                 <div className="flex items-center gap-2.5 min-w-0">
                                                     <span
                                                         className={`px-2 py-0.5 rounded-pill font-bold uppercase text-[10px] tracking-wide shrink-0 ${
                                                             m.result === 'Win'
-                                                                ? 'bg-green-500/15 text-green-400'
+                                                                ? 'bg-success/15 text-success'
                                                                 : m.result === 'Loss'
-                                                                ? 'bg-red-500/15 text-red-400'
-                                                                : 'bg-amber-500/15 text-amber-400'
+                                                                ? 'bg-danger/15 text-danger'
+                                                                : 'bg-info/15 text-info'
                                                         }`}
                                                     >
                                                         {m.result || 'Saved'}

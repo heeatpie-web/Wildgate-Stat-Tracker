@@ -18,6 +18,7 @@ const getAudioContext = (): AudioContext | null => {
 
 export const useSoundEffects = () => {
     const soundEnabled = useAppStore((state) => state.soundEnabled);
+    const soundVolume = useAppStore((state) => state.soundVolume);
 
     const prepareAudio = useCallback(() => {
         if (!soundEnabled) return;
@@ -46,8 +47,9 @@ export const useSoundEffects = () => {
                 osc.type = type;
                 osc.frequency.setValueAtTime(freq, startAt);
 
+                const peakGain = 0.11 * Math.max(0, Math.min(1, soundVolume / 100));
                 gain.gain.setValueAtTime(0.0001, startAt);
-                gain.gain.exponentialRampToValueAtTime(0.11, startAt + 0.01);
+                gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, peakGain), startAt + 0.01);
                 gain.gain.exponentialRampToValueAtTime(0.00001, stopAt);
 
                 osc.connect(gain);
@@ -71,7 +73,7 @@ export const useSoundEffects = () => {
         } else {
             doPlay();
         }
-    }, [soundEnabled]);
+    }, [soundEnabled, soundVolume]);
 
     const playCapture = useCallback(() => {
         playTone(1174.66, 'triangle', 0.055);

@@ -162,6 +162,7 @@ const SECTION_LABELS: Record<string, string> = {
     prospectorWeapon: 'Prospector Weapons',
     equipment: 'Equipment',
     perk: 'Perks',
+    category: 'Categories',
 };
 
 const SECTION_TYPES: Record<string, DrillDownTarget['type']> = {
@@ -169,6 +170,7 @@ const SECTION_TYPES: Record<string, DrillDownTarget['type']> = {
     prospectorWeapon: 'Weapon',
     equipment: 'Equipment',
     perk: 'Perk',
+    category: 'Category',
 };
 
 export const EntityAnalyticsView: React.FC<EntityAnalyticsViewProps> = ({ data, onDrillDown }) => {

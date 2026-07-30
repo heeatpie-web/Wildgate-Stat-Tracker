@@ -125,6 +125,46 @@ export const UI_REACH_MODIFIERS = [
   ...ARTIFACT_ENTRIES.map((entry) => entry.displayName),
 ];
 
+const MAP_ENTRIES = (HAZARD_CATALOG.mapTypes || []) as ReachModifierCatalogEntry[];
+
+/** Display names of every known map/location from hazardCatalog.json's mapTypes catalog. */
+export const MAP_TYPES: string[] = MAP_ENTRIES.map((entry) => entry.displayName);
+
+/** Lowercase set of every known map display name + alias from hazardCatalog.json. */
+export const KNOWN_MAP_NAMES: ReadonlySet<string> = new Set(
+  MAP_ENTRIES.flatMap((entry) => [entry.displayName, ...(entry.aliases || [])])
+    .map((name) => String(name || '').trim().toLowerCase())
+    .filter(Boolean)
+);
+
+/** Whitespace-stripped variants of KNOWN_MAP_NAMES (handles "DEADWORLDS" vs "DEAD WORLDS" spacing variance). */
+const KNOWN_MAP_NAMES_COMPACT: ReadonlySet<string> = new Set(
+  Array.from(KNOWN_MAP_NAMES).map((name) => name.replace(/\s+/g, ''))
+);
+
+/**
+ * Case-insensitive, whitespace-tolerant check for whether `value` is (or contains) a known
+ * map name. OCR lines are often noisy (extra characters/labels around the map name), so this
+ * also matches when a longer string CONTAINS a known map name as a substring.
+ */
+export const isKnownMapName = (value: unknown): boolean => {
+  const raw = String(value ?? '').trim();
+  if (!raw) return false;
+  const lower = raw.toLowerCase();
+  if (KNOWN_MAP_NAMES.has(lower)) return true;
+
+  const compact = lower.replace(/\s+/g, '');
+  if (KNOWN_MAP_NAMES_COMPACT.has(compact)) return true;
+
+  for (const mapName of KNOWN_MAP_NAMES) {
+    if (mapName.length >= 4 && lower.includes(mapName)) return true;
+  }
+  for (const mapNameCompact of KNOWN_MAP_NAMES_COMPACT) {
+    if (mapNameCompact.length >= 4 && compact.includes(mapNameCompact)) return true;
+  }
+  return false;
+};
+
 export const KILLED_BY_OPTIONS = [
   "Enemy Player", "AI Legion", "World Hazard", "Friendly Fire", "Unknown"
 ];

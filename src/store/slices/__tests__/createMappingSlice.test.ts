@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createStore } from 'zustand/vanilla';
-import { createMappingSlice, MappingSlice, resolvePlayerProfileDisplayName } from '../createMappingSlice';
+import { createMappingSlice, MappingSlice, OcrCorrectionEntry, resolvePlayerProfileDisplayName } from '../createMappingSlice';
 
 vi.mock('../../../utils/logger', () => ({
   default: { info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -693,6 +693,103 @@ describe('createMappingSlice', () => {
       }).rosterEntryMeta;
       expect(meta.p1.status).toBe('confirmed');
       expect(meta.p1.archivedAt).toBeUndefined();
+    });
+  });
+
+  describe('applyOcrCorrections (batch)', () => {
+    it('applies every correction in a single state transition', () => {
+      let transitions = 0;
+      const unsubscribe = store.subscribe(() => { transitions += 1; });
+
+      store.getState().applyOcrCorrections([
+        { ocrName: 'Adrlan', correctedName: 'Adrian', context: 'lobby', confidenceWeight: 1, source: 'review_modal' },
+        { ocrName: 'kfFartingPuppy', correctedName: 'AlixerThus', context: 'matchstats', confidenceWeight: 1, source: 'review_modal' },
+      ]);
+
+      // The whole point: one write for N corrections, not up to 3N separate
+      // `set()` commits (alias record + redundant compat wrapper + setPlayerName).
+      expect(transitions).toBe(1);
+      unsubscribe();
+
+      const mappedNames = Object.values(store.getState().knownMappings);
+      expect(mappedNames).toContain('Adrian');
+      expect(mappedNames).toContain('AlixerThus');
+
+      const profileNames = Object.values(store.getState().playerProfiles).map((p) => p.name);
+      expect(profileNames).toContain('Adrian');
+      expect(profileNames).toContain('AlixerThus');
+
+      // One alias-model write per correction, not two (the dropped
+      // `recordOcrCorrection` compat wrapper used to double it).
+      expect(store.getState().ocrAliasModel.entries['adrlan']?.[0]?.count).toBe(1);
+      expect(store.getState().ocrAliasModel.entries['kffartingpuppy']?.[0]?.count).toBe(1);
+    });
+
+    it('produces the same mappings, profiles, and alias model as the equivalent one-at-a-time calls', () => {
+      const entries: OcrCorrectionEntry[] = [
+        { ocrName: 'Adrlan', correctedName: 'Adrian', context: 'lobby', confidenceWeight: 1, source: 'review_modal' },
+        { ocrName: 'kfFartingPuppy', correctedName: 'AlixerThus', context: 'matchstats', confidenceWeight: 1, source: 'review_modal' },
+      ];
+
+      // "Old per-item path" here means the intended single alias-record +
+      // setPlayerName pair per correction — i.e. the pre-batch behaviour
+      // minus the redundant `recordOcrCorrection` double-write this fix
+      // deliberately removes (see handleSubmitCorrections).
+      const sequential = makeStore();
+      entries.forEach((entry) => {
+        sequential.getState().recordOcrAliasCorrection(entry.ocrName, entry.correctedName, {
+          source: entry.source,
+          context: entry.context,
+          confidenceWeight: entry.confidenceWeight,
+        });
+        sequential.getState().setPlayerName(entry.ocrName, entry.correctedName);
+      });
+
+      store.getState().applyOcrCorrections(entries);
+
+      // Timestamps are wall-clock and can differ by a millisecond between
+      // stores; everything else must match exactly.
+      const stripProfiles = (profiles: Record<string, { lastSeen: number; firstSeen: number }>) => Object.fromEntries(
+        Object.entries(profiles).map(([key, value]) => [key, { ...value, lastSeen: 0, firstSeen: 0 }]),
+      );
+      const stripAliasModel = (model: MappingSlice['ocrAliasModel']) => ({
+        ...model,
+        stats: { ...model.stats, lastCompactedAt: 0 },
+        entries: Object.fromEntries(
+          Object.entries(model.entries).map(([key, group]) => [
+            key,
+            group.map((entry) => ({
+              ...entry,
+              lastUpdatedAt: 0,
+              learningMetadata: entry.learningMetadata
+                ? { ...entry.learningMetadata, firstCorrectionAt: 0 }
+                : entry.learningMetadata,
+            })),
+          ]),
+        ),
+      });
+
+      expect(store.getState().knownMappings).toEqual(sequential.getState().knownMappings);
+      expect(store.getState().uidMappings.players).toEqual(sequential.getState().uidMappings.players);
+      expect(stripProfiles(store.getState().playerProfiles)).toEqual(stripProfiles(sequential.getState().playerProfiles));
+      expect(stripAliasModel(store.getState().ocrAliasModel)).toEqual(stripAliasModel(sequential.getState().ocrAliasModel));
+    });
+
+    it('accumulates alias corrections for the same raw text within one batch', () => {
+      store.getState().applyOcrCorrections([
+        { ocrName: 'Adrlan', correctedName: 'Adrian', context: 'lobby', confidenceWeight: 1 },
+        { ocrName: 'Adrlan', correctedName: 'Adrian', context: 'lobby', confidenceWeight: 1 },
+      ]);
+
+      expect(store.getState().ocrAliasModel.entries['adrlan']?.[0]?.count).toBe(2);
+    });
+
+    it('does not write for an empty batch', () => {
+      let transitions = 0;
+      const unsubscribe = store.subscribe(() => { transitions += 1; });
+      store.getState().applyOcrCorrections([]);
+      expect(transitions).toBe(0);
+      unsubscribe();
     });
   });
 });

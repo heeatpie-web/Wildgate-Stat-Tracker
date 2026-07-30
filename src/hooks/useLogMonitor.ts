@@ -673,6 +673,12 @@ export const useLogMonitor = (activeUser?: string) => {
     const latestNebLoadoutSavedTimestampRef = useRef<number>(0);
     const latestNebLoadoutSavedSignatureRef = useRef<string>('');
     const localTelemetryShipSelectionRef = useRef<string>('');
+    // Game-log timestamp (ms) of the event that produced the current
+    // localTelemetryShipSelectionRef value / the last applied ship-selection telemetry.
+    // Used to reject out-of-order (stale) ship-selection events so a delayed/late-processed
+    // older event cannot clobber an already-applied newer selection, regardless of whether
+    // either event came from the local-loadout path or the shared-selection path.
+    const localTelemetryShipSelectionAtRef = useRef<number>(0);
     const pendingTelemetryConsistencyRef = useRef<Partial<TelemetryConsistency>>({
         durationToleranceSeconds: DEFAULT_DURATION_TOLERANCE_SECONDS,
     });
@@ -1073,6 +1079,7 @@ export const useLogMonitor = (activeUser?: string) => {
         latestNebLoadoutSavedTimestampRef.current = 0;
         latestNebLoadoutSavedSignatureRef.current = '';
         localTelemetryShipSelectionRef.current = '';
+        localTelemetryShipSelectionAtRef.current = 0;
         telemetryPracticeRangeSessionIdsRef.current.clear();
         pendingTelemetryConsistencyRef.current = {
             durationToleranceSeconds: DEFAULT_DURATION_TOLERANCE_SECONDS,
@@ -1115,6 +1122,7 @@ export const useLogMonitor = (activeUser?: string) => {
             latestNebLoadoutSavedTimestampRef.current = 0;
             latestNebLoadoutSavedSignatureRef.current = '';
             localTelemetryShipSelectionRef.current = '';
+            localTelemetryShipSelectionAtRef.current = 0;
             applyTelemetryTimerValue('00:00');
         }
 
@@ -1203,6 +1211,7 @@ export const useLogMonitor = (activeUser?: string) => {
     useEffect(() => {
         if (shipSource !== 'telemetry') {
             localTelemetryShipSelectionRef.current = '';
+            localTelemetryShipSelectionAtRef.current = 0;
         }
     }, [shipSource]);
     useEffect(() => { activeUserRef.current = activeUser; }, [activeUser]);
@@ -1479,6 +1488,16 @@ export const useLogMonitor = (activeUser?: string) => {
                         });
                     }
                     if (!allowSessionEvent) {
+                        if (isLoadoutBearingEvent) {
+                            traceTelemetryLoadout('Gate 1 rejected: allowSessionEvent', {
+                                eventName: name,
+                                ageSeconds,
+                                timestampMs: gameTime,
+                                sessionStartTimeMs: sessionStartTimeRef.current,
+                                devMode: devModeRef.current,
+                                allowStartupPracticeRangeBootstrap,
+                            });
+                        }
                         Logger.debug('LogMonitor', `Skipping old event: ${name} (age: ${ageSeconds}s, before session start)`);
                         return;
                     }
@@ -2081,13 +2100,31 @@ export const useLogMonitor = (activeUser?: string) => {
                                 if (allowLooseFallback) return nameHint;
                             }
 
-                            if (!unresolvedIdCandidate) return '';
+                            if (!unresolvedIdCandidate) {
+                                traceTelemetryLoadout('Gate 4 rejected: resolveTelemetrySelection found no match', {
+                                    eventName: name,
+                                    entityType,
+                                    rawValue: rawValue == null ? null : String(rawValue),
+                                    nameHint: nameHint || null,
+                                    weakNameHint,
+                                    guidCandidates: selectionIdCandidates,
+                                });
+                                return '';
+                            }
                             registerUnknownId(unresolvedIdCandidate, entityType);
                             const unknownLabel = formatUnknownTelemetrySelectionLabel(unresolvedIdCandidate);
                             Logger.warn(
                                 'LogMonitor',
                                 `Unknown ${entityType} telemetry ID: ${unresolvedIdCandidate} | raw: "${rawValue}" | resolved: "${unknownLabel}"`,
                             );
+                            if (!allowLooseFallback) {
+                                traceTelemetryLoadout('Gate 4 rejected: unresolved id in strict (shared) mode', {
+                                    eventName: name,
+                                    entityType,
+                                    unresolvedIdCandidate,
+                                    rawValue: rawValue == null ? null : String(rawValue),
+                                });
+                            }
                             return allowLooseFallback ? unknownLabel : '';
                         };
 
@@ -2153,28 +2190,46 @@ export const useLogMonitor = (activeUser?: string) => {
                             allowLooseNameFallback: !shouldApplySharedShipSelection,
                         });
                         if (shipName && !shipName.startsWith('Unknown')) {
-                            if (shouldApplySharedShipSelection) {
+                            // Ordering guard: reject this ship selection if a *newer* (by game-log
+                            // timestamp) selection has already been applied. Without this, whichever
+                            // event happens to be processed last wins regardless of its own timestamp,
+                            // so a delayed/out-of-order older event (local or shared) can silently
+                            // clobber a genuinely newer selection. Comparing timestamps instead of
+                            // simply trusting processing order preserves the original intent (don't let
+                            // a stale shared record overwrite a fresh local pick) while also fixing the
+                            // inverse (don't let a stale local record overwrite a fresh shared pick).
+                            const lastAppliedShipSelectionAt = localTelemetryShipSelectionAtRef.current;
+                            const isStaleOutOfOrderShipSelection = (
+                                lastAppliedShipSelectionAt > 0 && gameTime < lastAppliedShipSelectionAt
+                            );
+                            if (isStaleOutOfOrderShipSelection) {
+                                traceTelemetryLoadout('Ship selection rejected: stale/out-of-order event', {
+                                    eventName: name,
+                                    candidateShip: shipName,
+                                    candidateAtMs: gameTime,
+                                    lastAppliedShip: localTelemetryShipSelectionRef.current,
+                                    lastAppliedAtMs: lastAppliedShipSelectionAt,
+                                    source: shouldApplySharedShipSelection ? 'shared-ship-selection' : 'telemetry',
+                                });
+                                Logger.debug(
+                                    'LogMonitor',
+                                    `Ignored out-of-order ship-selection event: ${name} (ship=${shipName}, at=${gameTime} < lastApplied=${lastAppliedShipSelectionAt})`,
+                                );
+                                shipName = '';
+                            } else {
                                 localTelemetryShipSelectionRef.current = shipName;
+                                localTelemetryShipSelectionAtRef.current = gameTime;
+                                traceTelemetryLoadout('Apply telemetry ship', {
+                                    eventName: name,
+                                    ship: shipName,
+                                    source: shouldApplySharedShipSelection ? 'shared-ship-selection' : 'telemetry',
+                                    lifecycleActive: telemetryLifecycleActiveRef.current,
+                                });
+                                setActiveShip(shipName, 'telemetry');
+                                if (shipName !== activeShipRef.current) {
+                                    Logger.info('LogMonitor', `Auto-selected ship: ${shipName}`);
+                                }
                             }
-                            const fallbackSharedShipName = hasTelemetrySelection(localTelemetryShipSelectionRef.current)
-                                ? localTelemetryShipSelectionRef.current
-                                : '';
-                            const authoritativeShipName = (
-                                shipName && !shipName.startsWith('Unknown')
-                            )
-                                ? shipName
-                                : (fallbackSharedShipName || shipName);
-                            traceTelemetryLoadout('Apply telemetry ship', {
-                                eventName: name,
-                                ship: authoritativeShipName,
-                                source: shouldApplySharedShipSelection ? 'shared-ship-selection' : 'telemetry',
-                                lifecycleActive: telemetryLifecycleActiveRef.current,
-                            });
-                            setActiveShip(authoritativeShipName, 'telemetry');
-                            if (authoritativeShipName !== activeShipRef.current) {
-                                Logger.info('LogMonitor', `Auto-selected ship: ${authoritativeShipName}`);
-                            }
-                            shipName = authoritativeShipName;
                         }
                         const collectCandidateStrings = (value: unknown, out: string[], depth = 0) => {
                             if (value == null || depth > 3) return;
@@ -2525,7 +2580,22 @@ export const useLogMonitor = (activeUser?: string) => {
                         }
                         updateTelemetryDraftFromLoadout(nextLoadout, gameTime);
                     } else if (isRecord(loadout) && !shouldApplyLoadout && !shouldApplySharedShipSelection) {
+                        traceTelemetryLoadout('Gate 3 rejected: shouldApplyLoadout', {
+                            eventName: name,
+                            recordKey,
+                            actorIds,
+                            actorNames,
+                            localIds,
+                            localNames,
+                            loadoutMarkedLocal,
+                        });
                         Logger.debug('LogMonitor', `Skipped non-local loadout event: ${name}`);
+                    } else if (isLoadoutBearingEvent && !isRecord(loadout)) {
+                        traceTelemetryLoadout('Gate 2 rejected: isLoadoutBearingEvent matched but no loadout payload resolved', {
+                            eventName: name,
+                            recordKey,
+                            payloadKeys: payloadKeys ? payloadKeys.split(',').filter(Boolean) : [],
+                        });
                     }
                     const actions = {
                         setToast,

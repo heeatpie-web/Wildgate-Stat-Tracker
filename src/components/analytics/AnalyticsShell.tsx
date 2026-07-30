@@ -26,7 +26,7 @@ import { AnalyticsNavigation, AnalyticsCategory } from './AnalyticsNavigation';
 import { StatExportModal } from './StatExportModal';
 import { EntityAnalyticsView } from './EntityAnalyticsView';
 import { getUpdateLabel, UPDATE_DEFINITIONS } from '../../data/gamePatches';
-import { getMatchEquipment, getMatchPerks, getMatchProspectorWeapons, getMatchShip } from '../patch/patchEntityCatalog';
+import { getKnownMatchCategories, getMatchEquipment, getMatchPerks, getMatchProspectorWeapons, getMatchShip } from '../patch/patchEntityCatalog';
 
 const VIEW_LABELS: Record<AnalyticsView, string> = {
     overview: 'Overview',
@@ -119,6 +119,7 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
         equipment: [],
         perk: [],
         update: [],
+        category: [],
     });
     const contentRef = useRef<HTMLDivElement>(null);
     const [pinnedTiles, setPinnedTiles] = useState<Set<string>>(new Set());
@@ -143,6 +144,7 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
         entityFilters.equipment[0],
         entityFilters.perk[0],
         entityFilters.update[0],
+        entityFilters.category[0],
     ].filter(Boolean).length;
 
     const requestedDataView = useMemo<AnalyticsView | undefined>(() => {
@@ -184,6 +186,10 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
         () => collectSortedUnique(filterOptionSourceMatches.flatMap((match) => getMatchPerks(match))),
         [filterOptionSourceMatches]
     );
+    const categoryFilterOptions = useMemo(
+        () => collectSortedUnique(getKnownMatchCategories(filterOptionSourceMatches)),
+        [filterOptionSourceMatches]
+    );
     const activeContextTags = useMemo(() => {
         let timeRangeLabel = TIME_RANGE_OPTIONS.find((option) => option.value === timeRange)?.label || 'All Time';
         if (timeRange === 'custom' && customDateFrom && customDateTo) {
@@ -197,6 +203,7 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
         if (entityFilters.update[0]) {
             tags.push(`Update: ${getUpdateLabel(entityFilters.update[0])}`);
         }
+        if (entityFilters.category[0]) tags.push(`Category: ${entityFilters.category[0]}`);
         return tags;
     }, [entityFilters, timeRange, customDateFrom, customDateTo]);
 
@@ -548,7 +555,7 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
                                             <span className="text-label-xs font-bold uppercase tracking-widest text-md-sys-on-surface/50">Filters</span>
                                             {activeFilterCount > 0 && (
                                                 <button
-                                                    onClick={() => setEntityFilters({ ship: [], prospectorWeapon: [], equipment: [], perk: [], update: [] })}
+                                                    onClick={() => setEntityFilters({ ship: [], prospectorWeapon: [], equipment: [], perk: [], update: [], category: [] })}
                                                     className="text-label-xs font-bold text-md-sys-primary hover:underline"
                                                 >
                                                     Clear all
@@ -608,6 +615,17 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
                                             >
                                                 <option value="">All Updates</option>
                                                 {UPDATE_DEFINITIONS.map((u) => <option key={u.key} value={u.key}>{u.label}</option>)}
+                                            </select>
+                                        </label>
+                                        <label className="flex flex-col gap-1">
+                                            <span className="text-label-xs text-md-sys-on-surface/50 font-semibold">Category</span>
+                                            <select
+                                                value={entityFilters.category[0] || ''}
+                                                onChange={(e) => setEntityFilters((prev) => ({ ...prev, category: e.target.value ? [e.target.value] : [] }))}
+                                                className={filterSelectClassName + ' w-full'}
+                                            >
+                                                <option value="">All Categories</option>
+                                                {categoryFilterOptions.map((o) => <option key={o} value={o}>{o}</option>)}
                                             </select>
                                         </label>
                                     </div>

@@ -1,4 +1,4 @@
-import { UI_REACH_MODIFIERS } from '../constants';
+import { UI_REACH_MODIFIERS, isKnownMapName } from '../constants';
 import Logger from '../logger';
 import type { LobbyScanResult, TeamColor, ScanOptions, OCRLine } from './types';
 import { SHIP_TYPES } from './types';
@@ -7,6 +7,21 @@ import { preprocessImage } from './imageUtils';
 import { groupWordsIntoLines, runNativeOCR, detectModifiers } from './ocrUtils';
 import { getElectronAPI } from '../electronAPI';
 import { normalizeOcrName, normalizePipeSpacerPlayerName } from '../stringUtils';
+
+/**
+ * Classifies an OCR line as a ship name, a reach modifier, and/or a known map name.
+ * Extracted as a pure helper (rather than inlined in the scan loop) so the exclusion
+ * buckets that decide whether a line becomes a fabricated player entry can be unit
+ * tested without standing up the full OCR/canvas capture pipeline.
+ */
+export const classifyTacticalOcrLine = (rawText: string): { isShip: boolean, isModifier: boolean, isMapName: boolean } => {
+    const upper = String(rawText || '').toUpperCase();
+    const isShip = SHIP_TYPES.some(st => upper.includes(st)) || /MURDER|SPAGHURDER|MEANR|THAN|AVG/.test(upper);
+    const isModifier = UI_REACH_MODIFIERS.some(mod => upper.includes(mod.toUpperCase())) ||
+        /ARTIFACT[:\s]|MODIFIER[:\s]/.test(upper);
+    const isMapName = isKnownMapName(rawText);
+    return { isShip, isModifier, isMapName };
+};
 
 export const normalizeTacticalPlayerName = (rawName: string): string => {
     const specialPipeName = normalizePipeSpacerPlayerName(rawName);
@@ -102,12 +117,9 @@ export const processTacticalScreenshot = async (
             }
 
             if (line.text.length > 2 && !/READY|LOBBY|MATCH/i.test(line.text)) {
-                const isShip = SHIP_TYPES.some(st => upper.includes(st)) || /MURDER|SPAGHURDER|MEANR|THAN|AVG/.test(upper);
+                const { isShip, isModifier, isMapName } = classifyTacticalOcrLine(line.text);
 
-                const isModifier = UI_REACH_MODIFIERS.some(mod => upper.includes(mod.toUpperCase())) ||
-                    /ARTIFACT[:\s]|MODIFIER[:\s]/.test(upper);
-
-                if (!isShip && !isModifier) {
+                if (!isShip && !isModifier && !isMapName) {
                     nameLines.push(line);
                 }
             }

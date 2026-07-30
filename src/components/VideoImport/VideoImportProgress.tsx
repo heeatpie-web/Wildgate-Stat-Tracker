@@ -23,7 +23,7 @@ export const VideoImportProgress: React.FC = () => {
     return (
         <div className="flex flex-col items-center justify-center h-full gap-6 p-8">
             <div className="text-center">
-                <div className="text-title-md font-bold text-md-sys-on-surface mb-1">Processing Video</div>
+                <div className="text-title font-bold text-md-sys-on-surface mb-1">Processing Video</div>
                 <div className="text-label-sm text-md-sys-on-surface/50 truncate max-w-xs">{fileName}</div>
             </div>
 

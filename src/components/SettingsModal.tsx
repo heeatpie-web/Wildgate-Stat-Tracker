@@ -23,6 +23,11 @@ import {
     DEFAULT_MACRO_SEQUENCE_CONFIG,
     OCR_NAME_REROUTE_THRESHOLD_MAX,
     OCR_NAME_REROUTE_THRESHOLD_MIN,
+    SHIP_KILL_POPUP_AUTO_DISMISS_MAX_MS,
+    SHIP_KILL_POPUP_AUTO_DISMISS_MIN_MS,
+    SHIP_KILL_POPUP_AUTO_DISMISS_NEVER,
+    SOUND_VOLUME_MAX,
+    SOUND_VOLUME_MIN,
     buildVirtualGamepadAxes,
     buildVirtualGamepadSliders,
 } from '../store/slices/createSettingsSlice';
@@ -856,6 +861,10 @@ const SettingsModalContent: React.FC = () => {
     const setOcrEnhancedNameRecoveryEnabled = useAppStore(s => s.setOcrEnhancedNameRecoveryEnabled);
     const ocrNameRerouteThreshold = useAppStore(s => s.ocrNameRerouteThreshold);
     const setOcrNameRerouteThreshold = useAppStore(s => s.setOcrNameRerouteThreshold);
+    const soundVolume = useAppStore(s => s.soundVolume);
+    const setSoundVolume = useAppStore(s => s.setSoundVolume);
+    const shipKillPopupAutoDismissMs = useAppStore(s => s.shipKillPopupAutoDismissMs);
+    const setShipKillPopupAutoDismissMs = useAppStore(s => s.setShipKillPopupAutoDismissMs);
     const ocrLearningEnabled = useAppStore(s => s.ocrLearningEnabled);
     const setOcrLearningEnabled = useAppStore(s => s.setOcrLearningEnabled);
     const ocrAutoApplyMinScore = useAppStore(s => s.ocrAutoApplyMinScore);
@@ -1071,6 +1080,7 @@ const SettingsModalContent: React.FC = () => {
                 disableAnimations: state.disableAnimations,
                 performanceMode: state.performanceMode,
                 soundEnabled: state.soundEnabled,
+                soundVolume: (state as any).soundVolume,
                 showSmartCaptureInHeader: state.showSmartCaptureInHeader,
                 language: state.language,
                 showTimer: state.showSessionTimer,
@@ -1112,6 +1122,7 @@ const SettingsModalContent: React.FC = () => {
                 ocrCalibration: state.ocrCalibration,
                 ocrRegions: state.ocrRegions,
                 tutorialCompleted: state.tutorialCompleted,
+                shipKillPopupAutoDismissMs: (state as any).shipKillPopupAutoDismissMs,
             },
             layouts: (state as any).layouts,
             timelineEvents: (state as any).timelineEvents,
@@ -1714,6 +1725,47 @@ const SettingsModalContent: React.FC = () => {
                                             </button>
                                         </div>
                                     ))}
+                                    <label className="text-label-sm opacity-60 flex items-center gap-2 pt-1">
+                                        Sound Volume
+                                        <input
+                                            type="range"
+                                            min={SOUND_VOLUME_MIN}
+                                            max={SOUND_VOLUME_MAX}
+                                            step={1}
+                                            value={soundVolume}
+                                            onChange={(e) => setSoundVolume(Number(e.target.value))}
+                                            disabled={!soundEnabled}
+                                            className="flex-1"
+                                        />
+                                        <span className="font-mono text-label-sm w-10 text-right">{soundVolume}%</span>
+                                    </label>
+                                    <label className="text-label-sm opacity-60 flex items-center gap-2 pt-1">
+                                        Elimination Popup Timeout
+                                        <input
+                                            type="range"
+                                            min={SHIP_KILL_POPUP_AUTO_DISMISS_MIN_MS / 1000}
+                                            max={(SHIP_KILL_POPUP_AUTO_DISMISS_MAX_MS / 1000) + 10}
+                                            step={10}
+                                            value={
+                                                shipKillPopupAutoDismissMs === SHIP_KILL_POPUP_AUTO_DISMISS_NEVER
+                                                    ? (SHIP_KILL_POPUP_AUTO_DISMISS_MAX_MS / 1000) + 10
+                                                    : shipKillPopupAutoDismissMs / 1000
+                                            }
+                                            onChange={(e) => {
+                                                const seconds = Number(e.target.value);
+                                                const maxSeconds = SHIP_KILL_POPUP_AUTO_DISMISS_MAX_MS / 1000;
+                                                setShipKillPopupAutoDismissMs(
+                                                    seconds > maxSeconds ? SHIP_KILL_POPUP_AUTO_DISMISS_NEVER : seconds * 1000
+                                                );
+                                            }}
+                                            className="flex-1"
+                                        />
+                                        <span className="font-mono text-label-sm w-14 text-right">
+                                            {shipKillPopupAutoDismissMs === SHIP_KILL_POPUP_AUTO_DISMISS_NEVER
+                                                ? 'Never'
+                                                : `${shipKillPopupAutoDismissMs / 1000}s`}
+                                        </span>
+                                    </label>
                                     {hardwareAccelerationNeedsRestart && (
                                         <div className="rounded-control border border-md-sys-outline/20 bg-md-sys-surface-container-high px-3 py-2 flex items-center justify-between gap-3">
                                             <span className="text-label-sm text-md-sys-on-surface/60 leading-snug">

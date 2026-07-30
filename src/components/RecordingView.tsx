@@ -9,6 +9,7 @@ import { useAppStore } from '../store/useAppStore';
 import { useGameData } from '../providers/GameDataProvider';
 import { findActiveTelemetryDraftMatch } from '../utils/smartCaptureScope';
 import { PregameAdvicePanel } from './PregameAdvicePanel';
+import { buildAnalyticsIdentityResolver } from '../utils/analyticsIdentity';
 // TimelinePanel archived
 
 interface RecordingViewProps {
@@ -18,10 +19,36 @@ interface RecordingViewProps {
 
 export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData, isActive = true }) => {
     const { telemetryLifecycleStage, telemetryAutomationStatus } = useUIState();
-    const { matches } = useGameData();
+    const {
+        matches,
+        pilotRegistry,
+        pilotAliases,
+        knownMappings,
+        playerProfiles,
+        ocrAliasModel,
+    } = useGameData();
     const activeUser = useAppStore((s) => s.activeUser);
     const sessionStartTime = useAppStore((s) => s.sessionStartTime);
     const pregameAdviceEnabled = useAppStore((s) => s.pregameAdviceEnabled);
+
+    // ── INTEL identity canonicalisation boundary ─────────────────────────────
+    // The pregame-advice engine must never see raw OCR-cased/aliased names — it compares
+    // teammates/opponents with plain string equality. Canonicalise here (mirroring
+    // useAnalyticsData.ts's resolver) so alias drift and OCR-case variance don't fragment
+    // history into separate INTEL entries. Building the resolver walks the whole pilot
+    // registry, so it's memoised and only rebuilt when its identity inputs actually change.
+    const pregameIdentity = React.useMemo(() => buildAnalyticsIdentityResolver({
+        pilotRegistry,
+        pilotAliases,
+        knownMappings,
+        playerProfiles,
+        aliasModel: ocrAliasModel,
+    }), [pilotRegistry, pilotAliases, knownMappings, playerProfiles, ocrAliasModel]);
+
+    const canonicalMatches = React.useMemo(
+        () => pregameIdentity.canonicalizeMatches(matches),
+        [pregameIdentity, matches]
+    );
 
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const [viewport, setViewport] = React.useState(() => ({
@@ -105,6 +132,12 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
     const activeTelemetryDraftMatch = React.useMemo(
         () => findActiveTelemetryDraftMatch({ activeUser, matches, sessionStartTime }),
         [activeUser, matches, sessionStartTime]
+    );
+    // Canonicalise the live draft the same way as the history pool above, so teammate/opponent
+    // names compared inside the INTEL engine use identical canonical strings on both sides.
+    const canonicalActiveDraftMatch = React.useMemo(
+        () => (activeTelemetryDraftMatch ? pregameIdentity.canonicalizeMatch(activeTelemetryDraftMatch) : null),
+        [activeTelemetryDraftMatch, pregameIdentity]
     );
     const showPregameIntelTab = pregameAdviceEnabled && Boolean(activeTelemetryDraftMatch);
 
@@ -199,12 +232,12 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
                     </div>
                 </div>
             ) : null}
-            {workspaceTab === 'intel' && activeTelemetryDraftMatch ? (
+            {workspaceTab === 'intel' && canonicalActiveDraftMatch ? (
                 <div className="min-h-0">
                     <PregameAdvicePanel
-                        key={activeTelemetryDraftMatch.id}
-                        activeDraftMatch={activeTelemetryDraftMatch}
-                        allMatches={matches}
+                        key={canonicalActiveDraftMatch.id}
+                        activeDraftMatch={canonicalActiveDraftMatch}
+                        allMatches={canonicalMatches}
                     />
                 </div>
             ) : (

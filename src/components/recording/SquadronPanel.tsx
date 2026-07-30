@@ -28,14 +28,28 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
   const hasShipManualOverride = Boolean(telemetryDetectedShip && activeShip && !sameShip(telemetryDetectedShip, activeShip));
   const hasHeroManualOverride = Boolean(telemetryDetectedHero && activeHero && telemetryDetectedHero !== activeHero);
   const telemetryActivity = getTelemetryActivityState(telemetryStatus?.exists, telemetryStatus?.lastEventAt);
-  const hasMatchTelemetry = Boolean(isMatchInProgress || telemetryActivity === 'receiving');
+  // Signal 3 must reflect genuine telemetry *reception* (an event actually arrived recently),
+  // not just "a match happens to be in progress" -- isMatchInProgress is a lifecycle flag that
+  // is trivially true for the whole match and says nothing about whether telemetry is flowing,
+  // so folding it into this signal made the indicator read "1/3" even when telemetry was dead.
+  const hasMatchTelemetry = telemetryActivity === 'receiving';
   const telemetrySignalsFilled = (telemetryDetectedShip ? 1 : 0) + (telemetryDetectedHero ? 1 : 0) + (hasMatchTelemetry ? 1 : 0);
   const telemetrySignalsTotal = 3;
+  const missingTelemetrySignals = [
+    !telemetryDetectedShip ? 'ship' : null,
+    !telemetryDetectedHero ? 'prospector' : null,
+    !hasMatchTelemetry ? 'match telemetry reception' : null,
+  ].filter((signal): signal is string => Boolean(signal));
+  // Still gate visibility on isMatchInProgress so a genuinely idle app (no match, no recent
+  // telemetry) doesn't show a permanent "0/3" badge -- but unlike the old count itself, this is
+  // only about whether to show the indicator at all, not about what it reports while showing.
+  const showTelemetrySummary = telemetrySignalsFilled > 0 || isMatchInProgress;
   const telemetrySummaryTooltip = [
     `Telemetry signals ${telemetrySignalsFilled}/${telemetrySignalsTotal}`,
     telemetryDetectedShip ? `Ship detected: ${telemetryDetectedShip.split('(')[0].trim()}` : 'Ship pending',
     telemetryDetectedHero ? `Prospector detected: ${telemetryDetectedHero}` : 'Prospector pending',
-    hasMatchTelemetry ? 'Match telemetry active' : 'Match telemetry idle',
+    hasMatchTelemetry ? 'Match telemetry receiving' : 'Match telemetry not receiving',
+    missingTelemetrySignals.length ? `Missing: ${missingTelemetrySignals.join(', ')}` : 'All signals present',
   ].join(' | ');
 
   const sourceChip = (label: string, source?: 'manual' | 'telemetry' | 'ocr') => {
@@ -78,7 +92,7 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
             <h3 className="recording-panel-heading-title">Ship and Loadout</h3>
           </div>
           <div className="recording-panel-heading-meta">
-            {telemetrySignalsFilled > 0 && (
+            {showTelemetrySummary && (
               <span
                 data-testid="recording-telemetry-summary"
                 className="recording-telemetry-indicator is-active"
@@ -155,7 +169,7 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
           <h3 className="recording-panel-heading-title">Ship and Loadout</h3>
         </div>
         <div className="recording-panel-heading-meta">
-          {telemetrySignalsFilled > 0 && (
+          {showTelemetrySummary && (
             <span
               data-testid="recording-telemetry-summary"
               className="recording-telemetry-indicator is-active"

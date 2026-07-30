@@ -50,4 +50,47 @@ describe('createSettingsSlice OCR policy', () => {
     store.getState().setOcrNameRerouteThreshold(Number.NaN);
     expect(store.getState().ocrNameRerouteThreshold).toBe(78);
   });
+
+  it('defaults sound volume to 100 and clamps to the 0-100 range', () => {
+    expect(store.getState().soundVolume).toBe(100);
+
+    store.getState().setSoundVolume(45.6);
+    expect(store.getState().soundVolume).toBe(46);
+
+    store.getState().setSoundVolume(-10);
+    expect(store.getState().soundVolume).toBe(0);
+
+    store.getState().setSoundVolume(500);
+    expect(store.getState().soundVolume).toBe(100);
+
+    store.getState().setSoundVolume(Number.NaN);
+    expect(store.getState().soundVolume).toBe(100);
+  });
+
+  it('defaults the ship-kill popup auto-dismiss to 30s and clamps into range', () => {
+    expect(store.getState().shipKillPopupAutoDismissMs).toBe(30_000);
+
+    store.getState().setShipKillPopupAutoDismissMs(5_000);
+    expect(store.getState().shipKillPopupAutoDismissMs).toBe(10_000);
+
+    store.getState().setShipKillPopupAutoDismissMs(999_000);
+    expect(store.getState().shipKillPopupAutoDismissMs).toBe(120_000);
+
+    store.getState().setShipKillPopupAutoDismissMs(60_000);
+    expect(store.getState().shipKillPopupAutoDismissMs).toBe(60_000);
+
+    store.getState().setShipKillPopupAutoDismissMs(Number.NaN);
+    expect(store.getState().shipKillPopupAutoDismissMs).toBe(30_000);
+  });
+
+  it('treats 0 (or negative) as the "never auto-dismiss" sentinel', () => {
+    store.getState().setShipKillPopupAutoDismissMs(0);
+    expect(store.getState().shipKillPopupAutoDismissMs).toBe(0);
+
+    store.getState().setShipKillPopupAutoDismissMs(60_000);
+    expect(store.getState().shipKillPopupAutoDismissMs).toBe(60_000);
+
+    store.getState().setShipKillPopupAutoDismissMs(-500);
+    expect(store.getState().shipKillPopupAutoDismissMs).toBe(0);
+  });
 });

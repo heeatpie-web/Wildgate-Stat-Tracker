@@ -95,6 +95,10 @@ const storeState = {
   setOcrEnhancedNameRecoveryEnabled: vi.fn(),
   ocrNameRerouteThreshold: 78,
   setOcrNameRerouteThreshold: vi.fn(),
+  soundVolume: 100,
+  setSoundVolume: vi.fn(),
+  shipKillPopupAutoDismissMs: 30_000,
+  setShipKillPopupAutoDismissMs: vi.fn(),
   ocrLearningEnabled: true,
   setOcrLearningEnabled: vi.fn(),
   ocrAutoApplyMinScore: 0.83,
@@ -383,6 +387,33 @@ describe('SettingsModal', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: /enabled/i }));
 
     expect(storeState.setFullAutoEnabled).toHaveBeenCalledWith(false);
+  });
+
+  it('exposes a sound volume slider directly under the Sound Effects toggle', async () => {
+    const { SettingsModal } = await import('./SettingsModal');
+    render(<SettingsModal />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^interface$/i }));
+
+    const volumeSlider = screen.getByLabelText(/sound volume/i);
+    fireEvent.change(volumeSlider, { target: { value: '40' } });
+
+    expect(storeState.setSoundVolume).toHaveBeenCalledWith(40);
+  });
+
+  it('lets users configure the ship-elimination popup auto-dismiss timeout, including "never"', async () => {
+    const { SettingsModal } = await import('./SettingsModal');
+    render(<SettingsModal />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^interface$/i }));
+
+    const timeoutSlider = screen.getByLabelText(/elimination popup timeout/i);
+    fireEvent.change(timeoutSlider, { target: { value: '60' } });
+    expect(storeState.setShipKillPopupAutoDismissMs).toHaveBeenCalledWith(60_000);
+
+    // Dragging to the top of the range (beyond the 120s max) means "never auto-dismiss".
+    fireEvent.change(timeoutSlider, { target: { value: '130' } });
+    expect(storeState.setShipKillPopupAutoDismissMs).toHaveBeenCalledWith(0);
   });
 });
 

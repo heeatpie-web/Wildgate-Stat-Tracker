@@ -116,6 +116,7 @@ export const processWithLocalOCR = async (
             return {
                 mode: 'Lobby',
                 lobbyData: { players, modifiers },
+                mapType: ocrData.mapType ?? null,
             };
         }
 
@@ -159,6 +160,7 @@ export const processWithLocalOCR = async (
             return {
                 mode: 'Tactical',
                 lobbyData: { players, modifiers },
+                mapType: ocrData.mapType ?? null,
             };
         }
 

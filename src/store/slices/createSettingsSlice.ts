@@ -29,6 +29,14 @@ export type DashboardPreloadView = 'analytics' | 'history' | 'smart-captures' | 
 export const OCR_NAME_REROUTE_THRESHOLD_MIN = 50;
 export const OCR_NAME_REROUTE_THRESHOLD_MAX = 95;
 export const OCR_NAME_REROUTE_THRESHOLD_DEFAULT = 78;
+export const SHIP_KILL_POPUP_AUTO_DISMISS_MIN_MS = 10_000;
+export const SHIP_KILL_POPUP_AUTO_DISMISS_MAX_MS = 120_000;
+export const SHIP_KILL_POPUP_AUTO_DISMISS_DEFAULT_MS = 30_000;
+/** Sentinel value: the popup stays open until manually dismissed/saved (no auto-dismiss timer). */
+export const SHIP_KILL_POPUP_AUTO_DISMISS_NEVER = 0;
+export const SOUND_VOLUME_MIN = 0;
+export const SOUND_VOLUME_MAX = 100;
+export const SOUND_VOLUME_DEFAULT = 100;
 export type VirtualGamepadButton = 'DPAD_UP' | 'DPAD_DOWN' | 'DPAD_LEFT' | 'DPAD_RIGHT' | 'A' | 'B' | 'X' | 'Y' | 'LEFT_SHOULDER' | 'RIGHT_SHOULDER' | 'START' | 'BACK' | 'LEFT_THUMB' | 'RIGHT_THUMB';
 
 export interface MacroStepConfig {
@@ -257,6 +265,29 @@ export const normalizeOcrNameRerouteThreshold = (threshold: unknown): number => 
   );
 };
 
+/**
+ * Clamps the ship-elimination popup auto-dismiss duration. `0` (or anything
+ * <= 0) is the sentinel for "never auto-dismiss" — the popup stays open
+ * until the user saves or manually closes it. Any positive value is clamped
+ * to [SHIP_KILL_POPUP_AUTO_DISMISS_MIN_MS, SHIP_KILL_POPUP_AUTO_DISMISS_MAX_MS].
+ */
+export const normalizeShipKillPopupAutoDismissMs = (value: unknown): number => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return SHIP_KILL_POPUP_AUTO_DISMISS_DEFAULT_MS;
+  const rounded = Math.round(numeric);
+  if (rounded <= 0) return SHIP_KILL_POPUP_AUTO_DISMISS_NEVER;
+  return Math.max(
+    SHIP_KILL_POPUP_AUTO_DISMISS_MIN_MS,
+    Math.min(SHIP_KILL_POPUP_AUTO_DISMISS_MAX_MS, rounded)
+  );
+};
+
+export const normalizeSoundVolume = (value: unknown): number => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return SOUND_VOLUME_DEFAULT;
+  return Math.max(SOUND_VOLUME_MIN, Math.min(SOUND_VOLUME_MAX, Math.round(numeric)));
+};
+
 export const createDefaultOcrRegions = (): OcrRegionSettings => ({
   crewHub: {
     leftPanel: { xMin: 0.0, xMax: 0.48, yMin: 0.05, yMax: 0.85 },
@@ -297,6 +328,7 @@ export interface SettingsSlice {
   tipsEnabled: boolean;
   tipLibraryIndex: number;
   soundEnabled: boolean;
+  soundVolume: number;
   language: Language;
   showSessionTimer: boolean;
   lifecycleTrackingPaused: boolean;
@@ -371,6 +403,7 @@ export interface SettingsSlice {
   setTipLibraryIndex: (index: number) => void;
   advanceTipLibraryIndex: (step?: number) => void;
   setSoundEnabled: (enabled: boolean) => void;
+  setSoundVolume: (volume: number) => void;
   setLanguage: (lang: Language) => void;
   setShowSessionTimer: (show: boolean) => void;
   setLifecycleTrackingPaused: (paused: boolean) => void;
@@ -440,6 +473,10 @@ export interface SettingsSlice {
 
   tacticalMapAutoCapture: boolean;
   setTacticalMapAutoCapture: (enabled: boolean) => void;
+
+  /** Ship-elimination popup auto-dismiss duration in ms; 0 means "never auto-dismiss". */
+  shipKillPopupAutoDismissMs: number;
+  setShipKillPopupAutoDismissMs: (ms: number) => void;
 }
 
 const defaultPreloadStats = (): Record<DashboardPreloadView, DashboardPreloadStat> => ({
@@ -466,6 +503,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   tipsEnabled: true,
   tipLibraryIndex: 0,
   soundEnabled: true,
+  soundVolume: SOUND_VOLUME_DEFAULT,
   language: 'en',
   showSessionTimer: true,
   lifecycleTrackingPaused: false,
@@ -535,6 +573,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   fullAutoEnabled: true,
   pregameAdviceEnabled: true,
   tacticalMapAutoCapture: false,
+  shipKillPopupAutoDismissMs: SHIP_KILL_POPUP_AUTO_DISMISS_DEFAULT_MS,
 
   setActiveMode: (mode) => set({ activeMode: mode }),
   setActiveUser: (user) => set({ activeUser: user }),
@@ -554,6 +593,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
     tipLibraryIndex: Math.max(0, Math.floor(Number(state.tipLibraryIndex || 0) + Number(step || 1))),
   })),
   setSoundEnabled: (enabled) => set({ soundEnabled: enabled }),
+  setSoundVolume: (volume) => set({ soundVolume: normalizeSoundVolume(volume) }),
   setLanguage: (lang) => set({ language: lang }),
   setShowSessionTimer: (show) => set({ showSessionTimer: show }),
   setLifecycleTrackingPaused: (paused) => set({ lifecycleTrackingPaused: paused }),
@@ -762,4 +802,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   // TACTICAL_MAP_MONITOR_LOCKED in useTacticalMapMonitor.ts). The setter is
   // forced OFF so no code path can re-enable the OCR polling loop.
   setTacticalMapAutoCapture: () => set({ tacticalMapAutoCapture: false }),
+  setShipKillPopupAutoDismissMs: (ms) => set({
+    shipKillPopupAutoDismissMs: normalizeShipKillPopupAutoDismissMs(ms)
+  }),
 });

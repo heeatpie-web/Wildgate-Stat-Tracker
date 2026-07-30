@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useDeferredValue, useMemo } from 'react';
 import {
     AnalyticsTimeRange,
     AnalyticsView,
@@ -34,7 +34,7 @@ import { buildAnalyticsIdentityResolver } from '../../utils/analyticsIdentity';
 import { useGameData } from '../../providers/GameDataProvider';
 import { useUIState } from '../../providers/UIStateProvider';
 import { getUpdateLabel } from '../../data/gamePatches';
-import { getMatchEquipment, getMatchPerks, getMatchProspectorWeapons, getMatchShip, getMatchUpdateKey } from '../patch/patchEntityCatalog';
+import { getMatchCategory, getMatchEquipment, getMatchPerks, getMatchProspectorWeapons, getMatchShip, getMatchUpdateKey } from '../patch/patchEntityCatalog';
 
 const METRIC_MIN_SAMPLE = 5;
 const DELTA_MIN_SAMPLE = 10;
@@ -100,6 +100,7 @@ const EMPTY_ENTITY_FILTERS: EntityAnalyticsFilters = {
     equipment: [],
     perk: [],
     update: [],
+    category: [],
 };
 
 const toPct = (value: number): number => Math.round(value * 1000) / 10;
@@ -181,6 +182,10 @@ const buildEntityRows = (
                     return getMatchPerks(match);
                 case 'update':
                     return [getMatchUpdateKey(match)];
+                case 'category': {
+                    const category = getMatchCategory(match);
+                    return category ? [category] : [];
+                }
                 default:
                     return [];
             }
@@ -218,6 +223,7 @@ const matchPassesFilters = (match: any, filters: EntityAnalyticsFilters): boolea
     const equipment = getMatchEquipment(match);
     const perks = getMatchPerks(match);
     const update = getMatchUpdateKey(match);
+    const category = getMatchCategory(match);
     if (filters.ship.length > 0 && !filters.ship.some((candidate) => candidate.toLowerCase() === ship.toLowerCase())) {
         return false;
     }
@@ -231,6 +237,9 @@ const matchPassesFilters = (match: any, filters: EntityAnalyticsFilters): boolea
         return false;
     }
     if (filters.update.length > 0 && !filters.update.includes(update)) {
+        return false;
+    }
+    if (filters.category.length > 0 && !filters.category.some((candidate) => candidate.toLowerCase() === category.toLowerCase())) {
         return false;
     }
     return true;
@@ -250,6 +259,7 @@ const EMPTY_ENTITY_ANALYTICS: EntityAnalyticsData = {
         equipment: [],
         perk: [],
         update: [],
+        category: [],
     },
     comparisons: {
         periodVsPrevious: {
@@ -307,17 +317,30 @@ export const useAnalyticsData = (
     } = useGameData();
     const { activeMode } = useUIState();
 
+    // Mapping/profile mutations (e.g. batched OCR corrections) fire far more
+    // often than the analytics view needs to re-canonicalise the whole match
+    // history. Defer the *inputs* to the identity resolver — not its output —
+    // so React can keep the UI responsive and catch the resolver (and every
+    // memo downstream of it, incl. `modeMatches`'s full-history canonicalize)
+    // up in a lower-priority render. Mirrors PlayerHub.tsx's
+    // `deferredPilotRegistry` pattern.
+    const deferredPilotRegistry = useDeferredValue(pilotRegistry);
+    const deferredPilotAliases = useDeferredValue(pilotAliases);
+    const deferredKnownMappings = useDeferredValue(knownMappings);
+    const deferredPlayerProfiles = useDeferredValue(playerProfiles);
+    const deferredOcrAliasModel = useDeferredValue(ocrAliasModel);
+
     const analyticsIdentity = useMemo(() => buildAnalyticsIdentityResolver({
-        pilotRegistry,
-        pilotAliases,
-        knownMappings,
-        playerProfiles,
-        aliasModel: ocrAliasModel,
-    }), [pilotAliases, pilotRegistry, knownMappings, ocrAliasModel, playerProfiles]);
+        pilotRegistry: deferredPilotRegistry,
+        pilotAliases: deferredPilotAliases,
+        knownMappings: deferredKnownMappings,
+        playerProfiles: deferredPlayerProfiles,
+        aliasModel: deferredOcrAliasModel,
+    }), [deferredPilotAliases, deferredPilotRegistry, deferredKnownMappings, deferredOcrAliasModel, deferredPlayerProfiles]);
 
     const canonicalPlayerProfiles = useMemo(
-        () => analyticsIdentity.canonicalizePlayerProfiles(playerProfiles),
-        [analyticsIdentity, playerProfiles]
+        () => analyticsIdentity.canonicalizePlayerProfiles(deferredPlayerProfiles),
+        [analyticsIdentity, deferredPlayerProfiles]
     );
 
     const rangeStart = useMemo(() => {
@@ -426,8 +449,8 @@ export const useAnalyticsData = (
     );
 
     const relationshipInsights = useMemo(
-        () => (wantSocial ? calculateRelationshipAnalytics(canonicalPlayerProfiles as any, knownMappings) : []),
-        [wantSocial, canonicalPlayerProfiles, knownMappings]
+        () => (wantSocial ? calculateRelationshipAnalytics(canonicalPlayerProfiles as any, deferredKnownMappings) : []),
+        [wantSocial, canonicalPlayerProfiles, deferredKnownMappings]
     );
 
     const timePatterns = useMemo(
@@ -546,6 +569,7 @@ export const useAnalyticsData = (
                 equipment: buildEntityRows(selectedMatches, 'equipment'),
                 perk: buildEntityRows(selectedMatches, 'perk'),
                 update: buildEntityRows(selectedMatches, 'update'),
+                category: buildEntityRows(selectedMatches, 'category'),
             },
             comparisons: {
                 periodVsPrevious: calculateComparison('Current Period vs Previous Period', currentPeriodMatches, previousPeriodMatches),

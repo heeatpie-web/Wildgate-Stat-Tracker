@@ -12,6 +12,7 @@ import {
   mergeOCRData,
   calculateOverallConfidence,
   validateExtractedData,
+  isPlaceholderTeamName,
 } from '../ocrParser';
 import type { OCRWord, OCRLine, OCRExtractedData, ExtractedPlayer, ExtractedModifier, ExtractedOpponentTeam } from '../ocrTypes';
 
@@ -714,6 +715,40 @@ describe('calculateOverallConfidence', () => {
     });
     // (100*2 + 50*1) / (2+1) = 250/3 ≈ 83.3
     expect(confidence).toBeCloseTo(83.33, 0);
+  });
+});
+
+// ── isPlaceholderTeamName ──
+// Regression: lobbyScan.ts assigns the ship-class OCR line (e.g. "Hunter") to `teamName`, so
+// nothing downstream should ever treat a known ship or map name as a real team identity.
+
+describe('isPlaceholderTeamName', () => {
+  it('treats known ship names as placeholders', () => {
+    expect(isPlaceholderTeamName('Hunter')).toBe(true);
+    expect(isPlaceholderTeamName('bastion')).toBe(true);
+    expect(isPlaceholderTeamName('PRIVATEER')).toBe(true);
+    expect(isPlaceholderTeamName('Battle Scout')).toBe(true);
+  });
+
+  it('treats common ship-name OCR misreads as placeholders', () => {
+    expect(isPlaceholderTeamName('Bunter')).toBe(true);
+    expect(isPlaceholderTeamName('Bast1on')).toBe(true);
+  });
+
+  it('treats known map names as placeholders', () => {
+    expect(isPlaceholderTeamName('Deadworlds')).toBe(true);
+  });
+
+  it('still treats the existing placeholder patterns as placeholders', () => {
+    expect(isPlaceholderTeamName('Team 1')).toBe(true);
+    expect(isPlaceholderTeamName('Enemy Team 2')).toBe(true);
+    expect(isPlaceholderTeamName('Unknown')).toBe(true);
+    expect(isPlaceholderTeamName('')).toBe(true);
+  });
+
+  it('does not flag a real team name that happens to share no substring with a ship/map', () => {
+    expect(isPlaceholderTeamName('Raiders')).toBe(false);
+    expect(isPlaceholderTeamName('Nightfall Squad')).toBe(false);
   });
 });
 
