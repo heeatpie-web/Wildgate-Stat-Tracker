@@ -979,11 +979,11 @@ body[data-mode='twilight'] .toast-card-standard {
       color-mix(in srgb, var(--md-sys-color-surface-container), transparent 2%) 100%);
 }
 
-.history-table tbody tr {
+:where(.history-table) tbody tr {
   background: color-mix(in srgb, var(--md-sys-color-surface), transparent 2%);
 }
 
-.history-table tbody tr:hover {
+:where(.history-table) tbody tr:hover {
   background: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 95%);
 }
 

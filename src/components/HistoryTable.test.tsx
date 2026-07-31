@@ -216,12 +216,12 @@ describe('HistoryTable', () => {
     fireEvent.click(screen.getByRole('button', { name: /a1b2c3d4/i }));
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('A1B2C3D4');
 
-    fireEvent.click(screen.getByRole('button', { name: /match 1/i }));
+    fireEvent.click(screen.getByRole('button', { name: '1' }));
     expect(uiState.setSmartCapturesFocusMatchId).toHaveBeenCalledWith(1);
     expect(uiState.setActiveView).toHaveBeenCalledWith('smart-captures');
   });
 
-  it('expands a match row to show the tactical map preview and combined hazards', async () => {
+  it('opens the match details modal to show the tactical map preview, seed, and combined hazards', async () => {
     matches[0] = buildMatch();
     const { getMatchArtifactsStructured } = await import('../utils/artifactService');
     vi.mocked(getMatchArtifactsStructured).mockResolvedValue({
@@ -237,9 +237,11 @@ describe('HistoryTable', () => {
     const { default: HistoryTable } = await import('./HistoryTable');
     render(<HistoryTable />);
 
-    fireEvent.click(screen.getByTitle('Expand match'));
+    fireEvent.doubleClick(screen.getByText('Win'));
 
+    expect(screen.getByText('Map Screen')).toBeInTheDocument();
     expect(await screen.findByAltText('Tactical map capture')).toHaveAttribute('src', 'C:/caps/capture_map_1.png');
+    expect(screen.getAllByText('A1B2C3D4').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Storm').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Quake').length).toBeGreaterThan(0);
   });
@@ -261,12 +263,12 @@ describe('HistoryTable', () => {
     fireEvent.click(screen.getByRole('button', { name: /filters/i }));
     fireEvent.click(screen.getByRole('button', { name: /selected|select hazards or modifiers/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Storm' }));
-    expect(screen.getByRole('button', { name: /match 1/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /match 2/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '2' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Ashfall' }));
 
-    expect(screen.getByRole('button', { name: /match 1/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /match 2/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '2' })).toBeInTheDocument();
   });
 });

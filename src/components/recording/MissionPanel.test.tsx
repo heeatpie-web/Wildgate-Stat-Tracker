@@ -219,6 +219,7 @@ describe('MissionPanel', () => {
     fireEvent.change(screen.getByPlaceholderText(/tournament, scrim, league/i), {
       target: { value: 'Spring Invitational' },
     });
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
     expect(gameData.setCurrentMatchCategory).toHaveBeenCalledWith('Spring Invitational');
   });

@@ -809,7 +809,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                             onMouseDown={(ev) => { ev.preventDefault(); }}
                                             onClick={() => {
                                                 incrementCategoryUse(s.key);
-                                                setCurrentMatchCategory(s.key);
+                                                setCurrentMatchCategory(s.label);
                                                 setCategoryInput(s.label);
                                                 setSuggestionsVisible(false);
                                             }}

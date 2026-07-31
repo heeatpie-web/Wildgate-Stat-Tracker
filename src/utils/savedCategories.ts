@@ -1,7 +1,7 @@
-import { normalizeMatchCategory } from './matchCategory';
+import { normalizeMatchCategory, getMatchCategoryKey } from './matchCategory';
 
 export interface SavedCategory {
-  key: string; // normalized key
+  key: string; // case-folded dedup/lookup key — not for display
   label: string; // display label
   count: number; // usage frequency
   lastUsedAt: number; // epoch ms
@@ -44,7 +44,7 @@ export const loadSavedCategories = (): SavedCategory[] => {
 export const addOrIncrementCategory = (label: string) => {
   const normalized = normalizeMatchCategory(label);
   if (!normalized) return null;
-  const key = normalized;
+  const key = getMatchCategoryKey(normalized);
   const now = Date.now();
   const list = readRaw();
   const idx = list.findIndex((c) => c.key === key);
@@ -52,16 +52,16 @@ export const addOrIncrementCategory = (label: string) => {
     list[idx].count = (list[idx].count || 0) + 1;
     list[idx].lastUsedAt = now;
   } else {
-    list.push({ key, label: label.trim(), count: 1, lastUsedAt: now });
+    list.push({ key, label: normalized, count: 1, lastUsedAt: now });
   }
   writeRaw(list);
-  return key;
+  return normalized;
 };
 
 export const incrementCategoryUse = (labelOrKey: string) => {
   const normalized = normalizeMatchCategory(labelOrKey);
   if (!normalized) return null;
-  const key = normalized;
+  const key = getMatchCategoryKey(normalized);
   const now = Date.now();
   const list = readRaw();
   const idx = list.findIndex((c) => c.key === key);
@@ -69,14 +69,14 @@ export const incrementCategoryUse = (labelOrKey: string) => {
     list[idx].count = (list[idx].count || 0) + 1;
     list[idx].lastUsedAt = now;
   } else {
-    list.push({ key, label: labelOrKey.trim(), count: 1, lastUsedAt: now });
+    list.push({ key, label: normalized, count: 1, lastUsedAt: now });
   }
   writeRaw(list);
-  return key;
+  return normalized;
 };
 
 export const removeSavedCategory = (keyOrLabel: string) => {
-  const key = normalizeMatchCategory(keyOrLabel);
+  const key = getMatchCategoryKey(keyOrLabel);
   if (!key) return false;
   const list = readRaw().filter((c) => c.key !== key);
   writeRaw(list);

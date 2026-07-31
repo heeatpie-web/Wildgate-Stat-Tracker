@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom';
 import { Match, Language, DrillDownTarget } from '../types';
 import { TRANSLATIONS } from '../utils/translations';
-import { Trash2, Edit2, Pin, Clock, Image as ImageIcon, Download, ArrowUpDown, Swords, X, FileText, Save, Ghost, Trophy, TrendingUp, Flame, Search, ChevronLeft, ChevronRight, Zap, ScanEye, AlertTriangle, RefreshCw, Filter, ChevronDown, ChevronUp, Check, Crosshair, LogIn, Archive, ArchiveRestore, Hash, ClipboardCopy } from 'lucide-react';
+import { Trash2, Edit2, Pin, Clock, Image as ImageIcon, Download, ArrowUpDown, Swords, X, FileText, Save, Ghost, Trophy, TrendingUp, Flame, Search, ChevronLeft, ChevronRight, Zap, ScanEye, AlertTriangle, RefreshCw, Filter, ChevronDown, ChevronUp, Check, Crosshair, LogIn, Archive, ArchiveRestore, ClipboardCopy } from 'lucide-react';
 import { EditMatchModal } from './EditMatchModal';
 import { exportMatchesAsImage } from './history/historyExport';
 import { timeAgo, formatDayHeader, getRowBg } from './history/historyUtils';
@@ -22,6 +22,7 @@ import { removeMatchArtifactsThenDelete, buildSilentBackgroundOcrMatch } from '.
 import { getElectronAPI } from '../utils/electronAPI';
 import { classifyArtifactScreenshotBucket } from '../utils/artifactScreenshotBuckets';
 import { getUpdateForTimestamp } from '../data/gamePatches';
+import { getQueueDisplayNumber } from './smart-captures/smartCaptureUtils';
 import { Eye } from 'lucide-react';
 
 const resultPillClass = (result?: string): string => (
@@ -33,9 +34,6 @@ const resultPillClass = (result?: string): string => (
 interface MatchHistoryRowProps {
     match: Match;
     isSelected: boolean;
-    isExpanded: boolean;
-    mapSrc: string | null | undefined;
-    mapResolved: boolean;
     timeAgoLabel: string;
     matchNumberLabel: string;
     teamCountLabel: string;
@@ -44,7 +42,6 @@ interface MatchHistoryRowProps {
     combinedHazards: string[];
     onSelect: () => void;
     onOpenDetails: () => void;
-    onToggleExpanded: () => void;
     onNavigateToSmartCaptures: () => void;
     onEdit: () => void;
     onOpenNote: () => void;
@@ -52,7 +49,6 @@ interface MatchHistoryRowProps {
     onArchive: () => void;
     onDelete: () => void;
     onCopySeed: () => void;
-    onCopyMapImage: (path: string) => void;
     onDrillDown: (name: string, type: DrillDownTarget['type']) => void;
     formatPlayerForDisplay: (name: string) => string;
 }
@@ -60,9 +56,6 @@ interface MatchHistoryRowProps {
 const MatchHistoryRow: React.FC<MatchHistoryRowProps> = ({
     match,
     isSelected,
-    isExpanded,
-    mapSrc,
-    mapResolved,
     timeAgoLabel,
     matchNumberLabel,
     teamCountLabel,
@@ -71,7 +64,6 @@ const MatchHistoryRow: React.FC<MatchHistoryRowProps> = ({
     combinedHazards,
     onSelect,
     onOpenDetails,
-    onToggleExpanded,
     onNavigateToSmartCaptures,
     onEdit,
     onOpenNote,
@@ -79,7 +71,6 @@ const MatchHistoryRow: React.FC<MatchHistoryRowProps> = ({
     onArchive,
     onDelete,
     onCopySeed,
-    onCopyMapImage,
     onDrillDown,
     formatPlayerForDisplay,
 }) => {
@@ -95,54 +86,26 @@ const MatchHistoryRow: React.FC<MatchHistoryRowProps> = ({
                 className={`border-b border-md-sys-outline/5 transition-all duration-200 group cursor-pointer ${isSelected ? 'bg-md-sys-primary/10' : getRowBg(match)} active:bg-md-sys-on-surface/[0.07]`}
                 title="Click to select. Double-click to open details."
             >
-                <td className="w-[72px] p-0 relative px-2 py-3.5 align-middle">
-                    <div className={`absolute inset-y-0 left-0 w-[5px] rounded-r-full transition-all ${
+                <td className="w-[6px] p-0 relative align-middle">
+                    <div className={`absolute inset-y-0 left-0 w-[5px] ${
                         isWin ? 'bg-success'
                             : isLoss ? 'bg-danger'
                                 : isOngoing ? 'bg-info'
                                     : 'bg-neutral'
-                    } opacity-70 group-hover:opacity-100`} />
-                    <div className="relative flex flex-col gap-1 pl-2">
-                        <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); onNavigateToSmartCaptures(); }}
-                            className="inline-flex items-center gap-1 text-label-sm font-black tracking-wide text-md-sys-on-surface hover:text-md-sys-primary transition-colors"
-                            title="Open in Smart Captures"
-                        >
-                            <Hash size={11} />
-                            {matchNumberLabel}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); onToggleExpanded(); }}
-                            className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md border transition-colors ${
-                                isExpanded
-                                    ? 'border-md-sys-primary/25 bg-md-sys-primary/10 text-md-sys-primary'
-                                    : 'border-md-sys-outline/10 text-md-sys-on-surface/55 hover:bg-md-sys-on-surface/[0.06]'
-                            }`}
-                            title={isExpanded ? 'Collapse match' : 'Expand match'}
-                        >
-                            <ChevronDown size={10} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                            {isExpanded ? 'Less' : 'More'}
-                        </button>
-                    </div>
+                    }`} />
                 </td>
-                <td className="px-3 py-4">
+                <td className="px-4 py-4 text-center">
                     <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); onNavigateToSmartCaptures(); }}
-                        className="inline-flex items-center gap-1.5 rounded-pill border border-md-sys-primary/20 bg-md-sys-primary/10 px-2.5 py-1 text-label-sm font-bold text-md-sys-primary hover:bg-md-sys-primary/15 transition-colors"
+                        className="inline-flex items-center gap-1 rounded-pill border border-md-sys-outline/15 bg-md-sys-on-surface/[0.06] px-2.5 py-1 text-lg font-black text-md-sys-on-surface/80 hover:bg-md-sys-on-surface/[0.1] transition-colors"
                         title="Open in Smart Captures"
                     >
-                        Match {matchNumberLabel}
+                        {matchNumberLabel}
                     </button>
                 </td>
-                <td className="px-3 py-4">
-                    <div className="text-body font-bold text-md-sys-on-surface/75">{teamCountLabel}</div>
-                    <div className="text-label-xs uppercase tracking-wide text-md-sys-on-surface/35">teams</div>
-                </td>
-                <td className="px-3 py-4">
-                    <div className="flex items-center gap-2.5">
+                <td className="px-4 py-4 text-center">
+                    <div className="flex items-center justify-center gap-2.5">
                         <div className={`w-8 h-8 rounded-control flex items-center justify-center ${
                             isWin ? 'bg-success/15'
                                 : isLoss ? 'bg-danger/15'
@@ -159,7 +122,7 @@ const MatchHistoryRow: React.FC<MatchHistoryRowProps> = ({
                             }
                         </div>
                         <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-1.5">
+                            <div className="flex flex-wrap items-center justify-center gap-1.5">
                                 <span className={`text-body font-bold ${
                                     isWin ? 'text-success'
                                         : isLoss ? 'text-danger'
@@ -168,24 +131,8 @@ const MatchHistoryRow: React.FC<MatchHistoryRowProps> = ({
                                 }`}>
                                     {match.result}
                                 </span>
-                                {seedLabel ? (
-                                    <button
-                                        type="button"
-                                        onClick={(e) => { e.stopPropagation(); onCopySeed(); }}
-                                        className="inline-flex items-center gap-1 rounded-pill border border-md-sys-outline/10 bg-md-sys-on-surface/[0.05] px-2 py-0.5 text-label-xs font-semibold text-md-sys-on-surface/75 hover:bg-md-sys-on-surface/[0.08] transition-colors"
-                                        title="Click to copy seed"
-                                    >
-                                        <ClipboardCopy size={10} />
-                                        {seedLabel}
-                                    </button>
-                                ) : null}
-                                {eraLabel ? (
-                                    <span className="rounded-pill border border-md-sys-outline/10 bg-md-sys-on-surface/[0.05] px-2 py-0.5 text-label-xs font-semibold text-md-sys-on-surface/55">
-                                        {eraLabel}
-                                    </span>
-                                ) : null}
                             </div>
-                            <div className="flex flex-wrap items-center gap-1.5 text-label-sm text-md-sys-on-surface/40 font-medium mt-0.5">
+                            <div className="flex flex-wrap items-center justify-center gap-1.5 text-label-sm text-md-sys-on-surface/40 font-medium mt-0.5">
                                 <span>{match.subType || 'Combat'}</span>
                                 <MatchCategoryBadge category={match.matchCategory} compact />
                                 {match.isPracticeRange === true ? (
@@ -202,12 +149,36 @@ const MatchHistoryRow: React.FC<MatchHistoryRowProps> = ({
                         </div>
                     </div>
                 </td>
-                <td className="px-3 py-4">
+                <td className="px-4 py-4 text-center">
+                    {seedLabel ? (
+                        <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onCopySeed(); }}
+                            className="inline-flex items-center gap-1 rounded-pill border border-md-sys-outline/10 bg-md-sys-on-surface/[0.05] px-2 py-0.5 text-label-xs font-semibold text-md-sys-on-surface/75 hover:bg-md-sys-on-surface/[0.08] transition-colors"
+                            title="Click to copy seed"
+                        >
+                            <ClipboardCopy size={10} />
+                            {seedLabel}
+                        </button>
+                    ) : (
+                        <span className="text-md-sys-on-surface/40 italic text-label-sm">--</span>
+                    )}
+                </td>
+                <td className="px-4 py-4 text-center">
+                    <div className="text-body font-bold text-md-sys-on-surface/75">{teamCountLabel}</div>
+                    <div className="text-label-xs uppercase tracking-wide text-md-sys-on-surface/35">teams</div>
+                </td>
+                <td className="px-4 py-4 text-center">
                     <div className="text-body font-semibold text-md-sys-on-surface/60">{timeAgoLabel}</div>
                     <div className="text-label-sm text-md-sys-on-surface/40 font-medium mt-0.5">{new Date(match.timestamp).toLocaleDateString()}</div>
+                    {eraLabel ? (
+                        <span className="inline-block mt-1 whitespace-nowrap rounded-pill border border-md-sys-outline/10 bg-md-sys-on-surface/[0.05] px-2 py-0.5 text-label-xs font-semibold text-md-sys-on-surface/55">
+                            {eraLabel}
+                        </span>
+                    ) : null}
                 </td>
-                <td className="px-3 py-4">
-                    <div className="flex items-center gap-2.5">
+                <td className="px-4 py-4 text-center">
+                    <div className="flex items-center justify-center gap-2.5">
                         <div className="w-8 h-8 rounded-control bg-gradient-to-br from-md-sys-primary/10 to-md-sys-tertiary/10 border border-md-sys-outline/[0.06] flex items-center justify-center text-label-sm font-bold text-md-sys-primary/60">
                             {(match.ship || 'U')[0]}
                         </div>
@@ -217,11 +188,11 @@ const MatchHistoryRow: React.FC<MatchHistoryRowProps> = ({
                         </div>
                     </div>
                 </td>
-                <td className="px-3 py-4">
+                <td className="px-4 py-4 text-center">
                     <span className="font-mono tabular-nums text-base tracking-wider text-md-sys-on-surface/70 bg-md-sys-on-surface/[0.04] px-3 py-1.5 rounded-lg">{match.time || '--:--'}</span>
                 </td>
-                <td className="px-3 py-4 max-w-[280px]">
-                    <div className="flex flex-wrap gap-1.5">
+                <td className="px-4 py-4 max-w-[280px] text-center">
+                    <div className="flex flex-wrap justify-center gap-1.5">
                         {match.mapType ? (
                             <span className="px-2 py-0.5 rounded-md bg-info/10 text-info/80 text-label-sm font-medium inline-flex items-center gap-1">
                                 <ScanEye size={9} />{match.mapType}
@@ -245,8 +216,8 @@ const MatchHistoryRow: React.FC<MatchHistoryRowProps> = ({
                         )}
                     </div>
                 </td>
-                <td className="px-3 py-4 text-body max-w-40">
-                    <div className="flex flex-wrap gap-1">
+                <td className="px-4 py-4 text-body max-w-40 text-center">
+                    <div className="flex flex-wrap justify-center gap-1">
                         {(match.teammates && match.teammates.length > 0) ? match.teammates.map((teammate, index) => (
                             <span key={index} onClick={(e) => { e.stopPropagation(); onDrillDown(teammate, 'Teammate'); }} className="px-2 py-0.5 rounded-md bg-info/8 text-info/80 hover:bg-info/15 cursor-pointer transition-colors text-label-sm font-medium">
                                 {formatPlayerForDisplay(teammate)}
@@ -254,8 +225,8 @@ const MatchHistoryRow: React.FC<MatchHistoryRowProps> = ({
                         )) : <span className="text-md-sys-on-surface/40 italic text-label-sm">None</span>}
                     </div>
                 </td>
-                <td className="px-3 py-4 text-body max-w-40">
-                    <div className="flex flex-wrap gap-1">
+                <td className="px-4 py-4 text-body max-w-40 text-center">
+                    <div className="flex flex-wrap justify-center gap-1">
                         {(match.opponents && match.opponents.length > 0) ? (
                             <>
                                 {match.opponents.slice(0, 5).map((opponent, index) => (
@@ -272,8 +243,8 @@ const MatchHistoryRow: React.FC<MatchHistoryRowProps> = ({
                         ) : <span className="text-md-sys-on-surface/40 italic text-label-sm">None</span>}
                     </div>
                 </td>
-                <td className="px-3 py-4 text-right">
-                    <div className="flex justify-end items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200" onClick={e => e.stopPropagation()}>
+                <td className="px-4 py-4 text-center">
+                    <div className="grid grid-cols-3 gap-1 mx-auto w-fit opacity-0 group-hover:opacity-100 transition-opacity duration-200" onClick={e => e.stopPropagation()}>
                         <button onClick={onEdit} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-md-sys-on-surface/[0.08] transition-colors text-md-sys-on-surface/60 hover:text-md-sys-on-surface" title="Edit"><Edit2 size={13} /></button>
                         <button onClick={onOpenNote} className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${match.notes ? 'text-md-sys-primary bg-md-sys-primary/10' : 'text-md-sys-on-surface/60 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/[0.08]'}`} title="Notes"><FileText size={13} /></button>
                         <button onClick={onPin} className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${match.isPinned ? 'text-warning bg-warning/10' : 'text-md-sys-on-surface/60 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/[0.08]'}`} title="Pin"><Pin size={13} className={match.isPinned ? 'fill-current' : ''} /></button>
@@ -282,7 +253,7 @@ const MatchHistoryRow: React.FC<MatchHistoryRowProps> = ({
                         <button onClick={onDelete} className="w-7 h-7 rounded-lg flex items-center justify-center text-md-sys-on-surface/60 hover:text-danger hover:bg-danger/10 transition-colors" title="Delete"><Trash2 size={13} /></button>
                     </div>
                 </td>
-                <td className="pr-5 py-4 pl-2 text-right" onClick={e => e.stopPropagation()}>
+                <td className="pr-5 py-4 pl-2 text-center" onClick={e => e.stopPropagation()}>
                     <button
                         type="button"
                         onClick={onSelect}
@@ -298,85 +269,6 @@ const MatchHistoryRow: React.FC<MatchHistoryRowProps> = ({
                     </button>
                 </td>
             </tr>
-            {isExpanded && (
-                <tr className="border-b border-md-sys-outline/5">
-                    <td colSpan={12} className="px-4 pb-4 pt-0">
-                        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.85fr)] gap-4 rounded-card border border-md-sys-outline/10 overflow-hidden" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
-                            <div className="p-4 border-b lg:border-b-0 lg:border-r border-md-sys-outline/[0.06]">
-                                <div className="flex items-center justify-between gap-2 mb-3">
-                                    <div>
-                                        <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/40">Map Screen</div>
-                                        <div className="text-label-sm text-md-sys-on-surface/55 mt-0.5">Click to open details · double-click to copy the image</div>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={(e) => { e.stopPropagation(); onToggleExpanded(); }}
-                                        className="px-2.5 py-1.5 rounded-control text-label-xs font-semibold border border-md-sys-outline/10 text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/[0.06] transition-colors"
-                                    >
-                                        Collapse
-                                    </button>
-                                </div>
-                                {mapSrc === undefined ? (
-                                    <div role="status" aria-label="Loading tactical map preview" className="min-h-56 rounded-card border border-md-sys-outline/10 flex items-center justify-center text-md-sys-on-surface/40" style={{ background: 'var(--md-sys-color-surface-container)' }}>
-                                        <RefreshCw size={18} className="animate-spin" />
-                                    </div>
-                                ) : mapSrc ? (
-                                    <button
-                                        type="button"
-                                        onClick={(e) => { e.stopPropagation(); onOpenDetails(); }}
-                                        onDoubleClick={(e) => { e.stopPropagation(); onCopyMapImage(mapSrc); }}
-                                        className="w-full overflow-hidden rounded-card border border-md-sys-outline/10 group relative"
-                                        title="Click to open details · double-click to copy image"
-                                    >
-                                        <LocalImage src={mapSrc} alt="Tactical map capture" className="w-full max-h-72 object-cover" fallback={<div className="w-full h-72 bg-md-sys-on-surface/[0.06]" />} />
-                                        <div className="absolute inset-0 bg-scrim-40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-on-scrim transition-opacity">
-                                            <Eye size={18} />
-                                        </div>
-                                    </button>
-                                ) : (
-                                    <div className="min-h-56 rounded-card border border-md-sys-outline/10 flex items-center justify-center text-md-sys-on-surface/40" style={{ background: 'var(--md-sys-color-surface-container)' }}>
-                                        No tactical map capture found
-                                    </div>
-                                )}
-                            </div>
-                            <div className="p-4 space-y-4">
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div className="rounded-card border border-md-sys-outline/10 px-3 py-2" style={{ background: 'var(--md-sys-color-surface-container)' }}>
-                                        <div className="text-label-xs uppercase tracking-wide text-md-sys-on-surface/40">Seed</div>
-                                        <button type="button" onClick={(e) => { e.stopPropagation(); onCopySeed(); }} className="mt-1 inline-flex items-center gap-1 text-label-sm font-bold text-md-sys-primary hover:text-md-sys-primary/80 transition-colors">
-                                            <ClipboardCopy size={11} />
-                                            {seedLabel || '--'}
-                                        </button>
-                                    </div>
-                                    <div className="rounded-card border border-md-sys-outline/10 px-3 py-2" style={{ background: 'var(--md-sys-color-surface-container)' }}>
-                                        <div className="text-label-xs uppercase tracking-wide text-md-sys-on-surface/40">Era</div>
-                                        <div className="mt-1 text-label-sm font-semibold text-md-sys-on-surface/70">{eraLabel || '--'}</div>
-                                    </div>
-                                    <div className="rounded-card border border-md-sys-outline/10 px-3 py-2 col-span-2" style={{ background: 'var(--md-sys-color-surface-container)' }}>
-                                        <div className="text-label-xs uppercase tracking-wide text-md-sys-on-surface/40">Map / Artifact</div>
-                                        <div className="mt-1 flex flex-wrap gap-1.5 text-label-sm font-semibold text-md-sys-on-surface/70">
-                                            <span>{match.mapType || 'Unknown map'}</span>
-                                            <span className="opacity-35">·</span>
-                                            <span>{match.artifactSource || 'Unknown artifact'}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div>
-                                    <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/40 mb-2">All Hazards</div>
-                                    <div className="flex flex-wrap gap-1.5">
-                                        {combinedHazards.length > 0 ? combinedHazards.map((hazard) => (
-                                            <span key={hazard} className="px-2 py-0.5 rounded-md bg-warning/10 text-warning/80 text-label-sm font-medium inline-flex items-center gap-1">
-                                                <Zap size={9} />
-                                                {hazard}
-                                            </span>
-                                        )) : <span className="text-md-sys-on-surface/40 italic text-label-sm">None</span>}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </td>
-                </tr>
-            )}
         </React.Fragment>
     );
 };
@@ -438,8 +330,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
     const [hazardDropdownOpen, setHazardDropdownOpen] = useState(false);
     const [hazardSearch, setHazardSearch] = useState('');
     const [selectedHazards, setSelectedHazards] = useState<string[]>([]);
-    const [expandedMatches, setExpandedMatches] = useState<Set<number>>(new Set());
-    const [matchMapPaths, setMatchMapPaths] = useState<Record<number, string | null>>({});
+    const [detailsMapPath, setDetailsMapPath] = useState<string | null | undefined>(undefined);
     const hazardDropdownRef = useRef<HTMLDivElement | null>(null);
 
     const uniqueShips = useMemo(() => {
@@ -513,12 +404,20 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
         return String(parsed[1] || '').toUpperCase().replace(/[OIL]/g, (ch) => ({ O: '0', I: '1', L: '1' }[ch as 'O' | 'I' | 'L'] || ch));
     }, []);
 
-    const getEraLabel = useCallback((match: Match) => getUpdateForTimestamp(match.timestamp)?.label || '', []);
-
-    const getMatchNumber = useCallback((match: Match) => {
-        const canonical = Number(match.canonicalMatchNumber);
-        return Number.isFinite(canonical) && canonical > 0 ? canonical : match.id;
+    const getEraLabel = useCallback((match: Match) => {
+        const label = getUpdateForTimestamp(match.timestamp)?.label || '';
+        return label.replace(/\s*-\s*\d{1,2}\/\d{1,2}\/\d{4}$/, '');
     }, []);
+
+    const globalOrderedMatchIds = useMemo(
+        () => [...matches].sort((a, b) => a.timestamp - b.timestamp).map(m => m.id),
+        [matches]
+    );
+
+    const getMatchNumber = useCallback(
+        (match: Match) => getQueueDisplayNumber(match.id, globalOrderedMatchIds),
+        [globalOrderedMatchIds]
+    );
 
     const getTeamCount = useCallback((match: Match) => {
         const opponentTeams = Array.isArray(match.opponentTeams) ? match.opponentTeams.length : 0;
@@ -561,6 +460,16 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
         }
     }, []);
 
+    const handleCopyMapImage = useCallback(async (path: string) => {
+        const ok = await copyImageToClipboard(path);
+        pushNotification({
+            message: ok ? 'Copied tactical map image' : 'Could not copy tactical map image',
+            type: ok ? 'success' : 'warning',
+            source: 'history',
+            deepLink: { type: 'openView', view: 'history' },
+        });
+    }, [copyImageToClipboard, pushNotification]);
+
     const resolveTacticalMapPath = useCallback(async (match: Match): Promise<string | null> => {
         const fallback = (match.artifacts || []).find(
             (path) => classifyArtifactScreenshotBucket(String(path || '')) === 'tactical_map'
@@ -593,14 +502,6 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
         ));
     }, []);
 
-    const toggleExpandedMatch = useCallback((matchId: number) => {
-        setExpandedMatches((prev) => {
-            const next = new Set(prev);
-            if (next.has(matchId)) next.delete(matchId);
-            else next.add(matchId);
-            return next;
-        });
-    }, []);
 
     const navigateToSmartCaptures = useCallback((matchId: number) => {
         setSmartCapturesFocusMatchId(matchId);
@@ -936,28 +837,20 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
     const totalPages = itemsPerPage === 'Infinity' ? 1 : Math.ceil(sortedMatches.length / (itemsPerPage as number)) || 1;
 
     useEffect(() => {
-        const pendingIds = Array.from(expandedMatches).filter((matchId) => matchMapPaths[matchId] === undefined);
-        if (pendingIds.length === 0) return;
-
+        if (!selectedMatchForDetails) {
+            setDetailsMapPath(undefined);
+            return;
+        }
+        setDetailsMapPath(undefined);
         let cancelled = false;
-        pendingIds.forEach((matchId) => {
-            const match = matches.find((entry) => entry.id === matchId);
-            if (!match) return;
-            void (async () => {
-                const path = await resolveTacticalMapPath(match);
-                if (cancelled) return;
-                setMatchMapPaths((prev) => (
-                    prev[matchId] === path
-                        ? prev
-                        : { ...prev, [matchId]: path }
-                ));
-            })();
-        });
-
+        void (async () => {
+            const path = await resolveTacticalMapPath(selectedMatchForDetails);
+            if (!cancelled) setDetailsMapPath(path);
+        })();
         return () => {
             cancelled = true;
         };
-    }, [expandedMatches, matchMapPaths, matches, resolveTacticalMapPath]);
+    }, [selectedMatchForDetails, resolveTacticalMapPath]);
 
     return (
         <div data-tour="view-history" className="twilight-solid-scope twilight-soft-shadows w-full min-h-full pr-1 flex flex-col gap-4 animate-slide-up">
@@ -1320,26 +1213,27 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                     <table className="w-full text-left border-collapse history-table">
                         <thead className="sticky top-0 z-10">
                             <tr className="text-label-sm font-bold uppercase tracking-wide-10 text-md-sys-on-surface/60 border-b border-md-sys-outline/10 bg-md-sys-surface-container">
-                                <th className="w-[72px] p-0"></th>
-                                <th className="px-3 py-3.5 whitespace-nowrap">Match #</th>
-                                <th className="px-3 py-3.5 whitespace-nowrap">Teams</th>
-                                <th className="px-3 py-3.5 cursor-pointer hover:text-md-sys-primary transition-colors select-none" onClick={() => handleSort('result')}>
-                                    <span className="inline-flex items-center gap-1.5">Outcome / Seed / Era <ArrowUpDown size={10} className="opacity-40" /></span>
+                                <th className="w-[6px] p-0"></th>
+                                <th className="px-4 py-3.5 whitespace-nowrap text-center">Match #</th>
+                                <th className="px-4 py-3.5 cursor-pointer hover:text-md-sys-primary transition-colors select-none text-center" onClick={() => handleSort('result')}>
+                                    <span className="inline-flex items-center justify-center gap-1.5">Outcome <ArrowUpDown size={10} className="opacity-40" /></span>
                                 </th>
-                                <th className="px-3 py-3.5 cursor-pointer hover:text-md-sys-primary transition-colors select-none" onClick={() => handleSort('timeAgo')}>
-                                    <span className="inline-flex items-center gap-1.5">When <ArrowUpDown size={10} className="opacity-40" /></span>
+                                <th className="px-4 py-3.5 whitespace-nowrap text-center">Seed</th>
+                                <th className="px-4 py-3.5 whitespace-nowrap text-center">Teams</th>
+                                <th className="px-4 py-3.5 cursor-pointer hover:text-md-sys-primary transition-colors select-none text-center" onClick={() => handleSort('timeAgo')}>
+                                    <span className="inline-flex items-center justify-center gap-1.5">When <ArrowUpDown size={10} className="opacity-40" /></span>
                                 </th>
-                                <th className="px-3 py-3.5 cursor-pointer hover:text-md-sys-primary transition-colors select-none" onClick={() => handleSort('ship')}>
-                                    <span className="inline-flex items-center gap-1.5">Ship / Hero <ArrowUpDown size={10} className="opacity-40" /></span>
+                                <th className="px-4 py-3.5 cursor-pointer hover:text-md-sys-primary transition-colors select-none text-center" onClick={() => handleSort('ship')}>
+                                    <span className="inline-flex items-center justify-center gap-1.5">Ship / Hero <ArrowUpDown size={10} className="opacity-40" /></span>
                                 </th>
-                                <th className="px-3 py-3.5 cursor-pointer hover:text-md-sys-primary transition-colors select-none" onClick={() => handleSort('time')}>
-                                    <span className="inline-flex items-center gap-1.5">Duration <ArrowUpDown size={10} className="opacity-40" /></span>
+                                <th className="px-4 py-3.5 cursor-pointer hover:text-md-sys-primary transition-colors select-none text-center" onClick={() => handleSort('time')}>
+                                    <span className="inline-flex items-center justify-center gap-1.5">Duration <ArrowUpDown size={10} className="opacity-40" /></span>
                                 </th>
-                                <th className="px-3 py-3.5 whitespace-nowrap">Map / Hazards</th>
-                                <th className="px-3 py-3.5">Teammates</th>
-                                <th className="px-3 py-3.5">Opponents</th>
-                                <th className="px-3 py-3.5 text-right">Actions</th>
-                                <th className="pr-5 py-3.5 pl-2 text-right">
+                                <th className="px-4 py-3.5 whitespace-nowrap text-center">Map / Hazards</th>
+                                <th className="px-4 py-3.5 text-center">Teammates</th>
+                                <th className="px-4 py-3.5 text-center">Opponents</th>
+                                <th className="px-4 py-3.5 text-center">Actions</th>
+                                <th className="pr-5 py-3.5 pl-2 text-center">
                                     <input
                                         type="checkbox"
                                         checked={paginatedMatches.length > 0 && paginatedMatches.every(m => selectedMatches.includes(m.id))}
@@ -1352,7 +1246,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                         <tbody className="text-body font-medium text-md-sys-on-surface">
                             {sortedMatches.length === 0 ? (
                                 <tr>
-                                    <td colSpan={12}>
+                                    <td colSpan={13}>
                                         <div className="flex flex-col items-center justify-center py-28 gap-4">
                                             <div className="w-20 h-20 rounded-card bg-gradient-to-br from-md-sys-primary/15 to-md-sys-tertiary/15 border border-md-sys-outline/10 flex items-center justify-center">
                                                 <Ghost size={36} className="text-md-sys-primary/60" />
@@ -1369,7 +1263,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                                     <React.Fragment key={group.label}>
                                         {/* ── Day separator ── */}
                                         <tr>
-                                            <td colSpan={12} className="px-5 py-2.5 border-b border-md-sys-outline/5" style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface-variant), transparent 60%)' }}>
+                                            <td colSpan={13} className="px-5 py-2.5 border-b border-md-sys-outline/5" style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface-variant), transparent 60%)' }}>
                                                 <span className="text-label-sm font-bold uppercase tracking-wide-14 text-md-sys-on-surface/40">{group.label}</span>
                                             </td>
                                         </tr>
@@ -1383,16 +1277,12 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                                             const teamCount = getTeamCount(m);
                                             const teamCountLabel = teamCount > 0 ? `${teamCount}` : '--';
                                             const isSelected = selectedMatches.includes(m.id);
-                                            const isExpanded = expandedMatches.has(m.id);
 
                                             return (
                                                 <MatchHistoryRow
                                                     key={m.id}
                                                     match={m}
                                                     isSelected={isSelected}
-                                                    isExpanded={isExpanded}
-                                                    mapSrc={isExpanded ? matchMapPaths[m.id] : undefined}
-                                                    mapResolved={Object.prototype.hasOwnProperty.call(matchMapPaths, m.id)}
                                                     timeAgoLabel={timeAgoMap.get(m.id) || ''}
                                                     matchNumberLabel={matchNumber}
                                                     teamCountLabel={teamCountLabel}
@@ -1401,7 +1291,6 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                                                     combinedHazards={combinedHazards}
                                                     onSelect={() => toggleSelection(m.id)}
                                                     onOpenDetails={() => setSelectedMatchForDetails(m)}
-                                                    onToggleExpanded={() => toggleExpandedMatch(m.id)}
                                                     onNavigateToSmartCaptures={() => navigateToSmartCaptures(m.id)}
                                                     onEdit={() => setEditingMatch(m)}
                                                     onOpenNote={() => handleOpenNote(m)}
@@ -1409,15 +1298,6 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                                                     onArchive={() => onArchive(m.id)}
                                                     onDelete={() => handleDelete(m.id)}
                                                     onCopySeed={() => void copySeedToClipboard(seedLabel)}
-                                                    onCopyMapImage={async (path) => {
-                                                        const ok = await copyImageToClipboard(path);
-                                                        pushNotification({
-                                                            message: ok ? 'Copied tactical map image' : 'Could not copy tactical map image',
-                                                            type: ok ? 'success' : 'warning',
-                                                            source: 'history',
-                                                            deepLink: { type: 'openView', view: 'history' },
-                                                        });
-                                                    }}
                                                     onDrillDown={onDrillDown}
                                                     formatPlayerForDisplay={formatPlayerForDisplay}
                                                 />
@@ -1557,6 +1437,58 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                             </div>
                         )}
 
+                        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.5fr)_minmax(240px,0.85fr)] gap-3">
+                            <div className="p-4 rounded-card border border-md-sys-outline/[0.06]" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
+                                <div className="text-label-sm font-semibold uppercase tracking-wide-08 text-md-sys-on-surface/40 mb-3">Map Screen</div>
+                                {detailsMapPath === undefined ? (
+                                    <div role="status" aria-label="Loading tactical map preview" className="min-h-48 rounded-card border border-md-sys-outline/10 flex items-center justify-center text-md-sys-on-surface/40" style={{ background: 'var(--md-sys-color-surface-container)' }}>
+                                        <RefreshCw size={18} className="animate-spin" />
+                                    </div>
+                                ) : detailsMapPath ? (
+                                    <button
+                                        type="button"
+                                        onDoubleClick={() => void handleCopyMapImage(detailsMapPath)}
+                                        className="w-full overflow-hidden rounded-card border border-md-sys-outline/10 group relative"
+                                        title="Double-click to copy image"
+                                    >
+                                        <LocalImage src={detailsMapPath} alt="Tactical map capture" className="w-full max-h-64 object-cover" fallback={<div className="w-full h-64 bg-md-sys-on-surface/[0.06]" />} />
+                                        <div className="absolute inset-0 bg-scrim-40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-on-scrim transition-opacity">
+                                            <Eye size={18} />
+                                        </div>
+                                    </button>
+                                ) : (
+                                    <div className="min-h-48 rounded-card border border-md-sys-outline/10 flex items-center justify-center text-md-sys-on-surface/40 text-label-sm" style={{ background: 'var(--md-sys-color-surface-container)' }}>
+                                        No tactical map capture found
+                                    </div>
+                                )}
+                            </div>
+                            <div className="p-4 rounded-card border border-md-sys-outline/[0.06] flex flex-col gap-2" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
+                                <div className="rounded-card border border-md-sys-outline/10 px-3 py-2" style={{ background: 'var(--md-sys-color-surface-container)' }}>
+                                    <div className="text-label-xs uppercase tracking-wide text-md-sys-on-surface/40">Seed</div>
+                                    <button
+                                        type="button"
+                                        onClick={() => void copySeedToClipboard(getMatchSeed(selectedMatchForDetails))}
+                                        className="mt-1 inline-flex items-center gap-1 text-label-sm font-bold text-md-sys-primary hover:text-md-sys-primary/80 transition-colors"
+                                    >
+                                        <ClipboardCopy size={11} />
+                                        {getMatchSeed(selectedMatchForDetails) || '--'}
+                                    </button>
+                                </div>
+                                <div className="rounded-card border border-md-sys-outline/10 px-3 py-2" style={{ background: 'var(--md-sys-color-surface-container)' }}>
+                                    <div className="text-label-xs uppercase tracking-wide text-md-sys-on-surface/40">Era</div>
+                                    <div className="mt-1 text-label-sm font-semibold text-md-sys-on-surface/70">{getEraLabel(selectedMatchForDetails) || '--'}</div>
+                                </div>
+                                <div className="rounded-card border border-md-sys-outline/10 px-3 py-2" style={{ background: 'var(--md-sys-color-surface-container)' }}>
+                                    <div className="text-label-xs uppercase tracking-wide text-md-sys-on-surface/40">Map / Artifact</div>
+                                    <div className="mt-1 flex flex-wrap gap-1.5 text-label-sm font-semibold text-md-sys-on-surface/70">
+                                        <span>{selectedMatchForDetails.mapType || 'Unknown map'}</span>
+                                        <span className="opacity-35">·</span>
+                                        <span>{selectedMatchForDetails.artifactSource || 'Unknown artifact'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div className="p-5 rounded-card border border-md-sys-outline/[0.06]" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
                                 <div className="text-label-sm font-semibold uppercase tracking-wide-08 text-md-sys-on-surface/40 mb-3">Pilot Loadout</div>
@@ -1618,18 +1550,25 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                         </div>
 
                         {/* ── Hazards in detail modal ── */}
-                        {selectedMatchForDetails.reachModifiers && selectedMatchForDetails.reachModifiers.length > 0 && (
-                            <div className="p-5 rounded-card border border-md-sys-outline/[0.06]" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
-                                <div className="text-label-sm font-semibold uppercase text-md-sys-on-surface/40 mb-3 flex items-center gap-2"><Zap size={12} /> Hazards & Modifiers</div>
-                                <div className="flex flex-wrap gap-2">
-                                    {selectedMatchForDetails.reachModifiers.map(m => (
-                                        <span key={m} className="px-3 py-1.5 rounded-lg text-label-sm font-bold border border-warning/20 inline-flex items-center gap-1.5 bg-warning/8 text-warning/80">
-                                            <Zap size={11} />{m}
-                                        </span>
-                                    ))}
+                        {(() => {
+                            const detailHazards = Array.from(new Set([
+                                ...(selectedMatchForDetails.reachModifiers || []),
+                                ...((selectedMatchForDetails.ocrDebug?.hazards) || []),
+                            ].map((value) => String(value || '').trim()).filter(Boolean)));
+                            if (detailHazards.length === 0) return null;
+                            return (
+                                <div className="p-5 rounded-card border border-md-sys-outline/[0.06]" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
+                                    <div className="text-label-sm font-semibold uppercase text-md-sys-on-surface/40 mb-3 flex items-center gap-2"><Zap size={12} /> Hazards & Modifiers</div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {detailHazards.map(m => (
+                                            <span key={m} className="px-3 py-1.5 rounded-lg text-label-sm font-bold border border-warning/20 inline-flex items-center gap-1.5 bg-warning/8 text-warning/80">
+                                                <Zap size={11} />{m}
+                                            </span>
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            );
+                        })()}
 
                         {selectedMatchForDetails.kills && Object.values(selectedMatchForDetails.kills).some(v => v > 0) && (
                             <div className="p-5 rounded-card border border-md-sys-outline/[0.06]" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>

@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
-import { SmartCaptureConfidenceMeter } from './SmartCaptureConfidenceMeter';
+import { SmartCaptureConfidenceMeter } from './ConfidenceMeter';
 
 describe('SmartCaptureConfidenceMeter', () => {
   it('renders a progress bar with clamped width', () => {
