@@ -1,4 +1,10 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.11.4": [
+    "Removed the duplicate purple match-number pill in History rows",
+    "Redesigned row actions into a 3-wide grid",
+    "Redesigned the match details popup to show the tactical map and seed front and center",
+    "Fixed saved-category key normalization and two unrelated test bugs"
+  ],
   "v3.11.3": [
     "Redesigned the History tab with combined rows, inline map seed copy, and expandable map preview",
     "Merged the Seeds tab into History",
