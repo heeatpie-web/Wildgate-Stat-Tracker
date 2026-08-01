@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom';
 import { Match, Language, DrillDownTarget } from '../types';
 import { TRANSLATIONS } from '../utils/translations';
-import { Trash2, Edit2, Pin, Clock, Image as ImageIcon, Download, ArrowUpDown, Swords, X, FileText, Save, Ghost, Trophy, TrendingUp, Flame, Search, ChevronLeft, ChevronRight, Zap, ScanEye, AlertTriangle, RefreshCw, Filter, ChevronDown, ChevronUp, Check, Crosshair, LogIn, Archive, ArchiveRestore, ClipboardCopy } from 'lucide-react';
+import { Trash2, Edit2, Pin, Clock, Image as ImageIcon, Download, ArrowUpDown, Swords, X, FileText, Save, Ghost, Trophy, TrendingUp, Flame, Search, ChevronLeft, ChevronRight, Zap, ScanEye, AlertTriangle, RefreshCw, Filter, ChevronDown, ChevronUp, Check, Crosshair, LogIn, Archive, ArchiveRestore, ClipboardCopy, Equal } from 'lucide-react';
 import { EditMatchModal } from './EditMatchModal';
 import { exportMatchesAsImage } from './history/historyExport';
 import { timeAgo, formatDayHeader, getRowBg } from './history/historyUtils';
@@ -77,6 +77,7 @@ const MatchHistoryRow: React.FC<MatchHistoryRowProps> = ({
     const isWin = match.result === 'Win';
     const isLoss = match.result === 'Loss';
     const isOngoing = match.result === 'Ongoing';
+    const isDraw = match.result === 'Draw';
 
     return (
         <React.Fragment>
@@ -86,12 +87,13 @@ const MatchHistoryRow: React.FC<MatchHistoryRowProps> = ({
                 className={`border-b border-md-sys-outline/5 transition-all duration-200 group cursor-pointer ${isSelected ? 'bg-md-sys-primary/10' : getRowBg(match)} active:bg-md-sys-on-surface/[0.07]`}
                 title="Click to select. Double-click to open details."
             >
-                <td className="w-[6px] p-0 relative align-middle">
-                    <div className={`absolute inset-y-0 left-0 w-[5px] ${
+                <td className="w-[12px] p-0 relative align-middle">
+                    <div className={`absolute inset-y-0 left-0 w-[11px] ${
                         isWin ? 'bg-success'
                             : isLoss ? 'bg-danger'
-                                : isOngoing ? 'bg-info'
-                                    : 'bg-neutral'
+                                : isDraw ? 'bg-warning'
+                                    : isOngoing ? 'bg-info'
+                                        : 'bg-neutral'
                     }`} />
                 </td>
                 <td className="px-4 py-4 text-center">
@@ -109,16 +111,19 @@ const MatchHistoryRow: React.FC<MatchHistoryRowProps> = ({
                         <div className={`w-8 h-8 rounded-control flex items-center justify-center ${
                             isWin ? 'bg-success/15'
                                 : isLoss ? 'bg-danger/15'
-                                    : isOngoing ? 'bg-info/15'
-                                        : 'bg-neutral/15'
+                                    : isDraw ? 'bg-warning/15'
+                                        : isOngoing ? 'bg-info/15'
+                                            : 'bg-neutral/15'
                         }`}>
                             {isWin
                                 ? <Trophy size={14} className="text-success" />
                                 : isLoss
                                     ? <X size={14} className="text-danger" />
-                                    : isOngoing
-                                        ? <Clock size={14} className="text-info" />
-                                        : <TrendingUp size={14} className="text-md-sys-on-surface/70" />
+                                    : isDraw
+                                        ? <Equal size={14} className="text-warning" />
+                                        : isOngoing
+                                            ? <Clock size={14} className="text-info" />
+                                            : <TrendingUp size={14} className="text-md-sys-on-surface/70" />
                             }
                         </div>
                         <div className="min-w-0">
@@ -126,8 +131,9 @@ const MatchHistoryRow: React.FC<MatchHistoryRowProps> = ({
                                 <span className={`text-body font-bold ${
                                     isWin ? 'text-success'
                                         : isLoss ? 'text-danger'
-                                            : isOngoing ? 'text-info'
-                                                : 'text-md-sys-on-surface/70'
+                                            : isDraw ? 'text-warning'
+                                                : isOngoing ? 'text-info'
+                                                    : 'text-md-sys-on-surface/70'
                                 }`}>
                                     {match.result}
                                 </span>
@@ -909,7 +915,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                                     placeholder="Search matches..."
                                     value={searchInput}
                                     onChange={(e) => setSearchInput(e.target.value)}
-                                    className="pl-9 pr-4 py-2.5 text-body font-medium outline-none text-md-sys-on-surface w-full sm:w-64 transition-all rounded-control border border-md-sys-outline/10 focus:border-md-sys-primary/40 focus:ring-2 focus:ring-md-sys-primary/10"
+                                    className="pl-9 pr-4 py-2.5 text-body font-medium outline-none text-md-sys-on-surface w-full sm:w-56 transition-all rounded-control border border-md-sys-outline/10 focus:border-md-sys-primary/40 focus:ring-2 focus:ring-md-sys-primary/10"
                                     style={{ background: 'var(--md-sys-color-surface-container-high)' }}
                                 />
                             </div>
@@ -929,6 +935,68 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                                 )}
                                 <ChevronDown size={12} className={`transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
                             </button>
+                            <div className="w-px h-6 bg-md-sys-outline/10 mx-0.5" />
+                            <div className="flex items-center gap-2">
+                                <span className="text-label-sm font-semibold text-md-sys-on-surface/40 uppercase tracking-wider">Show</span>
+                                <select
+                                    value={itemsPerPage}
+                                    onChange={(e) => setItemsPerPage(e.target.value === 'Infinity' ? 'Infinity' : Number(e.target.value))}
+                                    className="px-2.5 py-1.5 outline-none transition-all cursor-pointer rounded-lg text-body font-semibold border border-md-sys-outline/10 focus:border-md-sys-primary/40 text-md-sys-on-surface"
+                                    style={{ background: 'var(--md-sys-color-surface-container-high)' }}
+                                >
+                                    <option value={10}>10</option>
+                                    <option value={20}>20</option>
+                                    <option value={40}>40</option>
+                                    <option value="Infinity">All</option>
+                                </select>
+                                <span className="text-label-sm font-medium text-md-sys-on-surface/40 whitespace-nowrap">
+                                    {itemsPerPage === 'Infinity'
+                                        ? `${shouldLimitAll ? `First 500 of ${sortedMatches.length}` : `All ${sortedMatches.length}`}`
+                                        : `${sortedMatches.length} results`}
+                                </span>
+                            </div>
+                            {itemsPerPage !== 'Infinity' && totalPages > 1 && (
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        disabled={currentPage === 1}
+                                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                        className="w-8 h-8 rounded-lg flex items-center justify-center disabled:opacity-disabled disabled:pointer-events-none hover:bg-md-sys-on-surface/[0.06] transition-colors text-md-sys-on-surface/60"
+                                    >
+                                        <ChevronLeft size={16} />
+                                    </button>
+                                    {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                                        let page: number;
+                                        if (totalPages <= 5) {
+                                            page = i + 1;
+                                        } else if (currentPage <= 3) {
+                                            page = i + 1;
+                                        } else if (currentPage >= totalPages - 2) {
+                                            page = totalPages - 4 + i;
+                                        } else {
+                                            page = currentPage - 2 + i;
+                                        }
+                                        return (
+                                            <button
+                                                key={page}
+                                                onClick={() => setCurrentPage(page)}
+                                                className={`w-8 h-8 rounded-lg text-body font-bold transition-all ${page === currentPage
+                                                    ? 'bg-md-sys-primary text-md-sys-on-primary shadow-md shadow-md-sys-primary/20'
+                                                    : 'text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/[0.06]'
+                                                    }`}
+                                            >
+                                                {page}
+                                            </button>
+                                        );
+                                    })}
+                                    <button
+                                        disabled={currentPage >= totalPages}
+                                        onClick={() => setCurrentPage(p => p + 1)}
+                                        className="w-8 h-8 rounded-lg flex items-center justify-center disabled:opacity-disabled disabled:pointer-events-none hover:bg-md-sys-on-surface/[0.06] transition-colors text-md-sys-on-surface/60"
+                                    >
+                                        <ChevronRight size={16} />
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -1133,70 +1201,6 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                         </div>
                     )}
 
-                    {/* ── Pagination bar ── */}
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2.5">
-                            <span className="text-label-sm font-semibold text-md-sys-on-surface/40 uppercase tracking-wider">Show</span>
-                            <select
-                                value={itemsPerPage}
-                                onChange={(e) => setItemsPerPage(e.target.value === 'Infinity' ? 'Infinity' : Number(e.target.value))}
-                                className="px-2.5 py-1.5 outline-none transition-all cursor-pointer rounded-lg text-body font-semibold border border-md-sys-outline/10 focus:border-md-sys-primary/40 text-md-sys-on-surface"
-                                style={{ background: 'var(--md-sys-color-surface-container-high)' }}
-                            >
-                                <option value={10}>10</option>
-                                <option value={20}>20</option>
-                                <option value={40}>40</option>
-                                <option value="Infinity">All</option>
-                            </select>
-                            <span className="text-label-sm font-medium text-md-sys-on-surface/40">
-                                {itemsPerPage === 'Infinity'
-                                    ? `${shouldLimitAll ? `First 500 of ${sortedMatches.length}` : `All ${sortedMatches.length}`}`
-                                    : `${sortedMatches.length} results`}
-                            </span>
-                        </div>
-                        {itemsPerPage !== 'Infinity' && totalPages > 1 && (
-                            <div className="flex items-center gap-1">
-                                <button
-                                    disabled={currentPage === 1}
-                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                    className="w-8 h-8 rounded-lg flex items-center justify-center disabled:opacity-disabled disabled:pointer-events-none hover:bg-md-sys-on-surface/[0.06] transition-colors text-md-sys-on-surface/60"
-                                >
-                                    <ChevronLeft size={16} />
-                                </button>
-                                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                                    let page: number;
-                                    if (totalPages <= 5) {
-                                        page = i + 1;
-                                    } else if (currentPage <= 3) {
-                                        page = i + 1;
-                                    } else if (currentPage >= totalPages - 2) {
-                                        page = totalPages - 4 + i;
-                                    } else {
-                                        page = currentPage - 2 + i;
-                                    }
-                                    return (
-                                        <button
-                                            key={page}
-                                            onClick={() => setCurrentPage(page)}
-                                            className={`w-8 h-8 rounded-lg text-body font-bold transition-all ${page === currentPage
-                                                ? 'bg-md-sys-primary text-md-sys-on-primary shadow-md shadow-md-sys-primary/20'
-                                                : 'text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/[0.06]'
-                                                }`}
-                                        >
-                                            {page}
-                                        </button>
-                                    );
-                                })}
-                                <button
-                                    disabled={currentPage >= totalPages}
-                                    onClick={() => setCurrentPage(p => p + 1)}
-                                    className="w-8 h-8 rounded-lg flex items-center justify-center disabled:opacity-disabled disabled:pointer-events-none hover:bg-md-sys-on-surface/[0.06] transition-colors text-md-sys-on-surface/60"
-                                >
-                                    <ChevronRight size={16} />
-                                </button>
-                            </div>
-                        )}
-                    </div>
                 </div>
 
                 {shouldLimitAll && (
@@ -1213,7 +1217,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                     <table className="w-full text-left border-collapse history-table">
                         <thead className="sticky top-0 z-10">
                             <tr className="text-label-sm font-bold uppercase tracking-wide-10 text-md-sys-on-surface/60 border-b border-md-sys-outline/10 bg-md-sys-surface-container">
-                                <th className="w-[6px] p-0"></th>
+                                <th className="w-[12px] p-0"></th>
                                 <th className="px-4 py-3.5 whitespace-nowrap text-center">Match #</th>
                                 <th className="px-4 py-3.5 cursor-pointer hover:text-md-sys-primary transition-colors select-none text-center" onClick={() => handleSort('result')}>
                                     <span className="inline-flex items-center justify-center gap-1.5">Outcome <ArrowUpDown size={10} className="opacity-40" /></span>
@@ -1310,28 +1314,6 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ isActive = true }) => {
                     </table>
                 </div>
 
-                {/* ── Bottom pagination (when there are many pages) ── */}
-                {itemsPerPage !== 'Infinity' && totalPages > 1 && (
-                    <div className="flex items-center justify-center gap-1 py-3 border-t border-md-sys-outline/[0.06]">
-                        <button
-                            disabled={currentPage === 1}
-                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                            className="w-8 h-8 rounded-lg flex items-center justify-center disabled:opacity-disabled disabled:pointer-events-none hover:bg-md-sys-on-surface/[0.06] transition-colors text-md-sys-on-surface/60"
-                        >
-                            <ChevronLeft size={16} />
-                        </button>
-                        <span className="text-label-sm font-semibold text-md-sys-on-surface/40 px-3">
-                            Page {currentPage} of {totalPages}
-                        </span>
-                        <button
-                            disabled={currentPage >= totalPages}
-                            onClick={() => setCurrentPage(p => p + 1)}
-                            className="w-8 h-8 rounded-lg flex items-center justify-center disabled:opacity-disabled disabled:pointer-events-none hover:bg-md-sys-on-surface/[0.06] transition-colors text-md-sys-on-surface/60"
-                        >
-                            <ChevronRight size={16} />
-                        </button>
-                    </div>
-                )}
             </div>
 
             {editingMatch && <EditMatchModal match={editingMatch} onClose={() => setEditingMatch(null)} onSave={(m) => { onEdit(m); setEditingMatch(null); }} />}
