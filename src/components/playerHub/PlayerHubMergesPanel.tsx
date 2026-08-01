@@ -19,6 +19,8 @@ export interface PlayerHubMergesPanelProps {
     onRestoreAutoMergeDismissal: (id: string) => void;
     onMergeSuggestionGroup: (group: RosterMergeSuggestionGroup) => void;
     onDismissMergeSuggestionGroup: (group: RosterMergeSuggestionGroup) => void;
+    /** Applies every currently-pending auto-merge (tier === 'auto') suggestion in one batch. */
+    onApproveAllAutoMerges: (groups: RosterMergeSuggestionGroup[]) => void;
 }
 
 const pillStyle = (active: boolean, color?: 'warning') => {
@@ -45,6 +47,7 @@ export const PlayerHubMergesPanel: FC<PlayerHubMergesPanelProps> = ({
     onRestoreAutoMergeDismissal,
     onMergeSuggestionGroup,
     onDismissMergeSuggestionGroup,
+    onApproveAllAutoMerges,
 }) => {
     const [activeTab, setActiveTab] = useState<MergesPanelTab>('merges');
 
@@ -211,13 +214,26 @@ export const PlayerHubMergesPanel: FC<PlayerHubMergesPanelProps> = ({
 
                                 {autoMergeGroups.length > 0 && (
                                     <div className="space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <h3 className="text-label-xs font-semibold uppercase tracking-wide text-md-sys-on-surface/55">
-                                                Pending suggestions
-                                            </h3>
-                                            <span className="text-label-xs text-md-sys-on-surface/45">
-                                                {autoMergeGroups.length}
-                                            </span>
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="text-label-xs font-semibold uppercase tracking-wide text-md-sys-on-surface/55">
+                                                    Pending suggestions
+                                                </h3>
+                                                <span className="text-label-xs text-md-sys-on-surface/45">
+                                                    {autoMergeGroups.length}
+                                                </span>
+                                            </div>
+                                            {autoMergeGroups.length > 1 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onApproveAllAutoMerges(autoMergeGroups)}
+                                                    className="h-7 px-2.5 rounded-control text-label-xs font-semibold border border-md-sys-primary/30 bg-md-sys-primary/10 text-md-sys-primary hover:bg-md-sys-primary/15 shrink-0 transition-colors"
+                                                    aria-label={`Approve all ${autoMergeGroups.length} pending auto-merge suggestions`}
+                                                    data-testid="auto-merge-approve-all"
+                                                >
+                                                    Approve all
+                                                </button>
+                                            )}
                                         </div>
                                         <p className="text-label-xs text-md-sys-on-surface/50">
                                             These roster entries are near-identical (at or above the auto-merge threshold). Apply to consolidate, or dismiss to keep them separate.

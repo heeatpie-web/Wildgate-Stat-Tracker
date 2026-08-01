@@ -14,6 +14,11 @@ import {
   stripArtifactSourceModifiers,
 } from '../../utils/artifactSource';
 import { sanitizeLoadout } from '../../utils/loadout';
+import {
+  removeSavedCategoryFromList,
+  upsertSavedCategory,
+  type SavedCategory,
+} from '../../utils/savedCategoriesLogic';
 
 /**
  * Origin of a data value. Priority: manual (3) > telemetry (2) > ocr (1).
@@ -119,22 +124,37 @@ type ProfileSnapshotMap = Record<string, Record<string, unknown>>;
 const normalizeNameKey = (value: string): string => normalizeOcrName(value || '').toLowerCase();
 export const normalizeRosterEntryKey = (value: string): string => normalizeNameKey(value);
 
+/**
+ * Renames every player-name field in a match using `resolve`, which returns
+ * the replacement name for a source name or `undefined` to leave it as-is.
+ * Generalized so a single pass can apply many independent target/source
+ * merge groups at once (see `mergePilotGroupsBatch`) instead of requiring
+ * one full `matches` scan per group.
+ */
+const rewriteMatchPlayerNamesMulti = (
+  match: Match,
+  resolve: (name: string) => string | undefined
+): Match => {
+  const rename = (name: string) => resolve(name) ?? name;
+  return {
+    ...match,
+    player: rename(match.player),
+    teammates: (match.teammates || []).map(rename),
+    opponents: (match.opponents || []).map(rename),
+    opponentTeams: Array.isArray(match.opponentTeams)
+      ? match.opponentTeams.map((team) => ({
+        ...team,
+        players: (team.players || []).map(rename),
+      }))
+      : match.opponentTeams,
+  };
+};
+
 const rewriteMatchPlayerNames = (
   match: Match,
   predicate: (name: string) => boolean,
   replacement: string
-): Match => ({
-  ...match,
-  player: predicate(match.player) ? replacement : match.player,
-  teammates: (match.teammates || []).map((name) => predicate(name) ? replacement : name),
-  opponents: (match.opponents || []).map((name) => predicate(name) ? replacement : name),
-  opponentTeams: Array.isArray(match.opponentTeams)
-    ? match.opponentTeams.map((team) => ({
-      ...team,
-      players: (team.players || []).map((name) => predicate(name) ? replacement : name),
-    }))
-    : match.opponentTeams,
-});
+): Match => rewriteMatchPlayerNamesMulti(match, (name) => (predicate(name) ? replacement : undefined));
 
 const dedupeAliasList = (values: string[], canonicalName?: string): string[] => {
   const seen = new Set<string>();
@@ -713,6 +733,15 @@ export interface DataSlice {
   mergePilots: (sourceName: string, targetName: string) => void;
   /** Merge many roster names into one target in a single store update (avoids N× match scans and N re-renders). */
   mergePilotsBatch: (targetName: string, sourceNames: string[]) => void;
+  /**
+   * Applies several independent merge groups (each with its own target +
+   * source names — e.g. every pending Auto-merge suggestion) in a single
+   * store update with exactly one pass over `matches`, instead of calling
+   * `mergePilotsBatch` once per group (which would each independently
+   * re-scan/rebuild the entire match history). This is the primitive
+   * "Approve all" uses.
+   */
+  mergePilotGroupsBatch: (groups: Array<{ targetName: string; sourceNames: string[] }>) => void;
   mergeHistory: MergeHistoryEntry[];
   activeMergeNotificationId: string | null;
   dismissActiveMergeNotification: () => void;
@@ -756,6 +785,18 @@ export interface DataSlice {
   dismissRosterMergeSuggestionPairs: (pairKeys: string[]) => void;
   dismissedRosterCandidateKeys: string[];
   dismissRosterCandidateKeys: (keys: string[]) => void;
+
+  /**
+   * User's saved match-category autocomplete list. Persisted through the
+   * normal store -> StorageService -> disk pipeline (see storage.ts) so it
+   * survives restarts the same way matches/roster/settings do.
+   */
+  savedMatchCategories: SavedCategory[];
+  /** Adds a new category or bumps an existing one's usage count; returns the normalized label, or null if the input was empty. */
+  addOrIncrementSavedCategory: (label: string) => string | null;
+  /** Bumps usage on an existing (or newly-created) category; returns the normalized label, or null if the input was empty. */
+  incrementSavedCategoryUse: (labelOrKey: string) => string | null;
+  removeSavedMatchCategory: (keyOrLabel: string) => boolean;
 
   setLastActivity: (timestamp: number) => void;
 }
@@ -940,6 +981,38 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
     return { dismissedRosterCandidateKeys: nextKeys };
   }),
 
+  savedMatchCategories: [],
+  addOrIncrementSavedCategory: (label) => {
+    let normalized: string | null = null;
+    set((state) => {
+      const result = upsertSavedCategory(state.savedMatchCategories || [], label);
+      normalized = result.normalized;
+      if (!normalized) return {};
+      return { savedMatchCategories: result.list };
+    });
+    return normalized;
+  },
+  incrementSavedCategoryUse: (labelOrKey) => {
+    let normalized: string | null = null;
+    set((state) => {
+      const result = upsertSavedCategory(state.savedMatchCategories || [], labelOrKey);
+      normalized = result.normalized;
+      if (!normalized) return {};
+      return { savedMatchCategories: result.list };
+    });
+    return normalized;
+  },
+  removeSavedMatchCategory: (keyOrLabel) => {
+    let removed = false;
+    set((state) => {
+      const current = state.savedMatchCategories || [];
+      const next = removeSavedCategoryFromList(current, keyOrLabel);
+      removed = next.length !== current.length;
+      return { savedMatchCategories: next };
+    });
+    return removed;
+  },
+
   mergeHistory: [],
   activeMergeNotificationId: null,
   dismissActiveMergeNotification: () => set({ activeMergeNotificationId: null }),
@@ -968,8 +1041,12 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
     const undone = state.undoLastMerge();
     if (!undone) return false;
     set((current) => ({
+      // A batch "Approve all" apply produces one merge snapshot shared by
+      // several records (one per group). Undoing any one of them reverts
+      // the whole snapshot, so every sibling record needs to drop too -
+      // otherwise they'd linger in "Recently applied" with no valid undo.
       recentAutoMergeApplications: (current.recentAutoMergeApplications || [])
-        .filter((item) => item.id !== id),
+        .filter((item) => item.mergeHistoryId !== entry.mergeHistoryId),
     }));
     return true;
   },
@@ -1507,6 +1584,155 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
       activeMergeNotificationId: snapshot.id,
       lastActivity: Date.now(),
     };
+  }),
+
+  mergePilotGroupsBatch: (groups) => set((state) => {
+    interface NormalizedMergeGroup {
+      targetTrim: string;
+      uniqueSources: string[];
+      sourceNorms: Set<string>;
+      sourceExact: Set<string>;
+    }
+    const normalizedGroups: NormalizedMergeGroup[] = [];
+    // Combined lookup so the whole batch can be applied to `matches` in one
+    // pass instead of one pass per group.
+    const globalNormToTarget = new Map<string, string>();
+    const globalExactToTarget = new Map<string, string>();
+
+    for (const group of groups || []) {
+      const targetTrim = String(group?.targetName || '').trim();
+      if (!targetTrim) continue;
+      const normTarget = normalizeOcrName(targetTrim).toLowerCase();
+      const uniqueSources: string[] = [];
+      const seenNorm = new Set<string>();
+      for (const raw of group.sourceNames || []) {
+        const s = String(raw || '').trim();
+        if (!s) continue;
+        const n = normalizeOcrName(s).toLowerCase();
+        if (!n || n === normTarget) continue;
+        if (seenNorm.has(n)) continue;
+        seenNorm.add(n);
+        uniqueSources.push(s);
+      }
+      if (uniqueSources.length === 0) continue;
+      const sourceNorms = new Set(uniqueSources.map((s) => normalizeOcrName(s).toLowerCase()));
+      const sourceExact = new Set(uniqueSources);
+      normalizedGroups.push({ targetTrim, uniqueSources, sourceNorms, sourceExact });
+      sourceNorms.forEach((n) => globalNormToTarget.set(n, targetTrim));
+      sourceExact.forEach((s) => globalExactToTarget.set(s, targetTrim));
+    }
+    if (normalizedGroups.length === 0) return {};
+
+    const resolveReplacement = (name: string): string | undefined => {
+      if (globalExactToTarget.has(name)) return globalExactToTarget.get(name);
+      return globalNormToTarget.get(normalizeOcrName(name).toLowerCase());
+    };
+    const isAnySource = (name: string) => resolveReplacement(name) !== undefined;
+
+    const totalSources = normalizedGroups.reduce((sum, g) => sum + g.uniqueSources.length, 0);
+    const snapshot: MergeHistoryEntry = {
+      id: `merge_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      timestamp: Date.now(),
+      sourceName: `${totalSources} pilot${totalSources === 1 ? '' : 's'} across ${normalizedGroups.length} group${normalizedGroups.length === 1 ? '' : 's'}`,
+      targetName: normalizedGroups.length === 1 ? normalizedGroups[0].targetTrim : `${normalizedGroups.length} targets`,
+      snapshot: {
+        matches: state.matches,
+        pilotRegistry: [...state.pilotRegistry],
+        favorites: [...state.favorites],
+        pilotNotes: { ...state.pilotNotes },
+        pilotAliases: clonePilotAliases(state.pilotAliases),
+        playerIdMap: { ...state.playerIdMap },
+        pendingReviews: [...(state.pendingReviews || [])],
+        playerProfiles: cloneProfileSnapshots(
+          (get() as unknown as { playerProfiles?: ProfileSnapshotMap }).playerProfiles
+        ),
+        rosterEntryMeta: cloneRosterEntryMetaMap(state.rosterEntryMeta),
+      },
+    };
+    const mergeHistory = [snapshot, ...(state.mergeHistory || [])].slice(0, 10);
+
+    // The one expensive pass, done once for the whole batch.
+    const newMatches = state.matches.map((match) => rewriteMatchPlayerNamesMulti(match, resolveReplacement));
+
+    const newRegistry = state.pilotRegistry.filter((p) => !isAnySource(p));
+    const newFavorites = state.favorites.filter((f) => !isAnySource(f));
+    const newNotes = { ...state.pilotNotes };
+    const newAliases = clonePilotAliases(state.pilotAliases);
+    const newIdMap = { ...state.playerIdMap };
+    const rosterEntryMetaRaw: Record<string, RosterEntryMeta> = { ...(state.rosterEntryMeta || {}) };
+    const profiles = (get() as unknown as { playerProfiles?: Record<string, Record<string, unknown>> }).playerProfiles;
+    const newProfiles = profiles && typeof profiles === 'object' ? { ...profiles } : undefined;
+
+    // Per-group housekeeping is cheap (O(sources), not O(matches)), so
+    // looping per group here doesn't reintroduce the cost the batched
+    // matches pass above was written to avoid.
+    for (const group of normalizedGroups) {
+      const { targetTrim, uniqueSources, sourceNorms, sourceExact } = group;
+      const isGroupSource = (name: string) => sourceExact.has(name) || sourceNorms.has(normalizeOcrName(name).toLowerCase());
+
+      if (!newRegistry.includes(targetTrim)) newRegistry.push(targetTrim);
+
+      const targetKey = normalizeRosterEntryKey(targetTrim);
+      let foldedMeta = rosterEntryMetaRaw[targetKey];
+      for (const src of uniqueSources) {
+        const sk = normalizeRosterEntryKey(src);
+        foldedMeta = mergeRosterEntryMeta(foldedMeta, rosterEntryMetaRaw[sk], Date.now());
+      }
+      rosterEntryMetaRaw[targetKey] = foldedMeta;
+
+      Object.keys(newNotes).forEach((key) => {
+        if (!isGroupSource(key)) return;
+        if (normalizeOcrName(key).toLowerCase() === normalizeOcrName(targetTrim).toLowerCase()) return;
+        newNotes[targetTrim] = (newNotes[targetTrim] ? `${newNotes[targetTrim]}\n` : '') + newNotes[key];
+        delete newNotes[key];
+      });
+
+      const combinedAliases: string[] = [...(newAliases[targetTrim] || [])];
+      uniqueSources.forEach((src) => {
+        combinedAliases.push(...(newAliases[src] || []), src);
+      });
+      Object.keys(newAliases).forEach((key) => {
+        if (isGroupSource(key)) delete newAliases[key];
+      });
+      const mergedAliases = dedupeAliasList(combinedAliases, targetTrim);
+      if (mergedAliases.length > 0) newAliases[targetTrim] = mergedAliases;
+      else delete newAliases[targetTrim];
+
+      Object.entries(newIdMap).forEach(([id, name]) => {
+        if (isGroupSource(name)) newIdMap[id] = targetTrim;
+      });
+
+      if (newProfiles) {
+        let mergedProfile = newProfiles[targetTrim];
+        for (const src of uniqueSources) {
+          const next = mergePlayerProfileRecords(mergedProfile, newProfiles[src], targetTrim);
+          if (next) mergedProfile = next;
+        }
+        if (mergedProfile) {
+          newProfiles[targetTrim] = mergedProfile;
+          uniqueSources.forEach((src) => { delete newProfiles[src]; });
+        }
+      }
+    }
+
+    const pendingReviewsList = state.pendingReviews || [];
+    const newPending = pendingReviewsList.filter((r) => !isAnySource(r.value));
+    const newRosterEntryMeta = normalizeRosterEntryMetaMap(newRegistry, rosterEntryMetaRaw);
+
+    const base = {
+      matches: newMatches,
+      pilotRegistry: newRegistry,
+      favorites: newFavorites,
+      pilotNotes: newNotes,
+      pilotAliases: newAliases,
+      playerIdMap: newIdMap,
+      rosterEntryMeta: newRosterEntryMeta,
+      pendingReviews: newPending,
+      mergeHistory,
+      activeMergeNotificationId: snapshot.id,
+      lastActivity: Date.now(),
+    };
+    return newProfiles ? { ...base, playerProfiles: newProfiles } : base;
   }),
 
   mergePilots: (sourceName, targetName) => {

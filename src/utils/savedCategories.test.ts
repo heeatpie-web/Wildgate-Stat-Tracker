@@ -1,9 +1,11 @@
 import { addOrIncrementCategory, loadSavedCategories, removeSavedCategory } from './savedCategories';
+import { useAppStore } from '../store/useAppStore';
 
 describe('savedCategories util', () => {
   beforeEach(() => {
-    // clear localStorage key
-    try { localStorage.removeItem('wg_saved_match_categories_v1'); } catch {}
+    // Categories now live in the app store (persisted via StorageService,
+    // not raw localStorage) - reset the slice directly between tests.
+    useAppStore.setState({ savedMatchCategories: [] });
   });
 
   test('add and load', () => {

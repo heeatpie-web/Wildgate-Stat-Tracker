@@ -101,6 +101,7 @@ const PlayerHub: React.FC = () => {
         renamePilot,
         mergePilots,
         mergePilotsBatch,
+        mergePilotGroupsBatch,
         undoLastMerge,
         mergeHistory,
         activeMergeNotificationId,
@@ -156,6 +157,7 @@ const PlayerHub: React.FC = () => {
         renamePilot: state.renamePilot,
         mergePilots: state.mergePilots,
         mergePilotsBatch: state.mergePilotsBatch,
+        mergePilotGroupsBatch: state.mergePilotGroupsBatch,
         undoLastMerge: state.undoLastMerge,
         mergeHistory: state.mergeHistory,
         activeMergeNotificationId: state.activeMergeNotificationId,
@@ -200,8 +202,12 @@ const PlayerHub: React.FC = () => {
         playerHubFocusName,
         setPlayerHubFocusName,
         activeUser,
+        setShowReviewQueue,
     } = useUIState();
     const activeUserKey = React.useMemo(() => normalizeNameKey(activeUser || ''), [activeUser]);
+    const fuzzyReviewCount = React.useMemo(() => (
+        (pendingReviews || []).filter((review) => review.type === 'roster_candidate' && Number(review.bestScore || 0) >= 70).length
+    ), [pendingReviews]);
 
     const [searchTerm, setSearchTerm] = useState('');
     const [ocrSearchTerm, setOcrSearchTerm] = useState('');
@@ -1499,6 +1505,40 @@ const PlayerHub: React.FC = () => {
         });
     };
 
+    const handleApproveAllAutoMerges = (groups: RosterMergeSuggestionGroup[]) => {
+        const applicable = groups.filter((group) => group.canonicalName && group.variants.length > 0);
+        if (applicable.length === 0) return;
+        // Single store update covering every group - one O(matches) pass
+        // instead of one full match-history rewrite per group.
+        mergePilotGroupsBatch(
+            applicable.map((group) => ({
+                targetName: group.canonicalName,
+                sourceNames: group.variants.map((v) => v.name),
+            }))
+        );
+        const allPairKeys = applicable.flatMap((group) => group.pairKeys);
+        if (allPairKeys.length > 0) dismissRosterMergeSuggestionPairs(allPairKeys);
+
+        const latestMergeId = useAppStore.getState().mergeHistory?.[0]?.id;
+        if (latestMergeId) {
+            applicable.forEach((group) => {
+                recordAutoMergeApplication({
+                    pairKeys: group.pairKeys,
+                    targetName: group.canonicalName,
+                    targetDisplayName: group.canonicalDisplayName,
+                    sourceNames: group.variants.map((v) => v.name),
+                    sourceDisplayNames: group.variants.map((v) => v.displayName),
+                    mergeHistoryId: latestMergeId,
+                });
+            });
+        }
+
+        setToast({
+            message: `Approved ${applicable.length} auto-merge suggestion${applicable.length === 1 ? '' : 's'}`,
+            type: 'success',
+        });
+    };
+
     const handleDismissMergeSuggestionGroup = (group: RosterMergeSuggestionGroup) => {
         dismissRosterMergeSuggestionPairs(group.pairKeys);
         if (group.tier === 'auto') {
@@ -1724,6 +1764,20 @@ const PlayerHub: React.FC = () => {
                                     </span>
                                 )}
                             </button>
+                            {fuzzyReviewCount > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowReviewQueue(true)}
+                                    className="h-8 px-3 rounded-control text-label-xs font-semibold transition-all border inline-flex items-center gap-1.5 border-md-sys-outline/10 text-md-sys-on-surface/55 hover:bg-md-sys-on-surface/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/35"
+                                    style={{ background: 'var(--md-sys-color-surface-container-high)' }}
+                                    title="Open the fuzzy-match review queue"
+                                >
+                                    Review Queue
+                                    <span className="px-1.5 py-0.5 rounded-pill text-[10px] font-bold leading-none bg-info/15 text-info">
+                                        {fuzzyReviewCount}
+                                    </span>
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -1745,6 +1799,7 @@ const PlayerHub: React.FC = () => {
                             onRestoreAutoMergeDismissal={handleRestoreAutoMergeDismissal}
                             onMergeSuggestionGroup={handleMergeSuggestionGroup}
                             onDismissMergeSuggestionGroup={handleDismissMergeSuggestionGroup}
+                            onApproveAllAutoMerges={handleApproveAllAutoMerges}
                         />
                     </div>
                 ) : !selected ? (

@@ -274,6 +274,7 @@ const buildStorageDataFromState = (state: AppState) => ({
   dismissedRosterCandidateKeys: state.dismissedRosterCandidateKeys,
   recentAutoMergeApplications: state.recentAutoMergeApplications,
   recentAutoMergeDismissals: state.recentAutoMergeDismissals,
+  savedMatchCategories: state.savedMatchCategories,
   settings: {
     mode: state.appearanceMode,
     theme: state.colorTheme,
@@ -492,6 +493,7 @@ const customStorage: PersistStorage<AppState> = {
           dismissedRosterCandidateKeys: Array.isArray(data.dismissedRosterCandidateKeys) ? data.dismissedRosterCandidateKeys : [],
           recentAutoMergeApplications: Array.isArray(data.recentAutoMergeApplications) ? data.recentAutoMergeApplications : [],
           recentAutoMergeDismissals: Array.isArray(data.recentAutoMergeDismissals) ? data.recentAutoMergeDismissals : [],
+          savedMatchCategories: Array.isArray(data.savedMatchCategories) ? data.savedMatchCategories : [],
 
           // Settings
           appearanceMode: settings.mode || 'twilight',
@@ -793,7 +795,8 @@ export const useAppStore = create<AppState>()(
         dismissedRosterMergePairKeys: state.dismissedRosterMergePairKeys,
         dismissedRosterCandidateKeys: state.dismissedRosterCandidateKeys,
         recentAutoMergeApplications: state.recentAutoMergeApplications,
-        recentAutoMergeDismissals: state.recentAutoMergeDismissals
+        recentAutoMergeDismissals: state.recentAutoMergeDismissals,
+        savedMatchCategories: state.savedMatchCategories
         // sessionTeams removed from persistence to prevent color sticking
       } as any),
       onRehydrateStorage: () => (state) => {

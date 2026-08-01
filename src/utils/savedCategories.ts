@@ -1,84 +1,33 @@
-import { normalizeMatchCategory, getMatchCategoryKey } from './matchCategory';
+/**
+ * @module savedCategories
+ * Public API for the saved match-category autocomplete list. Previously
+ * this read/wrote raw `localStorage` directly, which meant additions could
+ * silently fail to survive an app restart: localStorage commits in Electron
+ * are not flushed synchronously, and this module had no flush-on-quit hook
+ * (unlike `storage.ts`, which the rest of the app uses and which explicitly
+ * flushes on `beforeunload`/interval failsafe before the process exits).
+ *
+ * Categories now live in the Zustand store (`savedMatchCategories`, see
+ * `createDataSlice.ts`) and ride the same debounced-write-plus-flush
+ * pipeline as every other piece of app data, persisted to the on-disk DB
+ * via `StorageService`/IPC. This module just re-exports thin wrappers so
+ * existing call sites don't need to change.
+ */
+import { useAppStore } from '../store/useAppStore';
+import { sortSavedCategories } from './savedCategoriesLogic';
 
-export interface SavedCategory {
-  key: string; // case-folded dedup/lookup key — not for display
-  label: string; // display label
-  count: number; // usage frequency
-  lastUsedAt: number; // epoch ms
-}
+export type { SavedCategory } from './savedCategoriesLogic';
 
-const STORAGE_KEY = 'wg_saved_match_categories_v1';
+export const loadSavedCategories = () => sortSavedCategories(useAppStore.getState().savedMatchCategories || []);
 
-const readRaw = (): SavedCategory[] => {
-  try {
-    if (typeof localStorage === 'undefined') return [];
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((item) => item && typeof item.key === 'string').map((item) => ({
-      key: String(item.key),
-      label: String(item.label || item.key),
-      count: Number.isFinite(Number(item.count)) ? Number(item.count) : 0,
-      lastUsedAt: Number.isFinite(Number(item.lastUsedAt)) ? Number(item.lastUsedAt) : 0,
-    }));
-  } catch (e) {
-    return [];
-  }
-};
+export const addOrIncrementCategory = (label: string) => (
+  useAppStore.getState().addOrIncrementSavedCategory(label)
+);
 
-const writeRaw = (items: SavedCategory[]) => {
-  try {
-    if (typeof localStorage === 'undefined') return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-  } catch (e) {
-    // swallow
-  }
-};
+export const incrementCategoryUse = (labelOrKey: string) => (
+  useAppStore.getState().incrementSavedCategoryUse(labelOrKey)
+);
 
-export const loadSavedCategories = (): SavedCategory[] => {
-  const raw = readRaw();
-  return raw.sort((a, b) => b.count - a.count || b.lastUsedAt - a.lastUsedAt || a.label.localeCompare(b.label));
-};
-
-export const addOrIncrementCategory = (label: string) => {
-  const normalized = normalizeMatchCategory(label);
-  if (!normalized) return null;
-  const key = getMatchCategoryKey(normalized);
-  const now = Date.now();
-  const list = readRaw();
-  const idx = list.findIndex((c) => c.key === key);
-  if (idx >= 0) {
-    list[idx].count = (list[idx].count || 0) + 1;
-    list[idx].lastUsedAt = now;
-  } else {
-    list.push({ key, label: normalized, count: 1, lastUsedAt: now });
-  }
-  writeRaw(list);
-  return normalized;
-};
-
-export const incrementCategoryUse = (labelOrKey: string) => {
-  const normalized = normalizeMatchCategory(labelOrKey);
-  if (!normalized) return null;
-  const key = getMatchCategoryKey(normalized);
-  const now = Date.now();
-  const list = readRaw();
-  const idx = list.findIndex((c) => c.key === key);
-  if (idx >= 0) {
-    list[idx].count = (list[idx].count || 0) + 1;
-    list[idx].lastUsedAt = now;
-  } else {
-    list.push({ key, label: normalized, count: 1, lastUsedAt: now });
-  }
-  writeRaw(list);
-  return normalized;
-};
-
-export const removeSavedCategory = (keyOrLabel: string) => {
-  const key = getMatchCategoryKey(keyOrLabel);
-  if (!key) return false;
-  const list = readRaw().filter((c) => c.key !== key);
-  writeRaw(list);
-  return true;
-};
+export const removeSavedCategory = (keyOrLabel: string) => (
+  useAppStore.getState().removeSavedMatchCategory(keyOrLabel)
+);

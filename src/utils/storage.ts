@@ -15,6 +15,7 @@ import type {
 } from '../store/slices/createMappingSlice';
 import type { OcrAliasModel, OcrLearningEvent, OcrLearningQueueItem } from './ocrAliasEngine';
 import type { TeammateIdentityRecord } from './teammateIdentity';
+import { sanitizeSavedCategoryList, type SavedCategory } from './savedCategoriesLogic';
 import { normalizeSharedUidMappings, normalizeUidMappingName } from '../services/mappingContract';
 import { isBogusTertiaryLoadoutEntry, sanitizeUnknownLoadout } from './loadout';
 import Logger from './logger';
@@ -96,6 +97,7 @@ export interface StorageData {
   uidSeedState?: UidSeedState;
   storageMeta?: StorageMeta;
   liveSession?: StorageLiveSession;
+  savedMatchCategories?: SavedCategory[];
 }
 
 const LEGACY_KEYS = [
@@ -325,6 +327,7 @@ const createDefaultStorageData = (): StorageData => ({
   uidMappings: emptyUidMappings(),
   uidSeedState: { seedVersionApplied: null },
   storageMeta: {},
+  savedMatchCategories: [],
 });
 
 const coerceStorageData = (value: unknown): StorageData | null => {
@@ -394,6 +397,7 @@ const coerceStorageData = (value: unknown): StorageData | null => {
     uidMappings: toUidMappings(value.uidMappings),
     uidSeedState: toUidSeedState(value.uidSeedState),
     storageMeta: toStorageMeta(value.storageMeta),
+    savedMatchCategories: sanitizeSavedCategoryList(value.savedMatchCategories),
   };
 };
 
