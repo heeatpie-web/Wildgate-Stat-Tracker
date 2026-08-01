@@ -1,4 +1,11 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.11.6": [
+    "Add issue tracker with severity-ranked notifications",
+    "Move saved categories into the store and batch-approve auto-merges",
+    "Stream live progress into OCR rerun notifications",
+    "Add Draw result styling and relocate History pagination",
+    "Analytics polish: Era filter pills, color-coded win rates, Anniversary Update"
+  ],
   "v3.11.5": [
     "Fix result-flash arming and mid-flash captures",
     "Fix map/hazard names leaking into ship names",
