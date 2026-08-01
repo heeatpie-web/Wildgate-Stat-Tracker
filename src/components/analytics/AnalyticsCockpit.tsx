@@ -418,7 +418,7 @@ export const AnalyticsCockpit: React.FC<AnalyticsCockpitProps> = ({
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="min-w-0">
                             <h2 className="at-display text-base font-extrabold tracking-tight text-md-sys-on-surface">
-                                See what is moving the needle
+                                What's shaping your results
                             </h2>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">

@@ -977,7 +977,11 @@ export const calculateMetaAnalytics = (matches: Match[]): MetaAnalyticsData => {
         { label: '5–8 min', minSec: 300, maxSec: 479 },
         { label: '8–12 min', minSec: 480, maxSec: 719 },
         { label: '12–16 min', minSec: 720, maxSec: 959 },
-        { label: '> 16 min', minSec: 960, maxSec: Infinity },
+        { label: '16–20 min', minSec: 960, maxSec: 1199 },
+        { label: '20–30 min', minSec: 1200, maxSec: 1799 },
+        { label: '30–45 min', minSec: 1800, maxSec: 2699 },
+        { label: '45–60 min', minSec: 2700, maxSec: 3599 },
+        { label: '> 60 min', minSec: 3600, maxSec: Infinity },
     ];
 
     const bucketData: Record<string, { count: number; wins: number }> = {};

@@ -9,7 +9,7 @@ import { Match, MomentumData, TimePatternData, KillEfficiencyData, PeriodCompari
  * Pro View editorial: analyzes ship/hero usage + win rates
  */
 export const generateProEditorial = (matches: Match[]): string => {
-    if (matches.length < 5) return 'Play more matches to unlock personalized insights about your ship and hero performance.';
+    if (matches.length < 5) return 'Play a few more matches and this will break down your ship and hero performance.';
 
     const shipStats: Record<string, { wins: number; total: number }> = {};
     const heroStats: Record<string, { wins: number; total: number }> = {};
@@ -122,7 +122,7 @@ export const generateSynergyEditorial = (synergyMatrix: Record<string, Record<st
         });
     });
 
-    if (combos.length === 0) return 'Play more matches with different ship-hero combinations to unlock synergy insights.';
+    if (combos.length === 0) return 'Try more ship-hero combinations to start seeing synergy data here.';
 
     combos.sort((a, b) => b.wr - a.wr);
     const parts: string[] = [];
@@ -203,7 +203,7 @@ export const generateTimePatternEditorial = (data: TimePatternData): string => {
  * Kill Efficiency View editorial: analyzes kill trends and best performing loadouts
  */
 export const generateKillEfficiencyEditorial = (data: KillEfficiencyData): string => {
-    if (data.timeline.length < 5) return 'Play more matches to unlock kill efficiency analysis.';
+    if (data.timeline.length < 5) return 'Play a few more matches to see kill efficiency trends.';
 
     const parts: string[] = [];
 
@@ -436,11 +436,11 @@ export const synthesizeNarrative = (args: {
 
     if (matches.length < 5) {
         return {
-            headline: 'Building Your Story',
+            headline: 'Just Getting Started',
             sections: [{
                 id: 'intro',
                 title: 'Getting Started',
-                body: `You have ${matches.length} match${matches.length !== 1 ? 'es' : ''} on record. Play a few more to unlock your personalized performance narrative.`,
+                body: `You have ${matches.length} match${matches.length !== 1 ? 'es' : ''} on record. Play a few more and this view fills in with a full breakdown.`,
             }],
         };
     }
@@ -560,7 +560,7 @@ export const synthesizeNarrative = (args: {
         sections.push({
             id: 'timing',
             title: 'When You Shine',
-            body: `You play most frequently around ${hourLabel} on ${peakDay}s. Your peak performance window has a ${bestHourWR}% win rate. Understanding your rhythm can help you schedule sessions for maximum impact.`,
+            body: `You play most frequently around ${hourLabel} on ${peakDay}s. Your best win rate shows up at ${bestHourWR}% during that window.`,
         });
     }
 

@@ -11,10 +11,16 @@ export interface GamePatch {
 
 export const UPDATE_DEFINITIONS: UpdateDefinition[] = [
     {
+        key: 'anniversary-update-2026-07-17',
+        label: 'Anniversary Update - 7/17/2026',
+        startDate: '2026-07-17',
+        description: 'Matches played on or after July 17, 2026 until a newer update is added.',
+    },
+    {
         key: 'ship-speed-2026-06-18',
         label: 'Ship Speed - 6/18/2026',
         startDate: '2026-06-18',
-        description: 'Matches played on or after June 18, 2026 until a newer update is added.',
+        description: 'Matches played on or after June 18, 2026 until the Anniversary Update.',
     },
     {
         key: '1-5-update-2026-06-14',
@@ -63,11 +69,18 @@ export const getUpdateForTimestamp = (timestamp: number): UpdateDefinition | nul
 
 export const GAME_PATCHES: GamePatch[] = [
     {
+        version: 'Anniversary',
+        date: '2026-07-17',
+        updateKey: 'anniversary-update-2026-07-17',
+        title: 'Anniversary Update',
+        description: 'Current live update bucket for matches recorded on or after July 17, 2026.',
+    },
+    {
         version: '1.5.1',
         date: '2026-06-18',
         updateKey: 'ship-speed-2026-06-18',
         title: 'Ship Speed',
-        description: 'Ship speed balance update. Matches recorded on or after June 18, 2026.',
+        description: 'Matches recorded on or after June 18, 2026 until the Anniversary Update.',
     },
     {
         version: '1.5',
@@ -81,7 +94,7 @@ export const GAME_PATCHES: GamePatch[] = [
         date: '2026-03-12',
         updateKey: 'drill-charge-ram-bastion-2026-03-12',
         title: 'Drill Charge / Ram Bastion',
-        description: 'Current live update bucket for matches recorded on or after March 12, 2026.',
+        description: 'Matches recorded on or after March 12, 2026 until the 1.5 update.',
     },
     {
         version: '1.0',

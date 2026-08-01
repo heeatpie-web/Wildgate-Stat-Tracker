@@ -20,6 +20,12 @@ function shipColor(ship: string): string {
     return PIE_COLORS[Math.abs(hash % PIE_COLORS.length)];
 }
 
+function winRateColorClass(rate: number): string {
+    if (rate >= 55) return 'text-success';
+    if (rate >= 45) return 'text-warning';
+    return 'text-danger';
+}
+
 function fmtDuration(sec: number): string {
     const m = Math.floor(sec / 60);
     const s = sec % 60;
@@ -91,7 +97,7 @@ export const MetaView: React.FC<MetaViewProps> = ({ data, visualMode }) => {
                                     </div>
                                     <div className="w-10 text-right text-label-xs font-mono text-md-sys-on-surface/60">{s.pct}%</div>
                                     <div className="w-12 text-right text-label-xs font-bold tabular-nums">
-                                        <span className="text-success">{s.winRate}%</span>
+                                        <span className={winRateColorClass(s.winRate)}>{s.winRate}%</span>
                                         <span className="text-md-sys-on-surface/30 ml-0.5">WR</span>
                                     </div>
                                 </div>
@@ -152,7 +158,19 @@ export const MetaView: React.FC<MetaViewProps> = ({ data, visualMode }) => {
                                         [`${val} matches (${props.payload?.winRate ?? 0}% WR)`, 'Matches']
                                     }
                                 />
-                                <Bar dataKey="count" fill="var(--md-sys-color-primary)" radius={[4, 4, 0, 0]} opacity={0.8} />
+                                <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                                    {data.durationBuckets.map((b) => (
+                                        <Cell
+                                            key={b.label}
+                                            fill={b.count === 0
+                                                ? 'var(--md-sys-color-outline-variant)'
+                                                : b.winRate >= 55 ? 'var(--md-sys-color-success)'
+                                                : b.winRate >= 45 ? 'var(--md-sys-color-warning)'
+                                                : 'var(--md-sys-color-danger)'}
+                                            opacity={0.85}
+                                        />
+                                    ))}
+                                </Bar>
                             </BarChart>
                         </ResponsiveContainer>
                     )}
@@ -194,7 +212,7 @@ export const MetaView: React.FC<MetaViewProps> = ({ data, visualMode }) => {
                                             <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
                                             <span className="text-label-sm font-bold text-md-sys-on-surface/80 flex-1 truncate">{m.mode}</span>
                                             <span className="text-label-xs tabular-nums text-md-sys-on-surface/50">{m.pct}%</span>
-                                            <span className="text-label-xs tabular-nums font-bold text-success">{m.winRate}% WR</span>
+                                            <span className={`text-label-xs tabular-nums font-bold ${winRateColorClass(m.winRate)}`}>{m.winRate}% WR</span>
                                         </div>
                                     ))}
                                 </div>

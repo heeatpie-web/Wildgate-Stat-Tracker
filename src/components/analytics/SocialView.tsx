@@ -21,6 +21,7 @@ export const SocialView: React.FC<SocialViewProps> = ({ socialData, filteredMatc
     const [showSocialGraph, setShowSocialGraph] = useState(false);
     const [socialSort, setSocialSort] = useState<'WinRate' | 'Encounters'>('WinRate');
     const [socialSearch, setSocialSearch] = useState('');
+    const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden h-full">
@@ -70,7 +71,7 @@ export const SocialView: React.FC<SocialViewProps> = ({ socialData, filteredMatc
                                 </h3></div>
                                 <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pt-2">
                                     {filteredList.length === 0 ? <div className="opacity-40 text-label-sm font-bold text-center py-10">No data found</div> :
-                                        filteredList.slice(0, 50).map(([name, stat], i) => {
+                                        filteredList.slice(0, expanded[type] ? 50 : 8).map(([name, stat], i) => {
                                             const profile = playerProfiles[name];
                                             const topShip = profile?.shipsObserved ? Object.entries(profile.shipsObserved).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] : null;
                                             return (
@@ -89,6 +90,15 @@ export const SocialView: React.FC<SocialViewProps> = ({ socialData, filteredMatc
                                                 </button>
                                             );
                                         })}
+                                    {filteredList.length > 8 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setExpanded(prev => ({ ...prev, [type]: !prev[type] }))}
+                                            className="w-full text-center py-2 text-label-sm font-bold text-md-sys-primary hover:opacity-80 transition-opacity"
+                                        >
+                                            {expanded[type] ? 'Show fewer' : `Show all ${Math.min(filteredList.length, 50)}`}
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         );

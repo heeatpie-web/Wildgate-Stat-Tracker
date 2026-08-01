@@ -201,7 +201,7 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
         if (entityFilters.equipment[0]) tags.push(`Equipment: ${entityFilters.equipment[0]}`);
         if (entityFilters.perk[0]) tags.push(`Perk: ${entityFilters.perk[0]}`);
         if (entityFilters.update[0]) {
-            tags.push(`Update: ${getUpdateLabel(entityFilters.update[0])}`);
+            tags.push(`Era: ${getUpdateLabel(entityFilters.update[0])}`);
         }
         if (entityFilters.category[0]) tags.push(`Category: ${entityFilters.category[0]}`);
         return tags;
@@ -607,17 +607,6 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
                                             </select>
                                         </label>
                                         <label className="flex flex-col gap-1">
-                                            <span className="text-label-xs text-md-sys-on-surface/50 font-semibold">Update</span>
-                                            <select
-                                                value={entityFilters.update[0] || ''}
-                                                onChange={(e) => setEntityFilters((prev) => ({ ...prev, update: e.target.value ? [e.target.value] : [] }))}
-                                                className={filterSelectClassName + ' w-full'}
-                                            >
-                                                <option value="">All Updates</option>
-                                                {UPDATE_DEFINITIONS.map((u) => <option key={u.key} value={u.key}>{u.label}</option>)}
-                                            </select>
-                                        </label>
-                                        <label className="flex flex-col gap-1">
                                             <span className="text-label-xs text-md-sys-on-surface/50 font-semibold">Category</span>
                                             <select
                                                 value={entityFilters.category[0] || ''}
@@ -683,6 +672,30 @@ export const AnalyticsShell: React.FC<AnalyticsShellProps> = ({ isActive = true 
                                 />
                             </>
                         )}
+                    </div>
+
+                    {/* Row 3: Era pills — promoted out of the Filters popover since era filtering matters as much as time scope */}
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="at-eyebrow mr-1 self-center hidden sm:inline">Era</span>
+                        <button
+                            type="button"
+                            data-active={!entityFilters.update[0] ? 'true' : 'false'}
+                            onClick={() => setEntityFilters((prev) => ({ ...prev, update: [] }))}
+                            className="at-chip px-3 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary"
+                        >
+                            All
+                        </button>
+                        {UPDATE_DEFINITIONS.map((u) => (
+                            <button
+                                key={u.key}
+                                type="button"
+                                data-active={entityFilters.update[0] === u.key ? 'true' : 'false'}
+                                onClick={() => setEntityFilters((prev) => ({ ...prev, update: [u.key] }))}
+                                className="at-chip px-3 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary"
+                            >
+                                {u.label}
+                            </button>
+                        ))}
                     </div>
 
                     {/* Active filter tags — shown beneath time range when filters are set */}
