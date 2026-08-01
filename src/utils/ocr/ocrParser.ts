@@ -670,6 +670,14 @@ export function mergeOCRData(
     });
     merged.hazards = next;
   }
+  if (newData.spectators) {
+    const existing = new Set((merged.spectators || []).map(s => s.toLowerCase()));
+    const next = [...(merged.spectators || [])];
+    newData.spectators.forEach(s => {
+      if (s && !existing.has(s.toLowerCase())) next.push(s);
+    });
+    merged.spectators = next;
+  }
 
   return merged;
 }

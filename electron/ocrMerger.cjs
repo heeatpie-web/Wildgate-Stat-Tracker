@@ -11,6 +11,8 @@
  * - Update confidence scores
  */
 
+const { namesAreNearDuplicate } = require('./crewHubExtractor.cjs');
+
 const MAX_TEAM_PLAYERS = 4;
 const TEAM_COLOR_ORDER = ['red', 'orange', 'goldenrod', 'yellow', 'yellowgreen', 'limegreen', 'green', 'blue', 'purple', 'black', 'unknown'];
 
@@ -442,6 +444,7 @@ function mergeLegacyCrewHub(existing, newData) {
     playerShip: existing.playerShip || newData.playerShip,
     teammates: capPlayerEntries(mergedTeammates),
     opponentTeams: sortTeamsByColor(cleanedTeams, (team) => team?.color || team?.teamColor),
+    spectators: mergePlayers(existing.spectators || [], newData.spectators || []),
     reachModifiers: mergeHazards(existing.reachModifiers || [], newData.reachModifiers || []),
     mapType: newData.mapType ?? existing.mapType ?? null,
     overallConfidence: Math.round(((existing.overallConfidence || 0) + (newData.overallConfidence || 0)) / 2),
@@ -991,6 +994,7 @@ function mergeCrewHubData(existing, newData) {
     screenType: 'crewHub',
     yourTeam: mergeYourTeam(existing.yourTeam, newData.yourTeam),
     enemyTeams: mergeEnemyTeams(existing.enemyTeams, newData.enemyTeams),
+    spectators: mergePlayers(existing.spectators || [], newData.spectators || []),
     hazards: mergeHazards(existing.hazards || [], newData.hazards || []),
     mapType: newData.mapType ?? existing.mapType ?? null,
     isPartialCapture: false,
@@ -1372,24 +1376,19 @@ function mergePlayers(existing = [], newPlayers = []) {
 
   // Add new players (deduplicating, with fuzzy fallback for near-identical names
   // such as "Ondra-ocasek" vs "Ondra-ocasex" where OCR misread one trailing char).
+  // Reuses crewHubExtractor's namesAreNearDuplicate — the same tiered check (exact,
+  // clan-tag suffix, phantom digit suffix, short-name Levenshtein) that already
+  // dedupes cards within a single capture — so names merged across multiple
+  // captures over the course of a match get the same treatment instead of a
+  // separate, weaker check that missed common OCR variants on short/medium names.
   for (const player of newPlayers) {
     const name = typeof player === 'string' ? player : player?.name;
     if (name) {
       const key = name.toLowerCase();
       if (!seen.has(key)) {
-        // Fuzzy check: for names ≥8 chars, see if we already have a near-identical one (≤2 edits)
         let fuzzyKey = null;
-        if (name.length >= 8) {
-          for (const existingKey of seen.keys()) {
-            if (Math.abs(existingKey.length - key.length) > 2) continue;
-            const minLen = Math.min(existingKey.length, key.length);
-            const keyHasDigit = /\d/.test(key);
-            const existingHasDigit = /\d/.test(existingKey);
-            // Avoid conflating short digit-suffixed tags with letter-only tags
-            // (e.g. Riv2... vs Rive...): keep strict unless the shared stem is long.
-            if (keyHasDigit !== existingHasDigit && minLen < 10) continue;
-            if (levenshteinDistance(key, existingKey) <= 2) { fuzzyKey = existingKey; break; }
-          }
+        for (const existingKey of seen.keys()) {
+          if (namesAreNearDuplicate(key, existingKey)) { fuzzyKey = existingKey; break; }
         }
         if (fuzzyKey) {
           // Near-duplicate: keep the longer version (more OCR chars recovered)

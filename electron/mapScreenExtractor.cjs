@@ -270,6 +270,16 @@ function isUnderCrewShipBonusText(input) {
   return UNDERCREW_SHIP_BONUS_PHRASES.has(normalized);
 }
 
+// A map/hazard name (e.g. "Cryon Rift", "Deadworlds") bleeding in from the
+// adjacent HUD text (map name banner, known-hazards list) is never a real
+// team or ship name — reject it the same way isShipOnlyTeamLabel rejects a
+// bare ship type.
+function isKnownMapOrHazardLabel(cleaned) {
+  const key = normalizeShipTypeKey(cleaned);
+  if (!key) return false;
+  return Boolean(KNOWN_MAP_TYPES[key]) || Boolean(KNOWN_HAZARDS[key]);
+}
+
 function sanitizeExtractedTeamName(rawTeamName, shipType = '') {
   const cleaned = formatTeamName(String(rawTeamName || '')).trim();
   if (!cleaned) return '';
@@ -279,6 +289,7 @@ function sanitizeExtractedTeamName(rawTeamName, shipType = '') {
   if (SHIP_TYPES.includes(teamNameKey)) return '';
   if (shipKey && teamNameKey === shipKey) return '';
   if (isShipOnlyTeamLabel(cleaned)) return '';
+  if (isKnownMapOrHazardLabel(cleaned)) return '';
   return cleaned;
 }
 
@@ -297,6 +308,7 @@ function sanitizePlayerShipName(rawShipName, shipType = '') {
   const nameKey = normalizeShipTypeKey(cleaned);
   if (SHIP_TYPES.includes(nameKey)) return '';
   if (shipKey && nameKey === shipKey) return '';
+  if (isKnownMapOrHazardLabel(cleaned)) return '';
   return cleaned;
 }
 

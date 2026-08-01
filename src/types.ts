@@ -201,6 +201,8 @@ export interface Match {
   killedBy?: string;
   killedByShip?: string;
   opponentTeams?: OpponentTeam[];
+  /** Names detected on the black/spectator team — never real opponents, excluded from analytics. */
+  spectators?: string[];
   eliminatedByTeam?: string;
   isPinned?: boolean;
   archived?: boolean;

@@ -258,6 +258,8 @@ vi.mock('./utils/artifactService', () => ({
 }));
 
 vi.mock('./hooks/useResultMonitor', () => ({
+  KNOWN_FLASH_PURE_WHITE_MS: 200,
+  DEFAULT_RESULT_MONITOR_ARM_DELAY_MS: 45_000,
   useResultMonitor: (options: Record<string, unknown>) => {
     useResultFlashMonitorMock({
       ...options,
@@ -834,14 +836,14 @@ describe('App', () => {
 
     expect(useResultFlashMonitorMock).toHaveBeenCalledWith(expect.objectContaining({
       enabled: true,
-      armDelayMs: 0,
+      armDelayMs: 45_000,
       flashEnabled: true,
       textEnabled: true,
       armAnchorAt: expect.any(Number),
     }));
     expect(useResultTextMonitorMock).toHaveBeenCalledWith(expect.objectContaining({
       enabled: true,
-      armDelayMs: 0,
+      armDelayMs: 45_000,
       flashEnabled: true,
       textEnabled: true,
       armAnchorAt: expect.any(Number),
@@ -973,12 +975,12 @@ describe('App', () => {
     expect(startAutoCaptureMock).not.toHaveBeenCalled();
     expect(useResultFlashMonitorMock).toHaveBeenCalledWith(expect.objectContaining({
       enabled: true,
-      armDelayMs: 0,
+      armDelayMs: 45_000,
       armAnchorAt: expect.any(Number),
     }));
     expect(useResultTextMonitorMock).toHaveBeenCalledWith(expect.objectContaining({
       enabled: true,
-      armDelayMs: 0,
+      armDelayMs: 45_000,
       armAnchorAt: expect.any(Number),
     }));
     expect(uiState.setTelemetryAutomationStatus).toHaveBeenCalledWith(expect.objectContaining({
@@ -1534,9 +1536,16 @@ describe('App', () => {
       });
 
       expect(consoleLogSpy).toHaveBeenCalledWith(
-        '[Brain] Flash signal received - scheduling result capture in 0ms',
-        expect.objectContaining({ matchId: 4321, delayMs: 0 }),
+        '[Brain] Flash signal received - scheduling result capture in 200ms',
+        expect.objectContaining({ matchId: 4321, delayMs: 200 }),
       );
+
+      // Advance past the post-flash pre-capture delay (waits out the remainder of
+      // the known pure-white flash duration) before the screenshot burst runs.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200);
+      });
+
       expect(api.invoke).toHaveBeenCalledWith('capture-screen');
       expect(api.invoke).toHaveBeenCalledWith('save-screenshot', {
         imageBase64: 'image-base64',
@@ -1631,10 +1640,15 @@ describe('App', () => {
       };
       expect(flashOptions?.onFlashDetected).toBeTypeOf('function');
 
+      let triggerPromise: Promise<void> | undefined;
       await act(async () => {
-        await flashOptions.onFlashDetected?.();
+        // Don't await directly — the handler now waits out the post-flash
+        // pre-capture delay via a (fake) timer, so it can't resolve until the
+        // timer below is advanced.
+        triggerPromise = flashOptions.onFlashDetected?.();
         await vi.advanceTimersByTimeAsync(10_000);
       });
+      await triggerPromise;
 
       expect(appStoreState.updateMatch).toHaveBeenCalledWith(expect.objectContaining({
         id: 4330,

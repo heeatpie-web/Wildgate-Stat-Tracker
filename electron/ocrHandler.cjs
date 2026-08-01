@@ -2858,6 +2858,11 @@ function convertCrewHubToLegacy(crewHubData, rawText) {
     confidence: 70,
     rawText: name,
   }));
+  // Black-team/spectator names — never opponents, kept separate so nothing that
+  // reads opponentTeams/teammates for analytics ever sees them.
+  const spectators = Array.isArray(crewHubData.spectators)
+    ? Array.from(new Set(crewHubData.spectators.map((name) => String(name || '').trim()).filter(Boolean)))
+    : [];
 
   return cleanupLegacyExtraction({
     screenshotType: 'crew_hub',
@@ -2865,6 +2870,7 @@ function convertCrewHubToLegacy(crewHubData, rawText) {
     playerShipName,
     teammates,
     opponentTeams,
+    spectators,
     reachModifiers: mergeModifierLists(extractModifiers(rawText), hazardModifiers),
     hazards: hazardNames,
     overallConfidence,

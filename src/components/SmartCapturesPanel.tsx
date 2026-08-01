@@ -2490,6 +2490,12 @@ export const buildOcrReviewPendingMatch = (
     const nextOpponents = dedupeSubmittedNames(
         nextOpponentTeams.flatMap((team) => team.players || [])
     );
+    const nextSpectators = dedupeSubmittedNames(
+        (reviewData.spectators || [])
+            .map((name) => String(name || '').trim())
+            .filter(Boolean)
+            .filter((name) => !isActiveUserLike(name))
+    );
     const nextReachModifiers = toCanonicalModifierNames(
         (reviewData.reachModifiers || []) as Array<string | ExtractedModifier>,
         reviewData.hazards,
@@ -2535,6 +2541,9 @@ export const buildOcrReviewPendingMatch = (
         opponentTeams: nextOpponentTeams.length > 0
             ? nextOpponentTeams
             : (Array.isArray(existingPending.opponentTeams) ? existingPending.opponentTeams : (baseMatch.opponentTeams || undefined)),
+        spectators: nextSpectators.length > 0
+            ? nextSpectators
+            : (Array.isArray(existingPending.spectators) ? existingPending.spectators : (baseMatch.spectators || undefined)),
         ocrState: 'reviewing',
         ocrDebug: {
             ...((baseMatch.ocrDebug || {}) as Record<string, unknown>),
@@ -5086,6 +5095,21 @@ const SmartMatchDetail: React.FC<{
                                     })}
                                     onAddToRoster={onAddPilotToRoster}
                                 />
+                                {(match.spectators?.length ?? 0) > 0 && (
+                                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                        <span className="text-label-xs font-bold uppercase opacity-40">Spectators</span>
+                                        {match.spectators!.map((name, i) => (
+                                            <span
+                                                key={`${name}-${i}`}
+                                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-pill bg-md-sys-surface-container-high text-label-xs font-semibold opacity-60"
+                                                title="Detected on the black/spectator team — excluded from analytics"
+                                            >
+                                                <span className="px-1 py-px rounded bg-md-sys-outline/20 text-[9px] font-bold uppercase tracking-wide">spec</span>
+                                                {name}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
                                 {match.eliminatedByTeam && (
                                     <button
                                         onClick={() => onUpdate({ ...match, eliminatedByTeam: undefined })}

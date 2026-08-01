@@ -75,6 +75,8 @@ export interface OCRExtractedData {
   // From Crew Hub
   teammates: ExtractedPlayer[];
   opponentTeams: ExtractedOpponentTeam[];
+  /** Names detected on the black/spectator cluster — never opponents; excluded from analytics. */
+  spectators?: string[];
 
   // Game-specific
   artifactType?: string;

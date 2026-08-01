@@ -5,7 +5,9 @@ import { useGameData } from './providers/GameDataProvider';
 import { useUserPreferences } from './providers/UserPreferencesProvider';
 import { useLogMonitor } from './hooks/useLogMonitor';
 import {
-    useResultMonitor,    type ResultFlashMonitorDebugSnapshot,
+    useResultMonitor,    KNOWN_FLASH_PURE_WHITE_MS,
+    DEFAULT_RESULT_MONITOR_ARM_DELAY_MS,
+    type ResultFlashMonitorDebugSnapshot,
     type ResultTextDetectionPayload,
 } from './hooks/useResultMonitor';
 import { useTacticalMapMonitor } from './hooks/useTacticalMapMonitor';
@@ -2963,7 +2965,13 @@ const App: React.FC = () => {
     const resultMonitorArmAnchorAt = isArtifactsAndGates
         ? activeTelemetryDraftFirstPregameAt
         : resultMonitorArmAnchorAtState;
-    const resultMonitorArmDelayMs = isArtifactsAndGates ? ARTIFACTS_AND_GATES_RESULT_ARM_DELAY_MS : 0;
+    // Practice range matches can end at any moment with no real pregame lead-in, so
+    // arm immediately. Regular matches need a real delay from first pregame/live
+    // detection — without it, loading-screen brightness and HUD pop-in during the
+    // opening moments of a match get misread as the end-of-match result flash.
+    const resultMonitorArmDelayMs = isArtifactsAndGates
+        ? ARTIFACTS_AND_GATES_RESULT_ARM_DELAY_MS
+        : (isTelemetryPracticeRange ? 0 : DEFAULT_RESULT_MONITOR_ARM_DELAY_MS);
     const resultMonitorEligible = fullAutoEnabled && shouldWatchResultScreens;
     // Text tripwire is enabled whenever the monitor is eligible — both 'live' and 'menu'
     // stages. Restricting to 'live' caused the combined monitor to restart on the
@@ -3912,14 +3920,21 @@ const App: React.FC = () => {
         setResultFlashDebugEvents([]);
     }, [devMode]);
 
-    const handleResultFlashDetectedWithDebug = useCallback(async ({ brightSinceMs: _brightSinceMs }: { brightSinceMs: number }) => {
+    const handleResultFlashDetectedWithDebug = useCallback(async ({ brightSinceMs }: { brightSinceMs: number }) => {
         appendResultFlashDebugEvent('detected', 'Flash threshold held on the game capture; scheduling screenshot burst');
         cancelPendingTextDetection();
         const scheduledMatchId = normalizedActiveTelemetryDraftMatchId;
-        void _brightSinceMs;
-        const initialDelayMs = POST_FLASH_CAPTURE_BUFFER_MS;
+        // Detection fires as soon as the flash has held bright for 200ms, which is
+        // typically still mid-flash. Wait out the remainder of the known pure-white
+        // duration (+ buffer) so the capture lands just after the flash resolves,
+        // instead of grabbing a solid-white frame with no usable intel.
+        const elapsed = Math.max(0, Date.now() - brightSinceMs);
+        const remaining = Math.max(0, KNOWN_FLASH_PURE_WHITE_MS - elapsed);
+        const initialDelayMs = remaining + POST_FLASH_CAPTURE_BUFFER_MS;
         console.log(`[Brain] Flash signal received - scheduling result capture in ${initialDelayMs}ms`, {
             matchId: scheduledMatchId,
+            elapsed,
+            remaining,
             delayMs: initialDelayMs,
         });
         if (!beginFullAutoResultDetection('Result flash detected', scheduledMatchId, 'flash')) return;

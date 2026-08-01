@@ -582,6 +582,8 @@ async function extractCrewHub(
       players: [],
     },
     enemyTeams: [],
+    /** Names detected on the black/spectator cluster — never opponents, kept out of analytics. */
+    spectators: [],
     hazards: [],
     isPartialCapture: false,
     confidence: 0,
@@ -645,6 +647,7 @@ async function extractCrewHub(
       layout,
       { geometry, debugLayout }
     );
+    result.spectators = Array.isArray(result.enemyTeams.spectators) ? result.enemyTeams.spectators : [];
 
     // Step 3: Extract hazards from the "KNOWN HAZARDS" section of the crew hub.
     // This is a fallback source — used by ocrMerger when the tactical map
@@ -2187,7 +2190,13 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     dlog('[CrewHub] Step5f promoted repeated card label "' + group.badgeName + '" for color=' + group.color);
   }
 
-  // ── Step 5g: Drop the spectator cluster ─────────────────────────────────────
+  // ── Step 5g: Pull the spectator cluster out of the real-team pool ──────────
+  // Spectators are never opponents — their names are surfaced separately (via
+  // the `spectators` property attached to the returned array below) so the
+  // Smart Captures review UI can label them "spec" instead of silently
+  // discarding them, while every analytics/opponent consumer that only reads
+  // `enemyTeams` continues to see zero trace of them.
+  const spectatorNames = [];
   {
     const { groups: keptGroups, dropped } = dropSpectatorClusters(knownGroups);
     knownGroups = keptGroups;
@@ -2197,6 +2206,8 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
       for (const card of (group.cards || [])) {
         spectatorCardYs.push(card.y);
         skippedSpectatorNameKeys.add(normalizeNameKey(card.name));
+        const cleaned = cleanupPlayerName(String(card.name || ''));
+        if (cleaned) pushUniquePlayerName(spectatorNames, cleaned);
       }
     }
   }
@@ -2444,6 +2455,10 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
   })));
 
   console.log('[CrewHub] Enemy teams found:', enemyTeams.length, enemyTeams.map(t => `${t.color}(${t.players.length})`).join(', '));
+  // Non-index property — survives on the array instance for the immediate
+  // caller (extractCrewHub) but is invisible to for...of/map/JSON.stringify,
+  // so nothing that treats this as a plain opponent-teams array picks it up.
+  enemyTeams.spectators = spectatorNames;
   return enemyTeams;
 }
 
@@ -3457,6 +3472,7 @@ module.exports = {
   levenshteinDistance,
   scoreAsPlayerName,
   formatTeamName,
+  namesAreNearDuplicate,
   __test__: {
     computeLineMergeThreshold,
     computeXProximityThreshold,
