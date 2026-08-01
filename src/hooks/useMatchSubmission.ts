@@ -1342,22 +1342,31 @@ export const useMatchSubmission = () => {
                 matchEnd + SCOPED_ARTIFACT_REPAIR_POSTMATCH_GRACE_MS,
             );
 
-            const bundledArtifacts = await bundleMatchArtifacts(newMatch.id, matchStart, matchEnd);
+            // These two are independent: bundleMatchArtifacts only copies files into
+            // this match's artifact folder and returns their paths, while
+            // applyArtifactRepair reads/writes wildgate_db.json directly against a
+            // separate pool of loose candidate screenshots. Running them
+            // sequentially was pure added latency on every save with no ordering
+            // requirement between them - run concurrently instead.
             let scopedRepairAppliedLinks = 0;
             let scopedRepairRemovedLinks = 0;
-            try {
-                const repairResult = await applyArtifactRepair({
+            const [bundledArtifacts, repairSettledResult] = await Promise.all([
+                bundleMatchArtifacts(newMatch.id, matchStart, matchEnd),
+                applyArtifactRepair({
                     matchId: newMatch.id,
                     startTime: matchStart,
                     endTime: repairEndTime,
-                });
-                scopedRepairAppliedLinks = Number(repairResult?.summary?.appliedLinks || 0);
-                scopedRepairRemovedLinks = Number(repairResult?.summary?.removedLinks || 0);
+                }).catch((repairError) => {
+                    Logger.warn('Submission', `Scoped artifact repair failed for match ${newMatch.id}`, repairError);
+                    return null;
+                }),
+            ]);
+            if (repairSettledResult) {
+                scopedRepairAppliedLinks = Number(repairSettledResult?.summary?.appliedLinks || 0);
+                scopedRepairRemovedLinks = Number(repairSettledResult?.summary?.removedLinks || 0);
                 if (scopedRepairAppliedLinks > 0 || scopedRepairRemovedLinks > 0) {
                     Logger.info('Submission', `Scoped artifact repair updated match ${newMatch.id} (linked=${scopedRepairAppliedLinks}, removed=${scopedRepairRemovedLinks})`);
                 }
-            } catch (repairError) {
-                Logger.warn('Submission', `Scoped artifact repair failed for match ${newMatch.id}`, repairError);
             }
             const structuredArtifacts = await getMatchArtifactsStructured(newMatch.id, [
                 ...(newMatch.artifacts || []),

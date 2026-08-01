@@ -2166,6 +2166,34 @@ export const useLogMonitor = (activeUser?: string) => {
                                     Logger.info('LogMonitor', `Auto-selected prospector: ${heroName}`);
                                 }
                             }
+                        } else {
+                            // Ship has a second, ownership-agnostic path for genuinely shared/public
+                            // lobby broadcasts (shouldApplySharedShipSelection, see above) - hero has
+                            // no equivalent, by design, since loadout/prospector data is private to
+                            // the owning client rather than broadcast the way ship-selection is. So
+                            // this branch fires whenever this event's ownership check failed, which is
+                            // the single narrowest path in the whole hero/ship/telemetry-reception trio
+                            // the "Telemetry Signals X/3" indicator tracks (see SquadronPanel.tsx) - if
+                            // that badge is durably stuck below 3/3 with hero as the missing signal,
+                            // this trace (with Gate 3's actorIds/actorNames/localIds/localNames) is
+                            // the place to look first: is the local-player ID/name match genuinely
+                            // failing, or did this session simply never emit a loadout event carrying
+                            // hero fields for the local player.
+                            const hasHeroSignalFields = Object.keys(loadoutData).some((key) => (
+                                TELEMETRY_HERO_SIGNAL_KEYS.has(key.toLowerCase())
+                            ));
+                            if (hasHeroSignalFields) {
+                                traceTelemetryLoadout('Hero skipped: event carried hero fields but failed ownership match', {
+                                    eventName: name,
+                                    recordKey,
+                                    actorIds,
+                                    actorNames,
+                                    localIds,
+                                    localNames,
+                                    loadoutMarkedLocal,
+                                    isSharedShipSelectionEvent,
+                                });
+                            }
                         }
 
                         shipName = resolveTelemetrySelection({
