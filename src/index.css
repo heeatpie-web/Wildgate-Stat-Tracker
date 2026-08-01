@@ -167,6 +167,11 @@
   --indicator-data-error: var(--md-sys-color-danger);
   --indicator-updates: var(--md-sys-color-tertiary);
   --indicator-session: var(--md-sys-color-primary);
+  /* Dimmed but still colored (not neutral gray) - "telemetry is connected,
+     just no recent event" needs to read as different from "offline",
+     otherwise the Session chip looks broken any time the game goes a
+     moment without emitting a telemetry event. */
+  --indicator-session-idle: color-mix(in srgb, var(--md-sys-color-primary), transparent 55%);
   --indicator-vision: color-mix(in srgb, var(--md-sys-color-tertiary), var(--md-sys-color-primary) 26%);
   --indicator-mission: var(--md-sys-color-primary);
 }

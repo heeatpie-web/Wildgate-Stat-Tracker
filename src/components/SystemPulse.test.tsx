@@ -69,7 +69,7 @@ describe('SystemPulse telemetry indicator', () => {
 
     render(<SystemPulse />);
 
-    const sessionChip = screen.getByTitle('Session: connected (idle)');
+    const sessionChip = screen.getByTitle('Session: connected, waiting for the next in-game event (normal between kills/objectives)');
     expect(sessionChip).not.toHaveClass('bg-md-sys-surface-container-highest/92');
     expect(sessionChip.querySelector('.animate-pulse')).toBeNull();
   });
@@ -79,7 +79,7 @@ describe('SystemPulse telemetry indicator', () => {
 
     render(<SystemPulse />);
 
-    const sessionChip = screen.getByTitle('Session: offline');
+    const sessionChip = screen.getByTitle('Session: offline - telemetry file not found');
     expect(sessionChip).not.toHaveClass('bg-md-sys-surface-container-highest/92');
     expect(sessionChip.querySelector('.animate-pulse')).toBeNull();
   });

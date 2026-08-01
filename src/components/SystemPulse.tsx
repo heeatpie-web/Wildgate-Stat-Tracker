@@ -119,13 +119,17 @@ const SystemPulse: React.FC = () => {
                 icon: <Terminal size={12} />,
                 active: isReceiving,
                 color: isReceiving ? 'text-md-sys-on-surface/85' : isConnected ? 'text-md-sys-on-surface/70' : 'text-md-sys-on-surface/60',
-                dotVar: isReceiving ? '--indicator-session' : '--indicator-idle',
+                // "Connected but quiet" gets its own dimmed-but-colored dot rather
+                // than sharing the neutral gray idle color with "offline" - the
+                // game only emits telemetry on in-match events, so multi-second
+                // gaps between events are normal and shouldn't read as broken.
+                dotVar: isReceiving ? '--indicator-session' : isConnected ? '--indicator-session-idle' : '--indicator-idle',
                 pulse: isReceiving,
                 tooltip: telemetryActivity === 'receiving'
                     ? 'Session: receiving telemetry'
                     : telemetryActivity === 'connected'
-                        ? 'Session: connected (idle)'
-                        : 'Session: offline',
+                        ? 'Session: connected, waiting for the next in-game event (normal between kills/objectives)'
+                        : 'Session: offline - telemetry file not found',
             };
         })(),
         {
@@ -154,6 +158,7 @@ const SystemPulse: React.FC = () => {
         <div
             className="flex items-center gap-1"
             aria-label="System status"
+            title="System status - Data/Session reflect game telemetry health; Mission only lights up while a match is actually in progress, so it's normal for it to be off between matches."
         >
             {indicators.map((indicator) => (
                 <div
