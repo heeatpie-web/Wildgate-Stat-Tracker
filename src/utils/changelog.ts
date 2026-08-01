@@ -1,4 +1,10 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.11.5": [
+    "Fix result-flash arming and mid-flash captures",
+    "Fix map/hazard names leaking into ship names",
+    "Improve cross-capture player dedupe",
+    "Exclude spectators from analytics and label them in Smart Captures"
+  ],
   "v3.11.4": [
     "Removed the duplicate purple match-number pill in History rows",
     "Redesigned row actions into a 3-wide grid",
