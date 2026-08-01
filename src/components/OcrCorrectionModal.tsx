@@ -4,6 +4,7 @@ import { X, Check, Search, Info, Users, Image as ImageIcon, Shield, Minus, Plus,
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useAriaLiveRegion } from '../hooks/useAriaLiveRegion';
@@ -494,6 +495,12 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         removePendingReviews,
     } = useGameData();
     const { activeUser, setToast } = useUIState();
+    // Selector (not a bare `useAppStore()`) - this modal is always mounted
+    // inside the Wizard (see Wizard.tsx, isOpen={true}/CSS-hidden rather than
+    // unmounted), so subscribing to the whole store re-rendered this ~2000
+    // line tree on every store mutation anywhere in the app (any telemetry
+    // tick, roster edit, other-window setting, etc.), not just the fields
+    // used here.
     const {
         applyOcrCorrections,
         recordTeamIdentityCorrection,
@@ -506,7 +513,19 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         setOcrBatchAcceptThreshold,
         pendingMatchData,
         setPendingMatchData,
-    } = useAppStore();
+    } = useAppStore(useShallow((state) => ({
+        applyOcrCorrections: state.applyOcrCorrections,
+        recordTeamIdentityCorrection: state.recordTeamIdentityCorrection,
+        resolveTeamIdentity: state.resolveTeamIdentity,
+        ocrCorrections: state.ocrCorrections,
+        ocrAliasModel: state.ocrAliasModel,
+        recordCalibrationSample: state.recordCalibrationSample,
+        ocrMode: state.ocrMode,
+        ocrBatchAcceptThreshold: state.ocrBatchAcceptThreshold,
+        setOcrBatchAcceptThreshold: state.setOcrBatchAcceptThreshold,
+        pendingMatchData: state.pendingMatchData,
+        setPendingMatchData: state.setPendingMatchData,
+    })));
 
     const [corrections, setCorrections] = useState<Record<string, string>>({});
     const [ignored, setIgnored] = useState<Set<string>>(new Set());

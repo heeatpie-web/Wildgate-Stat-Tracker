@@ -33,6 +33,7 @@ import {
 import type { OCRProcessRuntimeOptions } from '../utils/electronBridge';
 import { getElectronAPI } from '../utils/electronAPI';
 import { useAppStore } from '../store/useAppStore';
+import { getOcrStageLabel, useOcrProgress } from '../hooks/useOcrProgress';
 import type { OcrRegionSettings } from '../store/slices/createSettingsSlice';
 import type { ExtractedModifier, OCRExtractedData } from '../utils/ocr/ocrTypes';
 import {
@@ -2797,6 +2798,11 @@ const SmartMatchDetail: React.FC<{
         const [reviewData, setReviewData] = useState<OCRExtractedData | null>(null);
         const [ocrNameSources, setOcrNameSources] = useState<OcrNameSourceMap>({});
         const [rerunProgress, setRerunProgress] = useState<RerunProgressState>({ ...INITIAL_RERUN_PROGRESS });
+        // Real, granular OCR progress streamed from the main process while a rerun is
+        // in flight (same source the match result wizard's Re-run OCR bar uses) -
+        // replaces the old static/simulated bar that only jumped at start/end.
+        const liveOcrProgress = useOcrProgress(rerunning);
+        const rerunNotificationIdRef = useRef<string | null>(null);
         const [showSecondaryActions, setShowSecondaryActions] = useState(false);
         const secondaryActionsRef = useRef<HTMLDivElement | null>(null);
         const nonCurrentWizardSnapshotRef = useRef<NonCurrentWizardSnapshot | null>(null);
@@ -2819,12 +2825,14 @@ const SmartMatchDetail: React.FC<{
         const {
             setToast,
             pushNotification,
+            updateNotification,
             setActiveView,
             setShowWizard,
             showWizard,
             smartCapturesOpenOcrReviewMatchId,
             setSmartCapturesOpenOcrReviewMatchId,
         } = useUIState();
+        const dismissNotification = useAppStore((state) => state.dismissNotification);
         const {
             setSelectedTeammates,
             setSelectedOpponents,
@@ -3954,6 +3962,30 @@ const SmartMatchDetail: React.FC<{
 
             return null;
         }, []);
+        // Mirror live OCR progress into the rerun status card + the persistent
+        // notification so both reflect real per-image/per-stage advancement instead
+        // of sitting frozen until the whole run resolves.
+        useEffect(() => {
+            if (!rerunning || !liveOcrProgress) return;
+            const percent = Math.max(0, Math.min(100, Math.round(liveOcrProgress.fraction * 100)));
+            const stageLabel = getOcrStageLabel(liveOcrProgress.stage);
+            setRerunProgress((prev) => {
+                if (prev.phase !== 'processing') return prev;
+                const total = prev.total > 0 ? prev.total : liveOcrProgress.imageCount;
+                const current = Math.max(0, Math.min(total, Math.round(liveOcrProgress.fraction * total)));
+                return {
+                    ...prev,
+                    current,
+                    status: `Processing ${total} image${total === 1 ? '' : 's'}... ${stageLabel}`,
+                    latestFileStatus: `Image ${liveOcrProgress.imageIndex + 1}/${liveOcrProgress.imageCount} - ${stageLabel}`,
+                };
+            });
+            if (rerunNotificationIdRef.current) {
+                updateNotification(rerunNotificationIdRef.current, {
+                    message: `Re-analyzing Match ${displayNumber}... ${percent}% (${stageLabel})`,
+                });
+            }
+        }, [liveOcrProgress, rerunning, displayNumber, updateNotification]);
         const handleRerunAnalysis = useCallback(async () => {
             const classifySource = (pathValue: string, index: number): ArtifactScreenshotBucket => (
                 classifyArtifactScreenshotBucket(pathValue, artifacts.imageFiles[index] || null)
@@ -4025,20 +4057,43 @@ const SmartMatchDetail: React.FC<{
                 latestFile: '',
             });
 
+            // Persistent notification: created once the run actually starts, then kept
+            // in the notification center (live-updated with real progress via the
+            // effect above) until the OCR result is submitted/applied or the user
+            // opens it from the notification.
+            const notificationId = `ocr_rerun_${match.id}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            rerunNotificationIdRef.current = notificationId;
+            pushNotification({
+                id: notificationId,
+                message: `Re-analyzing Match ${displayNumber}... 0% (${totalImageCount} image${totalImageCount === 1 ? '' : 's'})`,
+                type: 'info',
+                source: 'ocr',
+                deepLink: { type: 'openSmartCaptureOcrReview', matchId: match.id },
+            });
+
             try {
                 // Use the multi-image server-side rerun: processes screenshots sequentially
                 // so ocrMerger can properly combine tactical-map + crew-hub data.
                 const perFileRaw: Array<{ imagePath: string; success: boolean; error?: string; data?: OCRExtractedData }> = [];
                 let mergedData: OCRExtractedData | null = null;
                 let firstFailureReason = '';
+                let processedSoFar = 0;
                 for (const bucket of buckets) {
                     const rerun = await rerunOCRMulti(
                         bucket.paths,
                         activeUser,
                         ocrMode,
                         ocrRegions,
-                        rerunRuntimeOptions,
+                        {
+                            ...rerunRuntimeOptions,
+                            // Keeps the progress bar continuous across bucket boundaries
+                            // instead of restarting at 0% for each bucket (see
+                            // createOcrProgressReporter in electron/ocrHandler.cjs).
+                            progressBaseIndex: processedSoFar,
+                            progressTotalCount: totalImageCount,
+                        },
                     );
+                    processedSoFar += bucket.paths.length;
                     perFileRaw.push(...(rerun.perFile || []));
                     if (bucket.isPrimary && rerun.data) {
                         mergedData = rerun.data;
@@ -4098,14 +4153,17 @@ const SmartMatchDetail: React.FC<{
                             initialTab: 'result',
                             resultScan: detectedResultData,
                         });
-                        if (!onApplyToSession) {
-                            pushNotification({
-                                message: `Result screen detected for Match ${displayNumber}.`,
-                                type: 'success',
-                                source: 'smart-capture',
-                                durationMs: 12000,
-                                deepLink: { type: 'openSmartCaptureOcrReview', matchId: match.id },
-                            });
+                        if (rerunNotificationIdRef.current) {
+                            if (onApplyToSession) {
+                                // Data was submitted straight into the active session - the
+                                // notification's job is done.
+                                dismissNotification(rerunNotificationIdRef.current);
+                            } else {
+                                updateNotification(rerunNotificationIdRef.current, {
+                                    message: `Result screen detected for Match ${displayNumber}.`,
+                                    type: 'success',
+                                });
+                            }
                         }
                         return;
                     }
@@ -4121,12 +4179,16 @@ const SmartMatchDetail: React.FC<{
                     });
                     const failedBaseMatch = getLatestMatchSnapshot();
                     onUpdate({ ...failedBaseMatch, ocrState: 'error' });
-                    setToast({
-                        message: firstFailureReason
-                            ? `OCR re-analysis failed for all screenshots: ${firstFailureReason}`
-                            : 'OCR re-analysis failed for all screenshots.',
-                        type: 'error',
-                    });
+                    const failureMessage = firstFailureReason
+                        ? `OCR re-analysis failed for all screenshots: ${firstFailureReason}`
+                        : 'OCR re-analysis failed for all screenshots.';
+                    setToast({ message: failureMessage, type: 'error' });
+                    if (rerunNotificationIdRef.current) {
+                        updateNotification(rerunNotificationIdRef.current, {
+                            message: `Match ${displayNumber}: ${failureMessage}`,
+                            type: 'error',
+                        });
+                    }
                     return;
                 }
 
@@ -4159,17 +4221,25 @@ const SmartMatchDetail: React.FC<{
                     initialTab: getSmartCaptureWizardInitialTab('reanalyze-complete'),
                     resultScan: detectedResultData,
                 });
-                if (!onApplyToSession) {
-                    pushNotification({
-                        message: `OCR analysis complete for Match ${displayNumber}.`,
-                        type: 'success',
-                        source: 'smart-capture',
-                        durationMs: 12000,
-                        deepLink: { type: 'openSmartCaptureOcrReview', matchId: match.id },
-                    });
+                if (rerunNotificationIdRef.current) {
+                    if (onApplyToSession) {
+                        // Applied straight into the active session - nothing left to review.
+                        dismissNotification(rerunNotificationIdRef.current);
+                    } else {
+                        updateNotification(rerunNotificationIdRef.current, {
+                            message: `OCR analysis complete for Match ${displayNumber}. Tap to review.`,
+                            type: 'success',
+                        });
+                    }
                 }
             } catch (error) {
                 const reason = errorMessage(error);
+                if (rerunNotificationIdRef.current) {
+                    updateNotification(rerunNotificationIdRef.current, {
+                        message: `Match ${displayNumber}: OCR rerun failed - ${reason}`,
+                        type: 'error',
+                    });
+                }
                 setRerunProgress({
                     phase: 'error',
                     current: 0,
@@ -4184,12 +4254,17 @@ const SmartMatchDetail: React.FC<{
                 setToast({ message: `OCR rerun failed: ${reason}`, type: 'error' });
             } finally {
                 setRerunning(false);
+                // Stop routing further live-progress updates to this run's
+                // notification; the notification itself stays put until the user
+                // opens or dismisses it (or it was already cleared above on submit).
+                rerunNotificationIdRef.current = null;
             }
         }, [
             activeUser,
             applyReviewDataToSession,
             artifacts.images,
             artifacts.imageFiles,
+            dismissNotification,
             displayNumber,
             getLatestMatchSnapshot,
             match.artifacts,
@@ -4205,6 +4280,7 @@ const SmartMatchDetail: React.FC<{
             scanResultArtifacts,
             setOcrNameSources,
             setRerunProgress,
+            updateNotification,
             setRerunResults,
             setRerunning,
             setReviewData,

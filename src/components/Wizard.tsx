@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
     Clock,
     HeartCrack,
@@ -121,6 +121,7 @@ export const Wizard: React.FC = () => {
         poiMedium, setPoiMedium,
         poiEpic, setPoiEpic,
         updateMatch,
+        matches,
     } = useGameData();
 
     const { showWizard, setShowWizard, isOverlayMode, activeMode, activeUser, pushNotification, requestSmartCapture } = useUIState();
@@ -130,11 +131,17 @@ export const Wizard: React.FC = () => {
     const wizardCloseOnOcrApply = useAppStore((state) => state.wizardCloseOnOcrApply);
     const addPilotAlias = useAppStore((state) => state.addPilotAlias);
     const setPendingDraftData = useAppStore((state) => state.setPendingMatchData);
-    const pendingStoreMatch = useAppStore((state) => {
-        const pendingId = Number(state.pendingMatchData?.id || 0);
+    // Was a raw `useAppStore` selector doing `matches.find()` - Zustand runs a
+    // selector on every store notification (any field, any slice) to check
+    // whether its output changed, so that was an O(matches) scan on every
+    // keystroke anywhere in the app. `matches` here comes from the
+    // GameDataProvider context, which only gets a new array reference when
+    // matches actually change, so this useMemo only recomputes when it needs to.
+    const pendingStoreMatch = useMemo(() => {
+        const pendingId = Number(pendingMatchData?.id || 0);
         if (!Number.isInteger(pendingId) || pendingId <= 0) return null;
-        return state.matches.find((match) => match.id === pendingId) || null;
-    });
+        return matches.find((match) => match.id === pendingId) || null;
+    }, [matches, pendingMatchData?.id]);
     const [selectedWinType, setSelectedWinType] = useState<'Combat' | 'Artifact' | null>(null);
     const [activeTab, setActiveTab] = useState<WizardTab>('result');
     const [guidedResultStep, setGuidedResultStep] = useState<'stats' | 'team-review' | 'save'>('stats');
