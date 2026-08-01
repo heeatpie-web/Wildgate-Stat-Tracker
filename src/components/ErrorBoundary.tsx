@@ -5,8 +5,8 @@
  */
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, Copy } from 'lucide-react';
-import Logger from '../utils/logger';
 import { getElectronAPI } from '../utils/electronAPI';
+import { reportCriticalException } from '../utils/issueTracker';
 
 interface Props {
   children?: ReactNode;
@@ -37,10 +37,13 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    Logger.captureException(error, {
+    // Sev-5: a render crash that took down the whole tree. Still logs via
+    // Logger.captureException exactly as before; also tracked as an issue
+    // so it's not purely a console/log-file-only event.
+    reportCriticalException(error, {
       category: 'ErrorBoundary',
       action: 'componentDidCatch',
-      extra: { componentStack: errorInfo.componentStack }
+      extra: { componentStack: errorInfo.componentStack },
     });
   }
 

@@ -13,20 +13,24 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { UserPreferencesProvider } from './providers/UserPreferencesProvider';
 import { UIStateProvider } from './providers/UIStateProvider';
 import { GameDataProvider } from './providers/GameDataProvider';
-import Logger from './utils/logger';
 import { useAppStore } from './store/useAppStore';
+import { reportCriticalException } from './utils/issueTracker';
 
-// Global error handlers — catch unhandled errors outside React's tree
+// Global error handlers — catch unhandled errors outside React's tree.
+// Previously these only logged via Logger.captureException, so an uncaught
+// error was invisible to the user unless they happened to open devtools or
+// go dig through the log file. Now they're tracked as Sev-5 issues, which
+// still logs exactly as before but also surfaces a notification.
 window.onerror = (message, source, lineno, colno, error) => {
-  Logger.captureException(error || message, {
+  reportCriticalException(error || message, {
     category: 'GlobalError',
     action: 'window.onerror',
-    extra: { source, lineno, colno }
+    extra: { source, lineno, colno },
   });
 };
 
 window.onunhandledrejection = (event: PromiseRejectionEvent) => {
-  Logger.captureException(event.reason, {
+  reportCriticalException(event.reason, {
     category: 'GlobalError',
     action: 'unhandledrejection',
   });

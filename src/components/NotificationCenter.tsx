@@ -27,6 +27,28 @@ const iconToneClass = (type: AppNotification['type']) => {
     return 'text-info';
 };
 
+/** 1 (lowest) - 5 (worst). Only shown for tracked issues (severity >= 2) -
+ * routine info/success notifications at the default severity 1/2 would just
+ * add visual noise. */
+const severityBadgeClass = (severity: AppNotification['severity']): string => {
+    if (severity >= 5) return 'bg-danger text-white';
+    if (severity === 4) return 'bg-danger-soft-strong text-danger';
+    if (severity === 3) return 'bg-warning/20 text-warning';
+    return 'bg-md-sys-on-surface/10 text-md-sys-on-surface/60';
+};
+
+const SeverityBadge: React.FC<{ severity: AppNotification['severity'] }> = ({ severity }) => {
+    if (severity < 3) return null;
+    return (
+        <span
+            className={`px-1.5 py-0.5 rounded-pill text-[10px] font-bold leading-none shrink-0 ${severityBadgeClass(severity)}`}
+            title={`Severity ${severity} of 5`}
+        >
+            Sev {severity}
+        </span>
+    );
+};
+
 const formatTime = (timestamp: number) => {
     try {
         return new Date(timestamp).toLocaleTimeString([], {
@@ -84,7 +106,11 @@ export const NotificationCenter: React.FC = () => {
         [visibleNotifications]
     );
     const pinnedTip = tipNotifications[0] || null;
-    const unreadNonTips = unread.filter((item) => item.type !== 'tip');
+    // Most-severe-first (ties broken by recency) so a Sev-5 issue doesn't get
+    // buried under routine notifications that happened to fire afterward.
+    const unreadNonTips = unread
+        .filter((item) => item.type !== 'tip')
+        .sort((a, b) => (b.severity - a.severity) || (b.createdAt - a.createdAt));
     const readNonTips = read.filter((item) => item.type !== 'tip');
 
     const executeDeepLink = React.useCallback((deepLink?: NotificationDeepLink) => {
@@ -341,6 +367,7 @@ export const NotificationCenter: React.FC = () => {
                                         <div className="text-label-xs font-semibold uppercase tracking-wide-06 opacity-60 truncate">
                                             {sourceLabel[item.source]}
                                         </div>
+                                        <SeverityBadge severity={item.severity} />
                                     </div>
                                     <div className="flex items-center gap-1 shrink-0">
                                         <div className="text-label-xs opacity-50">{formatTime(item.createdAt)}</div>
@@ -379,6 +406,7 @@ export const NotificationCenter: React.FC = () => {
                                         <div className="text-label-xs font-semibold uppercase tracking-wide-06 opacity-60 truncate">
                                             {sourceLabel[item.source]}
                                         </div>
+                                        <SeverityBadge severity={item.severity} />
                                     </div>
                                     <div className="flex items-center gap-1 shrink-0">
                                         <div className="text-label-xs opacity-50">{formatTime(item.createdAt)}</div>

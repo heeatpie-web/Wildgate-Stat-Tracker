@@ -51,6 +51,7 @@ interface UIStateContextType {
     setToast: (toast: NotificationInput | null) => void;
     notifications: AppNotification[];
     pushNotification: (notification: NotificationInput) => void;
+    updateNotification: (id: string, patch: { message?: string; type?: AppNotification['type'] }) => void;
     dismissActiveNotification: () => void;
     markNotificationRead: (id: string) => void;
     markAllNotificationsRead: () => void;
@@ -157,6 +158,7 @@ export const UIStateProvider: React.FC<{ children: React.ReactNode }> = ({ child
         toast: s.toast, setToast: s.setToast,
         notifications: s.notifications,
         pushNotification: s.pushNotification,
+        updateNotification: s.updateNotification,
         dismissActiveNotification: s.dismissActiveNotification,
         markNotificationRead: s.markNotificationRead,
         markAllNotificationsRead: s.markAllNotificationsRead,

@@ -40,9 +40,21 @@ export interface NotificationAction {
     onClick: () => void;
 }
 
+/**
+ * Issue severity for bug/error-tracker notifications, 1 (lowest) - 5 (worst).
+ * Optional on plain info/success notifications - only meaningful once a
+ * caller (typically `reportIssue()`, see `utils/issueTracker.ts`) is
+ * flagging something as a tracked issue rather than routine app feedback.
+ */
+export type IssueSeverity = 1 | 2 | 3 | 4 | 5;
+
 export interface NotificationInput {
+    /** Stable id supplied by the caller so a later `updateNotification` call can find it. */
+    id?: string;
     message: string;
     type?: NotificationKind;
+    /** 1 (lowest) - 5 (worst). See `IssueSeverity`. Defaults from `type` if omitted. */
+    severity?: IssueSeverity;
     action?: NotificationAction;
     source?: NotificationSource;
     popup?: boolean;
@@ -50,10 +62,17 @@ export interface NotificationInput {
     deepLink?: NotificationDeepLink;
 }
 
+export interface NotificationUpdate {
+    message?: string;
+    type?: NotificationKind;
+    severity?: IssueSeverity;
+}
+
 export interface ToastState {
     id: string;
     message: string;
     type: NotificationKind;
+    severity: IssueSeverity;
     action?: NotificationAction;
     durationMs: number;
 }
@@ -62,6 +81,7 @@ export interface AppNotification {
     id: string;
     message: string;
     type: NotificationKind;
+    severity: IssueSeverity;
     action?: NotificationAction;
     source: NotificationSource;
     popup: boolean;
@@ -70,6 +90,19 @@ export interface AppNotification {
     createdAt: number;
     readAt: number | null;
 }
+
+/** Default severity for a notification that didn't specify one explicitly. */
+export const defaultSeverityForType = (type: NotificationKind): IssueSeverity => {
+    switch (type) {
+        case 'error': return 4;
+        case 'warning': return 3;
+        case 'info': return 2;
+        case 'success':
+        case 'tip':
+        default:
+            return 1;
+    }
+};
 
 export interface TelemetryStatusState {
     exists: boolean;
@@ -155,6 +188,7 @@ export interface UISlice {
     setIsRearranging: (isRearranging: boolean) => void;
     setToast: (toast: NotificationInput | null) => void;
     pushNotification: (notification: NotificationInput) => void;
+    updateNotification: (id: string, patch: NotificationUpdate) => void;
     dismissActiveNotification: () => void;
     dismissNotification: (id: string) => void;
     markNotificationRead: (id: string) => void;
@@ -205,12 +239,18 @@ const toPositiveDuration = (value: unknown): number => {
     return Math.round(parsed);
 };
 
+const isIssueSeverity = (value: unknown): value is IssueSeverity => (
+    typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 5
+);
+
 const createNotification = (input: NotificationInput): AppNotification => {
     const type = input.type ?? 'info';
+    const suppliedId = String(input.id || '').trim();
     return {
-        id: buildNotificationId(),
+        id: suppliedId || buildNotificationId(),
         message: String(input.message || '').trim(),
         type,
+        severity: isIssueSeverity(input.severity) ? input.severity : defaultSeverityForType(type),
         action: input.action,
         source: input.source ?? 'system',
         popup: input.popup === true,
@@ -225,6 +265,7 @@ const toToastState = (notification: AppNotification): ToastState => ({
     id: notification.id,
     message: notification.message,
     type: notification.type,
+    severity: notification.severity,
     action: notification.action,
     durationMs: notification.durationMs,
 });
@@ -440,6 +481,24 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
         }, state.notificationsSuspended);
     }),
     pushNotification: (notification) => set((state) => pushNotificationState(state, notification, state.notificationsSuspended)),
+    updateNotification: (id, patch) => set((state) => {
+        const targetId = String(id || '').trim();
+        if (!targetId) return {};
+        const index = state.notifications.findIndex((item) => item.id === targetId);
+        if (index === -1) return {};
+        const updated: AppNotification = {
+            ...state.notifications[index],
+            ...(patch.message !== undefined ? { message: String(patch.message).trim() } : {}),
+            ...(patch.type !== undefined ? { type: patch.type } : {}),
+            ...(isIssueSeverity(patch.severity) ? { severity: patch.severity } : {}),
+        };
+        const notifications = state.notifications.slice();
+        notifications[index] = updated;
+        const toast = state.toast && state.toast.id === targetId
+            ? { ...state.toast, message: updated.message, type: updated.type, severity: updated.severity }
+            : state.toast;
+        return { notifications, toast };
+    }),
     dismissActiveNotification: () => set((state) => dismissActiveNotificationState(state, state.notificationsSuspended)),
     dismissNotification: (id) => set((state) => dismissNotificationState(state, id, state.notificationsSuspended)),
     markNotificationRead: (id) => set((state) => trimNotificationState({
