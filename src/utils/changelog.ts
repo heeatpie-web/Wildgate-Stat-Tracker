@@ -1,4 +1,7 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.11.8": [
+    "Fix History row win/loss background shading (Tailwind opacity classes on themed colors weren't rendering)"
+  ],
   "v3.11.7": [
     "Fix delete for tracked-only pilots now archives instead of no-op"
   ],
