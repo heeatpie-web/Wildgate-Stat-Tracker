@@ -84,6 +84,7 @@ const MatchHistoryRow: React.FC<MatchHistoryRowProps> = ({
             <tr
                 onClick={onSelect}
                 onDoubleClick={onOpenDetails}
+                data-result={match.result}
                 className={`border-b border-md-sys-outline/5 transition-all duration-200 group cursor-pointer ${isSelected ? 'bg-md-sys-primary/10' : getRowBg(match)} active:bg-md-sys-on-surface/[0.07]`}
                 title="Click to select. Double-click to open details."
             >

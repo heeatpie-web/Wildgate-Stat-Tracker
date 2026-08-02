@@ -992,6 +992,11 @@ body[data-mode='twilight'] .toast-card-standard {
   background: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 95%);
 }
 
+:where(.history-table) tbody tr[data-result='Win']:hover { background-color: var(--color-success-soft-strong); }
+:where(.history-table) tbody tr[data-result='Loss']:hover { background-color: var(--color-danger-soft-strong); }
+:where(.history-table) tbody tr[data-result='Draw']:hover { background-color: var(--color-warning-soft-strong); }
+:where(.history-table) tbody tr[data-result='Ongoing']:hover { background-color: var(--color-info-soft-strong); }
+
 .history-dialog {
   background:
     radial-gradient(110% 80% at 0% 0%, color-mix(in srgb, var(--md-sys-color-primary), transparent 92%), transparent 55%),
@@ -4557,6 +4562,9 @@ body.perf-lite .shadow-2xl {
   --color-danger-soft-strong: color-mix(in srgb, var(--color-danger), transparent 68%);
   --color-info-soft-strong: color-mix(in srgb, var(--color-info), transparent 68%);
   --color-accent-soft-strong: color-mix(in srgb, var(--color-accent), transparent 68%);
+
+  --color-neutral-soft: color-mix(in srgb, var(--md-sys-color-outline), transparent 80%);
+  --color-neutral-soft-strong: color-mix(in srgb, var(--md-sys-color-outline), transparent 68%);
 }
 
 .text-success {
@@ -4646,6 +4654,14 @@ body.perf-lite .shadow-2xl {
 
 .bg-neutral {
   background-color: var(--md-sys-color-outline);
+}
+
+.bg-neutral-soft {
+  background-color: var(--color-neutral-soft);
+}
+
+.bg-neutral-soft-strong {
+  background-color: var(--color-neutral-soft-strong);
 }
 
 /* --- Semantic Opacity Hierarchy --- */

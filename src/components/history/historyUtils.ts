@@ -28,11 +28,18 @@ export const formatDayHeader = (timestamp: number): string => {
     return d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric', year: d.getFullYear() !== today.getFullYear() ? 'numeric' : undefined });
 };
 
-/** Row background shading by match outcome (Step 20.5: full row width, at-a-glance win/loss) */
+/**
+ * Row background shading by match outcome (Step 20.5: full row width, at-a-glance win/loss).
+ * Uses the hand-authored `-soft` classes, not Tailwind's `bg-x/NN` opacity-modifier syntax:
+ * these theme colors resolve through CSS custom properties (var(--color-success), etc.), and
+ * Tailwind can't decompose a var() reference to inject an alpha channel, so `bg-success/15`
+ * silently compiles to nothing. The `:hover` intensification lives in index.css, keyed off
+ * `[data-result]` on the row, since the same limitation blocks a `hover:` variant here too.
+ */
 export const getRowBg = (m: Match): string => {
-    if (m.result === 'Win') return 'bg-success/15 hover:bg-success/20';
-    if (m.result === 'Loss') return 'bg-danger/15 hover:bg-danger/20';
-    if (m.result === 'Draw') return 'bg-warning/15 hover:bg-warning/20';
-    if (m.result === 'Ongoing') return 'bg-info/15 hover:bg-info/20';
-    return 'bg-neutral/15 hover:bg-neutral/20';
+    if (m.result === 'Win') return 'bg-success-soft';
+    if (m.result === 'Loss') return 'bg-danger-soft';
+    if (m.result === 'Draw') return 'bg-warning-soft';
+    if (m.result === 'Ongoing') return 'bg-info-soft';
+    return 'bg-neutral-soft';
 };
