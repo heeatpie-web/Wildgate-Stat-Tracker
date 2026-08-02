@@ -1302,9 +1302,17 @@ const PlayerHub: React.FC = () => {
         setMergeSearch('');
     };
 
-    const handleDelete = (pilot: string) => {
-        removeFromRegistry(pilot);
-        if (selectedPilot === pilot) setSelectedPilot(null);
+    const handleDelete = (pilot: PlayerDetail) => {
+        // Roster members are actually removed from the registry; tracked-only
+        // pilots (never added to the roster) have nothing to remove there, so
+        // "Delete" for them means the same thing the Archive action already
+        // does elsewhere: hide from the active list until seen again.
+        if (pilot.isRoster) {
+            removeFromRegistry(pilot.name);
+        } else {
+            archiveTrackedPilot(pilot.name);
+        }
+        if (selectedPilot === pilot.name) setSelectedPilot(null);
         setConfirmDelete(null);
     };
 
@@ -1920,7 +1928,7 @@ const PlayerHub: React.FC = () => {
                                             </button>
                                         </>
                                     )}
-                                    {selected.isTrackedOnly ? (
+                                    {selected.isTrackedOnly && (
                                         <button
                                             type="button"
                                             onClick={() => handlePromoteTrackedEntry(selected)}
@@ -1931,55 +1939,57 @@ const PlayerHub: React.FC = () => {
                                             <Plus size={12} />
                                             Add to Roster
                                         </button>
-                                    ) : (
-                                        <>
-                                            <button
-                                                onClick={() => toggleFavorite(selected.name)}
-                                                className={`md3-icon-btn w-8 h-8 ${selected.isFavorite ? 'text-warning' : 'text-md-sys-on-surface/40'}`}
-                                                title={selected.isFavorite ? 'Unpin' : 'Pin'}
-                                                aria-label={selected.isFavorite ? 'Unpin player' : 'Pin player'}
-                                            >
-                                                <Star size={14} className={selected.isFavorite ? 'fill-amber-400' : ''} />
-                                            </button>
-                                            <button
-                                                onClick={() => handleStartRename(selected.name)}
-                                                className="md3-icon-btn w-8 h-8 text-md-sys-on-surface/40"
-                                                title="Rename"
-                                                aria-label="Rename player"
-                                            >
-                                                <Edit2 size={14} />
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    setShowFullProfile(true);
-                                                    setMergeTarget(selected.name);
-                                                }}
-                                                className="md3-icon-btn w-8 h-8 text-md-sys-on-surface/40"
-                                                title="Merge with another player"
-                                                aria-label="Merge player"
-                                            >
-                                                <Merge size={14} />
-                                            </button>
-                                            <button
-                                                onClick={() => setConfirmDelete(selected.name)}
-                                                className="md3-icon-btn w-8 h-8 text-md-sys-error/60 hover:text-md-sys-error"
-                                                title="Remove from roster"
-                                                aria-label="Remove player from roster"
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
-                                        </>
                                     )}
+                                    <button
+                                        onClick={() => toggleFavorite(selected.name)}
+                                        className={`md3-icon-btn w-8 h-8 ${selected.isFavorite ? 'text-warning' : 'text-md-sys-on-surface/40'}`}
+                                        title={selected.isFavorite ? 'Unpin' : 'Pin'}
+                                        aria-label={selected.isFavorite ? 'Unpin player' : 'Pin player'}
+                                    >
+                                        <Star size={14} className={selected.isFavorite ? 'fill-amber-400' : ''} />
+                                    </button>
+                                    <button
+                                        onClick={() => handleStartRename(selected.name)}
+                                        className="md3-icon-btn w-8 h-8 text-md-sys-on-surface/40"
+                                        title="Rename"
+                                        aria-label="Rename player"
+                                    >
+                                        <Edit2 size={14} />
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setShowFullProfile(true);
+                                            setMergeTarget(selected.name);
+                                        }}
+                                        className="md3-icon-btn w-8 h-8 text-md-sys-on-surface/40"
+                                        title="Merge with another player"
+                                        aria-label="Merge player"
+                                    >
+                                        <Merge size={14} />
+                                    </button>
+                                    <button
+                                        onClick={() => setConfirmDelete(selected.name)}
+                                        className="md3-icon-btn w-8 h-8 text-md-sys-error/60 hover:text-md-sys-error"
+                                        title={selected.isRoster ? 'Remove from roster' : 'Archive (hide from the active list)'}
+                                        aria-label={selected.isRoster ? 'Remove player from roster' : 'Archive player'}
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
                                 </div>
                             </div>
 
-                            {selected.isRoster && confirmDelete === selected.name && (
+                            {confirmDelete === selected.name && (
                                 <div className="mt-3 bg-md-sys-errorContainer/20 border border-md-sys-error/20 rounded-xl px-4 py-3 flex items-center justify-between">
                                     <span className="text-label-sm text-md-sys-error font-semibold flex items-center gap-2">
-                                        <AlertTriangle size={14} /> Delete {selected.name} from the roster?
+                                        <AlertTriangle size={14} />
+                                        {selected.isRoster
+                                            ? `Delete ${selected.name} from the roster?`
+                                            : `Archive ${selected.name} and hide them from the active list?`}
                                     </span>
                                     <div className="flex gap-2">
-                                        <button onClick={() => handleDelete(selected.name)} className="px-3 py-1 bg-md-sys-error text-md-sys-onError rounded-lg text-label-xs font-bold">Delete</button>
+                                        <button onClick={() => handleDelete(selected)} className="px-3 py-1 bg-md-sys-error text-md-sys-onError rounded-lg text-label-xs font-bold">
+                                            {selected.isRoster ? 'Delete' : 'Archive'}
+                                        </button>
                                         <button onClick={() => setConfirmDelete(null)} className="px-3 py-1 bg-md-sys-on-surface/10 rounded-lg text-label-xs font-bold">Cancel</button>
                                     </div>
                                 </div>
