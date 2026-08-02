@@ -1,4 +1,7 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.11.7": [
+    "Fix delete for tracked-only pilots now archives instead of no-op"
+  ],
   "v3.11.6": [
     "Add issue tracker with severity-ranked notifications",
     "Move saved categories into the store and batch-approve auto-merges",
